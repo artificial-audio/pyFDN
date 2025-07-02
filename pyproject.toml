@@ -18,7 +18,12 @@ classifiers = [
 ]
 license = {text = "MIT license"}
 dependencies = [
-  
+  "numpy",
+  "scipy",
+  "matplotlib",
+  "jupyter",
+  "ipython",
+  "ipykernel"
 ]
 
 [project.optional-dependencies]
