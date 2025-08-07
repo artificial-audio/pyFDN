@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from pyFDN.auxiliary.mag2db import mag2db
 
 def test_mag2db_basic():

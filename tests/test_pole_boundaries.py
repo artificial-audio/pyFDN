@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from types import SimpleNamespace
 from pyFDN.auxiliary.pole_boundaries import pole_boundaries
 
@@ -13,4 +12,4 @@ def test_pole_boundaries_basic():
     MinCurve, MaxCurve, f = pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=8)
     assert MinCurve.shape == (8,)
     assert MaxCurve.shape == (8,)
-    assert f.shape == (8,) 
+    assert f.shape == (8,)

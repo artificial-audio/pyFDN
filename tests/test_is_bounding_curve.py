@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from pyFDN.auxiliary.is_bounding_curve import is_bounding_curve
 
 def test_is_bounding_curve_upper():

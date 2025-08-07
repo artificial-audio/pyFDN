@@ -6,17 +6,19 @@ pyFDN
 .. image:: https://img.shields.io/pypi/v/pyFDN.svg
         :target: https://pypi.python.org/pypi/pyFDN
 
-.. image:: https://img.shields.io/travis/pandeyKalyan/pyFDN.svg
-        :target: https://travis-ci.com/pandeyKalyan/pyFDN
+.. image:: https://github.com/pandeyKalyan/pyFDN/workflows/CI/badge.svg
+        :target: https://github.com/pandeyKalyan/pyFDN/actions
 
 .. image:: https://readthedocs.org/projects/pyFDN/badge/?version=latest
         :target: https://pyFDN.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
 
-.. image:: https://pyup.io/repos/github/pandeyKalyan/pyFDN/shield.svg
-     :target: https://pyup.io/repos/github/pandeyKalyan/pyFDN/
-     :alt: Updates
+.. image:: https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue
+        :target: https://www.python.org/downloads/
+
+.. image:: https://img.shields.io/badge/license-MIT-blue.svg
+        :target: https://opensource.org/licenses/MIT
 
 
 
