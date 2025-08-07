@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 
+
 def is_bounding_curve(x_points, y_points, x_curve, y_curve, bound_type):
     """
     Check if all value points are bounded by the curve.

@@ -4,7 +4,6 @@
 
 import pytest
 
-
 # from pyFDN import pyFDN  # Unused import - commented out
 
 

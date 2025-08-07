@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def polydiag(p):
     """
     Convert array of polynomials p (shape [N, FIR]) to diagonal polynomial matrix d (shape [N, N, FIR]).

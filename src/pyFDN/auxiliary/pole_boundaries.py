@@ -1,5 +1,3 @@
-"""Pole boundary calculation utilities."""
-
 import numpy as np
 from numpy.linalg import svd
 from scipy.signal import freqz, group_delay
@@ -7,54 +5,56 @@ from scipy.signal import freqz, group_delay
 
 def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     """
-    Calculate pole boundaries for a feedback delay network.
-    
+    Find upper and lower pole boundaries for FDN loop.
     Args:
-        delays: array of delay lengths
-        absorption: absorption filters
-        feedback_matrix: feedback matrix
+        delays: 1D array of delays in samples (length N)
+        absorption: object with .b and .a attributes, each shape (N, 1, len)
+        feedback_matrix: 3D numpy array (N, N, len)
         fs: sampling frequency
-        nfft: FFT size
+        nfft: number of frequency bins (default: 4096)
     Returns:
-        min_curve: minimum pole boundary
-        max_curve: maximum pole boundary
+        MinCurve: lower bound of pole magnitude (shape: nfft)
+        MaxCurve: upper bound of pole magnitude (shape: nfft)
         f: frequency points (Hz, shape: nfft)
     """
-    num_delays = len(delays)
+    N = len(delays)
     # Compute frequency points
     w = np.linspace(0, np.pi, nfft)
     # FFT along the third axis
-    feedback_fft = np.fft.fft(feedback_matrix, n=nfft*2, axis=2)
-    feedback_fft = feedback_fft[:, :, :nfft]
+    FeedbackMatrix = np.fft.fft(feedback_matrix, n=nfft*2, axis=2)
+    FeedbackMatrix = FeedbackMatrix[:, :, :nfft]
 
-    min_vals = np.zeros(nfft)
-    max_vals = np.zeros(nfft)
+    Min = np.zeros(nfft)
+    Max = np.zeros(nfft)
     for it in range(nfft):
-        s = svd(feedback_fft[:, :, it], compute_uv=False)
-        min_vals[it] = np.min(np.abs(s))
-        max_vals[it] = np.max(np.abs(s))
+        s = svd(FeedbackMatrix[:, :, it], compute_uv=False)
+        Min[it] = np.min(np.abs(s)) ** (1 / np.min(delays))
+        Max[it] = np.max(np.abs(s)) ** (1 / np.max(delays))
 
-    # Absorption filter frequency response
-    b = absorption.b
-    a = absorption.a
-    if len(b.shape) == 2:
-        b = b.reshape(b.shape + (1,))
-    if len(a.shape) == 2:
-        a = a.reshape(a.shape + (1,))
+    # Combine with absorption
+    b = np.transpose(absorption.b, (0, 2, 1))  # shape (N, len, 1)
+    a = np.transpose(absorption.a, (0, 2, 1))  # shape (N, len, 1)
+    b = b.squeeze(-1)  # shape (N, len)
+    a = a.squeeze(-1)  # shape (N, len)
 
-    h = np.zeros((nfft, num_delays), dtype=complex)
-    g = np.zeros((nfft, num_delays))
-    for it in range(num_delays):
+    H = np.zeros((nfft, N), dtype=complex)
+    G = np.zeros((nfft, N))
+    for it in range(N):
         # freqz expects (b, a) as 1D arrays
-        h[:, it], _ = freqz(b[it, 0, :], a[it, 0, :], w)
-        g[:, it], _ = group_delay((b[it, 0, :], a[it, 0, :]), w)
+        H[:, it], w = freqz(b[it, :], a[it, :], nfft)
+        # group_delay returns (w, gd)
+        _, gd = group_delay((b[it, :], a[it, :]), nfft)
+        G[:, it] = gd
 
-    # d: shape (nfft, num_delays)
-    d = np.abs(h) ** (1.0 / (delays + g))
-    d_min = np.min(d, axis=1)
-    d_max = np.max(d, axis=1)
+    # delays: shape (N,)
+    # G: shape (nfft, N)
+    # d: shape (nfft, N)
+    d = np.abs(H) ** (1.0 / (delays + G))
+    dMin = np.min(d, axis=1)
+    dMax = np.max(d, axis=1)
 
-    min_curve = d_min * min_vals
-    max_curve = d_max * max_vals
+    MinCurve = dMin * Min
+    MaxCurve = dMax * Max
     f = w / np.pi * fs / 2
-    return min_curve, max_curve, f
+
+    return MinCurve, MaxCurve, f

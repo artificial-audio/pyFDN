@@ -4,6 +4,7 @@ from pyFDN.auxiliary.matrix_convolution import matrix_convolution
 from pyFDN.auxiliary.matrix_polyder import matrix_polyder
 from pyFDN.auxiliary.matrix_polyval import matrix_polyval
 
+
 class TFMatrix:
     """
     Implementation of transfer function matrix (in z-Domain).

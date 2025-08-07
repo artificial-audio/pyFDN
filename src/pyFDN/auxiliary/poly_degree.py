@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def mag2db(x):
     return 20 * np.log10(np.maximum(np.abs(x), np.finfo(float).eps))
 

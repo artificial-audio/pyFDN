@@ -17,3 +17,7 @@ build>=0.10.0
 # Development tools
 bump2version>=1.0.0
 watchdog>=3.0.0
+
+black>=23.0.0
+isort>=6.0.0
+flake8>=6.0.0
