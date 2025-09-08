@@ -38,12 +38,32 @@ jobs:
               core.setFailed(`Missing ${INDEX_PATH}.`);
               process.exit(1);
             }
-            const idx = JSON.parse(fs.readFileSync(INDEX_PATH, "utf8"));
-            const items = Array.isArray(idx.items) ? idx.items : [];
-            if (items.length === 0) {
-              core.setFailed("aux_index.json has no items.");
+            let idx;
+            try {
+              idx = JSON.parse(fs.readFileSync(INDEX_PATH, "utf8"));
+            } catch (e) {
+              core.setFailed(`Invalid JSON in ${INDEX_PATH}: ${e.message}`);
               process.exit(1);
             }
+            
+            // accept either: items[], functions[], or a top-level array
+            let items = [];
+            if (Array.isArray(idx.items)) {
+              items = idx.items;
+            } else if (Array.isArray(idx.functions)) {
+              items = idx.functions;  // <-- this matches your current JSON
+            } else if (Array.isArray(idx)) {
+              items = idx;
+            }
+            
+            console.log("aux_index.json keys:", Object.keys(idx));
+            console.log("Detected items length:", items.length);
+            
+            if (items.length === 0) {
+              core.setFailed("aux_index.json has no valid items. Expected: items[], functions[], or a top-level array.");
+              process.exit(1);
+            }
+            
 
             // label plan
             const baseLabels = ["phase:1"]; // always apply
