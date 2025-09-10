@@ -1,0 +1,321 @@
+name: Track Examples
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/examples_index.json'   # only sync when the examples index changes
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry run (no changes written)"
+        required: true
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+      limit:
+        description: "max items to process this run"
+        required: true
+        type: string
+        default: "30"
+      delay_ms:
+        description: "delay between writes (ms)"
+        required: true
+        type: string
+        default: "800"
+
+permissions:
+  contents: read
+  issues: write
+
+# prevent overlapping runs from double-consuming quota
+concurrency:
+  group: examples-issues-sync
+  cancel-in-progress: true
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout (to read examples_index.json)
+        uses: actions/checkout@v4
+
+      - name: create/update issues from examples_index.json
+        uses: actions/github-script@v7
+        env:
+          TOKEN_SOURCE: ${{ secrets.PROJECTS_TOKEN && 'PAT' || 'GITHUB_TOKEN' }}
+        with:
+          # prefer PAT for bigger quota; fallback to GITHUB_TOKEN
+          github-token: ${{ secrets.PROJECTS_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+
+            // ---- preflight: show token source & assert access ----
+            console.log("repo context:", `${context.repo.owner}/${context.repo.repo}`);
+            console.log("event:", context.eventName);
+            console.log("will use token:", process.env.TOKEN_SOURCE || "unknown");
+
+            async function assertAccess() {
+              try {
+                const repo = await github.rest.repos.get({
+                  owner: context.repo.owner, repo: context.repo.repo
+                });
+                console.log("repo access OK:", repo.data.full_name, "private:", repo.data.private, "has_issues:", repo.data.has_issues);
+              } catch (e) {
+                core.setFailed(`❌ token cannot access repo ${context.repo.owner}/${context.repo.repo}: ${e.status} ${e.message}`);
+                process.exit(1);
+              }
+              try {
+                await github.rest.issues.listForRepo({
+                  owner: context.repo.owner, repo: context.repo.repo, per_page: 1, state: "all"
+                });
+                console.log("issues API OK");
+              } catch (e) {
+                core.setFailed(`❌ issues API not accessible: ${e.status} ${e.message}`);
+                process.exit(1);
+              }
+            }
+            await assertAccess();
+
+            // inputs
+            const isPush = context.eventName === "push"; // auto-runs on main should write
+            let DRY = isPush ? false : (core.getInput("dry_run") || "true").toLowerCase() === "true";
+            const LIMIT = Math.max(1, parseInt(core.getInput("limit") || "30", 10));
+            const DELAY = Math.max(200, parseInt(core.getInput("delay_ms") || "800", 10));
+
+            // simple pacing + retry/backoff (survive rate/abuse limits)
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            async function safe(fn, args, attempt = 1) {
+              try {
+                return await fn(args);
+              } catch (e) {
+                const status = e.status || e.response?.status;
+                if (status === 403) {
+                  const retryAfter = Number(e.response?.headers?.['retry-after'] || 0);
+                  const reset = Number(e.response?.headers?.['x-ratelimit-reset'] || 0);
+                  const waitMs = retryAfter
+                    ? retryAfter * 1000
+                    : reset
+                      ? Math.max(0, reset * 1000 - Date.now())
+                      : Math.min(60000, 1000 * (2 ** Math.min(attempt, 6))); // 1s→64s
+                  console.log(`⏳ rate limited (attempt ${attempt}) → waiting ~${Math.round(waitMs/1000)}s`);
+                  await sleep(waitMs);
+                  return safe(fn, args, attempt + 1);
+                }
+                if (status === 502 || 503 === status) {
+                  console.log(`⏳ transient ${status}, retrying...`);
+                  await sleep(2000);
+                  return safe(fn, args, attempt + 1);
+                }
+                throw e;
+              }
+            }
+
+            // preflight: check remaining quota; if low, auto-switch to DRY
+            async function rateGuard() {
+              try {
+                const rl = await github.rest.rateLimit.get();
+                const remaining = rl.data.resources.core.remaining;
+                const resetAt   = rl.data.resources.core.reset;
+                console.log(`rate-limit: remaining=${remaining}, reset=${new Date(resetAt*1000).toISOString()}, DRY=${DRY}`);
+                if (!DRY && remaining < 150) {
+                  console.log("low API quota → switching to DRY mode to avoid 403");
+                  DRY = true;
+                }
+              } catch (e) {
+                console.log("rate-limit check failed (continuing):", e?.message || e);
+              }
+            }
+            await rateGuard();
+
+            // load index file
+            const INDEX_PATH = ".github/examples_index.json";
+            if (!fs.existsSync(INDEX_PATH)) {
+              core.setFailed(`Missing ${INDEX_PATH}.`);
+              process.exit(1);
+            }
+            let idx;
+            try {
+              idx = JSON.parse(fs.readFileSync(INDEX_PATH, "utf8"));
+            } catch (e) {
+              core.setFailed(`Invalid JSON in ${INDEX_PATH}: ${e.message}`);
+              process.exit(1);
+            }
+
+            // accept either: items[], functions[] (legacy), or a top-level array
+            let items = [];
+            if (Array.isArray(idx.items)) {
+              items = idx.items;
+            } else if (Array.isArray(idx.functions)) {
+              items = idx.functions;  // tolerate old shape
+            } else if (Array.isArray(idx)) {
+              items = idx;
+            }
+
+            console.log("examples_index.json keys:", Array.isArray(idx) ? ["<array>"] : Object.keys(idx));
+            console.log("detected items length:", items.length);
+
+            if (items.length === 0) {
+              core.setFailed("examples_index.json has no valid items. expected: items[], functions[], or a top-level array.");
+              process.exit(1);
+            }
+
+            // bound processing to limit (for safety)
+            const slice = items.slice(0, LIMIT);
+            console.log(`processing up to ${slice.length} items (limit=${LIMIT}); DRY=${DRY}`);
+
+            // label plan
+            const baseLabels = ["phase:examples"]; // examples phase label
+            const ensureLabels = async (names) => {
+              const existing = await github.paginate(
+                github.rest.issues.listLabelsForRepo,
+                { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
+              );
+              const need = names.filter(n => !existing.find(e => e.name.toLowerCase() === n.toLowerCase()));
+              if (DRY) {
+                if (need.length) console.log("(dry) would create labels:", need.join(", "));
+                return;
+              }
+              for (const n of need) {
+                const colour =
+                  n.startsWith("status:") ? "6ea04b" :
+                  n === "priority:high" ? "b60205" :
+                  n.startsWith("area:") || n.startsWith("module:") ? "1d76db" :
+                  "ededed";
+                await safe(github.rest.issues.createLabel, {
+                  owner: context.repo.owner, repo: context.repo.repo, name: n, color: colour
+                });
+                console.log("created label:", n);
+                await sleep(200); // tiny pacing on label writes
+              }
+            };
+
+            // preload all issues once (avoid search api limits)
+            const allIssues = await github.paginate(
+              github.rest.issues.listForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, state: "all", per_page: 100 }
+            );
+            const byTitle = new Map(allIssues.map(i => [i.title, i])); // exact title → issue
+
+            // helpers
+            const toAreaLabels = () => ["area:examples"]; // examples-only area
+            const statusLabel = (status) =>
+              (String(status || "").toLowerCase() === "done") ? "status:done" : "status:todo";
+
+            const makeBody = ({ matlab, python, status }) => {
+              const done = String(status || "").toLowerCase() === "done";
+              const lines = [
+                `**MATLAB:** ${matlab}`,
+                `**Python:** ${python}`,
+                "",
+                `**Status:** ${done ? "✅ Complete" : "⏳ To Do"}`,
+                "",
+                `**Attribution:** From Sebastian J. Schlecht's FDN Toolbox`,
+                `**Workflow author:** Facundo Franchino`,
+                "",
+                "### Checklist",
+                `${done ? "- [x]" : "- [ ]"} parity with MATLAB figures/output`,
+                `${done ? "- [x]" : "- [ ]"} clear usage + plotting`,
+                `${done ? "- [x]" : "- [ ]"} inputs/outputs documented`
+              ];
+              return lines.join("\n");
+            };
+
+            // make sure core labels exist 
+            const allLabelNames = new Set(baseLabels.concat([
+              "area:examples",
+              "priority:high", "status:done", "status:todo"
+            ]));
+            await ensureLabels([...allLabelNames]);
+
+            // small util: compare arrays case-insensitively
+            const sameLabels = (a, b) => {
+              const A = (a || []).map(x => x.toLowerCase()).sort().join(",");
+              const B = (b || []).map(x => x.toLowerCase()).sort().join(",");
+              return A === B;
+            };
+
+            // iterate items
+            let total = 0, doneCount = 0, todoCount = 0, created = 0, updated = 0, skipped = 0, noop = 0;
+
+            for (let i = 0; i < slice.length; i++) {
+              const it = slice[i];
+
+              // periodic quota check
+              if (!DRY && i % 5 === 0) await rateGuard();
+
+              const matlab = it.matlab;
+              const python = it.python;
+              const status = String(it.status || "todo").toLowerCase();
+              if (!matlab || !python) { console.log("skip invalid entry:", it); skipped++; continue; }
+
+              // title with arrow (british english comments etc.)
+              const title = `Example: ${matlab} → ${python}`;
+              const labels = [
+                ...baseLabels,
+                ...toAreaLabels(),
+                "priority:high",
+                statusLabel(status)
+              ];
+              const body = makeBody({ matlab, python, status });
+
+              // idempotent lookup
+              const hit = byTitle.get(title);
+
+              if (DRY) {
+                console.log(`(dry) ${hit ? "would update" : "would create"}: "${title}" with labels [${labels.join(", ")}]`);
+              } else {
+                if (hit) {
+                  const currentLabels = (hit.labels || []).map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean);
+                  const needsTitle = hit.title !== title;
+                  const needsBody = (hit.body || "") !== body;
+                  const needsLabels = !sameLabels(currentLabels, labels);
+
+                  if (!needsTitle && !needsBody && !needsLabels) {
+                    noop++;
+                  } else {
+                    await safe(github.rest.issues.update, {
+                      owner: context.repo.owner, repo: context.repo.repo,
+                      issue_number: hit.number,
+                      title, body, labels
+                    });
+                    console.log(`updated #${hit.number}: ${title}`);
+                    updated++;
+                    byTitle.set(title, { ...hit, title, body, labels: labels.map(n => ({ name: n })) }); // keep cache consistent
+                    await sleep(DELAY); // pacing
+                  }
+                } else {
+                  const createdIssue = await safe(github.rest.issues.create, {
+                    owner: context.repo.owner, repo: context.repo.repo,
+                    title, body, labels
+                  });
+                  console.log(`created #${createdIssue.data.number}: ${title}`);
+                  created++;
+                  byTitle.set(title, createdIssue.data); // add new issue to cache
+                  await sleep(DELAY); // pacing
+                }
+              }
+
+              total++;
+              if (status === "done") doneCount++; else todoCount++;
+            }
+
+            const progress = total ? Math.round((doneCount / total) * 100) : 0;
+
+            console.log("---- Summary ----");
+            console.log(`Processed (this run): ${slice.length} / ${items.length}`);
+            console.log(`Total in slice:       ${total}`);
+            console.log(`Completed in slice:   ${doneCount}`);
+            console.log(`To do in slice:       ${todoCount}`);
+            console.log(`Created:              ${created}`);
+            console.log(`Updated:              ${updated}`);
+            console.log(`No-op (already ok):   ${noop}`);
+            console.log(`Skipped (invalid):    ${skipped}`);
+            console.log(`Progress (slice):     ${progress}%`);
+
+            // also emit as outputs (useful if you ever chain jobs)
+            core.setOutput("total_processed", String(slice.length));
+            core.setOutput("created", String(created));
+            core.setOutput("updated", String(updated));
+            core.setOutput("noop", String(noop));
+            core.setOutput("progress_percent", String(progress));
