@@ -78,8 +78,8 @@ jobs:
             await assertAccess();
 
             // inputs
-            const isPush = context.eventName === "push"; // auto-runs on main should write
-            let DRY = isPush ? false : (core.getInput("dry_run") || "true").toLowerCase() === "true";
+            const isPush = context.eventName === "push";
+            let DRY = isPush ? true : (core.getInput("dry_run") || "true").toLowerCase() === "true";
             const LIMIT = Math.max(1, parseInt(core.getInput("limit") || "30", 10));
             const DELAY = Math.max(200, parseInt(core.getInput("delay_ms") || "800", 10));
 
