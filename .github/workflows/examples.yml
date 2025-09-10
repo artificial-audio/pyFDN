@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run (no changes written)"
+        description: "dry run (no changes written)"
         required: true
         type: choice
         options: ["true", "false"]
@@ -17,12 +17,12 @@ on:
         description: "max items to process this run"
         required: true
         type: string
-        default: "20"
+        default: "30"
       delay_ms:
         description: "delay between writes (ms)"
         required: true
         type: string
-        default: "1200"
+        default: "800"
 
 permissions:
   contents: read
@@ -30,17 +30,17 @@ permissions:
 
 # prevent overlapping runs from double-consuming quota
 concurrency:
-  group: issues-sync
+  group: examples-issues-sync
   cancel-in-progress: true
 
 jobs:
   track:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (to read examples_index.json)
+      - name: checkout (to read examples_index.json)
         uses: actions/checkout@v4
 
-      - name: Create/Update issues from examples_index.json
+      - name: create/update issues from examples_index.json
         uses: actions/github-script@v7
         env:
           TOKEN_SOURCE: ${{ secrets.PROJECTS_TOKEN && 'PAT' || 'GITHUB_TOKEN' }}
@@ -80,8 +80,8 @@ jobs:
             // inputs
             const isPush = context.eventName === "push"; // auto-runs on main should write
             let DRY = isPush ? false : (core.getInput("dry_run") || "true").toLowerCase() === "true";
-            const LIMIT = Math.max(1, parseInt(core.getInput("limit") || "20", 10));
-            const DELAY = Math.max(300, parseInt(core.getInput("delay_ms") || "1200", 10));
+            const LIMIT = Math.max(1, parseInt(core.getInput("limit") || "30", 10));
+            const DELAY = Math.max(200, parseInt(core.getInput("delay_ms") || "800", 10));
 
             // simple pacing + retry/backoff (survive rate/abuse limits)
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -165,7 +165,7 @@ jobs:
             console.log(`processing up to ${slice.length} items (limit=${LIMIT}); DRY=${DRY}`);
 
             // label plan
-            const baseLabels = ["phase:1"]; // keep the same phase label as before
+            const baseLabels = ["phase:examples"]; // examples phase label
             const ensureLabels = async (names) => {
               const existing = await github.paginate(
                 github.rest.issues.listLabelsForRepo,
@@ -198,7 +198,7 @@ jobs:
             const byTitle = new Map(allIssues.map(i => [i.title, i])); // exact title → issue
 
             // helpers
-            const toAreaLabels = () => ["area:examples"]; // examples-only label
+            const toAreaLabels = () => ["area:examples"]; // examples-only area
             const statusLabel = (status) =>
               (String(status || "").toLowerCase() === "done") ? "status:done" : "status:todo";
 
@@ -214,9 +214,9 @@ jobs:
                 `**Workflow author:** Facundo Franchino`,
                 "",
                 "### Checklist",
-                `${done ? "- [x]" : "- [ ]"} Unit tests cover typical and edge cases`,
-                `${done ? "- [x]" : "- [ ]"} Behaviour matches MATLAB output within tolerance`,
-                `${done ? "- [x]" : "- [ ]"} Docstring with usage example`
+                `${done ? "- [x]" : "- [ ]"} parity with MATLAB figures/output`,
+                `${done ? "- [x]" : "- [ ]"} clear usage + plotting`,
+                `${done ? "- [x]" : "- [ ]"} inputs/outputs documented`
               ];
               return lines.join("\n");
             };
@@ -249,7 +249,8 @@ jobs:
               const status = String(it.status || "todo").toLowerCase();
               if (!matlab || !python) { console.log("skip invalid entry:", it); skipped++; continue; }
 
-              const title = `Example: ${matlab} to ${python}`;
+              // title with arrow (british english comments etc.)
+              const title = `Example: ${matlab} → ${python}`;
               const labels = [
                 ...baseLabels,
                 ...toAreaLabels(),
@@ -280,7 +281,7 @@ jobs:
                     });
                     console.log(`updated #${hit.number}: ${title}`);
                     updated++;
-                    byTitle.set(title, { ...hit, title, body, labels: labels.map(n => ({ name: n })) });
+                    byTitle.set(title, { ...hit, title, body, labels: labels.map(n => ({ name: n })) }); // keep cache consistent
                     await sleep(DELAY); // pacing
                   }
                 } else {
@@ -290,7 +291,7 @@ jobs:
                   });
                   console.log(`created #${createdIssue.data.number}: ${title}`);
                   created++;
-                  byTitle.set(title, createdIssue.data);
+                  byTitle.set(title, createdIssue.data); // add new issue to cache
                   await sleep(DELAY); // pacing
                 }
               }
