@@ -108,3 +108,19 @@ ENV/
 .vscode/
 .idea/
 
+# OS-specific cruft
+.DS_Store
+Thumbs.db
+
+# Generated audio / data artefacts
+*.wav
+*.flac
+*.aiff
+*.mat
+*.npy
+*.npz
+*.pkl
+
+# Profiling outputs
+profile_default/
+*.prof
