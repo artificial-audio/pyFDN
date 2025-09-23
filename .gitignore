@@ -109,3 +109,6 @@ ENV/
 !.vscode/settings.json
 .idea/
 
+src/.DS_Store
+src/pyFDN/.DS_Store
+.DS_Store
