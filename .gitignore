@@ -109,3 +109,6 @@ ENV/
 !.vscode/settings.json
 .idea/
 
+opa_fig1.jpg
+src/pyFDN/.DS_Store
+src/.DS_Store
