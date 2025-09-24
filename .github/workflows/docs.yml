@@ -1,0 +1,50 @@
+name: Docs CI
+
+# Trigger automatically on push or PR + manual trigger
+on:
+  workflow_dispatch:       # manual trigger
+  push:
+    branches: [ main ]    # optional automatic build
+    paths:
+      - 'src/**'
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Install Sphinx and dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme
+
+      # Auto-generate .rst files from source
+      - name: Generate Sphinx RST
+        run: |
+          sphinx-apidoc -o docs/ ../src/<your_package_name>  # replace with your package
+
+      # Build the HTML documentation
+      - name: Build HTML docs
+        working-directory: docs
+        run: make html
+
+      # Deploy to GitHub Pages (repo-specific)
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/_build/html
