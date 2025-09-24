@@ -9,7 +9,7 @@ Based on ideas from:
     (2020).
 
 Original MATLAB code: (c) Sebastian Jiro Schlecht, Monday, 7. December 2020
-Python translation: Facundo Franchino, 2025
+Python translation: Facundo Franchino, September 2025
 """
 
 import torch
@@ -255,7 +255,7 @@ def create_coupled_rooms_fdn():
         impulse[0, 0, 0] = 1.0
         ir = model(impulse).squeeze().cpu().numpy()
         
-        # Ensure correct shape
+        # correct shape
         if ir.ndim == 1:
             ir = ir.reshape(-1, 1)
         
@@ -290,7 +290,7 @@ def plot_results(ir, fs, feedback_matrix):
     # Create figure with subplots
     fig = plt.figure(figsize=(15, 5))
     
-    # Plot 1: Impulse responses (using samples like MATLAB)
+    # Plot 1, Impulse responses (using samples like MATLAB)
     ax1 = plt.subplot(1, 3, 1)
     samples = np.arange(len(ir))
     ax1.plot(samples, ir[:, 0], label='Short Room', alpha=0.7, linewidth=0.5)
@@ -304,7 +304,7 @@ def plot_results(ir, fs, feedback_matrix):
     ax1.grid(True, alpha=0.3)
     ax1.set_xlim([0, len(ir)])
     
-    # Plot 2: Feedback matrix
+    # Plot 2, Feedback matrix
     ax2 = plt.subplot(1, 3, 2)
     im = ax2.imshow(feedback_matrix, cmap='RdBu_r', vmin=-1, vmax=1)
     plt.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
@@ -316,7 +316,7 @@ def plot_results(ir, fs, feedback_matrix):
     ax2.axhline(y=5.5, color='black', linewidth=1, linestyle='--', alpha=0.5)
     ax2.axvline(x=5.5, color='black', linewidth=1, linestyle='--', alpha=0.5)
     
-    # Plot 3: Energy decay curves (instead of pole plot from MATLAB's dss2pr)
+    # Plot 3, Energy decay curves (instead of pole plot from MATLAB's dss2pr)
     ax3 = plt.subplot(1, 3, 3)
     
     # Compute backward energy integration (Schroeder integral)
