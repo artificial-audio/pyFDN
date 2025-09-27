@@ -26,6 +26,73 @@ from flamo.functional import signal_gallery
 torch.manual_seed(5)
 np.random.seed(5)
 
+def tiny_rotation_matrix(n, delta, spread=0.1, log_matrix=None):
+    """
+    Translation of tinyRotationMatrix.m - orthogonal matrix with small eigenvalue angles
+    
+    Args:
+        n: Matrix size
+        delta: Mean normalized eigenvalue angle  
+        spread: Spreading of eigenvalue angle (default 0.1)
+        log_matrix: Initial logarithm matrix (default random)
+        
+    Returns:
+        rotation_matrix: Orthogonal matrix
+    """
+    if log_matrix is None:
+        log_matrix = torch.randn(n, n)
+    
+    # Generate skew symmetric matrix
+    skew_symmetric = (log_matrix - log_matrix.T) / 2
+    
+    # Eigenvalue decomposition
+    eigenvalues, eigenvectors = torch.linalg.eig(skew_symmetric)
+    
+    # Find nearest neighbors: for each eigenvector, find closest among conjugates
+    # The MATLAB nearestneighbour(v, conj(v)) finds for each column of v, 
+    # the closest column in conj(v) using Euclidean distance
+    
+    # Calculate pairwise distances between eigenvectors and their conjugates
+    # Each eigenvector is a column, so we transpose for proper broadcasting
+    v_conj = torch.conj(eigenvectors)
+    
+    # Compute distance matrix: |v_i - conj(v_j)|^2 for all i,j
+    distances = torch.zeros(n, n)
+    for i in range(n):
+        for j in range(n):
+            # Distance between eigenvector i and conjugate of eigenvector j
+            diff = eigenvectors[:, i] - v_conj[:, j]
+            distances[i, j] = torch.norm(diff).real
+    
+    # Find nearest neighbor index for each eigenvector
+    idx = torch.argmin(distances, dim=1)
+    
+    # Generate frequency spread
+    frequency_spread = 2 * (torch.rand(n) - 0.5) * spread + 1
+    
+    # Average spreads for conjugate pairs
+    frequency_spread = (frequency_spread[idx] + frequency_spread) / 2
+    
+    # Detect real eigenvalues: where IDX[i] == i (self-conjugate)
+    # MATLAB: frequencySpread( IDX - 1:N == 0 ) = 0
+    # This translates to: idx == torch.arange(n)
+    real_eigenval_mask = (idx == torch.arange(n))
+    frequency_spread[real_eigenval_mask] = 0
+    
+    # Scale and spread eigenvalues
+    eigenvals_normalized = eigenvalues / (torch.abs(eigenvalues) + 1e-12)
+    new_eigenvals = eigenvals_normalized * frequency_spread * delta * torch.pi
+    
+    # Create new skew-symmetric matrix
+    new_skew = torch.real(eigenvectors @ torch.diag(new_eigenvals) @ eigenvectors.conj().T)
+    new_skew = (new_skew - new_skew.T) / 2
+    
+    # Matrix exponential to get orthogonal matrix
+    rotation_matrix = torch.matrix_exp(new_skew)
+    
+    return rotation_matrix
+
+
 def create_coupled_rooms_fdn():
     """
     Create a coupled rooms FDN matching the MATLAB implementation exactly.
@@ -58,53 +125,25 @@ def create_coupled_rooms_fdn():
     delays_room2 = torch.tensor([2532, 2037, 1593, 1375, 1161, 2477], dtype=torch.float32)
     delay_lengths = torch.cat([delays_room1, delays_room2])
     
-    print(f"Delay values: {delay_lengths.int().tolist()}")
     
     # Coupling parameter (exact from MATLAB)
     coupling = 0.3
     
-    # Exact feedback matrices from MATLAB tinyRotationMatrix(6, 12)
-    # These were captured from the MATLAB output
-    A1 = torch.tensor([
-        [-0.3317,  0.1721, -0.2895,  0.3210,  0.5599, -0.6001],
-        [ 0.1655, -0.6906,  0.5125, -0.1606,  0.3038, -0.3392],
-        [-0.7027, -0.4035,  0.1191,  0.4512, -0.3147,  0.1630],
-        [ 0.3934, -0.5077, -0.6866,  0.2267, -0.2243, -0.1199],
-        [ 0.1033,  0.2301,  0.2475,  0.0899, -0.6489, -0.6678],
-        [ 0.4509,  0.1415,  0.3268,  0.7798,  0.1543,  0.1947]
-    ], dtype=torch.float32)
+    # Generate feedback matrices using tinyRotationMatrix
+    # Matches MATLAB: A1 = tinyRotationMatrix(N/2,12); A2 = tinyRotationMatrix(N/2,12);
+    A1 = tiny_rotation_matrix(N_per_room, 12).float()
+    A2 = tiny_rotation_matrix(N_per_room, 12).float()
     
-    A2 = torch.tensor([
-        [ 0.1120,  0.4493,  0.2820,  0.5641, -0.5814,  0.2231],
-        [-0.5886,  0.1512, -0.0437,  0.5752,  0.5456,  0.0137],
-        [-0.0576,  0.1039,  0.5691, -0.0287,  0.0054, -0.8131],
-        [-0.5400, -0.6441, -0.0199,  0.1149, -0.5250, -0.0654],
-        [ 0.5869, -0.5341, -0.0065,  0.5621,  0.1914, -0.1330],
-        [-0.0408, -0.2536,  0.7708, -0.1448,  0.2278,  0.5167]
-    ], dtype=torch.float32)
     
-    print(f"\nA1 matrix (first 3x3):\n{A1[:3, :3]}")
-    print(f"\nA2 matrix (first 3x3):\n{A2[:3, :3]}")
+    # Compute matrix square roots using eigenvalue decomposition
+    # sqrtm(A) = V * sqrt(D) * V^(-1) where A = V * D * V^(-1)
+    def matrix_sqrt(A):
+        eigenvals, eigenvecs = torch.linalg.eig(A.to(torch.complex64))
+        sqrt_eigenvals = torch.sqrt(eigenvals)
+        return torch.real(eigenvecs @ torch.diag(sqrt_eigenvals) @ torch.linalg.inv(eigenvecs)).float()
     
-    # Use the exact square root matrices from MATLAB
-    # These were captured from sqrtm(A1) and sqrtm(A2) in MATLAB
-    A1_sqrt = torch.tensor([
-        [ 0.4363, -0.3556, -0.0379,  0.0913,  0.7694, -0.2854],
-        [ 0.6143,  0.2620,  0.5911, -0.1438, -0.2962, -0.3102],
-        [-0.4151, -0.4892,  0.7049,  0.3011, -0.0025, -0.0291],
-        [ 0.2606, -0.2261, -0.3266,  0.7317, -0.4367, -0.2196],
-        [-0.3465,  0.6565,  0.0671,  0.3898,  0.2869, -0.4585],
-        [ 0.2684,  0.2890,  0.2027,  0.4392,  0.2176,  0.7504]
-    ], dtype=torch.float32)
-    
-    A2_sqrt = torch.tensor([
-        [ 0.7440,  0.3316,  0.1310,  0.3899, -0.3842,  0.1407],
-        [-0.3770,  0.7573, -0.0141,  0.3999,  0.3471,  0.0613],
-        [-0.0616,  0.0329,  0.8850, -0.0297,  0.0125, -0.4592],
-        [-0.3805, -0.4243,  0.0145,  0.7457, -0.3447, -0.0091],
-        [ 0.3856, -0.3425, -0.0128,  0.3575,  0.7717, -0.1029],
-        [-0.0848, -0.1347,  0.4462, -0.0569,  0.1322,  0.8688]
-    ], dtype=torch.float32)
+    A1_sqrt = matrix_sqrt(A1)
+    A2_sqrt = matrix_sqrt(A2)
     
     # Build the exact coupled feedback matrix from MATLAB
     cos_c = torch.cos(torch.tensor(coupling))
@@ -117,13 +156,10 @@ def create_coupled_rooms_fdn():
     feedback_matrix[N_per_room:, :N_per_room] = -sin_c * torch.matmul(A2_sqrt, A1_sqrt)
     feedback_matrix[N_per_room:, N_per_room:] = cos_c * A2
     
-    print(f"\nFeedback matrix (top-left 3x3):\n{feedback_matrix[:3, :3]}")
-    print(f"Feedback matrix (top-right 3x3):\n{feedback_matrix[:3, 6:9]}")
     
     # Verify orthogonality
     ortho_check = torch.matmul(feedback_matrix.T, feedback_matrix)
     max_deviation = torch.max(torch.abs(ortho_check - torch.eye(N)))
-    print(f"\nMax deviation from orthogonality: {max_deviation:.6e}")
     
     ## Build FDN using FLAMO components
     
@@ -180,8 +216,6 @@ def create_coupled_rooms_fdn():
     shortT60 = torch.tensor([0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175])
     longT60 = torch.tensor([4.0, 4.0, 4.4, 4.6, 4.2, 3.0, 2.2, 1.6, 1.4, 1.4])
     
-    print(f"\nShort T60 (1kHz): {shortT60[4].item():.3f}s")
-    print(f"Long T60 (1kHz): {longT60[4].item():.3f}s")
     
     # For simplicity, use frequency-independent attenuation at 1kHz band
     attenuation = dsp.parallelGain(
@@ -248,7 +282,6 @@ def create_coupled_rooms_fdn():
     )
     
     # Generate impulse response
-    print("\nGenerating impulse response...")
     with torch.no_grad():
         # Use direct impulse processing (faster and more reliable)
         impulse = torch.zeros(1, nfft, 1)
@@ -262,17 +295,6 @@ def create_coupled_rooms_fdn():
         # Trim to desired length
         ir = ir[:impulse_response_length, :]
         
-        print(f"IR shape: {ir.shape}")
-        print(f"Max amplitude room 1: {np.max(np.abs(ir[:, 0])):.6f}")
-        if ir.shape[1] > 1:
-            print(f"Max amplitude room 2: {np.max(np.abs(ir[:, 1])):.6f}")
-        
-        # Print first 10 samples for verification
-        print(f"\nFirst 10 samples of room 1 IR:")
-        print(ir[:10, 0])
-        if ir.shape[1] > 1:
-            print(f"\nFirst 10 samples of room 2 IR:")
-            print(ir[:10, 1])
     
     return ir, fs, feedback_matrix.numpy(), delay_lengths.numpy()
 
@@ -339,44 +361,12 @@ def plot_results(ir, fs, feedback_matrix):
     ax3.set_ylim([-60, 0])
     
     plt.tight_layout()
-    plt.savefig('coupled_rooms_python.png', dpi=150)
     plt.show()
-    
-    # Save audio file
-    if ir.shape[1] > 1:
-        # Stereo output
-        ir_normalized = ir / np.max(np.abs(ir))
-    else:
-        # Mono output, duplicate to stereo
-        ir_normalized = np.column_stack([ir, ir]) / np.max(np.abs(ir))
-    
-    sf.write('coupled_rooms_python.wav', ir_normalized, fs)
-    print(f"\nSaved audio to 'coupled_rooms_python.wav'")
-    print(f"Saved plot to 'coupled_rooms_python.png'")
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Coupled Rooms FDN Example")
-    print("Python Translation by Facundo Franchino")
-    print("Using FLAMO library")
-    print("=" * 60)
-    print("\nOriginal MATLAB code by Sebastian J. Schlecht")
-    print("Based on: Das, Abel & Canfield-Dafilou (DAFx 2020)")
-    print("=" * 60)
-    
     # Generate coupled rooms FDN
     ir, fs, feedback_matrix, delays = create_coupled_rooms_fdn()
     
     # Plot results
     plot_results(ir, fs, feedback_matrix)
-    
-    print("\n" + "=" * 60)
-    print("Processing complete!")
-    print("\nImplementation Notes:")
-    print("- Modal decomposition (dss2pr) has been omitted as requested")
-    print("- Using exact delay values and matrices from MATLAB with rng(5)")
-    print("- Frequency-independent attenuation for simplicity")
-    print("  (Can be upgraded to use parallelFDNAccurateGEQ for full frequency-dependent absorption)")
-    print("- The coupling is implemented through the block matrix structure")
-    print("=" * 60)

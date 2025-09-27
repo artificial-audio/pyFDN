@@ -35,6 +35,11 @@ def design_one_pole_filter(HDc, HNyq):
 
 
 def one_pole_absorption(RT_DC, RT_NY, delays, fs):
+    """
+    One-pole absorption filter design for FDN.
+    
+    Note: Modal decomposition part should still be translated in future work.
+    """
     HDc = db2mag(delays * RT602slope(RT_DC, fs))
     HNyq = db2mag(delays * RT602slope(RT_NY, fs))
     b, a = design_one_pole_filter(HDc, HNyq)
