@@ -1,33 +1,28 @@
+from __future__ import annotations
 import numpy as np
 
-
-def mag2db(x):
-    return 20 * np.log10(np.maximum(np.abs(x), np.finfo(float).eps))
-
-
-def poly_degree(polynomial, var, tol=None):
+def poly_degree(polynomial: np.ndarray, var: str, tol_db: float = -200) -> int:
     """
-    Determine the degree of a polynomial with tolerance and exponent sign.
+    Polynomial degree with tolerance and exponent sign.
+    
     Args:
-        polynomial: 1D numpy array of polynomial coefficients
-        var: 'z^1' or 'z^-1'
-        tol: tolerance in dB (optional, default: mag2db(eps))
+        polynomial: Vector of polynomial coefficients
+        var: Either 'z^1' or 'z^-1'
+        tol_db: Tolerance in dB
+        
     Returns:
-        deg: degree of the polynomial
+        deg: Degree of the polynomial
     """
-    if tol is None:
-        tol = mag2db(np.finfo(float).eps)
-
-    poly_db = mag2db(np.abs(polynomial))
+    poly_db = 20 * np.log10(np.abs(polynomial) + np.finfo(float).eps)
     max_coefficient = np.max(poly_db)
-
-    if var == "z^-1":
-        indices = np.where((poly_db - max_coefficient) > tol)[0]
-        deg = indices[-1] if len(indices) > 0 else 0
-    elif var == "z^1":
-        indices = np.where((poly_db - max_coefficient) > tol)[0]
-        deg = len(polynomial) - indices[0] - 1 if len(indices) > 0 else 0
+    
+    if var == 'z^-1':
+        valid_indices = np.where((poly_db - max_coefficient) > tol_db)[0]
+        deg = valid_indices[-1] if len(valid_indices) > 0 else 0
+    elif var == 'z^1':
+        valid_indices = np.where((poly_db - max_coefficient) > tol_db)[0]
+        deg = len(polynomial) - valid_indices[0] if len(valid_indices) > 0 else 0
     else:
-        raise ValueError("var must be 'z^1' or 'z^-1'")
-
+        raise ValueError('Variable type not defined')
+    
     return deg

@@ -1,35 +1,34 @@
+from __future__ import annotations
 import numpy as np
 
 
-def matrix_convolution(A, B):
+def matrix_convolution(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     """
-    Matrix polynomial multiplication (convolution along the last axis).
-    A: shape (m, n, orderA)
-    B: shape (n, k, orderB)
+    Matrix polynomial multiplication by convolution.
+    
+    Args:
+        A: Matrix polynomial of size [m, n, order]
+        B: Matrix polynomial of size [n, k, order]
+        
     Returns:
-        C: shape (m, k, orderA + orderB - 1)
+        C: Matrix polynomial of size [m, k, order] with C(z) = A(z)*B(z)
     """
-    szA = A.shape
-    szB = B.shape
-
-    if szA[1] != szB[0]:
-        raise ValueError("Invalid matrix dimension.")
-
-    m, n, orderA = szA
-    n2, k, orderB = szB
-    orderC = orderA + orderB - 1
-
-    C = np.zeros((m, k, orderC), dtype=A.dtype)
-
-    # Permute to (order, m, n) for easier indexing
+    sz_A = A.shape
+    sz_B = B.shape
+    
+    if sz_A[1] != sz_B[0]:
+        raise ValueError('Invalid matrix dimension.')
+    
+    C = np.zeros((sz_A[0], sz_B[1], sz_A[2] + sz_B[2] - 1))
+    
     A_perm = np.transpose(A, (2, 0, 1))
     B_perm = np.transpose(B, (2, 0, 1))
-
-    for row in range(m):
-        for col in range(k):
-            for it in range(n):
-                # Convolve the polynomials for (row, it) and (it, col)
-                conv_result = np.convolve(A_perm[:, row, it], B_perm[:, it, col])
-                C[row, col, : len(conv_result)] += conv_result
-
+    C_perm = np.transpose(C, (2, 0, 1))
+    
+    for row in range(sz_A[0]):
+        for col in range(sz_B[1]):
+            for it in range(sz_A[1]):
+                C_perm[:, row, col] += np.convolve(A_perm[:, row, it], B_perm[:, it, col])
+    
+    C = np.transpose(C_perm, (1, 2, 0))
     return C
