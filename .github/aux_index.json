@@ -1,0 +1,442 @@
+{
+  "functions": [
+    {
+      "matlab": "EDC.m",
+      "python": "e_d_c.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "RT602slope.m",
+      "python": "r_t602slope.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "absorption2T60.m",
+      "python": "absorption2_t60.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "absorptionFilters.m",
+      "python": "absorption_filters.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "adjPoly.m",
+      "python": "adj_poly.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "adjugate.m",
+      "python": "adjugate.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "blueWhiteRedColormap.m",
+      "python": "blue_white_red_colormap.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "circspace.m",
+      "python": "circspace.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "circulant.m",
+      "python": "circulant.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "clip.m",
+      "python": "clip.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "combnk.m",
+      "python": "combnk.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "convert2zFilter.m",
+      "python": "convert2z_filter.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "decayFitNet2InitialLevel.m",
+      "python": "decay_fit_net2_initial_level.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "detPolynomial.m",
+      "python": "det_polynomial.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "firstOrderAbsorption.m",
+      "python": "first_order_absorption.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "generalCharPoly.m",
+      "python": "general_char_poly.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "generalCharPolySym.m",
+      "python": "general_char_poly_sym.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "hertz2unit.m",
+      "python": "hertz2unit.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "isBoundingCurve.m",
+      "python": "is_bounding_curve.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "loopTF.m",
+      "python": "loop_t_f.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "lowRankApprox.m",
+      "python": "low_rank_approx.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "m2pm.m",
+      "python": "m2pm.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "mag2db.m",
+      "python": "mag2db.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "mat.m",
+      "python": "mat.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "matrixConvolution.m",
+      "python": "matrix_convolution.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "matrixDelayApproximation.m",
+      "python": "matrix_delay_approximation.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "matrix_polyder.m",
+      "python": "matrix_polyder.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "matrix_polyval.m",
+      "python": "matrix_polyval.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "maxCorr.m",
+      "python": "max_corr.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "mcircshift.m",
+      "python": "mcircshift.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "mgrpdelay.m",
+      "python": "mgrpdelay.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "mpoly2sym.m",
+      "python": "mpoly2sym.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "mpolyDegree.m",
+      "python": "mpoly_degree.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "ms2smp.m",
+      "python": "ms2smp.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "msym2poly.m",
+      "python": "msym2poly.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "negpolyder.m",
+      "python": "negpolyder.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "onePoleAbsorption.m",
+      "python": "one_pole_absorption.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "outerSumApproximation.m",
+      "python": "outer_sum_approximation.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "plotImpulseResponseMatrix.m",
+      "python": "plot_impulse_response_matrix.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "plotMatrix.m",
+      "python": "plot_matrix.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "plotSystemMatrix.m",
+      "python": "plot_system_matrix.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "poleBoundaries.m",
+      "python": "pole_boundaries.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "poleQuality.m",
+      "python": "pole_quality.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "polyDegree.m",
+      "python": "poly_degree.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "polydiag.m",
+      "python": "polydiag.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "printMatLatex.m",
+      "python": "print_mat_latex.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "printMatSyntax.m",
+      "python": "print_mat_syntax.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "processFDN.m",
+      "python": "process_f_d_n.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "processTransposedFDN.m",
+      "python": "process_transposed_f_d_n.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "rad2hertz.m",
+      "python": "rad2hertz.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "randSgn.m",
+      "python": "rand_sgn.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "realLogOfNormalMatrix.m",
+      "python": "real_log_of_normal_matrix.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "reduceConjugatePairs.m",
+      "python": "reduce_conjugate_pairs.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "refinePolePositions.m",
+      "python": "refine_pole_positions.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "restoreConjugatePairs.m",
+      "python": "restore_conjugate_pairs.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "reverberationTime.m",
+      "python": "reverberation_time.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "slope2RT60.m",
+      "python": "slope2_r_t60.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "smp2ms.m",
+      "python": "smp2ms.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "snap.m",
+      "python": "snap.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "sortby.m",
+      "python": "sortby.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "tfMatrix.m",
+      "python": "tf_matrix.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "toDiagonalSimilarCanonicalForm.m",
+      "python": "to_diagonal_similar_canonical_form.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "transposeAllFields.m",
+      "python": "transpose_all_fields.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "unit2hertz.m",
+      "python": "unit2hertz.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zDelay.m",
+      "python": "z_delay.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zFDNloop.m",
+      "python": "z_f_d_nloop.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zFDNloopSimple.m",
+      "python": "z_f_d_nloop_simple.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zFIR.m",
+      "python": "z_f_i_r.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zFilter.m",
+      "python": "z_filter.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zSOS.m",
+      "python": "z_s_o_s.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zScalar.m",
+      "python": "z_scalar.py",
+      "status": "todo",
+      "description": ""
+    },
+    {
+      "matlab": "zTF.m",
+      "python": "zTF.py",
+      "status": "done",
+      "description": ""
+    },
+    {
+      "matlab": "zp2rpk.m",
+      "python": "zp2rpk.py",
+      "status": "todo",
+      "description": ""
+    }
+  ]
+}
