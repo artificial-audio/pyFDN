@@ -30,7 +30,7 @@ dependencies = [
   "jupyter",
   "ipython",
   "ipykernel",
-  "flamo==0.1.13",
+  "flamo==0.1.7",
   "flareverb==0.0.2"
 ]
 
