@@ -14,7 +14,7 @@ pyFDN
         :target: https://pyFDN.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-.. image:: https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue
+.. image:: https://img.shields.io/badge/python-3.10%20%7C%203.11-blue
         :target: https://www.python.org/downloads/
         :alt: Python versions
 
