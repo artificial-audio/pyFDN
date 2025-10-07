@@ -104,20 +104,56 @@ mixing_matrix.assign_value(feedback_matrix_torch)
 
 # Absorption Filters (using pyFDN's one-pole design with FLAMO implementation)
 
-# Create one-pole absorption filters using FLAMO's parallelFilter
-# One-pole filter: H(z) = b0 / (1 + a1*z^-1) = b0 * (1, -a1) / (1, a1)
-absorption = dsp.parallelFilter(
-    size=(2, N),  # 2 coefficients per filter (numerator: b0, denominator: a1)
+# As Sebastian Schlecht indicated, use parallelBiquad and set one-pole coefficients directly
+class OnePoleAbsorption(dsp.parallelBiquad):
+    """Biquad with one-pole coefficients set directly."""
+    
+    def __init__(self, b_coeffs, a_coeffs, *args, **kwargs):
+        self.b_coeffs = torch.tensor(b_coeffs, dtype=torch.float32)  # Shape: (N, 1, 1)
+        self.a_coeffs = torch.tensor(a_coeffs, dtype=torch.float32)  # Shape: (N, 1, 2)
+        super().__init__(*args, **kwargs)
+        
+    def get_poly_coeff(self, param):
+        """Set one-pole coefficients directly as biquad coefficients."""
+        N = self.size[0]
+        nfft = self.nfft
+        n_sections = self.n_sections
+        
+        # Create frequency domain coefficients for parallelBiquad
+        # Shape should be (nfft//2+1, n_sections, N) for B and A
+        # But for parallel processing, H should be (nfft//2+1, N)
+        
+        # Frequency bins
+        omega = torch.linspace(0, np.pi, nfft//2+1, device=self.device)
+        z_inv = torch.exp(-1j * omega).unsqueeze(1)  # Shape: (nfft//2+1, 1)
+        
+        # initialise H directly for each channel
+        H = torch.zeros(nfft//2+1, N, dtype=torch.complex64, device=self.device)
+        
+        for i in range(N):
+            b0 = float(self.b_coeffs[i, 0, 0])
+            a0 = float(self.a_coeffs[i, 0, 0])  # Should be 1.0
+            a1 = float(self.a_coeffs[i, 0, 1])
+            
+            # One-pole transfer function: H(z) = b0 / (1 + a1*z^-1)
+            H[:, i] = b0 / (a0 + a1 * z_inv.squeeze() + 1e-10)
+        
+        # For compatibility, create B and A tensors
+        # These represent the frequency domain coefficients
+        B = H.unsqueeze(1) * torch.ones(1, n_sections, 1, device=self.device)
+        A = torch.ones_like(B)
+        
+        return H, B, A
+
+# Create the one-pole absorption filter with coefficients set directly
+absorption = OnePoleAbsorption(
+    b_coeffs=b,
+    a_coeffs=a,
+    size=(N,),
+    n_sections=1,
     nfft=nfft,
     device=device
 )
-
-# Convert pyFDN one-pole coefficients to FLAMO format
-# For H(z) = b0 / (1 + a1*z^-1), FLAMO expects coefficients as [b0, a1]
-filter_coeffs = torch.zeros(2, N)
-filter_coeffs[0, :] = torch.tensor(b[:, 0, 0])  # b0 coefficients  
-filter_coeffs[1, :] = torch.tensor(a[:, 0, 1])  # a1 coefficients
-absorption.assign_value(filter_coeffs)
 
 # Build Feedback Path  
 feedback = system.Series(OrderedDict({
@@ -256,7 +292,7 @@ axes[1, 1].grid(True, alpha=0.3, which='both')
 axes[1, 1].set_xlim([20, fs/2])
 axes[1, 1].set_ylim([0, max(RT_DC * 1.2, 4)])
 
-# Filter coefficient visualization 
+# filter coefficient visualisation 
 axes[1, 2].plot(delays, [b[i, 0, 0] for i in range(N)], 'bo-', label='b0 coefficients')
 axes[1, 2].plot(delays, [a[i, 0, 1] for i in range(N)], 'ro-', label='a1 coefficients')
 axes[1, 2].set_xlabel('Delay (samples)')
