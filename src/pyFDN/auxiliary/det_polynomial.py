@@ -7,7 +7,7 @@ def det_polynomial(polynomial_matrix, var):
     """
     Compute the determinant of a polynomial matrix.
     Args:
-        polynomial_matrix: numpy array of shape (N, N, degree)
+        polynomial_matrix: numpy array of shape (N, N, degree) containing the polynomial coefficients
         var: 'z^1' or 'z^-1'
     Returns:
         determinant: 1D numpy array of the determinant polynomial
