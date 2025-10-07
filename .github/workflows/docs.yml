@@ -11,6 +11,12 @@ on:
   pull_request:
     branches: [ main ]
 
+# Add permissions for GitHub token
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy-docs:
     runs-on: ubuntu-latest
@@ -42,9 +48,19 @@ jobs:
         working-directory: docs
         run: make html
 
-      # Deploy to GitHub Pages (repo-specific)
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      # Configure Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      # Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
+          path: docs/_build/html
+      
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
