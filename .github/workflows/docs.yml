@@ -55,6 +55,8 @@ jobs:
       # Configure Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
       
       # Upload artifact
       - name: Upload artifact
