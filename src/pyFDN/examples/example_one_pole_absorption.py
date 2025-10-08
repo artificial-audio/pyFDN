@@ -34,7 +34,6 @@ from auxiliary.one_pole_absorption import (
 from generate.random_orthogonal import random_orthogonal
 
 
-
 # random seed for reproducibility that matches MATLAB's implemntation
 np.random.seed(1)
 torch.manual_seed(1)
@@ -82,7 +81,6 @@ input_gain.assign_value(torch.ones(N, num_input))
 output_gain = dsp.Gain(size=(num_output, N), nfft=nfft, device=device)
 output_gain.assign_value(torch.ones(num_output, N))
 
-
 # Delay Lines
 delay_module = dsp.parallelDelay(
     size=(N,),
@@ -104,49 +102,13 @@ mixing_matrix.assign_value(feedback_matrix_torch)
 
 # Absorption Filters (using pyFDN's one-pole design with FLAMO implementation)
 
-# As Sebastian Schlecht indicated, use parallelBiquad and set one-pole coefficients directly
-class OnePoleAbsorption(dsp.parallelBiquad):
-    """Biquad with one-pole coefficients set directly."""
-    
-    def __init__(self, b_coeffs, a_coeffs, *args, **kwargs):
-        self.b_coeffs = torch.tensor(b_coeffs, dtype=torch.float32)  # Shape: (N, 1, 1)
-        self.a_coeffs = torch.tensor(a_coeffs, dtype=torch.float32)  # Shape: (N, 1, 2)
-        super().__init__(*args, **kwargs)
-        
-    def get_poly_coeff(self, param):
-        """Set one-pole coefficients directly as biquad coefficients."""
-        N = self.size[0]
-        nfft = self.nfft
-        n_sections = self.n_sections
-        
-        # Create frequency domain coefficients for parallelBiquad
-        # Shape should be (nfft//2+1, n_sections, N) for B and A
-        # But for parallel processing, H should be (nfft//2+1, N)
-        
-        # Frequency bins
-        omega = torch.linspace(0, np.pi, nfft//2+1, device=self.device)
-        z_inv = torch.exp(-1j * omega).unsqueeze(1)  # Shape: (nfft//2+1, 1)
-        
-        # initialise H directly for each channel
-        H = torch.zeros(nfft//2+1, N, dtype=torch.complex64, device=self.device)
-        
-        for i in range(N):
-            b0 = float(self.b_coeffs[i, 0, 0])
-            a0 = float(self.a_coeffs[i, 0, 0])  # Should be 1.0
-            a1 = float(self.a_coeffs[i, 0, 1])
-            
-            # One-pole transfer function: H(z) = b0 / (1 + a1*z^-1)
-            H[:, i] = b0 / (a0 + a1 * z_inv.squeeze() + 1e-10)
-        
-        # For compatibility, create B and A tensors
-        # These represent the frequency domain coefficients
-        B = H.unsqueeze(1) * torch.ones(1, n_sections, 1, device=self.device)
-        A = torch.ones_like(B)
-        
-        return H, B, A
+# Import the reusable ParallelOnePole class
+from pyFDN.dsp.parallel_one_pole import ParallelOnePole
 
-# Create the one-pole absorption filter with coefficients set directly
-absorption = OnePoleAbsorption(
+# As Sebastian Schlecht indicated, use parallelBiquad for IIR filters
+# FLAMO's biquad doesn't allow direct coefficient setting (limitation that should be changed)
+# So we use ParallelOnePole class which works around this by overriding get_poly_coeff
+absorption = ParallelOnePole(
     b_coeffs=b,
     a_coeffs=a,
     size=(N,),
@@ -189,9 +151,7 @@ model = system.Shell(
     output_layer=dsp.iFFT(nfft)
 )
 
-
 ## Generate and Analyse IR
-
 
 with torch.no_grad():
     # Create impulse signal
@@ -205,10 +165,7 @@ with torch.no_grad():
     ir_flamo = ir_flamo[:impulse_response_length]
 
 
-
 ## Visualisation
-
-
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 # Time axis
