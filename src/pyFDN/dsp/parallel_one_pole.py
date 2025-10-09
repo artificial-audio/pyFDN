@@ -50,30 +50,53 @@ class ParallelOnePole(dsp.parallelBiquad):
         Returns:
             tuple: (H, B, A) where:
                 - H: Frequency response, shape (nfft//2+1, N)
-                - B: Numerator coefficients (for compatibility)
-                - A: Denominator coefficients (for compatibility)
+                - B: Numerator coefficients in frequency domain
+                - A: Denominator coefficients in frequency domain
         """
         N = self.size[0]
         nfft = self.nfft
-        n_sections = self.n_sections
         
-        # frequency bins
-        omega = torch.linspace(0, np.pi, nfft//2+1, device=self.device)
-        z_inv = torch.exp(-1j * omega)  # z^-1
+        # create polynomial coefficients for each filter
+        # one-pole: H(z) = b0 / (1 + a1*z^-1)
+        # this is a biquad with: b = [b0, 0, 0], a = [1, a1, 0]
         
-        # initialisew frequency response for each channel
-        H = torch.zeros(nfft//2+1, N, dtype=torch.complex64, device=self.device)
+        b_poly = torch.zeros((3, N), device=self.device)  # [b0, b1, b2] for each filter
+        a_poly = torch.zeros((3, N), device=self.device)  # [a0, a1, a2] for each filter
         
         for i in range(N):
             b0 = float(self.b_coeffs[i, 0, 0])
             a0 = float(self.a_coeffs[i, 0, 0])  # should be 1
             a1 = float(self.a_coeffs[i, 0, 1])
             
-            # one-pole transfer function: H(z) = b0 / (1 + a1*z^-1)
-            H[:, i] = b0 / (a0 + a1 * z_inv + 1e-10)
+            # set coefficients
+            b_poly[0, i] = b0  # b0
+            b_poly[1, i] = 0   # b1 = 0 for one-pole
+            b_poly[2, i] = 0   # b2 = 0 for one-pole
+            
+            a_poly[0, i] = a0  # a0 = 1
+            a_poly[1, i] = a1  # a1
+            a_poly[2, i] = 0   # a2 = 0 for one-pole
         
-        # create B and A tensors for compatibility with parallelBiquad
-        B = H.unsqueeze(1) * torch.ones(1, n_sections, 1, device=self.device)
-        A = torch.ones_like(B)
+        # apply anti-aliasing envelope (following FLAMO convention)
+        # create impulse responses for each filter
+        impulse_length = nfft // 2
+        b_aa = torch.zeros((impulse_length, N), device=self.device)
+        a_aa = torch.zeros((impulse_length, N), device=self.device)
+        
+        # set impulse at t=0,1,2 for b and a coefficients
+        b_aa[0, :] = b_poly[0, :]  # b0
+        b_aa[1, :] = b_poly[1, :]  # b1
+        b_aa[2, :] = b_poly[2, :]  # b2
+        
+        a_aa[0, :] = a_poly[0, :]  # a0
+        a_aa[1, :] = a_poly[1, :]  # a1  
+        a_aa[2, :] = a_poly[2, :]  # a2
+        
+        # fft to get frequency domain
+        B = torch.fft.rfft(b_aa, nfft, dim=0)  # shape: (nfft//2+1, N)
+        A = torch.fft.rfft(a_aa, nfft, dim=0)  # shape: (nfft//2+1, N)
+        
+        # compute frequency response
+        H = B / (A + 1e-12)  # add small epsilon for numerical stability
         
         return H, B, A
