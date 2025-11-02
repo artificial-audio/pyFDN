@@ -1,7 +1,7 @@
 import numpy as np
-from pyFDN.auxiliary.zFilter import zFilter
+from pyFDN.auxiliary.zfilter import ZFilter
 
-class zScalar(zFilter):
+class ZScalar(ZFilter):
     """
     Scalar Matrix in zFilter and its derivative (= zeros).
     Converted from MATLAB version (Sebastian J. Schlecht, 2019).
@@ -30,9 +30,9 @@ class zScalar(zFilter):
 
     def inverse(self):
         if self.isDiagonal:
-            return zScalar(1.0 / self.matrix, isDiagonal=self.isDiagonal)
+            return ZScalar(1.0 / self.matrix, isDiagonal=self.isDiagonal)
         else:
-            return zScalar(np.linalg.inv(self.matrix), isDiagonal=self.isDiagonal)
+            return ZScalar(np.linalg.inv(self.matrix), isDiagonal=self.isDiagonal)
 
     def dfiltType(self):
         return "none"
