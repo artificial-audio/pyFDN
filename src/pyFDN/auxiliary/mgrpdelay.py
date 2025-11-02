@@ -1,27 +1,34 @@
+from __future__ import annotations
+from typing import Tuple
+from numpy.typing import ArrayLike
 import numpy as np
-from scipy.signal import grpdelay
+from scipy.signal import group_delay
 
-def mgrpdelay(A):
-    """
-    Compute group delay of a 3D FIR filter matrix A for each matrix entry.
+from pyFDN.helpers.utils import ensure_3d
 
-    Args:
-        A (ndarray): FIR matrix of shape (N, M, FIR)
+def mgrpdelay(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+    """Group delay for each entry of an FIR matrix."""
 
-    Returns:
-        GD (ndarray): Group delay of shape (N, M, FIR)
-        w (ndarray): Frequency array returned by scipy.signal.grpdelay
-    """
-    N, M, FIR = A.shape
-    GD = np.zeros((N, M, FIR))
-    w = None
-
-    for i in range(N):
-        for j in range(M):
-            # grpdelay returns (w, gd), so we swap output
-            w_tmp, gd_tmp = grpdelay(A[i, j, :], a=1, fs=2*np.pi)
-            GD[i, j, :] = gd_tmp
-            if w is None:
-                w = w_tmp
-
-    return GD, w
+    mat = ensure_3d(matrix)
+    n, m, _ = mat.shape
+    delays = []
+    freq_ref = None
+    for row in range(n):
+        row_entries = []
+        for col in range(m):
+            coeffs = mat[row, col, :]
+            if np.allclose(coeffs, 0):
+                row_entries.append(np.full(512, np.nan, dtype=float))
+                continue
+            w, gd = group_delay((coeffs, [1.0]))
+            if freq_ref is None:
+                freq_ref = w
+            if gd.size < w.size:
+                padded = np.full(w.size, np.nan, dtype=float)
+                padded[: gd.size] = gd
+                gd = padded
+            row_entries.append(gd)
+        delays.append(row_entries)
+    if freq_ref is None:
+        freq_ref = np.linspace(0.0, np.pi, 512)
+    return np.asarray(delays), freq_ref

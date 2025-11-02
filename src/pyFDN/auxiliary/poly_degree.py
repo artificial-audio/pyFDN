@@ -1,28 +1,30 @@
 from __future__ import annotations
 import numpy as np
+from numpy.typing import ArrayLike
 
-def poly_degree(polynomial: np.ndarray, var: str, tol_db: float = -200) -> int:
-    """
-    Polynomial degree with tolerance and exponent sign.
-    
-    Args:
-        polynomial: Vector of polynomial coefficients
-        var: Either 'z^1' or 'z^-1'
-        tol_db: Tolerance in dB
-        
-    Returns:
-        deg: Degree of the polynomial
-    """
-    poly_db = 20 * np.log10(np.abs(polynomial) + np.finfo(float).eps)
-    max_coefficient = np.max(poly_db)
-    
-    if var == 'z^-1':
-        valid_indices = np.where((poly_db - max_coefficient) > tol_db)[0]
-        deg = valid_indices[-1] if len(valid_indices) > 0 else 0
-    elif var == 'z^1':
-        valid_indices = np.where((poly_db - max_coefficient) > tol_db)[0]
-        deg = len(polynomial) - valid_indices[0] if len(valid_indices) > 0 else 0
-    else:
-        raise ValueError('Variable type not defined')
-    
-    return deg
+from pyFDN.auxiliary.mag2db import mag2db
+
+def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> int:
+    """Return the polynomial degree, matching ``polyDegree.m`` semantics."""
+
+    coeffs = np.asarray(polynomial)
+    if coeffs.ndim != 1:
+        coeffs = np.ravel(coeffs)
+    if coeffs.size == 0:
+        return 0
+
+    if tol is None:
+        tol = mag2db(np.finfo(float).eps)
+
+    coeff_db = mag2db(coeffs)
+    max_coeff = np.max(coeff_db)
+    mask = coeff_db - max_coeff > tol
+    active = np.nonzero(mask)[0]
+    if active.size == 0:
+        return 0
+
+    if var == "z^-1":
+        return int(active[-1])
+    if var == "z^1":
+        return int(len(coeffs) - 1 - active[0])
+    raise ValueError("var must be 'z^-1' or 'z^1'")

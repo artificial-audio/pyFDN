@@ -1,66 +1,42 @@
+from __future__ import annotations
 import numpy as np
+from typing import Optional
+from numpy.typing import ArrayLike
 
 class FeedbackDelay:
-    """
-    Array of feedback delay processors.
+    """Vectorised block delay lines for the FDN."""
 
-    Translated from MATLAB class.
-    """
+    def __init__(self, delays: ArrayLike, max_block_size: int) -> None:
+        delays_arr = np.asarray(delays, dtype=int).reshape(-1)
+        if delays_arr.ndim != 1:
+            raise ValueError("Delays must be a 1-D array")
+        if np.any(delays_arr <= 0):
+            raise ValueError("Delays must be positive integers")
 
-    def __init__(self, max_block_size, delays):
-        self.delays = np.array(delays)
-        self.num_delays = len(delays)
-        # Allocate delay lines with extra space for max_block_size
-        self.values = np.zeros((max(delays) + max_block_size, self.num_delays))
-        self.pointers = np.ones(self.num_delays, dtype=int)  # 1-based in MATLAB, 0-based in Python
-        self.pointers -= 1  # convert to 0-based indexing
+        self.delays = delays_arr
+        self.num_delays = delays_arr.size
+        self.max_block_size = int(max_block_size)
+        self.max_delay = int(np.max(delays_arr))
+        self.buffer = np.zeros((self.num_delays, self.max_delay), dtype=float)
+        self.pointers = np.zeros(self.num_delays, dtype=int)
+        self._last_indices: Optional[np.ndarray] = None
 
-    def set_values(self, val):
-        """
-        Set values at current pointer positions.
-        val: shape [blockSize, num_delays]
-        """
-        blkSz = val.shape[0]
-        row_idx, col_idx = self._get_index(blkSz)
-        self.values[row_idx, col_idx] = val
+    def get_values(self, block_size: int) -> np.ndarray:
+        if block_size > self.max_block_size:
+            raise ValueError("Block size exceeds configured maximum")
+        offsets = (self.pointers[:, None] + np.arange(block_size)[None, :]) % self.delays[:, None]
+        self._last_indices = offsets
+        gathered = self.buffer[np.arange(self.num_delays)[:, None], offsets]
+        return gathered.T
 
-    def get_values(self, blkSz):
-        """
-        Get values from current pointer positions.
-        """
-        row_idx, col_idx = self._get_index(blkSz)
-        return self.values[row_idx, col_idx]
+    def set_values(self, block: ArrayLike) -> None:
+        if self._last_indices is None:
+            raise RuntimeError("get_values must be called before set_values")
+        block_arr = np.asarray(block, dtype=float)
+        if block_arr.shape != (self._last_indices.shape[1], self.num_delays):
+            raise ValueError("Block shape mismatch when writing delay values")
+        self.buffer[np.arange(self.num_delays)[:, None], self._last_indices] = block_arr.T
 
-    def next(self, blkSz):
-        """
-        Move pointers forward by block size (with wrap-around modulo delay).
-        """
-        self.pointers = self._mod_delay(self.pointers + blkSz)
-
-    # ---------------- Internal helpers ---------------- #
-    def _get_index(self, blkSz):
-        """
-        Compute row and column indices for current block.
-        Returns:
-            row_idx, col_idx : arrays of shape [blkSz, num_delays]
-        """
-        # Row indices: pointers + 0..blkSz-1
-        row_idx = self.pointers + np.arange(blkSz)[:, None]  # shape [blkSz, num_delays]
-        row_idx = self._mod_delay(row_idx)
-
-        # Column indices: broadcast 0..num_delays-1
-        col_idx = np.arange(self.num_delays)[None, :]  # shape [1, num_delays]
-        col_idx = np.tile(col_idx, (blkSz, 1))
-
-        return row_idx, col_idx
-
-    def _mod_delay(self, idx):
-        """
-        Wrap-around modulo each delay value.
-        idx: array
-        """
-        # idx - delays > 0 → wrap around
-        wrapped = idx.copy()
-        for i, delay in enumerate(self.delays):
-            wrapped[:, i] = np.mod(idx[:, i], delay)
-        return wrapped
+    def advance(self, block_size: int) -> None:
+        self.pointers = (self.pointers + block_size) % self.delays
+        self._last_indices = None

@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 
 from pyFDN.auxiliary.negpolyder import negpolyder
-from pyFDN.auxiliary.z_filter import ZFilter
+from pyFDN.auxiliary.zfilter import ZFilter
 
 
 class ZSOS(ZFilter):

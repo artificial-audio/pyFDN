@@ -1,29 +1,23 @@
+from __future__ import annotations
+from typing import Tuple
+from numpy.typing import ArrayLike
 import numpy as np
 
-def outer_sum_approximation(A):
-    """
-    Minimizes || u + v' - A ||_F with a rank-1 approximation.
+import math
 
-    Args:
-        A (ndarray): 2D input matrix
+def outer_sum_approximation(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+    """Rank-1 approximation minimizing ``||u + v^T - matrix||_F``."""
 
-    Returns:
-        u (ndarray): Column vector of shape (N,)
-        v (ndarray): Column vector of shape (M,)
-    """
-    # Transform to exponential domain
-    maxA = np.max(A)
-    eA = np.exp(A / maxA)
+    mat = np.asarray(matrix, dtype=float)
+    max_val = np.max(mat)
+    if max_val == 0:
+        return np.zeros(mat.shape[0]), np.zeros(mat.shape[1])
 
-    # Rank-1 approximation via SVD
-    U, S, Vh = np.linalg.svd(eA, full_matrices=False)
-    sqrt_singular = np.sqrt(S[0])
-    
-    eu = U[:, 0] * sqrt_singular
-    ev = Vh[0, :] * sqrt_singular
+    exp_mat = np.exp(mat / max_val)
+    U, S, Vh = np.linalg.svd(exp_mat, full_matrices=False)
+    eu = U[:, 0] * math.sqrt(S[0])
+    ev = Vh[0, :] * math.sqrt(S[0])
 
-    # Transform back from exp domain
-    u = np.log(np.abs(eu)) * maxA
-    v = np.log(np.abs(ev)) * maxA
-
+    u = np.log(np.abs(eu)) * max_val
+    v = np.log(np.abs(ev)) * max_val
     return u, v
