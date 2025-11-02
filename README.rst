@@ -22,6 +22,10 @@ pyFDN
         :target: https://opensource.org/licenses/MIT
         :alt: License
 
+.. image:: https://img.shields.io/badge/coverage-68%25-brightgreen
+    :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
+    :alt: Test coverage
+
 
 Python library for Feedback Delay Networks
 
@@ -118,9 +122,13 @@ Repository index
 Development
 -----------
 
-Run the test suite after making changes::
+Run the test suite (the configuration mirrors CI and emits coverage details)::
 
-    pytest
+    tox -e py311
+
+Or, inside an activated virtual environment::
+
+    pytest --cov=src/pyFDN --cov-report=term-missing
 
 For linting and packaging helpers see ``Makefile`` (``make lint``/``make docs``)
 and ``tox.ini`` for multi-environment testing.
