@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.det_polynomial import det_polynomial
 from pyFDN.auxiliary.poly_degree import poly_degree
@@ -9,66 +12,59 @@ from pyFDN.auxiliary.zfilter import ZFilter
 
 
 class ZFIR(ZFilter):
-    """
-    FIR filter in z-domain derived from zFilter.
-    """
+    """FIR z-domain filter backed by ``TFMatrix``."""
 
-    def __init__(self, b, **kwargs):
-        super().__init__(**kwargs)
-        b = np.array(b)
-        self.n, self.m = b.shape[:2]
+    def __init__(self, b: ArrayLike, **kwargs) -> None:
+        super().__init__()
 
-        self.parseArguments(kwargs)
-        self.checkShape(self.m)
+        b_arr = np.asarray(b, dtype=np.complex128)
+        if b_arr.ndim != 3:
+            raise ValueError("ZFIR expects a 3-D array of FIR coefficients")
 
-        # FIR has denominator = ones
-        denominator = np.ones((self.n, self.m))
-        self.matrix = self.tfMatrix(b, denominator)
+        self.n, self.m = b_arr.shape[:2]
 
-        # Derivative
-        self.matrixDer = self.derive(self.matrix)
+        legacy_flag = kwargs.pop("isDiagonal", None)
+        diagonal_flag = kwargs.pop("is_diagonal", None)
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs.keys()))
+            raise TypeError(f"Unexpected keyword arguments: {unexpected}")
 
-        # Number of delay units
-        self.numberOfDelayUnits = self.getDelays(b)
+        if legacy_flag is not None and diagonal_flag is not None and legacy_flag != diagonal_flag:
+            raise ValueError("Conflicting values for diagonal configuration")
 
-    # -------------------------
-    # Helper methods (stubs)
-    # -------------------------
-    def tfMatrix(self, numerator, denominator):
-        """Convert numerator and denominator to a TFMatrix"""
-        return TFMatrix(numerator, denominator)
+        combined_flag = legacy_flag if legacy_flag is not None else diagonal_flag
+        parse_args = {"isDiagonal": bool(combined_flag)} if combined_flag is not None else {}
+        self.parse_arguments(parse_args)
+        self.check_shape(self.m)
 
-    def derive(self, matrix):
-        """Compute derivative of TFMatrix"""
-        return matrix.derive()
+        denominator = np.ones((self.n, self.m, 1), dtype=np.complex128)
+        self._matrix = TFMatrix(b_arr, denominator)
+        self._matrix_der = self._matrix.derive()
+        self.number_of_delay_units = int(self._calculate_delays(b_arr))
 
-    def getDelays(self, numerator):
-        """Compute number of delay units"""
-        if self.isDiagonal:
+    def _calculate_delays(self, numerator: np.ndarray) -> int:
+        if self.is_diagonal:
             numerator_full = polydiag(np.transpose(numerator, (0, 2, 1)))
         else:
             numerator_full = numerator
-        return poly_degree(det_polynomial(numerator_full), variable='z^-1')
+        delays = det_polynomial(numerator_full, var='z^-1')
+        return poly_degree(delays, 'z^-1')
 
-    # -------------------------
-    # Shape-independent access
-    # -------------------------
-    def at_(self, z):
-        return self.matrix.at(z)
+    def _at(self, z: complex | np.ndarray) -> np.ndarray:
+        return self._matrix.at(z)
 
-    def der_(self, z):
-        return self.matrixDer.at(z)
+    def _der(self, z: complex | np.ndarray) -> np.ndarray:
+        return self._matrix_der.at(z)
 
-    def inverse(self):
+    def inverse(self) -> ZTF:
         return ZTF(
-            self.matrix.denominator,
-            self.matrix.numerator,
-            isDiagonal=self.isDiagonal
+            self._matrix.denominator,
+            self._matrix.numerator,
+            is_diagonal=self.is_diagonal,
         )
 
-    def dfiltType(self):
+    def dfilt_type(self) -> str:
         return "dffir"
 
-    def dfiltParameter(self, n, m):
-        # MATLAB slicing: b(n,m,:) → Python slicing: b[n,m,:]
-        return self.matrix.numerator[n, m, :]
+    def dfilt_parameter(self, n: int, m: int):
+        return self._matrix.numerator[n, m, :]

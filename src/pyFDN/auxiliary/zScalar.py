@@ -1,41 +1,55 @@
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import ArrayLike
+
 from pyFDN.auxiliary.zfilter import ZFilter
 
-class ZScalar(ZFilter):
-    """
-    Scalar Matrix in zFilter and its derivative (= zeros).
-    Converted from MATLAB version (Sebastian J. Schlecht, 2019).
-    """
 
-    def __init__(self, matrix, **kwargs):
+class ZScalar(ZFilter):
+    """Constant matrix filter in the z-domain."""
+
+    def __init__(self, matrix: ArrayLike, **kwargs) -> None:
         super().__init__()
-        self.n, self.m = matrix.shape
-        self.parseArguments(kwargs)
-        self.checkShape(self.m)
 
         if not isinstance(matrix, np.ndarray):
-            raise ValueError("Needs a numpy array matrix")
+            matrix = np.asarray(matrix, dtype=float)
 
-        self.matrix = matrix
-        self.matrixDer = np.zeros_like(matrix)
-        self.numberOfDelayUnits = 0
+        if matrix.ndim != 2:
+            raise ValueError("ZScalar expects a 2-D matrix")
 
-    # Equivalent to MATLAB at_(z)
-    def at_(self, z):
-        return self.matrix
+        self.n, self.m = matrix.shape
+        legacy_flag = kwargs.pop("isDiagonal", None)
+        diagonal_flag = kwargs.pop("is_diagonal", None)
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs.keys()))
+            raise TypeError(f"Unexpected keyword arguments: {unexpected}")
 
-    # Equivalent to MATLAB der_(z)
-    def der_(self, z):
-        return self.matrixDer
+        if legacy_flag is not None and diagonal_flag is not None and legacy_flag != diagonal_flag:
+            raise ValueError("Conflicting values for diagonal configuration")
 
-    def inverse(self):
-        if self.isDiagonal:
-            return ZScalar(1.0 / self.matrix, isDiagonal=self.isDiagonal)
-        else:
-            return ZScalar(np.linalg.inv(self.matrix), isDiagonal=self.isDiagonal)
+        combined_flag = legacy_flag if legacy_flag is not None else diagonal_flag
+        parse_args = {"isDiagonal": bool(combined_flag)} if combined_flag is not None else {}
+        self.parse_arguments(parse_args)
+        self.check_shape(self.m)
 
-    def dfiltType(self):
+        self._matrix = matrix.astype(np.complex128, copy=False)
+        self._matrix_der = np.zeros_like(self._matrix)
+        self.number_of_delay_units = 0
+
+    def _at(self, z: complex | np.ndarray) -> np.ndarray:
+        return self._matrix
+
+    def _der(self, z: complex | np.ndarray) -> np.ndarray:
+        return self._matrix_der
+
+    def inverse(self) -> "ZScalar":
+        if self.is_diagonal:
+            return ZScalar(1.0 / self._matrix, is_diagonal=True)
+        return ZScalar(np.linalg.inv(self._matrix), is_diagonal=False)
+
+    def dfilt_type(self) -> str:
         return "none"
 
-    def dfiltParameter(self, n, m):
-        return self.matrix[n, m]
+    def dfilt_parameter(self, n: int, m: int):
+        return self._matrix[n, m]

@@ -4,6 +4,7 @@ from typing import Optional
 from dataclasses import dataclass
 from numpy.typing import ArrayLike
 from pyFDN.auxiliary.ztf import ZTF
+from pyFDN.auxiliary.zscalar import ZScalar
 
 class IIRFilterState:
     """Streaming Direct Form I filter section."""
@@ -97,6 +98,30 @@ class FilterMatrix:
                 input_channels=n_rows if diag else n_cols,
                 dtype=float,
                 filters=filters,
+            )
+
+        if isinstance(data, ZScalar):
+            diag = data.is_diagonal if is_diagonal is None else is_diagonal
+            matrix = np.asarray(data.at(1.0), dtype=float)
+            if diag:
+                diag_vals = np.diag(matrix) if matrix.ndim == 2 else matrix.reshape(-1)
+                condensed = diag_vals.reshape(-1, 1)
+                return cls(
+                    kind="static",
+                    is_diagonal=True,
+                    output_channels=condensed.shape[0],
+                    input_channels=condensed.shape[0],
+                    dtype=condensed.dtype,
+                    matrix=condensed,
+                )
+
+            return cls(
+                kind="static",
+                is_diagonal=False,
+                output_channels=matrix.shape[0],
+                input_channels=matrix.shape[1],
+                dtype=matrix.dtype,
+                matrix=matrix,
             )
 
         arr = np.asarray(data, dtype=float)

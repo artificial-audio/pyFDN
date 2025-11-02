@@ -1,7 +1,8 @@
 # dss2impz.py
 import numpy as np
-from pyFDN.auxiliary.processFDN import processFDN  # assumes you have this implemented
-from pyFDN.auxiliary.convert2zfilter import convert2zFilter  # your convert2zFilter function
+
+from pyFDN.auxiliary.convert2zfilter import convert2zFilter
+from pyFDN.auxiliary.process_fdn import process_fdn
 
 def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=None, absorption_filters=None):
     """
@@ -39,7 +40,7 @@ def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=N
     input_signal[0, :] = 1
 
     # Process FDN
-    impulse_response = processFDN(
+    impulse_response = process_fdn(
         input_signal,
         delays,
         A,
