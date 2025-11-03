@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from numpy.linalg import svd
 from scipy.signal import freqz, group_delay
 
@@ -43,7 +44,9 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
         # freqz expects (b, a) as 1D arrays
         H[:, it], w = freqz(b[it, :], a[it, :], nfft)
         # group_delay returns (w, gd)
-        _, gd = group_delay((b[it, :], a[it, :]), nfft)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            _, gd = group_delay((b[it, :], a[it, :]), nfft)
         G[:, it] = gd
 
     # delays: shape (N,)

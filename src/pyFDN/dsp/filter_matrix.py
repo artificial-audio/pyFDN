@@ -79,8 +79,15 @@ class FilterMatrix:
 
         if isinstance(data, ZTF):
             diag = data.is_diagonal if is_diagonal is None else is_diagonal
-            num = np.asarray(data.numerator, dtype=float)
-            den = np.asarray(data.denominator, dtype=float)
+            def _real_coefficients(arr: np.ndarray, label: str) -> np.ndarray:
+                if np.iscomplexobj(arr):
+                    if np.allclose(arr.imag, 0.0, atol=1e-12):
+                        return arr.real.astype(float)
+                    raise ValueError(f"{label} contains complex coefficients which are unsupported")
+                return np.asarray(arr, dtype=float)
+
+            num = _real_coefficients(data.numerator, "Numerator")
+            den = _real_coefficients(data.denominator, "Denominator")
             n_rows, n_cols, _ = num.shape
             if diag and n_cols != 1:
                 raise ValueError("Diagonal ZTF must have second dimension equal to 1")
@@ -102,7 +109,13 @@ class FilterMatrix:
 
         if isinstance(data, ZScalar):
             diag = data.is_diagonal if is_diagonal is None else is_diagonal
-            matrix = np.asarray(data.at(1.0), dtype=float)
+            raw_matrix = data.at(1.0)
+            if np.iscomplexobj(raw_matrix):
+                if np.allclose(np.imag(raw_matrix), 0.0, atol=1e-12):
+                    raw_matrix = np.real(raw_matrix)
+                else:
+                    raise ValueError("Static matrix contains complex entries which are unsupported")
+            matrix = np.asarray(raw_matrix, dtype=float)
             if diag:
                 diag_vals = np.diag(matrix) if matrix.ndim == 2 else matrix.reshape(-1)
                 condensed = diag_vals.reshape(-1, 1)
