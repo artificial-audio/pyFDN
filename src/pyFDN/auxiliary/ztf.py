@@ -5,6 +5,9 @@ from typing import Tuple
 import numpy as np
 
 from pyFDN.auxiliary.matrix_polyval import matrix_polyval
+from pyFDN.auxiliary.det_polynomial import det_polynomial
+from pyFDN.auxiliary.poly_degree import poly_degree
+from pyFDN.auxiliary.polydiag import polydiag
 from pyFDN.auxiliary.zfilter import ZFilter
 from pyFDN.helpers.utils import ensure_3d
 
@@ -42,7 +45,22 @@ class ZTF(ZFilter):
         self.check_shape(self.m)
 
         self._exponents = np.arange(self.numerator.shape[2] - 1, -1, -1, dtype=int)
-        self.number_of_delay_units = max(self.numerator.shape[2], self.denominator.shape[2]) - 1
+
+        numerator_full: np.ndarray | None
+        if self.is_diagonal:
+            diag_coeffs = np.transpose(self.numerator, (0, 2, 1))[:, :, 0]
+            numerator_full = polydiag(diag_coeffs)
+        elif self.n == self.m:
+            numerator_full = self.numerator
+        else:
+            numerator_full = None
+
+        if numerator_full is not None:
+            det_poly = det_polynomial(np.asarray(numerator_full, dtype=np.complex128), 'z^-1')
+            degree = poly_degree(det_poly, 'z^-1')
+            self.number_of_delay_units = max(int(degree), 0)
+        else:
+            self.number_of_delay_units = max(self.numerator.shape[2], self.denominator.shape[2]) - 1
 
     @property
     def shape(self) -> Tuple[int, int]:
