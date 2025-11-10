@@ -16,7 +16,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from collections import OrderedDict
-import soundfile as sf
 
 # FLAMO imports for DSP components
 from flamo.processor import dsp, system
@@ -26,12 +25,12 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from auxiliary.one_pole_absorption import (
+from pyFDN.auxiliary.one_pole_absorption import (
     one_pole_absorption, 
     RT602slope, 
     db2mag
 )
-from generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.random_orthogonal import random_orthogonal
 
 
 # random seed for reproducibility that matches MATLAB's implemntation
@@ -204,7 +203,7 @@ for i in range(N):
     axes[0, 2].semilogx(freqs, 20 * np.log10(np.abs(H)), 
                         label=f'Delay {i+1} ({delays[i]} smp)')
 
-axes[0, 2].set_xlabel('Frequency (Hz)')
+axes[0, 2].set_xlabel('Frequency (Hz)') # log scale
 axes[0, 2].set_ylabel('Magnitude (dB)')
 axes[0, 2].legend()
 axes[0, 2].grid(True, alpha=0.3, which='both')

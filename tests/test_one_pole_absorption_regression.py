@@ -9,11 +9,6 @@ created by Facundo Franchino, early October 2025
 import numpy as np
 import os
 import pytest
-import scipy.io  # required for loading MATLAB reference data
-
-# add src to path
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
 from pyFDN.generate.random_orthogonal import random_orthogonal
@@ -22,35 +17,26 @@ from pyFDN.generate.random_orthogonal import random_orthogonal
 # path to MATLAB reference file
 REFERENCE_MAT_FILE = os.path.join(
     os.path.dirname(__file__),
-    'reference_files', 
-    'onePoleAbsorption_reference.mat'
+    'reference', 
+    'example_onePoleAbsorption.mat'
 )
 
 
-def load_matlab_reference():
-    """load reference data from MATLAB export."""
-    if not os.path.exists(REFERENCE_MAT_FILE):
-        raise FileNotFoundError(f"Reference file required but not found: {REFERENCE_MAT_FILE}")
-    
-    mat_data = scipy.io.loadmat(REFERENCE_MAT_FILE)
-    return mat_data['export_data'][0, 0]  # MATLAB struct format
-
-
-def test_one_pole_absorption_coefficients():
+def test_one_pole_absorption_coefficients(loadmat):
     """test that pyFDN generates same absorption coefficients as MATLAB."""
     
     # load MATLAB ref
-    ref = load_matlab_reference()
+    ref = loadmat(REFERENCE_MAT_FILE)
     
     # extract reference parameters
-    RT_DC = float(ref['RT_DC'].item())
-    RT_NY = float(ref['RT_NY'].item())
-    delays = ref['delays'].flatten()
-    fs = float(ref['fs'].item())
+    RT_DC = ref['RT_DC']
+    RT_NY = ref['RT_NY']
+    delays = ref['delays']
+    fs = ref['fs']
     
     # extract MATLAB coefficient results
-    b_matlab = ref['absorption_b']
-    a_matlab = ref['absorption_a']
+    b_matlab = ref['absorption']['b']
+    a_matlab = ref['absorption']['a']
     
     # generate coefficients in Python
     b_python, a_python = one_pole_absorption(RT_DC, RT_NY, delays, fs)
@@ -118,7 +104,7 @@ def test_impulse_response_comparison():
     # load MATLAB reference
     ref = load_matlab_reference()
     
-    # Eextract parameters
+    # Extract parameters
     delays = ref['delays'].flatten()
     feedback_matrix = ref['feedbackMatrix']
     RT_DC = float(ref['RT_DC'].item())
@@ -185,7 +171,7 @@ def test_impulse_response_comparison():
         "output_gain": output_gain
     }))
     
-    # aadd direct path
+    # add direct path
     direct_gain = dsp.Gain(size=(1, 1), nfft=nfft, device=device)
     direct_gain.assign_value(torch.ones(1, 1))
     
@@ -212,19 +198,32 @@ def test_impulse_response_comparison():
     ir_f = ir_flamo[:min_len]
     ir_m = ir_matlab[:min_len]
     
+    # PLOT the two impulse responses for visual inspection
+    import matplotlib.pyplot as plt
+    t = np.arange(min_len) / fs
+    plt.figure(figsize=(12, 6))
+    plt.plot(t, ir_m, label="MATLAB Reference", alpha=0.7)
+    plt.plot(t, ir_f, label="FLAMO pyFDN Output", alpha=0.7)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Amplitude")
+    plt.title("Impulse Response Comparison (MATLAB vs FLAMO/pyFDN)")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    
     # check correlation (FLAMO uses FFT-based processing so exact match not expected)
     correlation = np.corrcoef(ir_f, ir_m)[0, 1]
     
     # we expect reasonable correlation but not perfect match due to different implementations
     # MATLAB uses time-domain processing while FLAMO uses FFT-based processing
-    assert correlation > 0.5, f"Impulse responses should be correlated, got {correlation:.3f}"
+    assert correlation > 0.95, f"Impulse responses should be correlated, got {correlation:.3f}"
     
     # check that both have similar energy
     energy_flamo = np.sum(ir_f**2)
     energy_matlab = np.sum(ir_m**2)
     energy_ratio = energy_flamo / energy_matlab
     
-    assert 0.1 < energy_ratio < 10, f"Energy should be similar, ratio={energy_ratio:.3f}"
+    assert 0.95 < energy_ratio < 1.05, f"Energy should be similar, ratio={energy_ratio:.3f}"
 
 
 def test_without_matlab_reference():
