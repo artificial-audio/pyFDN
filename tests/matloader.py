@@ -138,6 +138,53 @@ def _convert_elem(elem: Any) -> Any:
     # everything else: leave numpy arrays (including 0-d scalars) as-is
     return elem
 
+def _upcast_int_like(elem: Any) -> Any:
+    """
+    Recursively upcast integer scalars and arrays to float64.
+    Leaves booleans untouched.
+    """
+    if isinstance(elem, bool):
+        return elem
+
+    if isinstance(elem, dict):
+        return {k: _upcast_int_like(v) for k, v in elem.items()}
+
+    if isinstance(elem, list):
+        return [_upcast_int_like(v) for v in elem]
+
+    if isinstance(elem, tuple):
+        return tuple(_upcast_int_like(v) for v in elem)
+
+    if isinstance(elem, set):
+        return {_upcast_int_like(v) for v in elem}
+
+    if isinstance(elem, frozenset):
+        return frozenset(_upcast_int_like(v) for v in elem)
+
+    if _HAVE_SPARSE and sp.issparse(elem):
+        if np.issubdtype(elem.dtype, np.integer):
+            return elem.astype(np.float64)
+        return elem
+
+    if isinstance(elem, np.ndarray):
+        if elem.dtype == object:
+            out = np.empty(elem.shape, dtype=object)
+            it = np.nditer(elem, flags=["multi_index", "refs_ok"], op_flags=["readonly"])
+            for x in it:
+                out[it.multi_index] = _upcast_int_like(x.item())
+            return out
+        if np.issubdtype(elem.dtype, np.integer) and not np.issubdtype(elem.dtype, np.bool_):
+            return elem.astype(np.float64)
+        return elem
+
+    if isinstance(elem, np.integer):
+        return float(elem)
+
+    if isinstance(elem, int):
+        return float(elem)
+
+    return elem
+
 def _clean_top_level(d: Dict[str, Any]) -> Dict[str, Any]:
     drop = {"__header__", "__version__", "__globals__"}
     return {k: v for k, v in d.items() if k not in drop}
@@ -180,6 +227,7 @@ def load_mat_workspace(
     *,
     simplify_chars: bool = True,
     allow_v73_with_mat73: bool = True,
+    upcast: bool = True,
 ) -> Dict[str, Any]:
     """
     Load a MATLAB .mat workspace dump into Python/Numpy while:
@@ -196,6 +244,8 @@ def load_mat_workspace(
         Convert char arrays to str / list[str].
     allow_v73_with_mat73 : bool
         For v7.3: use 'mat73' if available; otherwise raise a clear error.
+    upcast : bool
+        Convert integer arrays and scalars to float64.
 
     Returns
     -------
@@ -228,28 +278,32 @@ def load_mat_workspace(
                 raw.pop(v, None)
 
         if not simplify_chars:
-            return raw
+            result = raw
+        else:
+            # Normalize char arrays inside the structure returned by mat73 and unbox 0-d scalars
+            def fix_nodes(x):
+                if isinstance(x, np.ndarray) and x.dtype.kind in ("U", "S"):
+                    return _char_to_str(x)
+                if isinstance(x, np.ndarray) and x.ndim == 0:
+                    return x.item()
+                if (
+                    isinstance(x, np.ndarray)
+                    and x.dtype != object
+                    and x.dtype.kind not in ("U", "S")  # not char arrays
+                    and x.shape == (1, 1)
+                ):
+                    return x[0, 0]
+                if isinstance(x, dict):
+                    return {k: fix_nodes(v) for k, v in x.items()}
+                if isinstance(x, list):
+                    return [fix_nodes(v) for v in x]
+                return x
 
-        # Normalize char arrays inside the structure returned by mat73 and unbox 0-d scalars
-        def fix_nodes(x):
-            if isinstance(x, np.ndarray) and x.dtype.kind in ("U", "S"):
-                return _char_to_str(x)
-            if isinstance(x, np.ndarray) and x.ndim == 0:
-                return x.item()
-            if (
-                isinstance(x, np.ndarray)
-                and x.dtype != object
-                and x.dtype.kind not in ("U", "S")  # not char arrays
-                and x.shape == (1, 1)
-            ):
-                return x[0, 0]
-            if isinstance(x, dict):
-                return {k: fix_nodes(v) for k, v in x.items()}
-            if isinstance(x, list):
-                return [fix_nodes(v) for v in x]
-            return x
+            result = {k: fix_nodes(v) for k, v in raw.items()}
 
-        return {k: fix_nodes(v) for k, v in raw.items()}
+        if upcast:
+            return {k: _upcast_int_like(v) for k, v in result.items()}
+        return result
 
     # ----- v5/v7 path (SciPy) -----
     if not _HAVE_SCIPY:
@@ -276,5 +330,8 @@ def load_mat_workspace(
 
 
         out[k] = cv
+
+    if upcast:
+        return {k: _upcast_int_like(v) for k, v in out.items()}
 
     return out

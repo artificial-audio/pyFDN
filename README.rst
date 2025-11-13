@@ -87,7 +87,10 @@ four-delay FDN and inspecting its stability bounds::
 
     # Match-loop decay targets (seconds) at DC and Nyquist
     rt60 = np.full(len(delays), 0.6)
-    b, a = one_pole_absorption(rt60, 1.4 * rt60, delays, fs)
+    sos = one_pole_absorption(rt60, 1.4 * rt60, delays, fs)  # SOS format: (6, N)
+    # Convert SOS to b, a format for pole_boundaries: b shape (N, 1, 1), a shape (N, 1, 2)
+    b = sos[0:1, :].T[:, np.newaxis, :]  # b0, shape (N, 1, 1)
+    a = np.stack([sos[3, :], sos[4, :]], axis=1)[:, np.newaxis, :]  # [a0, a1], shape (N, 1, 2)
     absorption = SimpleNamespace(b=b, a=a)
 
     lower, upper, freqs = pole_boundaries(delays, absorption, feedback, fs)

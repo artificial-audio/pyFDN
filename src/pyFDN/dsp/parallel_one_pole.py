@@ -25,17 +25,16 @@ class ParallelOnePole(dsp.parallelBiquad):
     parameters (cutoff, gain) rather than allowing direct coefficient assignment.
     
     Args:
-        b_coeffs (array-like): Numerator coefficients, shape (N, 1, 1)
-        a_coeffs (array-like): Denominator coefficients, shape (N, 1, 2) 
-                               where a_coeffs[:, 0, 0] = 1.0 and a_coeffs[:, 0, 1] = a1
+        sos (array-like): SOS filter coefficients, shape (6, N) with [b0, b1, b2, a0, a1, a2] per column
+                          For one-pole filters: b1=b2=a2=0, a0=1
         *args: Arguments passed to parallelBiquad
         **kwargs: Keyword arguments passed to parallelBiquad
     """
     
-    def __init__(self, b_coeffs, a_coeffs, *args, **kwargs):
-        # store coefficients before calling super().__init__ as it may call get_poly_coeff
-        self.b_coeffs = torch.tensor(b_coeffs, dtype=torch.float32)  # shape: (N, 1, 1)
-        self.a_coeffs = torch.tensor(a_coeffs, dtype=torch.float32)  # shape: (N, 1, 2)
+    def __init__(self, sos, *args, **kwargs):
+        # store SOS coefficients before calling super().__init__ as it may call get_poly_coeff
+        # sos shape: (6, N) with [b0, b1, b2, a0, a1, a2] per column
+        self.sos = torch.tensor(sos, dtype=torch.float32)
         super().__init__(*args, **kwargs)
         
     def get_poly_coeff(self, param):
@@ -60,22 +59,9 @@ class ParallelOnePole(dsp.parallelBiquad):
         # one-pole: H(z) = b0 / (1 + a1*z^-1)
         # this is a biquad with: b = [b0, 0, 0], a = [1, a1, 0]
         
-        b_poly = torch.zeros((3, N), device=self.device)  # [b0, b1, b2] for each filter
-        a_poly = torch.zeros((3, N), device=self.device)  # [a0, a1, a2] for each filter
-        
-        for i in range(N):
-            b0 = float(self.b_coeffs[i, 0, 0])
-            a0 = float(self.a_coeffs[i, 0, 0])  # should be 1
-            a1 = float(self.a_coeffs[i, 0, 1])
-            
-            # set coefficients
-            b_poly[0, i] = b0  # b0
-            b_poly[1, i] = 0   # b1 = 0 for one-pole
-            b_poly[2, i] = 0   # b2 = 0 for one-pole
-            
-            a_poly[0, i] = a0  # a0 = 1
-            a_poly[1, i] = a1  # a1
-            a_poly[2, i] = 0   # a2 = 0 for one-pole
+        # Extract coefficients from SOS format: [b0, b1, b2, a0, a1, a2] per column
+        b_poly = self.sos[:3, :].to(self.device)  # [b0, b1, b2] for each filter
+        a_poly = self.sos[3:, :].to(self.device)  # [a0, a1, a2] for each filter
         
         # apply anti-aliasing envelope (following FLAMO convention)
         # create impulse responses for each filter

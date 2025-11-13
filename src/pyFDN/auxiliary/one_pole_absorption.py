@@ -28,14 +28,20 @@ def design_one_pole_filter(HDc, HNyq):
     r = HDc / HNyq
     a1 = (1 - r) / (1 + r)
     b0 = (1 - a1) * HNyq
-    b = b0[:, np.newaxis, np.newaxis]
-    a = np.ones_like(b)
-    a = np.concatenate([a, a1[:, np.newaxis, np.newaxis]], axis=2)
-    return b, a
+    # Return SOS format: shape (6, N) with [b0, b1, b2, a0, a1, a2] per channel
+    N = len(b0)
+    sos = np.zeros((6, N))
+    sos[0, :] = b0  # b0
+    sos[1, :] = 0   # b1
+    sos[2, :] = 0   # b2
+    sos[3, :] = 1   # a0
+    sos[4, :] = a1  # a1
+    sos[5, :] = 0   # a2
+    return sos
 
 
 def one_pole_absorption(RT_DC, RT_NY, delays, fs):
     HDc = db2mag(delays * RT602slope(RT_DC, fs))
     HNyq = db2mag(delays * RT602slope(RT_NY, fs))
-    b, a = design_one_pole_filter(HDc, HNyq)
-    return b, a
+    sos = design_one_pole_filter(HDc, HNyq)
+    return sos
