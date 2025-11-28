@@ -53,3 +53,4 @@ def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=N
     )
 
     return impulse_response
+

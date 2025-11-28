@@ -1,0 +1,72 @@
+name: Docs CI
+
+# Trigger automatically on push or PR + manual trigger
+on:
+  workflow_dispatch:       # manual trigger
+  push:
+    branches: [ main ]    # optional automatic build
+    paths:
+      - 'src/**'
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+
+# Add permissions for GitHub token
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # Checkout the repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Install Sphinx and dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme
+          pip install -e .
+
+      # Auto-generate .rst files from source
+      - name: Generate Sphinx RST
+        run: |
+          sphinx-apidoc -o ./docs/ ./src/pyFDN  # replace with your package
+
+      # Build the HTML documentation
+      - name: Build HTML docs
+        working-directory: docs
+        run: make html
+
+      # Configure Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        with:
+          enablement: true
+      
+      # Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+      
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

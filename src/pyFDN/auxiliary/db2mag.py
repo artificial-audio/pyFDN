@@ -8,3 +8,4 @@ def db2mag(db: ArrayLike) -> np.ndarray:
 
     db_arr = np.asarray(db, dtype=float)
     return np.power(10.0, db_arr / 20.0)
+

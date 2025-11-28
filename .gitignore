@@ -122,8 +122,6 @@ Thumbs.db
 *.npz
 *.pkl
 
-!src/pyFDN/audio/*.wav
-
 # Profiling outputs
 profile_default/
 *.prof
