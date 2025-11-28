@@ -20,7 +20,7 @@ def absorption_filters(frequency, targetRT60, filterOrder, delays, fs):
     if filterOrder == 0:
         rt60 = targetRT60[0, :]
         db = delays * rt60_to_slope(rt60, fs)
-        FIR = db2mag(db)[:, None]
+        FIR[:, 0] = db2mag(db)
     else:
         for ch in range(num_channels):
             rt60 = targetRT60[:, ch]
