@@ -7,7 +7,7 @@ def absorption_to_t60(filterCoeffs, delays, nfft, fs):
     """Compute T60 from recursive absorption filter with delay."""
     filterLen = filterCoeffs.shape[1]
     response = np.fft.fft(filterCoeffs, nfft, axis=1)
-    freq = np.linspace(0, fs, nfft)
+    freq = np.linspace(0, fs/2, nfft // 2, endpoint=False)
 
     response = response[:, :nfft // 2]
     freq = freq[:nfft // 2]
