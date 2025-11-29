@@ -1,35 +1,25 @@
+from __future__ import annotations
+from numpy.typing import ArrayLike
 import numpy as np
 
+from pyFDN.helpers.utils import ensure_3d
 
-def matrix_convolution(A, B):
-    """
-    Matrix polynomial multiplication (convolution along the last axis).
-    A: shape (m, n, orderA)
-    B: shape (n, k, orderB)
-    Returns:
-        C: shape (m, k, orderA + orderB - 1)
-    """
-    szA = A.shape
-    szB = B.shape
+def matrix_convolution(A: ArrayLike, B: ArrayLike) -> np.ndarray:
+    """Matrix polynomial multiplication by convolution."""
 
-    if szA[1] != szB[0]:
-        raise ValueError("Invalid matrix dimension.")
+    A_arr = ensure_3d(A)
+    B_arr = ensure_3d(B)
+    if A_arr.shape[1] != B_arr.shape[0]:
+        raise ValueError("Inner dimensions must agree")
 
-    m, n, orderA = szA
-    n2, k, orderB = szB
-    orderC = orderA + orderB - 1
-
-    C = np.zeros((m, k, orderC), dtype=A.dtype)
-
-    # Permute to (order, m, n) for easier indexing
-    A_perm = np.transpose(A, (2, 0, 1))
-    B_perm = np.transpose(B, (2, 0, 1))
+    m, n, order_a = A_arr.shape
+    _, k, order_b = B_arr.shape
+    result = np.zeros((m, k, order_a + order_b - 1), dtype=np.result_type(A_arr, B_arr))
 
     for row in range(m):
         for col in range(k):
-            for it in range(n):
-                # Convolve the polynomials for (row, it) and (it, col)
-                conv_result = np.convolve(A_perm[:, row, it], B_perm[:, it, col])
-                C[row, col, : len(conv_result)] += conv_result
-
-    return C
+            acc = np.zeros(order_a + order_b - 1, dtype=result.dtype)
+            for inter in range(n):
+                acc += np.convolve(A_arr[row, inter, :], B_arr[inter, col, :])
+            result[row, col, :] = acc
+    return result

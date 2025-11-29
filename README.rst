@@ -22,6 +22,10 @@ pyFDN
         :target: https://opensource.org/licenses/MIT
         :alt: License
 
+.. image:: https://img.shields.io/badge/coverage-68%25-brightgreen
+    :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
+    :alt: Test coverage
+
 
 Python library for Feedback Delay Networks
 
@@ -97,18 +101,33 @@ Quick start
 .. Repository index
 .. ----------------
 
-.. ``src/pyFDN/auxiliary``
-..     Matrix polynomial routines (``matrix_convolution``, ``matrix_polyval``,
-..     ``matrix_polyder``), loop-analysis helpers (``pole_boundaries``,
-..     ``is_bounding_curve``), and absorption filter design utilities.
-.. ``src/pyFDN/generate``
-..     Random structure generators including ``random_orthogonal``.
-.. ``src/pyFDN/examples``
-..     Jupyter notebooks that demonstrate absorption design workflows.
-.. ``tests``
-..     Pytest-based regression suite covering the numerical helpers.
-.. ``docs``
-..     Sphinx project used to publish https://pyFDN.readthedocs.io/.
+``src/pyFDN/auxiliary``
+    Matrix polynomial routines (``matrix_convolution``, ``matrix_polyval``,
+    ``matrix_polyder``), loop-analysis helpers (``pole_boundaries``,
+    ``is_bounding_curve``), and absorption filter design utilities.
+``src/pyFDN/generate``
+    Random structure generators including ``random_orthogonal``.
+``src/pyFDN/examples``
+    Jupyter notebooks that demonstrate absorption design workflows.
+``tests``
+    Pytest-based regression suite covering the numerical helpers.
+``docs``
+    Sphinx project used to publish https://pyFDN.readthedocs.io/.
+
+
+Development
+-----------
+
+Run the test suite (the configuration mirrors CI and emits coverage details)::
+
+    tox -e py311
+
+Or, inside an activated virtual environment::
+
+    pytest --cov=src/pyFDN --cov-report=term-missing
+
+For linting and packaging helpers see ``Makefile`` (``make lint``/``make docs``)
+and ``tox.ini`` for multi-environment testing.
 
 Credits
 -------

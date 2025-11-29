@@ -1,5 +1,11 @@
+from __future__ import annotations
 import numpy as np
+from numpy.typing import ArrayLike
 
 
-def mag2db(x):
-    return 20 * np.log10(np.maximum(x, 1e-20))  # avoid log(0)
+def mag2db(magnitude: ArrayLike) -> np.ndarray:
+    """Convert magnitudes to decibels with numerical guard."""
+
+    mag = np.asarray(magnitude, dtype=float)
+    tiny = np.finfo(float).tiny
+    return 20.0 * np.log10(np.maximum(np.abs(mag), tiny))

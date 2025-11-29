@@ -2,8 +2,10 @@ import numpy as np
 from scipy.linalg import qr
 
 
-def random_orthogonal(n):
-    """Generate a random n x n orthogonal matrix."""
-    Q, R = qr(np.random.randn(n, n))
-    Q = Q @ np.diag(np.sign(np.diag(R)))
-    return Q
+def random_orthogonal(n: int) -> np.ndarray:
+    """Generate a random orthogonal matrix distributed according to the Haar measure."""
+
+    q, r = np.linalg.qr(np.random.standard_normal((n, n)))
+    d = np.sign(np.diag(r))
+    d[d == 0] = 1
+    return q * d

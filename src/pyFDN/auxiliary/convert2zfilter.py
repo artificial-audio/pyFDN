@@ -1,32 +1,8 @@
 import numpy as np
 
-# ---------------- Placeholder Classes ---------------- #
-class ZFilter:
-    """Base class for zFilter objects."""
-    def __init__(self):
-        pass
-
-class ZScalar(ZFilter):
-    """Wraps a numeric matrix as a zFilter."""
-    def __init__(self, mat):
-        super().__init__()
-        self.mat = np.array(mat)
-        self.m, self.n = self.mat.shape
-
-    def filter(self, x):
-        """Matrix multiplication for filtering."""
-        return x @ self.mat.T
-
-class ZFIR(ZFilter):
-    """Wraps a numeric 1D array (FIR) as a zFilter."""
-    def __init__(self, coeffs):
-        super().__init__()
-        self.coeffs = np.array(coeffs)
-
-    def filter(self, x):
-        """1D FIR filtering along axis 0 (time)."""
-        from scipy.signal import lfilter
-        return lfilter(self.coeffs, [1.0], x, axis=0)
+from pyFDN.auxiliary.zscalar import ZScalar
+from pyFDN.auxiliary.zfir import ZFIR
+from pyFDN.auxiliary.zfilter import ZFilter
 
 
 # ---------------- convert2zFilter ---------------- #

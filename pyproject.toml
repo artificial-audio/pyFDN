@@ -25,29 +25,39 @@ requires-python = ">=3.10"
 license = {text = "MIT license"}
 dependencies = [
   "numpy",
+  'torch',
+  'torchaudio',
+  'soundfile',
   "scipy",
-  "matplotlib",
-  "jupyter",
-  "ipython",
-  "ipykernel",
   "flamo",
   "flareverb"
 ]
 
 [project.optional-dependencies]
-dev = [
+test = [
     "pytest>=7.0.0",  # testing
-    "coverage>=7.0.0",  # testing
+    "pytest-cov>=4.0.0",  # coverage plugin for pytest
+    "coverage>=7.0.0",  # coverage tooling
+]
+dev = [
+    # Include everything from [test]
+    "pytest>=7.0.0",  # testing
+    "pytest-cov>=4.0.0",  # coverage plugin for pytest
+    "coverage>=7.0.0",  # coverage tooling
+    # Plus additional dev tools
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
     "mypy>=1.0.0",  # type checking
-    "Sphinx>=6.0.0",  # documentation
-    "sphinx-rtd-theme>=1.0.0",  # documentation theme
     "twine>=4.0.0",  # packaging
     "wheel>=0.40.0",  # packaging
     "build>=0.10.0",  # packaging
     "bump2version>=1.0.0",  # version management
     "watchdog>=3.0.0",  # development tools
+]
+docs = [
+    "Sphinx>=6.0.0",  # documentation
+    "sphinx-rtd-theme>=1.0.0",  # documentation theme
+    "sphinx-autodoc-typehints>=1.0.0",  # documentation type hints
 ]
 
 [project.urls]
@@ -57,6 +67,9 @@ homepage = "https://github.com/pandeyKalyan/pyFDN"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["*.*"]

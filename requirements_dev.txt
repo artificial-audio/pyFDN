@@ -1,0 +1,20 @@
+# Development dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+coverage>=7.0.0
+tox>=4.0.0
+ruff>=0.1.0
+mypy>=1.0.0
+
+# Documentation
+Sphinx>=6.0.0
+sphinx-rtd-theme>=1.0.0
+
+# Packaging
+twine>=4.0.0
+wheel>=0.40.0
+build>=0.10.0
+
+# Development tools
+bump2version>=1.0.0
+watchdog>=3.0.0
