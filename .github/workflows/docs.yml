@@ -18,11 +18,8 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy-docs:
+  build-docs:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       # Checkout the repo
@@ -40,7 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ".[docs]"
-
+      
       # Auto-generate .rst files from source
       - name: Generate Sphinx RST
         run: |
@@ -51,18 +48,41 @@ jobs:
         working-directory: docs
         run: make html
 
+      # Save built docs as an artifact for later deployment
+      - name: Upload built docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+
+  deploy-docs:
+    runs-on: ubuntu-latest
+    needs: build-docs
+    # Only deploy on pushes to main so environment rules are satisfied
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       # Configure Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
         with:
           enablement: true
-      
-      # Upload artifact
+
+      # Download the built docs from the previous job
+      - name: Download docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+
+      # Upload artifact for GitHub Pages
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_build/html
-      
+
       # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
