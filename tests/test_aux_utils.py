@@ -38,10 +38,9 @@ def test_rt60_slope_inverse_relationship():
 
 def test_one_pole_absorption_shapes_are_correct():
     delays = np.array([10.0, 20.0, 30.0])
-    b, a = one_pole_absorption(1.2, 0.8, delays, 44_100)
-    assert b.shape == (delays.size, 1, 1)
-    assert a.shape == (delays.size, 1, 2)
-    assert np.all(a[:, 0, 0] == 1.0)
+    sos = one_pole_absorption(1.2, 0.8, delays, 44100.0)
+    assert sos.shape == (6, delays.size)
+    assert np.all(sos[3, :] == 1.0)
 
 
 def test_outer_sum_approximation_handles_zero_matrix():
