@@ -42,13 +42,16 @@ dev = [
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
     "mypy>=1.0.0",  # type checking
-    "Sphinx>=6.0.0",  # documentation
-    "sphinx-rtd-theme>=1.0.0",  # documentation theme
     "twine>=4.0.0",  # packaging
     "wheel>=0.40.0",  # packaging
     "build>=0.10.0",  # packaging
     "bump2version>=1.0.0",  # version management
     "watchdog>=3.0.0",  # development tools
+]
+docs = [
+    "Sphinx>=6.0.0",  # documentation
+    "sphinx-rtd-theme>=1.0.0",  # documentation theme
+    "sphinx-autodoc-typehints>=1.0.0",  # documentation type hints
 ]
 
 [project.urls]
