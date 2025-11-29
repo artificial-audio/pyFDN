@@ -37,6 +37,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",  # testing
+    "pytest-cov>=4.0.0",  # testing
     "coverage>=7.0.0",  # testing
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
