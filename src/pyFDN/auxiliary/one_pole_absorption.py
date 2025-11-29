@@ -15,7 +15,7 @@ def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
     delays_arr = np.asarray(delays, dtype=float)
     HDc = np.power(10.0, delays_arr * rt60_to_slope(rt_dc, fs) / 20.0)
     HNy = np.power(10.0, delays_arr * rt60_to_slope(rt_ny, fs) / 20.0)
-    return _design_one_pole_filters(HDc, HNy)
+    return design_one_pole_filter(HDc, HNy)
 
 
 def _design_one_pole_filters(h_dc: np.ndarray, h_ny: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
