@@ -25,20 +25,26 @@ requires-python = ">=3.10"
 license = {text = "MIT license"}
 dependencies = [
   "numpy",
+  'torch',
+  'torchaudio',
+  'soundfile',
   "scipy",
-  "matplotlib",
-  "jupyter",
-  "ipython",
-  "ipykernel",
   "flamo",
   "flareverb"
 ]
 
 [project.optional-dependencies]
-dev = [
+test = [
     "pytest>=7.0.0",  # testing
-    "pytest-cov>=4.0.0",  # testing
-    "coverage>=7.0.0",  # testing
+    "pytest-cov>=4.0.0",  # coverage plugin for pytest
+    "coverage>=7.0.0",  # coverage tooling
+]
+dev = [
+    # Include everything from [test]
+    "pytest>=7.0.0",  # testing
+    "pytest-cov>=4.0.0",  # coverage plugin for pytest
+    "coverage>=7.0.0",  # coverage tooling
+    # Plus additional dev tools
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
     "mypy>=1.0.0",  # type checking
