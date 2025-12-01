@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.tf_matrix import TFMatrix
+from pyFDN.auxiliary.filters import TFMatrix
 
 
 def test_tfmatrix_init_and_at():

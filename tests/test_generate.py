@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.matrix_convolution import matrix_convolution
+from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.generate.construct_cascaded_paraunitary_matrix import construct_cascaded_paraunitary_matrix
 from pyFDN.generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from pyFDN.generate.is_almost_zero import is_almost_zero

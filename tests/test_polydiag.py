@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.polydiag import polydiag
+from pyFDN.auxiliary.math import polydiag
 
 
 def test_polydiag_basic():

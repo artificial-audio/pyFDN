@@ -3,16 +3,16 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.convert2zfilter import convert2zFilter
-from pyFDN.auxiliary.zfilter import ZFilter
-from pyFDN.auxiliary.zfir import ZFIR
-from pyFDN.auxiliary.zscalar import ZScalar
-from pyFDN.auxiliary.ztf import ZTF
+
+from pyFDN.auxiliary.filters import ZFilter
+from pyFDN.auxiliary.filters import ZFIR
+from pyFDN.auxiliary.filters import ZScalar
+from pyFDN.auxiliary.filters import ZTF
 
 
 def test_convert2zfilter_returns_zscalar_for_static_matrices():
     matrix = np.array([[1.0, 0.0], [0.5, -0.25]])
-    zf = convert2zFilter(matrix)
+    zf = ZFilter.from_any(matrix)
     assert isinstance(zf, ZScalar)
     assert np.allclose(zf.at(1.0), matrix)
 
@@ -21,7 +21,7 @@ def test_convert2zfilter_returns_zfir_for_polynomial_data():
     coeffs = np.zeros((1, 1, 3))
     coeffs[0, 0, :] = [1.0, 0.5, -0.25]
 
-    zf = convert2zFilter(coeffs)
+    zf = ZFilter.from_any(coeffs)
     assert isinstance(zf, ZFIR)
     expected = (coeffs[:, :, 0] + coeffs[:, :, 1] + coeffs[:, :, 2]).reshape(-1, 1)
     assert np.allclose(zf.at(1.0), expected)
@@ -32,13 +32,13 @@ def test_convert2zfilter_round_trips_zfilter_instance():
     denominator = np.ones_like(numerator)
     ztf = ZTF(numerator, denominator)
 
-    converted = convert2zFilter(ztf)
+    converted = ZFilter.from_any(ztf)
     assert converted is ztf
 
 
 def test_convert2zfilter_rejects_unknown_types():
     with pytest.raises(TypeError):
-        convert2zFilter("not-a-filter")
+        ZFilter.from_any("not-a-filter")
 
 
 def test_ztf_matches_matrix_polyval():

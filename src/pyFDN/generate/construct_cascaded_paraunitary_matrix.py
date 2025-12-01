@@ -4,11 +4,11 @@ import numpy as np
 from scipy.linalg import hadamard
 import math
 
-from pyFDN.auxiliary.matrix_convolution import matrix_convolution
+from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.generate.random_orthogonal import random_orthogonal
 from pyFDN.generate.shift_matrix import shift_matrix
 from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
-from pyFDN.helpers.utils import ensure_3d
+from pyFDN.auxiliary.utils import ensure_3d
 
 def construct_cascaded_paraunitary_matrix(
     n: int,

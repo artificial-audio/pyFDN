@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from pyFDN.auxiliary.pole_boundaries import pole_boundaries
+from pyFDN.auxiliary.acoustics import pole_boundaries
 
 
 def test_pole_boundaries_basic():

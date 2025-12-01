@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.convert2zfilter import ZFilter, ZScalar
+from pyFDN.auxiliary.filters import ZFilter, ZScalar
 
 class DFiltMatrix:
     """

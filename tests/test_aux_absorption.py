@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.absorption_filters import absorption_filters
-from pyFDN.auxiliary.absorption_to_t60 import absorption_to_t60
-from pyFDN.auxiliary.rt60_to_slope import rt60_to_slope
-from pyFDN.auxiliary.db2mag import db2mag
+from pyFDN.auxiliary.acoustics import absorption_filters
+from pyFDN.auxiliary.acoustics import absorption_to_t60
+from pyFDN.auxiliary.acoustics import rt60_to_slope
+from pyFDN.auxiliary.utils import db2mag
 
 
 @pytest.mark.parametrize(

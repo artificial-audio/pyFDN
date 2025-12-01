@@ -4,7 +4,7 @@ from numpy.typing import ArrayLike
 import numpy as np
 
 from pyFDN.generate.shift_matrix import shift_matrix
-from pyFDN.helpers.utils import ensure_3d
+from pyFDN.auxiliary.utils import ensure_3d
 
 def random_matrix_shift(
     max_shift: int, matrix: ArrayLike, matrix_rev: ArrayLike | None = None

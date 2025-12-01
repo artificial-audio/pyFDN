@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.hertz2unit import hertz2unit
-from pyFDN.auxiliary.ms2smp import ms2smp
-from pyFDN.auxiliary.negpolyder import negpolyder
-from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
-from pyFDN.auxiliary.outer_sum_approximation import outer_sum_approximation
-from pyFDN.auxiliary.polyder_rational import polyder_rational
-from pyFDN.auxiliary.rt60_to_slope import rt60_to_slope
-from pyFDN.auxiliary.slope_to_rt60 import slope_to_rt60
+from pyFDN.auxiliary.utils import hertz2unit
+from pyFDN.auxiliary.delay import ms2smp
+from pyFDN.auxiliary.math import negpolyder
+from pyFDN.auxiliary.acoustics import one_pole_absorption
+from pyFDN.auxiliary.math import outer_sum_approximation
+from pyFDN.auxiliary.math import polyder_rational
+from pyFDN.auxiliary.acoustics import rt60_to_slope
+from pyFDN.auxiliary.acoustics import slope_to_rt60
 
 
 def test_ms2smp_round_trip_simple_values():

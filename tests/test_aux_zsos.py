@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from pyFDN.auxiliary.zsos import ZSOS
+from pyFDN.auxiliary.filters import ZSOS
 
 
 def _simple_sos():

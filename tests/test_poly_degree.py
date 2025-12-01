@@ -1,6 +1,7 @@
 import numpy as np
 
-from pyFDN.auxiliary.poly_degree import mag2db, poly_degree
+from pyFDN.auxiliary.math import poly_degree
+from pyFDN.auxiliary.utils import mag2db
 
 
 def test_mag2db():

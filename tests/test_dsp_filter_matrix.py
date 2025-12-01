@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.zscalar import ZScalar
-from pyFDN.auxiliary.ztf import ZTF
+from pyFDN.auxiliary.filters import ZScalar
+from pyFDN.auxiliary.filters import ZTF
 from pyFDN.dsp.filter_matrix import FilterMatrix
 
 

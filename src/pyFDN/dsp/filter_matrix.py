@@ -3,8 +3,8 @@ import numpy as np
 from typing import Optional
 from dataclasses import dataclass
 from numpy.typing import ArrayLike
-from pyFDN.auxiliary.ztf import ZTF
-from pyFDN.auxiliary.zscalar import ZScalar
+from pyFDN.auxiliary.filters import ZTF
+from pyFDN.auxiliary.filters import ZScalar
 
 class IIRFilterState:
     """Streaming Direct Form I filter section."""

@@ -1,10 +1,11 @@
+"""FDN processing functions."""
 from __future__ import annotations
 import numpy as np
 from typing import Optional
 from numpy.typing import ArrayLike
 from pyFDN.dsp.filter_matrix import FilterMatrix
 from pyFDN.dsp.feedback_delay import FeedbackDelay
-from pyFDN.auxiliary.ztf import ZTF
+from pyFDN.auxiliary.filters import ZTF
 
 def process_fdn(
     input_signal: ArrayLike,

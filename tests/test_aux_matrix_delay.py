@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.matrix_delay_approximation import matrix_delay_approximation
-from pyFDN.auxiliary.mgrpdelay import mgrpdelay
+from pyFDN.auxiliary.delay import matrix_delay_approximation
+from pyFDN.auxiliary.delay import mgrpdelay
 
 
 def test_mgrpdelay_handles_zero_rows():
@@ -25,7 +25,7 @@ def test_matrix_delay_approximation_uses_nanmean(monkeypatch):
     mock_freq = np.array([0.0, 1.0])
 
     monkeypatch.setattr(
-        "pyFDN.auxiliary.matrix_delay_approximation.mgrpdelay",
+        "pyFDN.auxiliary.delay.mgrpdelay",
         lambda _: (mock_gd, mock_freq),
     )
 

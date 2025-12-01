@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.matrix_polyval import matrix_polyval
+from pyFDN.auxiliary.math import matrix_polyval
 
 
 def test_matrix_polyval_basic():

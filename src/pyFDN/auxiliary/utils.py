@@ -1,3 +1,4 @@
+"""General utility functions."""
 from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike
@@ -26,3 +27,23 @@ def last_nonzero_indices(mat: np.ndarray) -> np.ndarray:
     last = np.zeros_like(first_true)
     last[has_nonzero] = arr.shape[2] - first_true[has_nonzero]
     return last
+
+
+def mag2db(magnitude: ArrayLike) -> np.ndarray:
+    """Convert magnitudes to decibels with numerical guard."""
+
+    mag = np.asarray(magnitude, dtype=float)
+    tiny = np.finfo(float).tiny
+    return 20.0 * np.log10(np.maximum(np.abs(mag), tiny))
+
+
+def db2mag(db: ArrayLike) -> np.ndarray:
+    """Convert decibel values to linear magnitude."""
+
+    db_arr = np.asarray(db, dtype=float)
+    return np.power(10.0, db_arr / 20.0)
+
+
+def hertz2unit(hz: ArrayLike, fs: float) -> np.ndarray:
+    """Convert frequency (Hz) to normalized frequency (0–1)."""
+    return np.asarray(hz) / fs * 2

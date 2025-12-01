@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pyFDN.helpers.utils import ensure_3d, last_nonzero_indices
+from pyFDN.auxiliary.utils import ensure_3d, last_nonzero_indices
 
 
 def test_ensure_3d_promotes_2d_arrays():

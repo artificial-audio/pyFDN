@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.is_bounding_curve import is_bounding_curve
+from pyFDN.auxiliary.acoustics import is_bounding_curve
 
 
 def test_is_bounding_curve_upper():

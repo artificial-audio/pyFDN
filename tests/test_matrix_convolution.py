@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.matrix_convolution import matrix_convolution
+from pyFDN.auxiliary.math import matrix_convolution
 
 
 def test_matrix_convolution_basic():

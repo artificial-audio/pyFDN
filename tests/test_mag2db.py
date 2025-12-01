@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyFDN.auxiliary.mag2db import mag2db
+from pyFDN.auxiliary.utils import mag2db
 
 
 def test_mag2db_basic():

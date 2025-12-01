@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 from torch import jagged
 
-from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
+from pyFDN.auxiliary.acoustics import one_pole_absorption
 from pyFDN.generate.random_orthogonal import random_orthogonal
 
 

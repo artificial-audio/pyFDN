@@ -1,8 +1,8 @@
 # dss2impz.py
 import numpy as np
 
-from pyFDN.auxiliary.convert2zfilter import convert2zFilter
-from pyFDN.auxiliary.process_fdn import process_fdn
+from pyFDN.auxiliary.filters import ZFilter
+from pyFDN.process import process_fdn
 
 def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=None, absorption_filters=None):
     """
@@ -29,9 +29,9 @@ def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=N
         Shape [ir_len, num_outputs, num_inputs]
     """
     # Wrap matrices as zFilter if needed
-    A = convert2zFilter(A)
-    B = convert2zFilter(B)
-    C = convert2zFilter(C)
+    A = ZFilter.from_any(A)
+    B = ZFilter.from_any(B)
+    C = ZFilter.from_any(C)
 
     num_inputs = B.m
 
