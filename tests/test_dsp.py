@@ -1,12 +1,17 @@
-"""Tests for ``pyFDN.dsp.filter_matrix``."""
+"""Tests for dsp module."""
 
 import numpy as np
 import pytest
 
+from pyFDN.auxiliary.filters import TFMatrix
 from pyFDN.auxiliary.filters import ZScalar
 from pyFDN.auxiliary.filters import ZTF
 from pyFDN.dsp.filter_matrix import FilterMatrix
 
+
+# ============================================================================
+# FilterMatrix Tests
+# ============================================================================
 
 def test_from_data_returns_same_instance():
     base = FilterMatrix.from_data(np.eye(2))
@@ -69,3 +74,25 @@ def test_from_data_requires_supported_type():
 def test_from_data_rejects_mismatched_diagonal_shape():
     with pytest.raises(ValueError):
         FilterMatrix.from_data(np.ones((2, 3)), is_diagonal=True)
+
+
+# ============================================================================
+# TFMatrix Tests
+# ============================================================================
+
+def test_tfmatrix_init_and_at():
+    num = np.ones((2, 2, 3))
+    den = np.ones((2, 2, 3))
+    tfm = TFMatrix(num, den, var="z^-1")
+    z = 1.0
+    result = tfm.at(z)
+    assert result.shape == (2, 2)
+
+
+def test_tfmatrix_poles():
+    num = np.ones((2, 2, 3))
+    den = np.zeros((2, 2, 3))
+    den[..., 0] = 1
+    tfm = TFMatrix(num, den)
+    poles = tfm.poles()
+    assert isinstance(poles, np.ndarray)

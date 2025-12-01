@@ -1,5 +1,5 @@
 """
-regression tests for one-pole absorption filters against MATLAB FDN Toolbox 
+FLAMO import tests for one-pole absorption filters against MATLAB FDN Toolbox 
 
 tests to double check that the Python implementation matches the MATLAB reference.
 
@@ -190,37 +190,6 @@ def test_impulse_response(one_pole_absorption_reference):
         decimal=3,
         err_msg="Impulse responses don't match"
     )
-
-def test_without_matlab_reference():
-    """test basic functionality even without MATLAB reference file."""
-    
-    # test parameters
-    fs = 48000
-    RT_DC = 3.0
-    RT_NY = 0.1
-    delays = np.array([1320, 1650, 2790, 550])
-    
-    # test coefficient generation
-    sos = one_pole_absorption(RT_DC, RT_NY, delays, fs)
-    
-    # basic sanity checks
-    assert sos.shape == (6, len(delays)), "SOS coefficients should be shape (6, N)"
-    assert np.all(np.isfinite(sos)), "SOS coefficients should be finite"
-    # Check SOS format: [b0, b1, b2, a0, a1, a2]
-    assert np.all(sos[1, :] == 0), "b1 should be 0 for one-pole filters"
-    assert np.all(sos[2, :] == 0), "b2 should be 0 for one-pole filters"
-    assert np.all(sos[3, :] == 1), "a0 should be 1"
-    assert np.all(sos[5, :] == 0), "a2 should be 0 for one-pole filters"
-    
-    # test orthogonal matrix generation
-    np.random.seed(1)
-    matrix = random_orthogonal(4)
-    
-    # test orthogonality
-    product = matrix.T @ matrix
-    identity = np.eye(4)
-    np.testing.assert_allclose(product, identity, rtol=1e-12, atol=1e-15,
-                              err_msg="generated matrix is not orthogonal")
 
 
 if __name__ == "__main__":

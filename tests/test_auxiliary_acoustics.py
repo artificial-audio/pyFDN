@@ -1,4 +1,4 @@
-"""Tests for absorption-related helper functions."""
+"""Tests for auxiliary.acoustics module."""
 
 import numpy as np
 import pytest
@@ -8,6 +8,10 @@ from pyFDN.auxiliary.acoustics import absorption_to_t60
 from pyFDN.auxiliary.acoustics import rt60_to_slope
 from pyFDN.auxiliary.utils import db2mag
 
+
+# ============================================================================
+# Absorption Filter Tests
+# ============================================================================
 
 @pytest.mark.parametrize(
     "target_rt, delays",

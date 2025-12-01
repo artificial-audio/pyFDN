@@ -1,4 +1,4 @@
-"""Tests for matrix delay helpers."""
+"""Tests for auxiliary.delay module."""
 
 import numpy as np
 import pytest
