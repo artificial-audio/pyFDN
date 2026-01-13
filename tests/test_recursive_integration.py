@@ -4,7 +4,7 @@ import pytest
 import torch
 import numpy as np
 from pyFDN.recursive import (
-    DelayRead, DelayWrite, ParallelBiquads,
+    DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )
 
@@ -173,7 +173,7 @@ class TestFDNSystems:
         delay_length = 16
         
         # Lowpass absorption (0.9 one-pole)
-        absorption_coeffs = torch.tensor([[[0.1, 0.0, 0.0, -0.9, 0.0]]]).repeat(num_lines, 1, 1)
+        absorption_coeffs = torch.tensor([[[1.0, -0.9, 0.0, 0.1, 0.0, 0.0]]]).repeat(num_lines, 1, 1)  # [a0, a1, a2, b0, b1, b2]
         
         # Hadamard matrix for feedback
         A = torch.tensor([
@@ -186,7 +186,7 @@ class TestFDNSystems:
         stages = [
             DelayRead(delay_length=delay_length, num_lines=num_lines),
             FeedbackMix(feedback_matrix=A),
-            ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+            Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
             InputTap(input_matrix=torch.ones(num_lines, 1)),
             DelayWrite(),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
@@ -213,7 +213,7 @@ class TestFDNSystems:
         delay_length = 16
         
         # Lowpass absorption (0.8 one-pole)
-        absorption_coeffs = torch.tensor([[[0.2, 0.0, 0.0, -0.8, 0.0]]]).repeat(num_lines, 1, 1)
+        absorption_coeffs = torch.tensor([[[1.0, -0.8, 0.0, 0.2, 0.0, 0.0]]]).repeat(num_lines, 1, 1)  # [a0, a1, a2, b0, b1, b2]
         
         A = torch.eye(num_lines) * 0.9  # Simple diagonal feedback
         
@@ -222,7 +222,7 @@ class TestFDNSystems:
             FeedbackMix(feedback_matrix=A),
             InputTap(input_matrix=torch.ones(num_lines, 1)),
             DelayWrite(),
-            ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+            Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
         ]
         core = RecursionCore(stages)
@@ -246,14 +246,14 @@ class TestStageOrdering:
         delay_length = 8
         
         # Strong lowpass
-        absorption_coeffs = torch.tensor([[[0.5, 0.0, 0.0, -0.5, 0.0]]]).repeat(num_lines, 1, 1)
+        absorption_coeffs = torch.tensor([[[1.0, -0.5, 0.0, 0.5, 0.0, 0.0]]]).repeat(num_lines, 1, 1)  # [a0, a1, a2, b0, b1, b2]
         A = torch.eye(num_lines) * 0.8
         
         # Version 1: Absorption inside loop
         stages_inside = [
             DelayRead(delay_length=delay_length, num_lines=num_lines),
             FeedbackMix(feedback_matrix=A),
-            ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+            Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
             InputTap(input_matrix=torch.ones(num_lines, 1)),
             DelayWrite(),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
@@ -265,7 +265,7 @@ class TestStageOrdering:
             FeedbackMix(feedback_matrix=A),
             InputTap(input_matrix=torch.ones(num_lines, 1)),
             DelayWrite(),
-            ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+            Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
         ]
         
@@ -298,9 +298,9 @@ class TestBatchProcessing:
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
         ]
         
-        # Process batch
+        # Process batch: [B, N, T]
         core_batch = RecursionCore(stages)
-        input_batch = torch.randn(batch_size, 64, 1)
+        input_batch = torch.randn(batch_size, 1, 64)  # [B, N_in, T]
         output_batch = core_batch.process(input_batch, block_size=16)
         
         # Process individually
@@ -312,7 +312,7 @@ class TestBatchProcessing:
                 DelayWrite(),
                 OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
             ])
-            output_single = core_single.process(input_batch[i:i+1], block_size=16)
+            output_single = core_single.process(input_batch[i:i+1], block_size=16)  # [1, N, T]
             
-            # Should match
+            # Should match: [B, N_out, T]
             assert torch.allclose(output_batch[i:i+1], output_single, atol=1e-6)

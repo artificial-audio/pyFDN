@@ -87,10 +87,11 @@ class OutputTap(Stage):
         if "lines" not in ctx:
             raise RuntimeError("OutputTap requires ctx['lines'] to be set")
         
-        lines = ctx["lines"]  # [B, T, N]
+        lines = ctx["lines"]  # [B, N, T]
         
-        # Apply output matrix: [B, T, N] @ [N, N_out] -> [B, T, N_out]
-        y = torch.matmul(lines, self.C.T)
+        # Apply output matrix using einsum: [B, N, T] @ [N, N_out] -> [B, N_out, T]
+        # einsum('bnt,no->bot', lines, self.C.T) computes lines @ C.T efficiently without transposing
+        y = torch.einsum('bnt,no->bot', lines, self.C.T)  # [B, N_out, T]
         
         # Add direct path if present
         if self.D is not None:
@@ -98,8 +99,9 @@ class OutputTap(Stage):
                 raise RuntimeError(
                     "OutputTap with direct path requires ctx['x'] to be set"
                 )
-            x = ctx["x"]  # [B, T, N_in]
-            # [B, T, N_in] @ [N_in, N_out] -> [B, T, N_out]
-            y = y + torch.matmul(x, self.D.T)
+            x = ctx["x"]  # [B, N_in, T]
+            # Apply direct matrix using einsum: [B, N_in, T] @ [N_in, N_out] -> [B, N_out, T]
+            direct = torch.einsum('bnt,no->bot', x, self.D.T)  # [B, N_out, T]
+            y = y + direct
         
         ctx["y"] = y

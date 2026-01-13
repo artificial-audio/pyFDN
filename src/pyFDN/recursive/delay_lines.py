@@ -39,11 +39,11 @@ class DelayRead(Stage):
         """Initialize delay buffers and pointer."""
         return {
             "delay_buffers": torch.zeros(
-                batch_size, self.delay_length, self.num_lines,
+                batch_size, self.num_lines, self.delay_length,
                 device=device, dtype=torch.float32
             ),
             "delay_pointer": torch.zeros(
-                batch_size, dtype=torch.long, device=device
+                batch_size, self.num_lines, dtype=torch.long, device=device
             )
         }
     
@@ -57,27 +57,24 @@ class DelayRead(Stage):
         """
         Read delayed samples from buffers.
         
-        Produces ctx["lines"] of shape [B, T, N] containing delayed samples.
+        Produces ctx["lines"] of shape [B, N, T] containing delayed samples.
         """
-        buffers = state_t["delay_buffers"]  # [B, L, N]
-        pointer = state_t["delay_pointer"]  # [B]
+        buffers = state_t["delay_buffers"]  # [B, N, L]
+        pointer = state_t["delay_pointer"]  # [B, N]
         
-        B, L, N = buffers.shape
+        B, N, L = buffers.shape
         T = block_size
         
-        # Generate indices for reading: (pointer + 0), (pointer + 1), ..., (pointer + T-1)
-        # All modulo L
-        time_offsets = torch.arange(T, device=buffers.device)  # [T]
-        read_indices = (pointer.unsqueeze(1) + time_offsets.unsqueeze(0)) % L  # [B, T]
+        # Generate indices for reading delayed samples
+        # Read from (pointer - delay_length) % L to get samples delayed by delay_length
+        # pointer: [B, N], time_offsets: [T] -> read_indices: [B, N, T]
+        time_offsets = torch.arange(T, device=buffers.device).view(1, 1, T)  # [1, 1, T]
+        # Read from positions offset by delay_length behind the write pointer
+        read_indices = (pointer.unsqueeze(2) - self.delay_length + time_offsets) % L  # [B, N, T]
         
-        # Gather samples from buffers
-        # We need to expand indices to match the buffer shape for gathering
-        read_indices_expanded = read_indices.unsqueeze(2).expand(B, T, N)  # [B, T, N]
-        
-        # Gather along the L dimension (dim=1 of buffers)
-        lines = torch.gather(buffers, 1, read_indices_expanded)  # [B, T, N]
-        
-        ctx["lines"] = lines
+        # Gather samples from buffers along the L dimension (dim=2)
+        # buffers: [B, N, L], read_indices: [B, N, T] -> lines: [B, N, T]
+        ctx["lines"] = torch.gather(buffers, 2, read_indices)  # [B, N, T]
         
         # Note: We don't update the pointer here - that's done by DelayWrite
 
@@ -123,31 +120,29 @@ class DelayWrite(Stage):
         """
         Write processed samples to buffers and advance pointer.
         
-        Reads ctx["lines"] of shape [B, T, N] and writes to delay buffers.
+        Reads ctx["lines"] of shape [B, N, T] and writes to delay buffers.
         """
         if "lines" not in ctx:
             raise RuntimeError("DelayWrite requires ctx['lines'] to be set by previous stages")
         
-        lines = ctx["lines"]  # [B, T, N]
-        buffers = state_t["delay_buffers"].clone()  # [B, L, N] - clone to avoid mutating state_t
-        pointer = state_t["delay_pointer"]  # [B]
+        lines = ctx["lines"]  # [B, N, T]
+        buffers = state_t["delay_buffers"].clone()  # [B, N, L] - clone to avoid mutating state_t
+        pointer = state_t["delay_pointer"]  # [B, N]
         
-        B, T, N = lines.shape
-        L = buffers.shape[1]
+        B, N, T = lines.shape
+        L = buffers.shape[2]
         
         # Generate indices for writing: (pointer + 0), (pointer + 1), ..., (pointer + T-1)
         # All modulo L
-        time_offsets = torch.arange(T, device=buffers.device)  # [T]
-        write_indices = (pointer.unsqueeze(1) + time_offsets.unsqueeze(0)) % L  # [B, T]
+        # pointer: [B, N], time_offsets: [T] -> write_indices: [B, N, T]
+        time_offsets = torch.arange(T, device=buffers.device).view(1, 1, T)  # [1, 1, T]
+        write_indices = (pointer.unsqueeze(2) + time_offsets) % L  # [B, N, T]
         
-        # Expand indices to match the shape for scattering
-        write_indices_expanded = write_indices.unsqueeze(2).expand(B, T, N)  # [B, T, N]
+        # Scatter samples into buffers along the L dimension (dim=2)
+        buffers.scatter_(2, write_indices, lines)
         
-        # Scatter samples into buffers
-        buffers.scatter_(1, write_indices_expanded, lines)
-        
-        # Advance pointer
-        new_pointer = (pointer + T) % L
+        # Advance pointer (one per delay line)
+        new_pointer = (pointer + T) % L  # [B, N]
         
         # Write updated state
         next_state["delay_buffers"] = buffers

@@ -18,7 +18,8 @@ class Biquads(Stage):
     - Modifies ctx["lines"] in-place
     
     Filter structure: Direct Form I biquad
-        y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+        a0*y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+        or equivalently: y[n] = (b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]) / a0
     
     State per line: [x[n-1], x[n-2], y[n-1], y[n-2]]
     """
@@ -34,8 +35,8 @@ class Biquads(Stage):
         
         Args:
             num_lines: Number of filter lines (N)
-            biquad_coeffs: Filter coefficients of shape [N, 5] or [N, num_sections, 5]
-                          where each row is [b0, b1, b2, a1, a2]
+            biquad_coeffs: Filter coefficients of shape [N, 6] or [N, num_sections, 6]
+                          where each row is [a0, a1, a2, b0, b1, b2]
                           If None, creates simple one-pole lowpass filters
             context_key: Context dictionary key to filter (default: "lines")
         """
@@ -46,17 +47,24 @@ class Biquads(Stage):
         # Initialize filter coefficients
         if biquad_coeffs is None:
             # Default: simple one-pole lowpass (y[n] = 0.9*y[n-1] + 0.1*x[n])
-            # As biquad: b0=0.1, b1=0, b2=0, a1=-0.9, a2=0
+            # As biquad: a0=1.0, a1=-0.9, a2=0, b0=0.1, b1=0, b2=0
             self.coeffs = torch.tensor(
-                [[0.1, 0.0, 0.0, -0.9, 0.0]],
+                [[1.0, -0.9, 0.0, 0.1, 0.0, 0.0]],
                 dtype=torch.float32
-            ).repeat(num_lines, 1)  # [N, 5]
+            ).repeat(num_lines, 1)  # [N, 6]
+            # Add section dimension to match expected 3D shape [N, num_sections, 6]
+            self.coeffs = self.coeffs.unsqueeze(1)  # [N, 1, 6]
             self.num_sections = 1
         else:
             self.coeffs = biquad_coeffs.float()
             if self.coeffs.dim() == 2:
-                # [N, 5] -> add section dimension
-                self.coeffs = self.coeffs.unsqueeze(1)  # [N, 1, 5]
+                # [N, 6] -> add section dimension
+                self.coeffs = self.coeffs.unsqueeze(1)  # [N, 1, 6]
+            if self.coeffs.shape[-1] != 6:
+                raise ValueError(
+                    f"Biquad coefficients must have 6 values [a0, a1, a2, b0, b1, b2], "
+                    f"got {self.coeffs.shape[-1]} values"
+                )
             self.num_sections = self.coeffs.shape[1]
     
     def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
@@ -92,17 +100,17 @@ class Biquads(Stage):
                 f"Biquads requires ctx['{self.context_key}'] to be set"
             )
         
-        x = ctx[self.context_key]  # [B, T, N]
+        x = ctx[self.context_key]  # [B, N, T]
         filter_state = state_t["biquad_state"].clone()  # [B, N, num_sections, 4]
         
-        B, T, N = x.shape
+        B, N, T = x.shape
         
         # Process each section sequentially (cascaded biquads)
         y = x.clone()
         
         for section_idx in range(self.num_sections):
-            # Get coefficients for this section
-            b0, b1, b2, a1, a2 = self.coeffs[:, section_idx].unbind(dim=1)  # Each: [N]
+            # Get coefficients for this section: [a0, a1, a2, b0, b1, b2]
+            a0, a1, a2, b0, b1, b2 = self.coeffs[:, section_idx].unbind(dim=1)  # Each: [N]
             
             # Get state for this section: [B, N, 4]
             state = filter_state[:, :, section_idx, :]
@@ -110,21 +118,23 @@ class Biquads(Stage):
             y_state = state[:, :, 2:]  # [B, N, 2] - [y[n-1], y[n-2]]
             
             # Process block sample by sample (IIR requires sequential processing)
-            output = torch.zeros_like(y)  # [B, T, N]
+            output = torch.zeros_like(y)  # [B, N, T]
             
             for t in range(T):
-                x_n = y[:, t, :]  # [B, N] - input for this section
+                x_n = y[:, :, t]  # [B, N] - input for this section
                 
-                # Compute output: y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
-                y_n = (
+                # Compute output: a0*y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+                # or: y[n] = (b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]) / a0
+                numerator = (
                     b0 * x_n
                     + b1 * x_state[:, :, 0]
                     + b2 * x_state[:, :, 1]
-                    + a1 * y_state[:, :, 0]  # Note: a1 already has negative sign in coeffs
-                    + a2 * y_state[:, :, 1]
+                    - a1 * y_state[:, :, 0]
+                    - a2 * y_state[:, :, 1]
                 )
+                y_n = numerator / a0.unsqueeze(0)  # Divide by a0, broadcasting over batch
                 
-                output[:, t, :] = y_n
+                output[:, :, t] = y_n
                 
                 # Update state (shift)
                 x_state[:, :, 1] = x_state[:, :, 0]  # x[n-2] = x[n-1]

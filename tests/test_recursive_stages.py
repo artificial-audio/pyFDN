@@ -4,7 +4,7 @@ import pytest
 import torch
 import numpy as np
 from pyFDN.recursive import (
-    DelayRead, DelayWrite, ParallelBiquads,
+    DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )
 
@@ -25,7 +25,7 @@ class TestDelayStages:
         
         # Initialize state
         state = core.init_state(batch_size=1)
-        assert state["delay_buffers"].shape == (1, delay_length, num_lines)
+        assert state["delay_buffers"].shape == (1, num_lines, delay_length)  # [B, N, L]
         assert torch.all(state["delay_buffers"] == 0)
     
     def test_pure_delay(self):
@@ -89,13 +89,13 @@ class TestDelayStages:
         ]
         core = RecursionCore(stages)
         
-        # Create different inputs for each batch
-        input_signal = torch.randn(batch_size, 32, num_lines)
+        # Create different inputs for each batch: [B, N, T]
+        input_signal = torch.randn(batch_size, num_lines, 32)
         output = core.process(input_signal, block_size=8)
         
-        assert output.shape == (batch_size, 32, num_lines)
+        assert output.shape == (batch_size, num_lines, 32)
         # First delay_length samples should be zero for all batches
-        assert torch.all(output[:, :delay_length, :] == 0)
+        assert torch.all(output[:, :, :delay_length] == 0)
 
 
 class TestParallelBiquads:
@@ -103,7 +103,7 @@ class TestParallelBiquads:
     
     def test_initialization(self):
         """Test biquad stage initialization."""
-        stage = ParallelBiquads(num_lines=4)
+        stage = Biquads(num_lines=4)
         state = stage.init_state(batch_size=2, device=torch.device("cpu"))
         
         assert "biquad_state" in state
@@ -112,13 +112,13 @@ class TestParallelBiquads:
     def test_one_pole_filter(self):
         """Test simple one-pole lowpass filter."""
         # One-pole lowpass: y[n] = a*y[n-1] + (1-a)*x[n]
-        # As biquad: b0=0.1, b1=0, b2=0, a1=-0.9, a2=0
+        # As biquad: a0=1.0, a1=-a, a2=0, b0=1-a, b1=0, b2=0
         a = 0.9
-        coeffs = torch.tensor([[[1-a, 0.0, 0.0, -a, 0.0]]])  # [1, 1, 5]
+        coeffs = torch.tensor([[[1.0, -a, 0.0, 1-a, 0.0, 0.0]]])  # [1, 1, 6]
         
         stages = [
             DelayRead(delay_length=4, num_lines=1),
-            ParallelBiquads(num_lines=1, biquad_coeffs=coeffs),
+            Biquads(num_lines=1, biquad_coeffs=coeffs),
             InputTap(input_matrix=torch.ones(1, 1)),
             DelayWrite(),
             OutputTap(num_lines=1, num_outputs=1),
@@ -138,11 +138,11 @@ class TestParallelBiquads:
     
     def test_state_preservation(self):
         """Test that filter state is preserved across blocks."""
-        coeffs = torch.tensor([[[0.5, 0.3, 0.0, -0.6, 0.0]]])  # [1, 1, 5]
+        coeffs = torch.tensor([[[1.0, -0.6, 0.0, 0.5, 0.3, 0.0]]])  # [1, 1, 6] [a0, a1, a2, b0, b1, b2]
         
         stages = [
             DelayRead(delay_length=4, num_lines=1),
-            ParallelBiquads(num_lines=1, biquad_coeffs=coeffs),
+            Biquads(num_lines=1, biquad_coeffs=coeffs),
             DelayWrite(),
             OutputTap(num_lines=1, num_outputs=1),
         ]
@@ -166,7 +166,7 @@ class TestFeedbackMix:
         stage = FeedbackMix(feedback_matrix=A)
         stage.init_state(1, torch.device("cpu"))
         
-        ctx = {"lines": torch.randn(1, 10, 4)}
+        ctx = {"lines": torch.randn(1, 4, 10)}  # [B, N, T]
         original = ctx["lines"].clone()
         
         stage.step_block(ctx, {}, {}, 10)
@@ -185,14 +185,14 @@ class TestFeedbackMix:
         stage = FeedbackMix(feedback_matrix=A)
         stage.init_state(1, torch.device("cpu"))
         
-        # Create test signal
-        lines = torch.tensor([[[1.0, 0.0, 2.0, 0.0]]])  # [B=1, T=1, N=4]
+        # Create test signal: [B=1, N=4, T=1]
+        lines = torch.tensor([[[1.0], [0.0], [2.0], [0.0]]])
         ctx = {"lines": lines}
         
         stage.step_block(ctx, {}, {}, 1)
         
-        # Check expected mixing
-        expected = torch.tensor([[[0.5, 0.5, 1.4, 0.6]]])
+        # Check expected mixing: [B=1, N=4, T=1]
+        expected = torch.tensor([[[0.5], [0.5], [1.4], [0.6]]])
         assert torch.allclose(ctx["lines"], expected, atol=1e-6)
 
 
@@ -206,14 +206,14 @@ class TestInputTap:
         stage = InputTap(input_matrix=B)
         stage.init_state(1, torch.device("cpu"))
         
-        lines = torch.ones(1, 10, 4)  # [B, T, N]
-        x = torch.ones(1, 10, 1) * 0.5  # [B, T, N_in]
+        lines = torch.ones(1, 4, 10)  # [B, N, T]
+        x = torch.ones(1, 1, 10) * 0.5  # [B, N_in, T]
         ctx = {"lines": lines, "x": x}
         
         stage.step_block(ctx, {}, {}, 10)
         
         # Should add 2.0 * 0.5 = 1.0 to all lines
-        expected = torch.ones(1, 10, 4) * 2.0
+        expected = torch.ones(1, 4, 10) * 2.0
         assert torch.allclose(ctx["lines"], expected)
     
     def test_matrix_multiplication(self):
@@ -227,14 +227,14 @@ class TestInputTap:
         stage = InputTap(input_matrix=B)
         stage.init_state(1, torch.device("cpu"))
         
-        lines = torch.zeros(1, 1, 3)
-        x = torch.tensor([[[2.0, 3.0]]])  # [B=1, T=1, N_in=2]
+        lines = torch.zeros(1, 3, 1)  # [B, N, T]
+        x = torch.tensor([[[2.0], [3.0]]])  # [B=1, N_in=2, T=1]
         ctx = {"lines": lines, "x": x}
         
         stage.step_block(ctx, {}, {}, 1)
         
-        # Expected: [2.0, 3.0, 2.5]
-        expected = torch.tensor([[[2.0, 3.0, 2.5]]])
+        # Expected: [2.0, 3.0, 2.5] -> [B=1, N=3, T=1]
+        expected = torch.tensor([[[2.0], [3.0], [2.5]]])
         assert torch.allclose(ctx["lines"], expected)
 
 
@@ -248,12 +248,12 @@ class TestOutputTap:
         stage = OutputTap(output_matrix=C)
         stage.init_state(1, torch.device("cpu"))
         
-        lines = torch.tensor([[[1.0, 2.0, 3.0, 4.0]]])  # [B=1, T=1, N=4]
+        lines = torch.tensor([[[1.0], [2.0], [3.0], [4.0]]])  # [B=1, N=4, T=1]
         ctx = {"lines": lines}
         
         stage.step_block(ctx, {}, {}, 1)
         
-        # Average should be 2.5
+        # Average should be 2.5: [B=1, N_out=1, T=1]
         expected = torch.tensor([[[2.5]]])
         assert torch.allclose(ctx["y"], expected)
     
@@ -264,12 +264,12 @@ class TestOutputTap:
         stage = OutputTap(output_matrix=C, direct_matrix=D)
         stage.init_state(1, torch.device("cpu"))
         
-        lines = torch.tensor([[[2.0, 4.0]]])  # [B=1, T=1, N=2]
-        x = torch.tensor([[[10.0]]])  # [B=1, T=1, N_in=1]
+        lines = torch.tensor([[[2.0], [4.0]]])  # [B=1, N=2, T=1]
+        x = torch.tensor([[[10.0]]])  # [B=1, N_in=1, T=1]
         ctx = {"lines": lines, "x": x}
         
         stage.step_block(ctx, {}, {}, 1)
         
-        # Output = 0.5*(2+4) + 0.3*10 = 3.0 + 3.0 = 6.0
+        # Output = 0.5*(2+4) + 0.3*10 = 3.0 + 3.0 = 6.0: [B=1, N_out=1, T=1]
         expected = torch.tensor([[[6.0]]])
         assert torch.allclose(ctx["y"], expected)

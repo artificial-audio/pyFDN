@@ -8,7 +8,7 @@ This module provides:
 - Core abstractions: Stage (base class) and RecursionCore (coordinator)
 - Concrete stages for building FDN-like recursive systems:
   * DelayRead/DelayWrite: Circular delay buffer management
-  * ParallelBiquads: IIR filter bank
+  * Biquads: IIR filter bank
   * FeedbackMix: Feedback matrix application
   * InputTap: External input injection
   * OutputTap: Output summation
@@ -18,7 +18,7 @@ Example usage:
     >>> stages = [
     ...     DelayRead(delay_length=1024, num_lines=4),
     ...     FeedbackMix(feedback_matrix=A),
-    ...     ParallelBiquads(num_lines=4),
+    ...     Biquads(num_lines=4),
     ...     InputTap(input_matrix=B),
     ...     DelayWrite(),
     ...     OutputTap(output_matrix=C)
@@ -30,7 +30,7 @@ Example usage:
 from .stage import Stage
 from .core import RecursionCore
 from .delay_lines import DelayRead, DelayWrite
-from .biquads import ParallelBiquads
+from .biquads import Biquads
 from .feedback_mix import FeedbackMix
 from .input_tap import InputTap
 from .output_tap import OutputTap
@@ -40,7 +40,7 @@ __all__ = [
     "RecursionCore",
     "DelayRead",
     "DelayWrite",
-    "ParallelBiquads",
+    "Biquads",
     "FeedbackMix",
     "InputTap",
     "OutputTap",

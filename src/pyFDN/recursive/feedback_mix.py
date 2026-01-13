@@ -67,10 +67,11 @@ class FeedbackMix(Stage):
         if "lines" not in ctx:
             raise RuntimeError("FeedbackMix requires ctx['lines'] to be set")
         
-        lines = ctx["lines"]  # [B, T, N]
+        lines = ctx["lines"]  # [B, N, T]
         
-        # Apply feedback matrix: [B, T, N] @ [N, N] -> [B, T, N]
-        mixed = torch.matmul(lines, self.A.T)
+        # Apply feedback matrix using einsum: [B, N, T] @ [N, N] -> [B, N, T]
+        # einsum('bnt,nm->bmt') computes lines @ A.T efficiently without transposing
+        mixed = torch.einsum('bnt,nm->bmt', lines, self.A.T)  # [B, N, T]
         
         # Update in-place
         ctx["lines"] = mixed

@@ -80,7 +80,7 @@ class RecursionCore:
         Process input signal through the recursive system.
         
         Args:
-            input_signal: Input tensor of shape [T_total, N_in] or [B, T_total, N_in]
+            input_signal: Input tensor of shape [T_total, N_in] or [B, N_in, T_total]
             block_size: Maximum number of samples per processing block
             
         Returns:
@@ -90,23 +90,26 @@ class RecursionCore:
             - Automatically adds batch dimension if input is 2D
             - Handles variable-length final block if T_total % block_size != 0
             - Maintains device and dtype consistency
+            - Input/output dimensions: [B, N, T] (batch, channel, sample)
         """
-        # Ensure input is 3D [B, T_total, N_in]
+        # Ensure input is 3D [B, N_in, T_total]
         if input_signal.dim() == 2:
-            input_signal = input_signal.unsqueeze(0)  # Add batch dimension
+            # Assume [T, N_in] -> transpose to [N_in, T], then add batch dim -> [1, N_in, T]
+            input_signal = input_signal.T.unsqueeze(0)  # [1, N_in, T]
             squeeze_output = True
         elif input_signal.dim() == 3:
+            # Assume new format [B, N_in, T_total]
             squeeze_output = False
         else:
             raise ValueError(
-                f"Input must be 2D [T, N_in] or 3D [B, T, N_in], "
+                f"Input must be 2D [T, N_in] or 3D [B, N_in, T_total], "
                 f"got {input_signal.dim()}D"
             )
         
         # Move to correct device
         input_signal = input_signal.to(self.device)
         
-        B, T_total, N_in = input_signal.shape
+        B, N_in, T_total = input_signal.shape
         
         # Initialize state
         state = self.init_state(B)
@@ -126,8 +129,8 @@ class RecursionCore:
             end_t = min(start_t + block_size, T_total)
             current_block_size = end_t - start_t
             
-            # Extract input block
-            x_block = input_signal[:, start_t:end_t, :]  # [B, T, N_in]
+            # Extract input block: [B, N_in, T]
+            x_block = input_signal[:, :, start_t:end_t]  # [B, N_in, T]
             
             # Initialize context for this block
             ctx: Dict[str, torch.Tensor] = {
@@ -153,15 +156,17 @@ class RecursionCore:
                     "No output produced - ensure pipeline includes OutputTap stage"
                 )
             
-            y_block = ctx["y"]  # [B, T, N_out]
+            y_block = ctx["y"]  # [B, N_out, T]
             output_blocks.append(y_block)
         
-        # Concatenate all output blocks
-        output = torch.cat(output_blocks, dim=1)  # [B, T_total, N_out]
+        # Concatenate all output blocks along time dimension (dim=2)
+        output = torch.cat(output_blocks, dim=2)  # [B, N_out, T_total]
         
         # Remove batch dimension if input was 2D
         if squeeze_output:
-            output = output.squeeze(0)
+            output = output.squeeze(0)  # [N_out, T_total]
+            # Transpose back to [T_total, N_out] for backward compatibility
+            output = output.T  # [T_total, N_out]
         
         return output
     

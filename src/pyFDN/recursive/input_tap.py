@@ -72,11 +72,12 @@ class InputTap(Stage):
         if "x" not in ctx:
             raise RuntimeError("InputTap requires ctx['x'] to be set")
         
-        lines = ctx["lines"]  # [B, T, N]
-        x = ctx["x"]          # [B, T, N_in]
+        lines = ctx["lines"]  # [B, N, T]
+        x = ctx["x"]          # [B, N_in, T]
         
-        # Apply input matrix: [B, T, N_in] @ [N_in, N] -> [B, T, N]
-        input_contrib = torch.matmul(x, self.B.T)
+        # Apply input matrix using einsum: [B, N_in, T] @ [N_in, N] -> [B, N, T]
+        # einsum('bnt,nm->bmt') computes x @ B.T efficiently without transposing
+        input_contrib = torch.einsum('bnt,nm->bmt', x, self.B.T)  # [B, N, T]
         
         # Add to lines in-place
         ctx["lines"] = lines + input_contrib

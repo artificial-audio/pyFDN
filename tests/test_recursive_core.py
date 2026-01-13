@@ -79,8 +79,8 @@ class TestRecursionCore:
         
         assert "delay_buffers" in state
         assert "delay_pointer" in state
-        assert state["delay_buffers"].shape == (2, 16, 4)
-        assert state["delay_pointer"].shape == (2,)
+        assert state["delay_buffers"].shape == (2, 4, 16)  # [B, N, L]
+        assert state["delay_pointer"].shape == (2, 4)  # [B, N]
     
     def test_batch_dimension_handling(self):
         """Test automatic batch dimension handling."""
@@ -91,15 +91,15 @@ class TestRecursionCore:
         ]
         core = RecursionCore(stages)
         
-        # 2D input [T, N_in]
+        # 2D input [T, N_in] -> converted to [N_in, T] internally, output back to [T, N_out]
         input_2d = torch.randn(100, 1)
         output = core.process(input_2d, block_size=32)
-        assert output.shape == (100, 1)
+        assert output.shape == (100, 1)  # Transposed back for backward compatibility
         
-        # 3D input [B, T, N_in]
-        input_3d = torch.randn(3, 100, 1)
+        # 3D input [B, N_in, T]
+        input_3d = torch.randn(3, 1, 100)
         output = core.process(input_3d, block_size=32)
-        assert output.shape == (3, 100, 1)
+        assert output.shape == (3, 1, 100)  # [B, N_out, T]
     
     def test_block_partitioning(self):
         """Test signal partitioning into blocks."""
