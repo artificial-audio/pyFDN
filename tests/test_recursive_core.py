@@ -8,9 +8,9 @@ from pyFDN.recursive import Stage, RecursionCore, DelayRead, DelayWrite, OutputT
 class DummyStage(Stage):
     """Simple stage for testing that adds a constant to ctx['lines']."""
     
-    def __init__(self, name: str, add_value: float = 1.0, has_state: bool = False):
+    def __init__(self, add_value: float = 1.0, has_state: bool = False):
         state_keys = {"dummy_state"} if has_state else set()
-        super().__init__(name, state_keys)
+        super().__init__(state_keys)
         self.add_value = add_value
         self.has_state = has_state
     
@@ -41,14 +41,13 @@ class TestStageBase:
     
     def test_stage_initialization(self):
         """Test basic stage initialization."""
-        stage = DummyStage("test", add_value=5.0)
-        assert stage.name == "test"
+        stage = DummyStage(add_value=5.0)
         assert stage.state_keys == set()
         assert stage.add_value == 5.0
     
     def test_stage_with_state(self):
         """Test stage with state keys."""
-        stage = DummyStage("test", has_state=True)
+        stage = DummyStage(has_state=True)
         assert stage.state_keys == {"dummy_state"}
         
         state = stage.init_state(2, torch.device("cpu"))
@@ -62,8 +61,8 @@ class TestRecursionCore:
     def test_core_initialization(self):
         """Test core initialization with stages."""
         stages = [
-            DummyStage("stage1"),
-            DummyStage("stage2"),
+            DummyStage(),
+            DummyStage(),
         ]
         core = RecursionCore(stages)
         assert len(core.stages) == 2
@@ -126,7 +125,7 @@ class TestRecursionCore:
     def test_state_preservation_across_blocks(self):
         """Test that state is correctly preserved across blocks."""
         stages = [
-            DummyStage("counter", has_state=True),
+            DummyStage(has_state=True),
             DelayRead(delay_length=8, num_lines=2),
             DelayWrite(),
             OutputTap(num_lines=2, num_outputs=1),

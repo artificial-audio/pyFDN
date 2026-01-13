@@ -22,7 +22,6 @@ class FeedbackMix(Stage):
     
     def __init__(
         self,
-        name: str = "feedback_mix",
         feedback_matrix: Optional[torch.Tensor] = None,
         num_lines: int = 4
     ):
@@ -30,12 +29,11 @@ class FeedbackMix(Stage):
         Initialize feedback mixing stage.
         
         Args:
-            name: Stage name
             feedback_matrix: Feedback matrix A of shape [N, N]
                            If None, creates identity matrix (no mixing)
             num_lines: Number of feedback lines (N), used if feedback_matrix is None
         """
-        super().__init__(name, state_keys=set())  # Stateless
+        super().__init__(state_keys=set())  # Stateless
         
         if feedback_matrix is None:
             # Default: identity matrix (no mixing)

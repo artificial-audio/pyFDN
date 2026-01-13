@@ -23,7 +23,6 @@ class InputTap(Stage):
     
     def __init__(
         self,
-        name: str = "input_tap",
         input_matrix: Optional[torch.Tensor] = None,
         num_lines: int = 4,
         num_inputs: int = 1
@@ -32,13 +31,12 @@ class InputTap(Stage):
         Initialize input injection stage.
         
         Args:
-            name: Stage name
             input_matrix: Input gain matrix B of shape [N, N_in]
                         If None, creates a matrix that feeds input to all lines equally
             num_lines: Number of feedback lines (N), used if input_matrix is None
             num_inputs: Number of input channels (N_in), used if input_matrix is None
         """
-        super().__init__(name, state_keys=set())  # Stateless
+        super().__init__(state_keys=set())  # Stateless
         
         if input_matrix is None:
             # Default: feed input to all lines with gain 1.0

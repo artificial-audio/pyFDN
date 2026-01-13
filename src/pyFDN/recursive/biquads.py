@@ -7,7 +7,7 @@ import torch
 from .stage import Stage
 
 
-class ParallelBiquads(Stage):
+class Biquads(Stage):
     """
     Parallel bank of biquad IIR filters applied to feedback lines.
     
@@ -25,7 +25,6 @@ class ParallelBiquads(Stage):
     
     def __init__(
         self,
-        name: str = "parallel_biquads",
         num_lines: int = 4,
         biquad_coeffs: Optional[torch.Tensor] = None,
         context_key: str = "lines"
@@ -34,14 +33,13 @@ class ParallelBiquads(Stage):
         Initialize parallel biquad filter bank.
         
         Args:
-            name: Stage name
             num_lines: Number of filter lines (N)
             biquad_coeffs: Filter coefficients of shape [N, 5] or [N, num_sections, 5]
                           where each row is [b0, b1, b2, a1, a2]
                           If None, creates simple one-pole lowpass filters
             context_key: Context dictionary key to filter (default: "lines")
         """
-        super().__init__(name, state_keys={"biquad_state"})
+        super().__init__(state_keys={"biquad_state"})
         self.num_lines = num_lines
         self.context_key = context_key
         
@@ -91,7 +89,7 @@ class ParallelBiquads(Stage):
         """
         if self.context_key not in ctx:
             raise RuntimeError(
-                f"ParallelBiquads requires ctx['{self.context_key}'] to be set"
+                f"Biquads requires ctx['{self.context_key}'] to be set"
             )
         
         x = ctx[self.context_key]  # [B, T, N]

@@ -23,7 +23,6 @@ class OutputTap(Stage):
     
     def __init__(
         self,
-        name: str = "output_tap",
         output_matrix: Optional[torch.Tensor] = None,
         direct_matrix: Optional[torch.Tensor] = None,
         num_lines: int = 4,
@@ -34,7 +33,6 @@ class OutputTap(Stage):
         Initialize output summation stage.
         
         Args:
-            name: Stage name
             output_matrix: Output gain matrix C of shape [N_out, N]
                          If None, creates averaging matrix (all lines contribute equally)
             direct_matrix: Direct-path matrix D of shape [N_out, N_in]
@@ -43,7 +41,7 @@ class OutputTap(Stage):
             num_outputs: Number of output channels (N_out), used if matrices are None
             num_inputs: Number of input channels (N_in), used if direct_matrix is None
         """
-        super().__init__(name, state_keys=set())  # Stateless
+        super().__init__(state_keys=set())  # Stateless
         
         if output_matrix is None:
             # Default: average all lines equally

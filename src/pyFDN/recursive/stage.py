@@ -23,16 +23,14 @@ class Stage(ABC):
     - N_out: number of output channels
     """
     
-    def __init__(self, name: str, state_keys: Set[str] | None = None):
+    def __init__(self, state_keys: Set[str] | None = None):
         """
         Initialize a processing stage.
         
         Args:
-            name: Unique name for this stage (used as identifier)
             state_keys: Set of state dictionary keys this stage owns and can modify.
                        If None or empty, the stage is purely feedforward.
         """
-        self.name = name
         self.state_keys = state_keys or set()
     
     @abstractmethod
@@ -89,4 +87,4 @@ class Stage(ABC):
     
     def __repr__(self) -> str:
         state_info = f" (state keys: {self.state_keys})" if self.state_keys else " (stateless)"
-        return f"{self.__class__.__name__}('{self.name}'){state_info}"
+        return f"{self.__class__.__name__}(){state_info}"

@@ -21,7 +21,6 @@ class DelayRead(Stage):
     
     def __init__(
         self,
-        name: str = "delay_read",
         delay_length: int = 1024,
         num_lines: int = 4
     ):
@@ -29,11 +28,10 @@ class DelayRead(Stage):
         Initialize delay read stage.
         
         Args:
-            name: Stage name
             delay_length: Length of delay buffer in samples (L)
             num_lines: Number of delay lines (N)
         """
-        super().__init__(name, state_keys={"delay_buffers", "delay_pointer"})
+        super().__init__(state_keys={"delay_buffers", "delay_pointer"})
         self.delay_length = delay_length
         self.num_lines = num_lines
     
@@ -97,18 +95,15 @@ class DelayWrite(Stage):
     Shares state with DelayRead stage.
     """
     
-    def __init__(self, name: str = "delay_write"):
+    def __init__(self):
         """
         Initialize delay write stage.
         
-        Args:
-            name: Stage name
-            
         Note:
             Delay parameters (length, num_lines) are determined by the shared
             state initialized by DelayRead.
         """
-        super().__init__(name, state_keys={"delay_buffers", "delay_pointer"})
+        super().__init__(state_keys={"delay_buffers", "delay_pointer"})
     
     def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
         """
