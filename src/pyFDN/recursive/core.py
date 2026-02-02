@@ -3,6 +3,7 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
 import torch
+import json
 
 from .stage import Stage
 
@@ -15,24 +16,39 @@ class RecursionCore:
     - Ordered list of processing stages
     - Global state dictionary shared across all stages
     - Block-based processing of input signals
-    - Context (ctx) propagation through stages
+    - Propagation of a single block-local context tensor (`lines`)
     
     Typical usage:
-        stages = [DelayRead(...), FeedbackMix(...), InputTap(...), 
-                  DelayWrite(...), OutputTap(...)]
-        core = RecursionCore(stages)
-        output = core.process(input_signal, block_size=512)
+        stages = [
+            DelayRead(...),         # read delayed lines -> lines
+            InputTap(...),          # inject external input into lines
+            FeedbackMix(...),       # process/mix lines inside the loop
+            ...                     # (optional additional processing on lines)
+            DelayWrite(...),        # write updated lines back to delay buffers
+            OutputTap(...),         # produce final output from lines (+ optional direct path)
+        ]
+        core = RecursionCore(stages, block_size=512)
+        output = core.process(input_signal)
     """
     
-    def __init__(self, stages: List[Stage], device: Optional[torch.device] = None):
+    def __init__(
+        self,
+        stages: List[Stage],
+        block_size: int,
+        device: Optional[torch.device] = None,
+    ):
         """
         Initialize the recursion core.
         
         Args:
             stages: Ordered list of Stage instances to execute sequentially
+            block_size: Maximum number of samples per processing block
             device: PyTorch device for all tensors. If None, uses CPU.
         """
         self.stages = stages
+        if block_size <= 0:
+            raise ValueError(f"block_size must be positive, got {block_size}")
+        self.block_size = int(block_size)
         self.device = device or torch.device("cpu")
         self._validate_stages()
         
@@ -49,7 +65,12 @@ class RecursionCore:
         # Actual conflicts will be caught in init_state
         pass
     
-    def init_state(self, batch_size: int) -> Dict[str, torch.Tensor]:
+    def init_state(
+        self, 
+        batch_size: int,
+        block_size: int,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
         """
         Initialize global state by merging all stage states.
         
@@ -61,7 +82,7 @@ class RecursionCore:
         """
         state: Dict[str, torch.Tensor] = {}
         for stage in self.stages:
-            stage_state = stage.init_state(batch_size, self.device)
+            stage_state = stage.init_state(batch_size, block_size, device)
             # Ensure no key conflicts (should already be caught by validation)
             for key in stage_state:
                 if key in state:
@@ -71,17 +92,12 @@ class RecursionCore:
                 state[key] = stage_state[key]
         return state
     
-    def process(
-        self,
-        input_signal: torch.Tensor,
-        block_size: int
-    ) -> torch.Tensor:
+    def process(self, input_signal: torch.Tensor) -> torch.Tensor:
         """
         Process input signal through the recursive system.
         
         Args:
             input_signal: Input tensor of shape [T_total, N_in] or [B, N_in, T_total]
-            block_size: Maximum number of samples per processing block
             
         Returns:
             Output tensor of same shape as input (with N_out channels instead of N_in)
@@ -112,15 +128,17 @@ class RecursionCore:
         B, N_in, T_total = input_signal.shape
         
         # Initialize state
-        state = self.init_state(B)
-        
-        # Determine output shape (from last OutputTap stage or default to N_in)
-        N_out = N_in  # Will be updated by first block output
+        state = self.init_state(B, self.block_size, self.device)
+
+        # Block-local feedback-line context and output
+        lines: Optional[torch.Tensor] = None
+        y_block: Optional[torch.Tensor] = None
         
         # Prepare output buffer (will be allocated on first block)
         output_blocks: List[torch.Tensor] = []
         
         # Process blocks
+        block_size = self.block_size
         num_blocks = (T_total + block_size - 1) // block_size
         
         for block_idx in range(num_blocks):
@@ -128,21 +146,49 @@ class RecursionCore:
             start_t = block_idx * block_size
             end_t = min(start_t + block_size, T_total)
             current_block_size = end_t - start_t
-            
+
             # Extract input block: [B, N_in, T]
             x_block = input_signal[:, :, start_t:end_t]  # [B, N_in, T]
-            
-            # Initialize context for this block
-            ctx: Dict[str, torch.Tensor] = {
-                "x": x_block,
-            }
-            
+
+            # If this is the last (possibly short) block, pad at end to full block_size
+            if current_block_size < block_size:
+                pad_width = block_size - current_block_size
+                pad_shape = list(x_block.shape[:-1]) + [pad_width]
+                padding = torch.zeros(*pad_shape, device=x_block.device, dtype=x_block.dtype)
+                x_block = torch.cat([x_block, padding], dim=-1)
+                current_block_size = block_size  # Ensure block_size consistency
+
+            # region agent log
+            try:
+                with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
+                    _f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "post-refactor",
+                        "hypothesisId": "H0",
+                        "location": "recursive/core.py:process:block_entry",
+                        "message": "Block entry with input statistics",
+                        "data": {
+                            "block_idx": int(block_idx),
+                            "block_size": int(current_block_size),
+                            "x_mean": float(x_block.mean().item()),
+                            "x_abs_max": float(x_block.abs().max().item()),
+                        },
+                        "timestamp": __import__("time").time(),
+                    }) + "\n")
+            except Exception:
+                pass
+            # endregion
+
             # Initialize next_state accumulator
             next_state: Dict[str, torch.Tensor] = {}
-            
+
             # Run all stages in sequence
             for stage in self.stages:
-                stage.step_block(ctx, state, next_state, current_block_size)
+                lines, y_candidate = stage.step_block(
+                    lines, state, next_state, block_size, x_block
+                )
+                if y_candidate is not None:
+                    y_block = y_candidate
             
             # Merge state_t and next_state for next block
             for key in state:
@@ -151,12 +197,10 @@ class RecursionCore:
                 # else: carry over previous state value
             
             # Extract output block
-            if "y" not in ctx:
+            if y_block is None:
                 raise RuntimeError(
                     "No output produced - ensure pipeline includes OutputTap stage"
                 )
-            
-            y_block = ctx["y"]  # [B, N_out, T]
             output_blocks.append(y_block)
         
         # Concatenate all output blocks along time dimension (dim=2)

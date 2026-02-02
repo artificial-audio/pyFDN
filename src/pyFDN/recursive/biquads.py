@@ -1,7 +1,7 @@
 """Parallel biquad filter bank stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import torch
 
 from .stage import Stage
@@ -10,39 +10,35 @@ from .stage import Stage
 class Biquads(Stage):
     """
     Parallel bank of biquad IIR filters applied to feedback lines.
-    
+
     This stage:
-    - Operates on ctx["lines"] (or another specified context key)
+    - Operates on the `lines` tensor (feedback-line signals for the current block)
     - Applies biquad filtering to each line independently
     - Maintains IIR filter state across blocks
-    - Modifies ctx["lines"] in-place
-    
-    Filter structure: Direct Form I biquad
+    - Returns the filtered lines for the next stage
+
+    Filter structure: Transposed Direct Form II biquad
         a0*y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
-        or equivalently: y[n] = (b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]) / a0
-    
-    State per line: [x[n-1], x[n-2], y[n-1], y[n-2]]
+
+    State per line: [z1, z2] (two delay elements for DF2T)
     """
-    
+
     def __init__(
         self,
         num_lines: int = 4,
         biquad_coeffs: Optional[torch.Tensor] = None,
-        context_key: str = "lines"
     ):
         """
         Initialize parallel biquad filter bank.
-        
+
         Args:
             num_lines: Number of filter lines (N)
             biquad_coeffs: Filter coefficients of shape [N, 6] or [N, num_sections, 6]
                           where each row is [a0, a1, a2, b0, b1, b2]
                           If None, creates simple one-pole lowpass filters
-            context_key: Context dictionary key to filter (default: "lines")
         """
         super().__init__(state_keys={"biquad_state"})
         self.num_lines = num_lines
-        self.context_key = context_key
         
         # Initialize filter coefficients
         if biquad_coeffs is None:
@@ -67,41 +63,41 @@ class Biquads(Stage):
                 )
             self.num_sections = self.coeffs.shape[1]
     
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
+    def init_state(self, batch_size: int, block_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
         """
         Initialize biquad filter states.
         
-        State shape: [B, N, num_sections, 4] for [x[n-1], x[n-2], y[n-1], y[n-2]]
+        State shape: [B, N, num_sections, 2] for DF2T states [z1, z2]
         """
         # Move coefficients to device
         self.coeffs = self.coeffs.to(device)
         
         return {
             "biquad_state": torch.zeros(
-                batch_size, self.num_lines, self.num_sections, 4,
+                batch_size, self.num_lines, self.num_sections, 2,
                 device=device, dtype=torch.float32
             )
         }
     
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Apply biquad filtering to lines in-place.
-        
-        Filters ctx[self.context_key] and updates it with filtered output.
+        Apply biquad filtering to the feedback-line tensor.
+
+        Reads `lines` [B, N, T], updates biquad state in `next_state`, and
+        returns the filtered lines for the next stage.
         """
-        if self.context_key not in ctx:
-            raise RuntimeError(
-                f"Biquads requires ctx['{self.context_key}'] to be set"
-            )
-        
-        x = ctx[self.context_key]  # [B, N, T]
-        filter_state = state_t["biquad_state"].clone()  # [B, N, num_sections, 4]
+        if lines is None:
+            raise RuntimeError("Biquads requires `lines` to be set")
+
+        x = lines  # [B, N, T]
+        filter_state = state_t["biquad_state"].clone()  # [B, N, num_sections, 2]
         
         B, N, T = x.shape
         
@@ -112,45 +108,43 @@ class Biquads(Stage):
             # Get coefficients for this section: [a0, a1, a2, b0, b1, b2]
             a0, a1, a2, b0, b1, b2 = self.coeffs[:, section_idx].unbind(dim=1)  # Each: [N]
             
-            # Get state for this section: [B, N, 4]
+            # Get DF2T state for this section: [B, N, 2] -> [z1, z2]
             state = filter_state[:, :, section_idx, :]
-            x_state = state[:, :, :2]  # [B, N, 2] - [x[n-1], x[n-2]]
-            y_state = state[:, :, 2:]  # [B, N, 2] - [y[n-1], y[n-2]]
+            z1 = state[:, :, 0]  # [B, N]
+            z2 = state[:, :, 1]  # [B, N]
+
+            # Normalize coefficients by a0 for stable DF2T update
+            inv_a0 = 1.0 / a0  # [N]
+            b0n = b0 * inv_a0
+            b1n = b1 * inv_a0
+            b2n = b2 * inv_a0
+            a1n = a1 * inv_a0
+            a2n = a2 * inv_a0
             
             # Process block sample by sample (IIR requires sequential processing)
             output = torch.zeros_like(y)  # [B, N, T]
             
             for t in range(T):
                 x_n = y[:, :, t]  # [B, N] - input for this section
-                
-                # Compute output: a0*y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
-                # or: y[n] = (b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]) / a0
-                numerator = (
-                    b0 * x_n
-                    + b1 * x_state[:, :, 0]
-                    + b2 * x_state[:, :, 1]
-                    - a1 * y_state[:, :, 0]
-                    - a2 * y_state[:, :, 1]
-                )
-                y_n = numerator / a0.unsqueeze(0)  # Divide by a0, broadcasting over batch
-                
+
+                # Transposed Direct Form II:
+                # y[n]  = b0n*x[n] + z1
+                # z1'   = b1n*x[n] - a1n*y[n] + z2
+                # z2'   = b2n*x[n] - a2n*y[n]
+                y_n = b0n.unsqueeze(0) * x_n + z1
+                z1 = b1n.unsqueeze(0) * x_n - a1n.unsqueeze(0) * y_n + z2
+                z2 = b2n.unsqueeze(0) * x_n - a2n.unsqueeze(0) * y_n
+
                 output[:, :, t] = y_n
-                
-                # Update state (shift)
-                x_state[:, :, 1] = x_state[:, :, 0]  # x[n-2] = x[n-1]
-                x_state[:, :, 0] = x_n               # x[n-1] = x[n]
-                y_state[:, :, 1] = y_state[:, :, 0]  # y[n-2] = y[n-1]
-                y_state[:, :, 0] = y_n               # y[n-1] = y[n]
             
             # Update state for this section
-            filter_state[:, :, section_idx, :2] = x_state
-            filter_state[:, :, section_idx, 2:] = y_state
+            filter_state[:, :, section_idx, 0] = z1
+            filter_state[:, :, section_idx, 1] = z2
             
             # Output of this section becomes input to next section
             y = output
         
-        # Update context in-place
-        ctx[self.context_key] = y
-        
         # Save updated state
         next_state["biquad_state"] = filter_state
+
+        return y, None

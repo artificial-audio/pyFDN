@@ -1,7 +1,7 @@
 """Feedback mixing stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import torch
 
 from .stage import Stage
@@ -46,7 +46,7 @@ class FeedbackMix(Stage):
                 f"Feedback matrix must be square, got shape {self.A.shape}"
             )
     
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
+    def init_state(self, batch_size: int, block_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
         """No state needed - purely feedforward."""
         # Move matrix to device
         self.A = self.A.to(device)
@@ -54,24 +54,22 @@ class FeedbackMix(Stage):
     
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Apply feedback matrix to lines.
         
-        Computes: ctx["lines"] = ctx["lines"] @ A.T
+        Computes: lines = lines @ A.T
         """
-        if "lines" not in ctx:
-            raise RuntimeError("FeedbackMix requires ctx['lines'] to be set")
-        
-        lines = ctx["lines"]  # [B, N, T]
+        if lines is None:
+            raise RuntimeError("FeedbackMix requires `lines` to be set")
         
         # Apply feedback matrix using einsum: [B, N, T] @ [N, N] -> [B, N, T]
         # einsum('bnt,nm->bmt') computes lines @ A.T efficiently without transposing
         mixed = torch.einsum('bnt,nm->bmt', lines, self.A.T)  # [B, N, T]
-        
-        # Update in-place
-        ctx["lines"] = mixed
+
+        return mixed, None

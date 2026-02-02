@@ -1,8 +1,9 @@
 """Delay line stages for feedback delays."""
 
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, Optional, Tuple
 import torch
+import json
 
 from .stage import Stage
 
@@ -13,15 +14,15 @@ class DelayRead(Stage):
     
     This stage:
     - Reads from the shared "delay_buffers" state
-    - Produces ctx["lines"] with delayed samples
-    - Should appear first in the stage pipeline
+    - Produces `lines` with delayed samples
+    - Should appear *after* DelayWrite in the stage pipeline
     
-    Shares state with DelayWrite stage.
+    Shares delay-line state with DelayWrite, but does not initialize it.
     """
     
     def __init__(
         self,
-        delay_length: int = 1024,
+        delay_lengths: torch.Tensor = torch.tensor([81, 100, 121, 169]),
         num_lines: int = 4
     ):
         """
@@ -31,33 +32,70 @@ class DelayRead(Stage):
             delay_length: Length of delay buffer in samples (L)
             num_lines: Number of delay lines (N)
         """
-        super().__init__(state_keys={"delay_buffers", "delay_pointer"})
-        self.delay_length = delay_length
+        # Stateless: delay state is owned/initialized by DelayWrite
+        super().__init__(state_keys=set())
+        self.delay_lengths = delay_lengths
         self.num_lines = num_lines
     
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
-        """Initialize delay buffers and pointer."""
+    def init_state(
+        self,
+        batch_size: int,
+        block_size: int,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Initialize delay buffers and pointer.
+        
+        Args:
+            batch_size: Batch size
+            block_size: Block size
+            device: Device
+        Returns:
+            Dict[str, torch.Tensor]: State dictionary
+                "delay_buffers": Delay buffers of shape [B, N, L]
+                "delay_pointer": Delay pointer of shape [B, N]
+        """
+        max_delay = self.delay_lengths.max().item()
+        buffer_size = max_delay + block_size
         return {
             "delay_buffers": torch.zeros(
-                batch_size, self.num_lines, self.delay_length,
-                device=device, dtype=torch.float32
+                batch_size,
+                self.num_lines,
+                buffer_size,
+                device=device,
+                dtype=torch.float32,
             ),
             "delay_pointer": torch.zeros(
-                batch_size, self.num_lines, dtype=torch.long, device=device
-            )
+                batch_size,
+                self.num_lines,
+                device=device,
+                dtype=torch.long,
+            ),
         }
     
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Read delayed samples from buffers.
+        Read delayed samples from buffers and add optional injection.
         
-        Produces ctx["lines"] of shape [B, N, T] containing delayed samples.
+        Produces `lines` of shape [B, N, T] containing delayed samples.
+        
+        Args:
+            lines: Optional incoming lines tensor of shape [B, N, T]
+            state_t: State at start of block
+            next_state: State at end of block
+            block_size: Block size
+            x_block: Optional external input block of shape [B, N_in, T]
+        Returns:
+            Tuple[torch.Tensor, Optional[torch.Tensor]]:
+                - `new_lines`: Updated lines tensor [B, N, T]
+                - `None`: No output block needed
         """
         buffers = state_t["delay_buffers"]  # [B, N, L]
         pointer = state_t["delay_pointer"]  # [B, N]
@@ -70,13 +108,42 @@ class DelayRead(Stage):
         # pointer: [B, N], time_offsets: [T] -> read_indices: [B, N, T]
         time_offsets = torch.arange(T, device=buffers.device).view(1, 1, T)  # [1, 1, T]
         # Read from positions offset by delay_length behind the write pointer
-        read_indices = (pointer.unsqueeze(2) - self.delay_length + time_offsets) % L  # [B, N, T]
+        read_indices = (pointer.unsqueeze(2) - self.delay_lengths.unsqueeze(0).unsqueeze(-1) + time_offsets) % L  # [B, N, T]
         
         # Gather samples from buffers along the L dimension (dim=2)
-        # buffers: [B, N, L], read_indices: [B, N, T] -> lines: [B, N, T]
-        ctx["lines"] = torch.gather(buffers, 2, read_indices)  # [B, N, T]
-        
-        # Note: We don't update the pointer here - that's done by DelayWrite
+        # buffers: [B, N, L], read_indices: [B, N, T] -> delayed: [B, N, T]
+        delayed = torch.gather(buffers, 2, read_indices)  # [B, N, T]
+
+        # For the canonical topology (InputTap -> DelayWrite -> DelayRead -> OutputTap),
+        # DelayRead should output the *purely delayed* signal from the buffers.
+        # Any input injection affects the buffers via DelayWrite, not by being
+        # summed here, so we ignore any incoming `lines` value.
+        new_lines = delayed
+
+        # region agent log
+        try:
+            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
+                _f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "post-refactor",
+                    "hypothesisId": "H1",
+                    "location": "recursive/delay_lines.py:DelayRead.step_block",
+                    "message": "DelayRead combined delayed buffer with incoming lines",
+                    "data": {
+                        "block_size": int(T),
+                        "delay_lengths": self.delay_lengths.tolist(),
+                        "has_incoming_lines": lines is not None,
+                        "delayed_abs_max": float(delayed.abs().max().item()),
+                        "incoming_lines_abs_max": float(lines.abs().max().item()) if lines is not None else 0.0,
+                        "new_lines_abs_max": float(new_lines.abs().max().item()),
+                    },
+                    "timestamp": __import__("time").time(),
+                }) + "\n")
+        except Exception:
+            pass
+        # endregion
+
+        return new_lines, None
 
 
 class DelayWrite(Stage):
@@ -102,30 +169,27 @@ class DelayWrite(Stage):
         """
         super().__init__(state_keys={"delay_buffers", "delay_pointer"})
     
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
+    def init_state(self, batch_size: int, block_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
         """
-        DelayWrite doesn't initialize state - it shares state with DelayRead.
-        
-        Returns empty dict.
+        DelayWrite does not initialize state.
         """
         return {}
     
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Write processed samples to buffers and advance pointer.
         
-        Reads ctx["lines"] of shape [B, N, T] and writes to delay buffers.
+        Reads `lines` of shape [B, N, T] and writes to delay buffers.
         """
-        if "lines" not in ctx:
-            raise RuntimeError("DelayWrite requires ctx['lines'] to be set by previous stages")
-        
-        lines = ctx["lines"]  # [B, N, T]
+        if lines is None:
+            raise RuntimeError("DelayWrite requires `lines` to be provided by previous stages")
         buffers = state_t["delay_buffers"].clone()  # [B, N, L] - clone to avoid mutating state_t
         pointer = state_t["delay_pointer"]  # [B, N]
         
@@ -147,3 +211,147 @@ class DelayWrite(Stage):
         # Write updated state
         next_state["delay_buffers"] = buffers
         next_state["delay_pointer"] = new_pointer
+
+        return lines, None
+
+# TODO: find ways to combine DelayRead and DelayWrite into a single stage
+class Delay(Stage):
+    """
+    Reads delayed samples from circular delay buffers.
+    
+    This stage:
+    - Reads from the shared "delay_buffers" state
+    - Produces `lines` with delayed samples
+    - Should appear *after* DelayWrite in the stage pipeline
+    
+    Shares delay-line state with DelayWrite, but does not initialize it.
+    """
+    
+    def __init__(
+        self,
+        delay_lengths: torch.Tensor = torch.tensor([81, 100, 121, 169]),
+        num_lines: int = 4
+    ):
+        """
+        Initialize delay read stage.
+        
+        Args:
+            delay_length: Length of delay buffer in samples (L)
+            num_lines: Number of delay lines (N)
+        """
+        # Stateless: delay state is owned/initialized by DelayWrite
+        super().__init__(state_keys=set())
+        self.delay_lengths = delay_lengths
+        self.num_lines = num_lines
+    
+    def init_state(
+        self,
+        batch_size: int,
+        block_size: int,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Initialize delay buffers and pointer.
+        
+        Args:
+            batch_size: Batch size
+            block_size: Block size
+            device: Device
+        Returns:
+            Dict[str, torch.Tensor]: State dictionary
+                "delay_buffers": Delay buffers of shape [B, N, L]
+                "delay_pointer": Delay pointer of shape [B, N]
+        """
+        max_delay = self.delay_lengths.max().item()
+        buffer_size = max_delay + block_size
+        return {
+            "delay_buffers": torch.zeros(
+                batch_size,
+                self.num_lines,
+                buffer_size,
+                device=device,
+                dtype=torch.float32,
+            ),
+            "delay_pointer": torch.zeros(
+                batch_size,
+                self.num_lines,
+                device=device,
+                dtype=torch.long,
+            ),
+        }
+    
+    def step_block(
+        self,
+        lines: Optional[torch.Tensor],
+        state_t: Dict[str, torch.Tensor],
+        next_state: Dict[str, torch.Tensor],
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Read delayed samples from buffers and add optional injection.
+        
+        Produces `lines` of shape [B, N, T] containing delayed samples.
+        
+        Args:
+            lines: Optional incoming lines tensor of shape [B, N, T]
+            state_t: State at start of block
+            next_state: State at end of block
+            block_size: Block size
+            x_block: Optional external input block of shape [B, N_in, T]
+        Returns:
+            Tuple[torch.Tensor, Optional[torch.Tensor]]:
+                - `new_lines`: Updated lines tensor [B, N, T]
+                - `None`: No output block needed
+        """
+        buffers = state_t["delay_buffers"]  # [B, N, L]
+        pointer = state_t["delay_pointer"]  # [B, N]
+        
+        B, N, L = buffers.shape
+        T = block_size
+        
+        # Generate indices for reading delayed samples
+        # Read from (pointer - delay_length) % L to get samples delayed by delay_length
+        # pointer: [B, N], time_offsets: [T] -> read_indices: [B, N, T]
+        time_offsets = torch.arange(T, device=buffers.device).view(1, 1, T)  # [1, 1, T]
+        # Read from positions offset by delay_length behind the write pointer
+        read_indices = (pointer.unsqueeze(2) - self.delay_lengths.unsqueeze(0).unsqueeze(-1) + time_offsets) % L  # [B, N, T]
+        
+        # Gather samples from buffers along the L dimension (dim=2)
+        # buffers: [B, N, L], read_indices: [B, N, T] -> delayed: [B, N, T]
+        delayed = torch.gather(buffers, 2, read_indices)  # [B, N, T]
+
+        # region agent log
+        try:
+            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
+                _f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "post-refactor",
+                    "hypothesisId": "H1",
+                    "location": "recursive/delay_lines.py:DelayRead.step_block",
+                    "message": "DelayRead combined delayed buffer with incoming lines",
+                    "data": {
+                        "block_size": int(T),
+                        "delay_lengths": self.delay_lengths.tolist(),
+                        "has_incoming_lines": lines is not None,
+                        "delayed_abs_max": float(delayed.abs().max().item()),
+                        "incoming_lines_abs_max": float(lines.abs().max().item()) if lines is not None else 0.0,
+                        "delayed_abs_max": float(delayed.abs().max().item()),
+                    },
+                    "timestamp": __import__("time").time(),
+                }) + "\n")
+        except Exception:
+            pass
+        # endregion
+
+        write_indices = (pointer.unsqueeze(2) + time_offsets) % L  # [B, N, T]
+        buffers.scatter_(2, write_indices, lines)
+        
+        # Advance pointer (one per delay line)
+        new_pointer = (pointer + T) % L  # [B, N]
+        
+        # Write updated state
+        next_state["delay_buffers"] = buffers
+        next_state["delay_pointer"] = new_pointer
+
+        return delayed, None

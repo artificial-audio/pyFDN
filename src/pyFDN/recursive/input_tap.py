@@ -1,24 +1,28 @@
 """Input injection stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import torch
+import json
 
 from .stage import Stage
 
 
 class InputTap(Stage):
     """
-    Injects external input into feedback lines.
+    Computes injected signal from external input for feedback lines.
     
     This stage:
     - Reads ctx["x"] (external input)
-    - Reads ctx["lines"] (current line signals)
-    - Adds weighted input to lines
-    - Writes result back to ctx["lines"] (in-place modification)
+    - Does NOT require ctx["lines"]
+    - Produces ctx["inject"] (input contribution for all lines)
     - Is purely feedforward (no state)
     
-    Operation: ctx["lines"] = ctx["lines"] + ctx["x"] @ B.T
+    Operation: ctx["inject"] = ctx["x"] @ B.T
+
+    The injection is then added to the delay-line signals by `DelayRead`,
+    which must appear later in the stage list. This allows `InputTap`
+    to be placed as the **first stage** in the recursion core.
     """
     
     def __init__(
@@ -43,13 +47,20 @@ class InputTap(Stage):
             self.B = torch.ones(num_lines, num_inputs, dtype=torch.float32)
         else:
             self.B = input_matrix.float()
+            self.num_lines = self.B.shape[0]
+            self.num_inputs = self.B.shape[1]
         
         if self.B.dim() != 2:
             raise ValueError(
                 f"Input matrix must be 2D [N, N_in], got shape {self.B.shape}"
             )
     
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
+    def init_state(
+        self,
+        batch_size: int,
+        block_size: int,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
         """No state needed - purely feedforward."""
         # Move matrix to device
         self.B = self.B.to(device)
@@ -57,27 +68,59 @@ class InputTap(Stage):
     
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Add weighted external input to lines.
+        Compute injected signal from external input and add it to the lines.
         
-        Computes: ctx["lines"] = ctx["lines"] + ctx["x"] @ B.T
+        If `lines` is None, a new tensor is created from the injected signal.
+        Otherwise the injected signal is added to the existing `lines`.
+        
+        Operation:
+            inject = x_block @ B.T
+            lines  = (lines or 0) + inject
         """
-        if "lines" not in ctx:
-            raise RuntimeError("InputTap requires ctx['lines'] to be set")
-        if "x" not in ctx:
-            raise RuntimeError("InputTap requires ctx['x'] to be set")
-        
-        lines = ctx["lines"]  # [B, N, T]
-        x = ctx["x"]          # [B, N_in, T]
-        
+        if x_block is None:
+            raise RuntimeError("InputTap requires external input `x_block` to be provided")
+
         # Apply input matrix using einsum: [B, N_in, T] @ [N_in, N] -> [B, N, T]
         # einsum('bnt,nm->bmt') computes x @ B.T efficiently without transposing
-        input_contrib = torch.einsum('bnt,nm->bmt', x, self.B.T)  # [B, N, T]
-        
-        # Add to lines in-place
-        ctx["lines"] = lines + input_contrib
+        inject = torch.einsum('bnt,nm->bmt', x_block, self.B.T)  # [B, N, T]
+
+        if lines is None:
+            new_lines = inject
+        else:
+            if lines.shape != inject.shape:
+                raise RuntimeError(
+                    f"InputTap: existing lines have shape {lines.shape}, "
+                    f"but injected signal has shape {inject.shape}"
+                )
+            new_lines = lines + inject
+
+        # region agent log
+        try:
+            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
+                _f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "post-refactor",
+                    "hypothesisId": "H2",
+                    "location": "recursive/input_tap.py:InputTap.step_block",
+                    "message": "InputTap injected external input into lines",
+                    "data": {
+                        "block_size": int(block_size),
+                        "has_incoming_lines": lines is not None,
+                        "x_abs_max": float(x.abs().max().item()),
+                        "inject_abs_max": float(inject.abs().max().item()),
+                        "new_lines_abs_max": float(new_lines.abs().max().item()),
+                    },
+                    "timestamp": __import__("time").time(),
+                }) + "\n")
+        except Exception:
+            pass
+        # endregion
+
+        return new_lines, None

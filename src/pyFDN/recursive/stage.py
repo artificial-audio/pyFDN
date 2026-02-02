@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Dict, Set
+from typing import Dict, Optional, Set, Tuple
 import torch
 
 
@@ -11,7 +11,7 @@ class Stage(ABC):
     Abstract base class for a processing stage in a recursive DSP system.
     
     Each stage represents one block-processing operation that can read from and write to:
-    - ctx: Signal context dictionary for the current block (local to this block)
+    - lines: Feedback-line signals tensor for the current block (local to this block)
     - state_t: Global state dictionary at the start of the block (read-only)
     - next_state: Accumulating state updates for the next block (write-only for owned keys)
     
@@ -51,39 +51,43 @@ class Stage(ABC):
     @abstractmethod
     def step_block(
         self,
-        ctx: Dict[str, torch.Tensor],
+        lines: Optional[torch.Tensor],
         state_t: Dict[str, torch.Tensor],
         next_state: Dict[str, torch.Tensor],
-        block_size: int
-    ) -> None:
+        block_size: int,
+        x_block: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Process one block of audio.
         
         This method should:
-        1. Read any needed signals from ctx and state_t
+        1. Read any needed signals from `lines`, `x_block` and `state_t`
         2. Perform processing
-        3. Write results back to ctx and next_state (only for owned state keys)
+        3. Return updated `lines` and (optionally) an output block `y_block`
         
         Args:
-            ctx: Signal context dictionary for this block. May contain:
-                - "x": External input block [B, T, N_in]
-                - "lines": Feedback line signals [B, T, N]
-                - "y": Output block [B, T, N_out]
-                - Other stage-specific entries
+            lines: Feedback-line signals for this block, shape [B, N, T].
+                   May be None for the first stage (e.g. `DelayRead`) which
+                   is responsible for creating the initial lines tensor.
             state_t: Global state at start of block (read-only, do not modify)
             next_state: Accumulating state updates (write only your owned keys)
             block_size: Number of time samples in this block (T dimension)
+            x_block: Optional external input block, shape [B, N_in, T].
+                     Only stages that use the external input (e.g. `InputTap`,
+                     `OutputTap` with direct paths) need to read this.
             
         Returns:
-            None. Modifications are made in-place to ctx and next_state.
+            A tuple `(new_lines, y_block)` where:
+                - `new_lines` is the updated feedback-line tensor [B, N, T]
+                - `y_block` is an optional output tensor [B, N_out, T]
+                  (typically produced only by `OutputTap`-like stages)
             
         Note:
-            - You may read any entry from state_t
-            - You may only write to next_state keys listed in self.state_keys
-            - You may read and write to ctx
-            - Do not directly mutate state_t
+            - You may read any entry from `state_t`
+            - You may only write to `next_state` keys listed in `self.state_keys`
+            - Do not directly mutate `state_t`
         """
-        pass
+        raise NotImplementedError
     
     def __repr__(self) -> str:
         state_info = f" (state keys: {self.state_keys})" if self.state_keys else " (stateless)"

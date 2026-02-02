@@ -23,13 +23,13 @@ Example usage:
     ...     DelayWrite(),
     ...     OutputTap(output_matrix=C)
     ... ]
-    >>> core = RecursionCore(stages)
-    >>> output = core.process(input_signal, block_size=512)
+    >>> core = RecursionCore(stages, block_size=512)
+    >>> output = core.process(input_signal)
 """
 
 from .stage import Stage
 from .core import RecursionCore
-from .delay_lines import DelayRead, DelayWrite
+from .delay_lines import DelayRead, DelayWrite, Delay
 from .biquads import Biquads
 from .feedback_mix import FeedbackMix
 from .input_tap import InputTap
@@ -40,6 +40,7 @@ __all__ = [
     "RecursionCore",
     "DelayRead",
     "DelayWrite",
+    "Delay",
     "Biquads",
     "FeedbackMix",
     "InputTap",
