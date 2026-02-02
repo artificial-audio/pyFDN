@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import Dict, Optional, Tuple
 import torch
-import json
 
 from .stage import Stage
 
@@ -119,29 +118,6 @@ class DelayRead(Stage):
         # Any input injection affects the buffers via DelayWrite, not by being
         # summed here, so we ignore any incoming `lines` value.
         new_lines = delayed
-
-        # region agent log
-        try:
-            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
-                _f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "post-refactor",
-                    "hypothesisId": "H1",
-                    "location": "recursive/delay_lines.py:DelayRead.step_block",
-                    "message": "DelayRead combined delayed buffer with incoming lines",
-                    "data": {
-                        "block_size": int(T),
-                        "delay_lengths": self.delay_lengths.tolist(),
-                        "has_incoming_lines": lines is not None,
-                        "delayed_abs_max": float(delayed.abs().max().item()),
-                        "incoming_lines_abs_max": float(lines.abs().max().item()) if lines is not None else 0.0,
-                        "new_lines_abs_max": float(new_lines.abs().max().item()),
-                    },
-                    "timestamp": __import__("time").time(),
-                }) + "\n")
-        except Exception:
-            pass
-        # endregion
 
         return new_lines, None
 
@@ -321,37 +297,5 @@ class Delay(Stage):
         # buffers: [B, N, L], read_indices: [B, N, T] -> delayed: [B, N, T]
         delayed = torch.gather(buffers, 2, read_indices)  # [B, N, T]
 
-        # region agent log
-        try:
-            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
-                _f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "post-refactor",
-                    "hypothesisId": "H1",
-                    "location": "recursive/delay_lines.py:DelayRead.step_block",
-                    "message": "DelayRead combined delayed buffer with incoming lines",
-                    "data": {
-                        "block_size": int(T),
-                        "delay_lengths": self.delay_lengths.tolist(),
-                        "has_incoming_lines": lines is not None,
-                        "delayed_abs_max": float(delayed.abs().max().item()),
-                        "incoming_lines_abs_max": float(lines.abs().max().item()) if lines is not None else 0.0,
-                        "delayed_abs_max": float(delayed.abs().max().item()),
-                    },
-                    "timestamp": __import__("time").time(),
-                }) + "\n")
-        except Exception:
-            pass
-        # endregion
-
-        write_indices = (pointer.unsqueeze(2) + time_offsets) % L  # [B, N, T]
-        buffers.scatter_(2, write_indices, lines)
-        
-        # Advance pointer (one per delay line)
-        new_pointer = (pointer + T) % L  # [B, N]
-        
-        # Write updated state
-        next_state["delay_buffers"] = buffers
-        next_state["delay_pointer"] = new_pointer
-
+        # Delay is read-only: do not write to buffers or update pointer.
         return delayed, None

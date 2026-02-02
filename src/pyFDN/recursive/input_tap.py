@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import Dict, Optional, Tuple
 import torch
-import json
 
 from .stage import Stage
 
@@ -100,27 +99,5 @@ class InputTap(Stage):
                     f"but injected signal has shape {inject.shape}"
                 )
             new_lines = lines + inject
-
-        # region agent log
-        try:
-            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
-                _f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "post-refactor",
-                    "hypothesisId": "H2",
-                    "location": "recursive/input_tap.py:InputTap.step_block",
-                    "message": "InputTap injected external input into lines",
-                    "data": {
-                        "block_size": int(block_size),
-                        "has_incoming_lines": lines is not None,
-                        "x_abs_max": float(x.abs().max().item()),
-                        "inject_abs_max": float(inject.abs().max().item()),
-                        "new_lines_abs_max": float(new_lines.abs().max().item()),
-                    },
-                    "timestamp": __import__("time").time(),
-                }) + "\n")
-        except Exception:
-            pass
-        # endregion
 
         return new_lines, None

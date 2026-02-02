@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import Dict, Optional, Tuple
 import torch
-import json
 
 from .stage import Stage
 
@@ -45,6 +44,8 @@ class OutputTap(Stage):
         if output_matrix is None:
             # Default: average all lines equally
             self.C = torch.ones(num_outputs, num_lines, dtype=torch.float32) / num_lines
+            self.num_outputs = num_outputs
+            self.num_lines = num_lines
         else:
             self.C = output_matrix.float()
             self.num_outputs, self.num_lines = self.C.shape
@@ -59,6 +60,7 @@ class OutputTap(Stage):
             self.D = None
         else:
             self.D = direct_matrix.float()
+            self.num_inputs = self.D.shape[1]
             if self.D.shape[0] != self.num_outputs:
                 raise ValueError(
                     f"Direct matrix must have {self.num_outputs} output channels, got shape {self.D.shape}"
@@ -111,25 +113,5 @@ class OutputTap(Stage):
             # Apply direct matrix using einsum: [B, N_in, T] @ [N_in, N_out] -> [B, N_out, T]
             direct = torch.einsum('bnt,no->bot', x, self.D.T)  # [B, N_out, T]
             y = y + direct
-
-        # region agent log
-        try:
-            with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
-                _f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "post-refactor",
-                    "hypothesisId": "H3",
-                    "location": "recursive/output_tap.py:OutputTap.step_block",
-                    "message": "OutputTap produced block output",
-                    "data": {
-                        "block_size": int(block_size),
-                        "lines_abs_max": float(lines.abs().max().item()),
-                        "y_abs_max": float(y.abs().max().item()),
-                    },
-                    "timestamp": __import__("time").time(),
-                }) + "\n")
-        except Exception:
-            pass
-        # endregion
 
         return lines, y

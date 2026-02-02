@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
 import torch
-import json
 
 from .stage import Stage
 
@@ -158,27 +157,6 @@ class RecursionCore:
                 x_block = torch.cat([x_block, padding], dim=-1)
                 current_block_size = block_size  # Ensure block_size consistency
 
-            # region agent log
-            try:
-                with open("/Users/wu12recu/Documents/GitHub/pyFDN/.cursor/debug.log", "a") as _f:
-                    _f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "post-refactor",
-                        "hypothesisId": "H0",
-                        "location": "recursive/core.py:process:block_entry",
-                        "message": "Block entry with input statistics",
-                        "data": {
-                            "block_idx": int(block_idx),
-                            "block_size": int(current_block_size),
-                            "x_mean": float(x_block.mean().item()),
-                            "x_abs_max": float(x_block.abs().max().item()),
-                        },
-                        "timestamp": __import__("time").time(),
-                    }) + "\n")
-            except Exception:
-                pass
-            # endregion
-
             # Initialize next_state accumulator
             next_state: Dict[str, torch.Tensor] = {}
 
@@ -204,8 +182,10 @@ class RecursionCore:
             output_blocks.append(y_block)
         
         # Concatenate all output blocks along time dimension (dim=2)
-        output = torch.cat(output_blocks, dim=2)  # [B, N_out, T_total]
-        
+        output = torch.cat(output_blocks, dim=2)  # [B, N_out, T_blocks]
+        # Trim to input length when last block was zero-padded
+        output = output[:, :, :T_total]
+
         # Remove batch dimension if input was 2D
         if squeeze_output:
             output = output.squeeze(0)  # [N_out, T_total]
