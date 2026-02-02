@@ -54,6 +54,7 @@ class DelayRead(Stage):
                 "delay_buffers": Delay buffers of shape [B, N, L]
                 "delay_pointer": Delay pointer of shape [B, N]
         """
+        self.delay_lengths = self.delay_lengths.to(device)
         max_delay = self.delay_lengths.max().item()
         buffer_size = max_delay + block_size
         return {
@@ -238,6 +239,7 @@ class Delay(Stage):
                 "delay_buffers": Delay buffers of shape [B, N, L]
                 "delay_pointer": Delay pointer of shape [B, N]
         """
+        self.delay_lengths = self.delay_lengths.to(device)
         max_delay = self.delay_lengths.max().item()
         buffer_size = max_delay + block_size
         return {
