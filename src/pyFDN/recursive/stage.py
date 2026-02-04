@@ -34,12 +34,18 @@ class Stage(ABC):
         self.state_keys = state_keys or set()
     
     @abstractmethod
-    def init_state(self, batch_size: int, device: torch.device) -> Dict[str, torch.Tensor]:
+    def init_state(
+        self,
+        batch_size: int,
+        block_size: int,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
         """
         Initialize state for this stage.
         
         Args:
             batch_size: Number of parallel signals (B dimension)
+            block_size: Maximum number of samples per processing block
             device: PyTorch device to create tensors on
             
         Returns:

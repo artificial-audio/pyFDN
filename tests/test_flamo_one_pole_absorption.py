@@ -49,7 +49,7 @@ def one_pole_absorption_reference(loadmat):
     try:
         from flamo.processor import dsp, system  # type: ignore
         import torch  # type: ignore
-    except ImportError:
+    except Exception:
         ir_python = None
     else:
         nfft = 2 ** 16

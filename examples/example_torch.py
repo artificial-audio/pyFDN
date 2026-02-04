@@ -9,8 +9,14 @@ with various example systems.
 import torch
 import matplotlib.pyplot as plt
 from pyFDN.recursive import (
-    DelayRead, DelayWrite, Biquads,
-    FeedbackMix, InputTap, OutputTap, RecursionCore
+    DelayRead,
+    DelayWrite,
+    Biquads,
+    FeedbackMix,
+    InputTap,
+    OutputTap,
+    RecursionCore,
+    build_ffm_stages,
 )
 
 
@@ -52,8 +58,8 @@ def example_1_pure_delay():
     
     stages = [
         DelayRead(delay_lengths=torch.tensor(delay_lengths, dtype=torch.long), num_lines=num_lines),
+        OutputTap(output_matrix=torch.eye(num_lines, num_lines)),
         InputTap(num_lines=num_lines, num_inputs=1),
-        OutputTap(output_matrix=torch.eye(2, 2)),
         DelayWrite(),
     ]
     
@@ -83,8 +89,8 @@ def example_2_feedback_comb():
     
     stages = [
         DelayRead(delay_lengths=torch.tensor(delay_lengths, dtype=torch.long), num_lines=1),
-        InputTap(num_lines=1, num_inputs=1),
         OutputTap(output_matrix=torch.eye(1, 1)),
+        InputTap(num_lines=1, num_inputs=1),
         FeedbackMix(feedback_matrix=torch.tensor([[feedback_gain]])),
         DelayWrite(),
     ]
@@ -154,9 +160,9 @@ def example_3_fdn_absorption():
 
 
 def example_4_block_size_comparison():
-    """Example 5: Verify block size invariance."""
+    """Example 4: Verify block size invariance."""
     print("\n" + "="*60)
-    print("Example 5: Block Size Invariance")
+    print("Example 4: Block Size Invariance")
     print("="*60)
     
     num_lines = 2
@@ -191,6 +197,70 @@ def example_4_block_size_comparison():
     return outputs
 
 
+def example_5_ffm_lossless():
+    """Example 5: Lossless cascaded Filter Feedback Matrix (FFM) inside the loop."""
+    print("\n" + "=" * 60)
+    print("Example 5: Lossless Cascaded FFM (no attenuation)")
+    print("=" * 60)
+
+    torch.manual_seed(0)
+
+    num_lines = 4
+    main_delays = [61, 89, 101, 127]
+
+    # Orthonormal mixing matrices U_k (Hadamard + two random orthogonals).
+    U0 = torch.tensor(
+        [
+            [1, 1, 1, 1],
+            [1, -1, 1, -1],
+            [1, 1, -1, -1],
+            [1, -1, -1, 1],
+        ],
+        dtype=torch.float32,
+    ) * 0.5
+
+    def random_orthogonal(n: int) -> torch.Tensor:
+        a = torch.randn(n, n, dtype=torch.float32)
+        q, r = torch.linalg.qr(a)
+        d = torch.sign(torch.diag(r))
+        d[d == 0] = 1.0
+        return q * d
+
+    U1 = random_orthogonal(num_lines)
+    U2 = random_orthogonal(num_lines)
+
+    # Diagonal per-line delays m_k (can be smaller than block_size; includes 0).
+    m1 = torch.tensor([0, 1, 2, 3], dtype=torch.long)
+    m2 = torch.tensor([0, 4, 8, 12], dtype=torch.long)
+
+    ffm_stages = build_ffm_stages([U0, U1, U2], [m1, m2], state_prefix="ffm")
+
+    # Input/output: excite all lines and tap average of delay outputs (v) with direct path.
+    B = torch.ones(num_lines, 1, dtype=torch.float32) / num_lines
+    C = torch.ones(1, num_lines, dtype=torch.float32) / num_lines
+    D = torch.ones(1, 1, dtype=torch.float32)
+
+    stages = [
+        DelayRead(delay_lengths=torch.tensor(main_delays, dtype=torch.long), num_lines=num_lines, state_key="delay"),
+        OutputTap(output_matrix=C, direct_matrix=D),
+        InputTap(input_matrix=B),
+        *ffm_stages,
+        DelayWrite(state_key="delay"),
+    ]
+
+    core = RecursionCore(stages, block_size=32)
+    print(f"\nSystem structure:\n{core}")
+    print(f"\nMain delays (samples): {main_delays}")
+    print(f"FFM diagonal delays m1: {m1.tolist()}")
+    print(f"FFM diagonal delays m2: {m2.tolist()}")
+    print("Note: This is lossless (no attenuation). Add a scalar gain or absorption filters to get decay.")
+
+    input_signal = create_impulse(2000, 1)
+    output = core.process(input_signal)
+    plot_signal(output, "Lossless Cascaded FFM (tapped at delay outputs)", max_samples=1200)
+    return output
+
+
 def main():
     """Run all examples."""
     print("\n" + "="*60)
@@ -203,6 +273,7 @@ def main():
         example_2_feedback_comb()
         example_3_fdn_absorption()
         example_4_block_size_comparison()
+        example_5_ffm_lossless()
         
         print("\n" + "="*60)
         print("All examples completed successfully!")

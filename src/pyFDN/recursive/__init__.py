@@ -29,11 +29,12 @@ Example usage:
 
 from .stage import Stage
 from .core import RecursionCore
-from .delay_lines import DelayRead, DelayWrite, Delay
+from .delay_lines import DelayRead, DelayWrite, Delay, DiagonalDelay
 from .biquads import Biquads
 from .feedback_mix import FeedbackMix
 from .input_tap import InputTap
 from .output_tap import OutputTap
+from .ffm_builders import build_ffm_stages
 
 __all__ = [
     "Stage",
@@ -41,8 +42,10 @@ __all__ = [
     "DelayRead",
     "DelayWrite",
     "Delay",
+    "DiagonalDelay",
     "Biquads",
     "FeedbackMix",
     "InputTap",
     "OutputTap",
+    "build_ffm_stages",
 ]

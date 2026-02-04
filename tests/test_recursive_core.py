@@ -14,7 +14,7 @@ class DummyStage(Stage):
         self.add_value = add_value
         self.has_state = has_state
     
-    def init_state(self, batch_size: int, device: torch.device):
+    def init_state(self, batch_size: int, block_size: int, device: torch.device):
         if self.has_state:
             return {"dummy_state": torch.zeros(batch_size, device=device)}
         return {}
@@ -55,7 +55,7 @@ class TestStageBase:
         stage = DummyStage(has_state=True)
         assert stage.state_keys == {"dummy_state"}
         
-        state = stage.init_state(2, torch.device("cpu"))
+        state = stage.init_state(2, block_size=1, device=torch.device("cpu"))
         assert "dummy_state" in state
         assert state["dummy_state"].shape == (2,)
 
@@ -85,7 +85,7 @@ class TestRecursionCore:
         
         assert "delay_buffers" in state
         assert "delay_pointer" in state
-        assert state["delay_buffers"].shape == (2, 4, 16)  # [B, N, L]
+        assert state["delay_buffers"].shape == (2, 4, 32)  # [B, N, L=max_delay+block_size]
         assert state["delay_pointer"].shape == (2, 4)  # [B, N]
     
     def test_batch_dimension_handling(self):

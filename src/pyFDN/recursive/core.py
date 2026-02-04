@@ -56,7 +56,8 @@ class RecursionCore:
         Validate stage configuration.
         
         Note: Multiple stages can claim the same state keys (e.g., DelayRead and
-        DelayWrite both use delay_buffers), but only one should initialize them.
+        DelayWrite both use the same delay-buffer keys), but only one should
+        initialize them.
         We detect conflicts during init_state if multiple stages try to initialize
         the same key.
         """
@@ -67,8 +68,8 @@ class RecursionCore:
     def init_state(
         self, 
         batch_size: int,
-        block_size: int,
-        device: torch.device,
+        block_size: Optional[int] = None,
+        device: Optional[torch.device] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Initialize global state by merging all stage states.
@@ -79,9 +80,12 @@ class RecursionCore:
         Returns:
             Merged state dictionary containing all stage states
         """
+        resolved_block_size = self.block_size if block_size is None else int(block_size)
+        resolved_device = self.device if device is None else device
+
         state: Dict[str, torch.Tensor] = {}
         for stage in self.stages:
-            stage_state = stage.init_state(batch_size, block_size, device)
+            stage_state = stage.init_state(batch_size, resolved_block_size, resolved_device)
             # Ensure no key conflicts (should already be caught by validation)
             for key in stage_state:
                 if key in state:
@@ -141,6 +145,11 @@ class RecursionCore:
         num_blocks = (T_total + block_size - 1) // block_size
         
         for block_idx in range(num_blocks):
+            # Block-local context must not carry across blocks. Persistent state
+            # belongs in `state` / `next_state` only.
+            lines = None
+            y_block = None
+
             # Determine current block size
             start_t = block_idx * block_size
             end_t = min(start_t + block_size, T_total)

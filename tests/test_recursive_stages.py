@@ -25,7 +25,7 @@ class TestDelayStages:
         
         # Initialize state
         state = core.init_state(batch_size=1)
-        assert state["delay_buffers"].shape == (1, num_lines, delay_length)  # [B, N, L]
+        assert state["delay_buffers"].shape == (1, num_lines, delay_length + core.block_size)  # [B, N, L]
         assert torch.all(state["delay_buffers"] == 0)
     
     def test_pure_delay(self):
@@ -166,7 +166,7 @@ class TestFeedbackMix:
         """Test feedback with identity matrix (no mixing)."""
         A = torch.eye(4)
         stage = FeedbackMix(feedback_matrix=A)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         lines = torch.randn(1, 4, 10)  # [B, N, T]
         original = lines.clone()
@@ -186,7 +186,7 @@ class TestFeedbackMix:
             [0.0, 0.0, 0.3, 0.7],
         ])
         stage = FeedbackMix(feedback_matrix=A)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         # Create test signal: [B=1, N=4, T=1]
         lines = torch.tensor([[[1.0], [0.0], [2.0], [0.0]]])
@@ -207,7 +207,7 @@ class TestInputTap:
         # Matrix that feeds input to all lines with gain 2.0
         B = torch.ones(4, 1) * 2.0
         stage = InputTap(input_matrix=B)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         lines = torch.ones(1, 4, 10)  # [B, N, T]
         x = torch.ones(1, 1, 10) * 0.5  # [B, N_in, T]
@@ -228,7 +228,7 @@ class TestInputTap:
             [0.5, 0.5],
         ])
         stage = InputTap(input_matrix=B)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         lines = torch.zeros(1, 3, 1)  # [B, N, T]
         x = torch.tensor([[[2.0], [3.0]]])  # [B=1, N_in=2, T=1]
@@ -249,7 +249,7 @@ class TestOutputTap:
         # Average 4 lines to 1 output
         C = torch.ones(1, 4) * 0.25
         stage = OutputTap(output_matrix=C)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         lines = torch.tensor([[[1.0], [2.0], [3.0], [4.0]]])  # [B=1, N=4, T=1]
         
@@ -265,7 +265,7 @@ class TestOutputTap:
         C = torch.ones(1, 2) * 0.5  # Mix 2 lines
         D = torch.ones(1, 1) * 0.3  # Direct path gain
         stage = OutputTap(output_matrix=C, direct_matrix=D)
-        stage.init_state(1, torch.device("cpu"))
+        stage.init_state(1, block_size=1, device=torch.device("cpu"))
         
         lines = torch.tensor([[[2.0], [4.0]]])  # [B=1, N=2, T=1]
         x = torch.tensor([[[10.0]]])  # [B=1, N_in=1, T=1]
