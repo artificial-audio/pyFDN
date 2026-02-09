@@ -1,11 +1,14 @@
 """Parallel biquad filter bank stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 import torch
 import torch.nn.functional as F
 
 from .stage import Stage
+
+if TYPE_CHECKING:
+    from .cost import CostContext, StageCost
 
 
 def _biquad_section_vectorized(
@@ -275,3 +278,31 @@ class Biquads(Stage):
         next_state["biquad_state"] = filter_state
 
         return y, None
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape, dtype_nbytes
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        N = int(self.num_lines)
+        S = int(self.num_sections)
+
+        x_bytes = nbytes_for_shape((B, N, T), ctx.dtype)
+        y_bytes = x_bytes
+
+        coeff_bytes = int(self.coeffs.numel()) * int(self.coeffs.element_size())
+        state_numel = B * N * S * 2
+        state_bytes = state_numel * dtype_nbytes(ctx.dtype)
+
+        flops = float(9 * B * N * T * S)
+        read_dsp = float(x_bytes + coeff_bytes + state_bytes)
+        write_dsp = float(y_bytes + state_bytes)
+
+        return StageCost(
+            flops=flops,
+            bytes_read_dsp=read_dsp,
+            bytes_write_dsp=write_dsp,
+            bytes_read_impl=read_dsp,
+            bytes_write_impl=write_dsp,
+            int_ops=0.0,
+        )

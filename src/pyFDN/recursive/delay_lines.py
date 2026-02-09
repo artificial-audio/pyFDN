@@ -1,10 +1,13 @@
 """Delay line stages for feedback delays."""
 
 from __future__ import annotations
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple, TYPE_CHECKING
 import torch
 
 from .stage import Stage
+
+if TYPE_CHECKING:
+    from .cost import CostContext, StageCost
 
 
 class DelayRead(Stage):
@@ -151,6 +154,34 @@ class DelayRead(Stage):
 
         return new_lines, None
 
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        N = int(self.num_lines)
+
+        lines_out_shape = ctx.lines_out if ctx.lines_out is not None else (B, N, T)
+        window_bytes = nbytes_for_shape((B, N, T), ctx.dtype)
+        lines_out_bytes = nbytes_for_shape(lines_out_shape, ctx.dtype)
+
+        index_bytes = nbytes_for_shape((B, N, T), torch.long)
+        int_ops = 3 * B * N * T
+
+        read_dsp = float(window_bytes)
+        write_dsp = float(lines_out_bytes)
+        read_impl = read_dsp + float(index_bytes)
+        write_impl = write_dsp
+
+        return StageCost(
+            flops=0.0,
+            bytes_read_dsp=read_dsp,
+            bytes_write_dsp=write_dsp,
+            bytes_read_impl=read_impl,
+            bytes_write_impl=write_impl,
+            int_ops=float(int_ops),
+        )
+
 
 class DelayWrite(Stage):
     """
@@ -225,6 +256,41 @@ class DelayWrite(Stage):
         next_state[self.pointer_key] = new_pointer
 
         return lines, None
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape
+
+        if ctx.lines_in is None and ctx.lines_out is None:
+            return StageCost.zero()
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        lines_shape = ctx.lines_in if ctx.lines_in is not None else ctx.lines_out
+        N = int(lines_shape[1])
+
+        lines_bytes = nbytes_for_shape(lines_shape, ctx.dtype)
+        window_bytes = nbytes_for_shape((B, N, T), ctx.dtype)
+
+        clone_bytes = 0
+        if ctx.delay_buffer_len is not None:
+            clone_bytes = nbytes_for_shape((B, N, int(ctx.delay_buffer_len)), ctx.dtype)
+
+        index_bytes = nbytes_for_shape((B, N, T), torch.long)
+        int_ops = 2 * B * N * T + 2 * B * N
+
+        read_dsp = float(lines_bytes)
+        write_dsp = float(window_bytes)
+        read_impl = read_dsp + float(clone_bytes) + float(index_bytes)
+        write_impl = write_dsp + float(clone_bytes)
+
+        return StageCost(
+            flops=0.0,
+            bytes_read_dsp=read_dsp,
+            bytes_write_dsp=write_dsp,
+            bytes_read_impl=read_impl,
+            bytes_write_impl=write_impl,
+            int_ops=float(int_ops),
+        )
 
 class DiagonalDelay(Stage):
     """
@@ -331,6 +397,41 @@ class DiagonalDelay(Stage):
         next_state[self.pointer_key] = new_pointer
 
         return y, None
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape
+
+        if ctx.lines_in is None and ctx.lines_out is None:
+            return StageCost.zero()
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        lines_shape = ctx.lines_in if ctx.lines_in is not None else ctx.lines_out
+        N = int(lines_shape[1])
+
+        lines_bytes = nbytes_for_shape(lines_shape, ctx.dtype)
+        window_bytes = nbytes_for_shape((B, N, T), ctx.dtype)
+
+        clone_bytes = 0
+        if ctx.delay_buffer_len is not None:
+            clone_bytes = nbytes_for_shape((B, N, int(ctx.delay_buffer_len)), ctx.dtype)
+
+        index_bytes = 2 * nbytes_for_shape((B, N, T), torch.long)
+        int_ops = 5 * B * N * T + 2 * B * N
+
+        read_dsp = float(lines_bytes + window_bytes)
+        write_dsp = float(window_bytes + lines_bytes)
+        read_impl = read_dsp + float(clone_bytes) + float(index_bytes)
+        write_impl = write_dsp + float(clone_bytes)
+
+        return StageCost(
+            flops=0.0,
+            bytes_read_dsp=read_dsp,
+            bytes_write_dsp=write_dsp,
+            bytes_read_impl=read_impl,
+            bytes_write_impl=write_impl,
+            int_ops=float(int_ops),
+        )
 
 
 # Backwards compatible alias (previously a WIP combined-delay stage).

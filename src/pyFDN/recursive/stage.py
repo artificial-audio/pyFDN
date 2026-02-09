@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 import torch
+
+if TYPE_CHECKING:
+    from .cost import CostContext, StageCost
 
 
 class Stage(ABC):
@@ -98,3 +101,9 @@ class Stage(ABC):
     def __repr__(self) -> str:
         state_info = f" (state keys: {self.state_keys})" if self.state_keys else " (stateless)"
         return f"{self.__class__.__name__}(){state_info}"
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        """Estimate analytical cost for this stage."""
+        from .cost import StageCost
+
+        return StageCost.zero()

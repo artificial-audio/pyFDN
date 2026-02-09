@@ -25,6 +25,8 @@ Example usage:
     ... ]
     >>> core = RecursionCore(stages, block_size=512)
     >>> output = core.process(input_signal)
+    >>> output = core.process(input_signal, profile=True)
+    >>> report = core.last_profile_report
 """
 
 from .stage import Stage
@@ -35,6 +37,21 @@ from .feedback_mix import FeedbackMix
 from .input_tap import InputTap
 from .output_tap import OutputTap
 from .ffm_builders import build_ffm_stages
+from .cost import (
+    CostContext,
+    StageCost,
+    StageCostEntry,
+    CostReport,
+    estimate_cost_from_shape,
+    estimate_cost_from_input,
+    derive_metrics,
+)
+from .profile import (
+    ProcessProfileConfig,
+    StageProfileBucket,
+    ProcessProfileTotals,
+    ProcessProfileReport,
+)
 
 __all__ = [
     "Stage",
@@ -48,4 +65,15 @@ __all__ = [
     "InputTap",
     "OutputTap",
     "build_ffm_stages",
+    "CostContext",
+    "StageCost",
+    "StageCostEntry",
+    "CostReport",
+    "estimate_cost_from_shape",
+    "estimate_cost_from_input",
+    "derive_metrics",
+    "ProcessProfileConfig",
+    "StageProfileBucket",
+    "ProcessProfileTotals",
+    "ProcessProfileReport",
 ]

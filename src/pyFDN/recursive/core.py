@@ -1,10 +1,17 @@
 """Core coordinator for recursive DSP processing."""
 
 from __future__ import annotations
-from typing import Dict, List, Optional
+from contextlib import nullcontext
+from typing import Dict, List, Optional, TYPE_CHECKING
 import torch
+from torch.profiler import profile as torch_profile
+from torch.profiler import record_function
 
 from .stage import Stage
+from .profile import ProcessProfileConfig, build_process_profile_report
+
+if TYPE_CHECKING:
+    from .profile import ProcessProfileReport
 
 
 class RecursionCore:
@@ -49,6 +56,7 @@ class RecursionCore:
             raise ValueError(f"block_size must be positive, got {block_size}")
         self.block_size = int(block_size)
         self.device = device or torch.device("cpu")
+        self.last_profile_report: Optional["ProcessProfileReport"] = None
         self._validate_stages()
         
     def _validate_stages(self) -> None:
@@ -95,12 +103,22 @@ class RecursionCore:
                 state[key] = stage_state[key]
         return state
     
-    def process(self, input_signal: torch.Tensor) -> torch.Tensor:
+    def process(
+        self,
+        input_signal: torch.Tensor,
+        *,
+        profile: bool = False,
+        profile_config: Optional[ProcessProfileConfig] = None,
+        return_profile: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, Optional["ProcessProfileReport"]]:
         """
         Process input signal through the recursive system.
         
         Args:
             input_signal: Input tensor of shape [T_total, N_in] or [B, N_in, T_total]
+            profile: Enable torch profiler capture and per-stage bucket report
+            profile_config: Optional profiler/report configuration
+            return_profile: If True, return `(output, profile_report)`
             
         Returns:
             Output tensor of same shape as input (with N_out channels instead of N_in)
@@ -129,6 +147,9 @@ class RecursionCore:
         input_signal = input_signal.to(self.device)
         
         B, N_in, T_total = input_signal.shape
+
+        resolved_profile_config = profile_config or ProcessProfileConfig()
+        profiling_enabled = bool(profile and resolved_profile_config.enabled)
         
         # Initialize state
         state = self.init_state(B, self.block_size, self.device)
@@ -143,52 +164,73 @@ class RecursionCore:
         # Process blocks
         block_size = self.block_size
         num_blocks = (T_total + block_size - 1) // block_size
-        
-        for block_idx in range(num_blocks):
-            # Block-local context must not carry across blocks. Persistent state
-            # belongs in `state` / `next_state` only.
-            lines = None
-            y_block = None
 
-            # Determine current block size
-            start_t = block_idx * block_size
-            end_t = min(start_t + block_size, T_total)
-            current_block_size = end_t - start_t
+        if profiling_enabled:
+            profile_context = torch_profile(
+                activities=list(resolved_profile_config.resolve_activities(self.device)),
+                record_shapes=resolved_profile_config.record_shapes,
+                profile_memory=resolved_profile_config.profile_memory,
+                with_stack=resolved_profile_config.with_stack,
+                with_flops=resolved_profile_config.with_flops,
+            )
+        else:
+            profile_context = nullcontext()
 
-            # Extract input block: [B, N_in, T]
-            x_block = input_signal[:, :, start_t:end_t]  # [B, N_in, T]
+        with profile_context as prof:
+            for block_idx in range(num_blocks):
+                # Block-local context must not carry across blocks. Persistent state
+                # belongs in `state` / `next_state` only.
+                lines = None
+                y_block = None
 
-            # If this is the last (possibly short) block, pad at end to full block_size
-            if current_block_size < block_size:
-                pad_width = block_size - current_block_size
-                pad_shape = list(x_block.shape[:-1]) + [pad_width]
-                padding = torch.zeros(*pad_shape, device=x_block.device, dtype=x_block.dtype)
-                x_block = torch.cat([x_block, padding], dim=-1)
-                current_block_size = block_size  # Ensure block_size consistency
+                # Determine current block size
+                start_t = block_idx * block_size
+                end_t = min(start_t + block_size, T_total)
+                current_block_size = end_t - start_t
 
-            # Initialize next_state accumulator
-            next_state: Dict[str, torch.Tensor] = {}
+                # Extract input block: [B, N_in, T]
+                x_block = input_signal[:, :, start_t:end_t]  # [B, N_in, T]
 
-            # Run all stages in sequence
-            for stage in self.stages:
-                lines, y_candidate = stage.step_block(
-                    lines, state, next_state, block_size, x_block
-                )
-                if y_candidate is not None:
-                    y_block = y_candidate
-            
-            # Merge state_t and next_state for next block
-            for key in state:
-                if key in next_state:
-                    state[key] = next_state[key]
-                # else: carry over previous state value
-            
-            # Extract output block
-            if y_block is None:
-                raise RuntimeError(
-                    "No output produced - ensure pipeline includes OutputTap stage"
-                )
-            output_blocks.append(y_block)
+                # If this is the last (possibly short) block, pad at end to full block_size
+                if current_block_size < block_size:
+                    pad_width = block_size - current_block_size
+                    pad_shape = list(x_block.shape[:-1]) + [pad_width]
+                    padding = torch.zeros(
+                        *pad_shape, device=x_block.device, dtype=x_block.dtype
+                    )
+                    x_block = torch.cat([x_block, padding], dim=-1)
+                    current_block_size = block_size  # Ensure block_size consistency
+
+                # Initialize next_state accumulator
+                next_state: Dict[str, torch.Tensor] = {}
+
+                # Run all stages in sequence
+                for stage_idx, stage in enumerate(self.stages):
+                    if profiling_enabled:
+                        label = f"stage::{stage_idx}:{stage.__class__.__name__}"
+                        with record_function(label):
+                            lines, y_candidate = stage.step_block(
+                                lines, state, next_state, block_size, x_block
+                            )
+                    else:
+                        lines, y_candidate = stage.step_block(
+                            lines, state, next_state, block_size, x_block
+                        )
+                    if y_candidate is not None:
+                        y_block = y_candidate
+
+                # Merge state_t and next_state for next block
+                for key in state:
+                    if key in next_state:
+                        state[key] = next_state[key]
+                    # else: carry over previous state value
+
+                # Extract output block
+                if y_block is None:
+                    raise RuntimeError(
+                        "No output produced - ensure pipeline includes OutputTap stage"
+                    )
+                output_blocks.append(y_block)
         
         # Concatenate all output blocks along time dimension (dim=2)
         output = torch.cat(output_blocks, dim=2)  # [B, N_out, T_blocks]
@@ -200,7 +242,25 @@ class RecursionCore:
             output = output.squeeze(0)  # [N_out, T_total]
             # Transpose back to [T_total, N_out] for backward compatibility
             output = output.T  # [T_total, N_out]
-        
+
+        if profiling_enabled:
+            self.last_profile_report = build_process_profile_report(
+                prof=prof,
+                stages=self.stages,
+                batch_size=B,
+                block_size=block_size,
+                num_blocks=num_blocks,
+                total_samples=T_total,
+                device=self.device,
+                dtype=input_signal.dtype,
+                input_signal=input_signal,
+                config=resolved_profile_config,
+            )
+        else:
+            self.last_profile_report = None
+
+        if return_profile:
+            return output, self.last_profile_report
         return output
     
     def __repr__(self) -> str:

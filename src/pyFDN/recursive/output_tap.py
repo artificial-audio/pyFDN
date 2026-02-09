@@ -1,10 +1,13 @@
 """Output summation stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 import torch
 
 from .stage import Stage
+
+if TYPE_CHECKING:
+    from .cost import CostContext, StageCost
 
 
 class OutputTap(Stage):
@@ -115,3 +118,38 @@ class OutputTap(Stage):
             y = y + direct
 
         return lines, y
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        N_out = int(self.C.shape[0])
+        N = int(self.C.shape[1])
+
+        lines_shape = ctx.lines_in if ctx.lines_in is not None else (B, N, T)
+        lines_bytes = nbytes_for_shape(lines_shape, ctx.dtype)
+        c_bytes = int(self.C.numel()) * int(self.C.element_size())
+
+        y_shape = ctx.y_shape if ctx.y_shape is not None else (B, N_out, T)
+        y_bytes = nbytes_for_shape(y_shape, ctx.dtype)
+
+        flops = 2 * B * T * N * N_out
+        read_dsp = lines_bytes + c_bytes
+        write_dsp = y_bytes
+
+        if self.D is not None:
+            N_in = int(self.D.shape[1])
+            x_bytes = nbytes_for_shape((B, N_in, T), ctx.dtype)
+            d_bytes = int(self.D.numel()) * int(self.D.element_size())
+            flops += 2 * B * T * N_in * N_out + B * N_out * T
+            read_dsp += x_bytes + d_bytes
+
+        return StageCost(
+            flops=float(flops),
+            bytes_read_dsp=float(read_dsp),
+            bytes_write_dsp=float(write_dsp),
+            bytes_read_impl=float(read_dsp),
+            bytes_write_impl=float(write_dsp),
+            int_ops=0.0,
+        )

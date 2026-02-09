@@ -198,6 +198,57 @@ class TestFeedbackMix:
         assert y is None
         assert torch.allclose(new_lines, expected, atol=1e-6)
 
+    def test_hadamard_fast_path_matches_dense(self):
+        """Hadamard structured path should match explicit dense Hadamard matrix."""
+        num_lines = 8
+        lines = torch.randn(2, num_lines, 13)
+
+        h = torch.tensor([[1.0]], dtype=torch.float32)
+        while h.shape[0] < num_lines:
+            h = torch.cat(
+                (
+                    torch.cat((h, h), dim=1),
+                    torch.cat((h, -h), dim=1),
+                ),
+                dim=0,
+            )
+        h = h / torch.sqrt(torch.tensor(float(num_lines)))
+
+        dense_stage = FeedbackMix(feedback_matrix=h)
+        hadamard_stage = FeedbackMix(mix_type="hadamard", num_lines=num_lines)
+        dense_stage.init_state(2, block_size=13, device=torch.device("cpu"))
+        hadamard_stage.init_state(2, block_size=13, device=torch.device("cpu"))
+
+        dense_out, _ = dense_stage.step_block(lines.clone(), {}, {}, 13)
+        hadamard_out, _ = hadamard_stage.step_block(lines.clone(), {}, {}, 13)
+
+        assert torch.allclose(hadamard_out, dense_out, atol=1e-6)
+
+    def test_hadamard_requires_power_of_two(self):
+        """Hadamard mode should reject non-power-of-two line counts."""
+        with pytest.raises(ValueError, match="power of two"):
+            FeedbackMix(mix_type="hadamard", num_lines=6)
+
+    def test_householder_fast_path_matches_dense(self):
+        """Householder structured path should match explicit dense reflection matrix."""
+        num_lines = 5
+        lines = torch.randn(3, num_lines, 7)
+        v = torch.randn(num_lines)
+        a = torch.eye(num_lines) - 2.0 * torch.outer(v, v) / torch.dot(v, v)
+
+        dense_stage = FeedbackMix(feedback_matrix=a)
+        householder_stage = FeedbackMix(
+            mix_type="householder",
+            householder_vector=v,
+        )
+        dense_stage.init_state(3, block_size=7, device=torch.device("cpu"))
+        householder_stage.init_state(3, block_size=7, device=torch.device("cpu"))
+
+        dense_out, _ = dense_stage.step_block(lines.clone(), {}, {}, 7)
+        householder_out, _ = householder_stage.step_block(lines.clone(), {}, {}, 7)
+
+        assert torch.allclose(householder_out, dense_out, atol=1e-6)
+
 
 class TestInputTap:
     """Test InputTap stage."""

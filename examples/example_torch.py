@@ -242,7 +242,7 @@ def example_5_ffm_lossless():
 
     stages = [
         DelayRead(delay_lengths=torch.tensor(main_delays, dtype=torch.long), num_lines=num_lines, state_key="delay"),
-        OutputTap(output_matrix=C, direct_matrix=D),
+        OutputTap(output_matrix=C),
         InputTap(input_matrix=B),
         *ffm_stages,
         DelayWrite(state_key="delay"),

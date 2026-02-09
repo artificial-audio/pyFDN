@@ -1,10 +1,13 @@
 """Input injection stage."""
 
 from __future__ import annotations
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 import torch
 
 from .stage import Stage
+
+if TYPE_CHECKING:
+    from .cost import CostContext, StageCost
 
 
 class InputTap(Stage):
@@ -101,3 +104,36 @@ class InputTap(Stage):
             new_lines = lines + inject
 
         return new_lines, None
+
+    def estimate_cost(self, ctx: "CostContext") -> "StageCost":
+        from .cost import StageCost, nbytes_for_shape
+
+        B = int(ctx.batch_size)
+        T = int(ctx.block_size)
+        N = int(self.B.shape[0])
+        N_in = int(self.B.shape[1])
+
+        x_bytes = nbytes_for_shape((B, N_in, T), ctx.dtype)
+        matrix_bytes = int(self.B.numel()) * int(self.B.element_size())
+
+        lines_in_bytes = 0
+        add_flops = 0
+        if ctx.lines_in is not None:
+            lines_in_bytes = nbytes_for_shape(ctx.lines_in, ctx.dtype)
+            add_flops = B * N * T
+
+        lines_out_shape = ctx.lines_out if ctx.lines_out is not None else (B, N, T)
+        lines_out_bytes = nbytes_for_shape(lines_out_shape, ctx.dtype)
+
+        flops = float(2 * B * T * N_in * N + add_flops)
+        read_dsp = float(x_bytes + matrix_bytes + lines_in_bytes)
+        write_dsp = float(lines_out_bytes)
+
+        return StageCost(
+            flops=flops,
+            bytes_read_dsp=read_dsp,
+            bytes_write_dsp=write_dsp,
+            bytes_read_impl=read_dsp,
+            bytes_write_impl=write_dsp,
+            int_ops=0.0,
+        )
