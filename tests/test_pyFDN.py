@@ -2,6 +2,7 @@
 
 """Tests for `pyFDN` package."""
 
+import numpy as np
 import pytest
 import pyFDN
 from pyFDN.auxiliary.acoustics import one_pole_absorption
@@ -32,6 +33,17 @@ def test_top_level_exports():
     assert pyFDN.random_orthogonal is random_orthogonal
     assert pyFDN.mag2db is mag2db
     assert pyFDN.process_fdn is process_fdn
+    assert pyFDN.random_orthogonal(3).shape == (3, 3)
+    assert pyFDN.mag2db([1.0])[0] == pytest.approx(0.0)
+    assert pyFDN.one_pole_absorption(1.0, 0.5, [10, 20], 48_000).shape == (6, 2)
+    assert pyFDN.process_fdn(
+        np.array([1.0, 0.0]),
+        delays=np.array([1]),
+        feedback_matrix=np.array([[0.0]]),
+        input_gain=np.array([[1.0]]),
+        output_gain=np.array([[1.0]]),
+        direct=np.array([[0.0]]),
+    ).shape == (2,)
 
 
 def test_process_fdn_camel_case_alias():

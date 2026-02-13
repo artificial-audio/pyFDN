@@ -12,4 +12,29 @@ from pyFDN.auxiliary.utils import db2mag, hertz2unit, is_bounding_curve, mag2db,
 from pyFDN.generate.random_orthogonal import random_orthogonal
 from pyFDN.process import process_fdn
 
+# Backward-compatibility alias for existing camelCase usage.
 processFDN = process_fdn
+
+__all__ = [
+    "TFMatrix",
+    "ZFIR",
+    "ZFilter",
+    "ZScalar",
+    "ZSOS",
+    "ZTF",
+    "db2mag",
+    "hertz2unit",
+    "is_bounding_curve",
+    "mag2db",
+    "matrix_convolution",
+    "matrix_polyval",
+    "ms2smp",
+    "one_pole_absorption",
+    "pole_boundaries",
+    "polydiag",
+    "processFDN",
+    "process_fdn",
+    "random_orthogonal",
+    "rt60_to_slope",
+    "slope_to_rt60",
+]
