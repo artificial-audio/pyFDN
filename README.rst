@@ -72,9 +72,7 @@ Quick start
 
 ..     from types import SimpleNamespace
 ..     import numpy as np
-..     from pyFDN.generate.random_orthogonal import random_orthogonal
-..     from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
-..     from pyFDN.auxiliary.pole_boundaries import pole_boundaries
+..     from pyFDN import one_pole_absorption, pole_boundaries, random_orthogonal
 
 ..     fs = 48_000
 ..     delays = np.array([331, 347, 359, 373], dtype=int)

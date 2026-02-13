@@ -28,8 +28,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption, rt60_to_slope as RT602slope
-from pyFDN.auxiliary.utils import db2mag
+from pyFDN import db2mag, one_pole_absorption, rt60_to_slope as RT602slope
 
 
 # random seed for reproducibility that matches MATLAB's implementation
@@ -301,4 +300,3 @@ plt.show()
 
 # Note: The dss2pr function still needs to be translated once the modal decomposition 
 # functionality is integrated into pyFDN for complete compatibility with fdnToolbox.
-
