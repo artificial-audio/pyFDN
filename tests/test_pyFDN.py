@@ -5,10 +5,10 @@
 import numpy as np
 import pytest
 import pyFDN
-from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.auxiliary.utils import mag2db
-from pyFDN.generate.random_orthogonal import random_orthogonal
-from pyFDN.process import process_fdn
+from pyFDN import one_pole_absorption
+from pyFDN import mag2db
+from pyFDN import random_orthogonal
+from pyFDN import process_fdn
 
 
 @pytest.fixture
@@ -46,6 +46,7 @@ def test_top_level_exports():
     ).shape == (2,)
 
 
-def test_process_fdn_camel_case_alias():
-    """Backward-friendly camelCase alias should point to process_fdn."""
-    assert pyFDN.processFDN is pyFDN.process_fdn
+def test_process_fdn_no_camel_case_alias():
+    """Only snake_case process_fdn should be exported."""
+    assert callable(pyFDN.process_fdn)
+    assert not hasattr(pyFDN, "processFDN")

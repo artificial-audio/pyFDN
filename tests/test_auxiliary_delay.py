@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.delay import matrix_delay_approximation
-from pyFDN.auxiliary.delay import mgrpdelay
+from pyFDN import matrix_delay_approximation
+from pyFDN import mgrpdelay
 
 
 def test_mgrpdelay_handles_zero_rows():

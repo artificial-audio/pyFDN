@@ -125,3 +125,6 @@ Thumbs.db
 # Profiling outputs
 profile_default/
 *.prof
+
+benchmark/
+output/

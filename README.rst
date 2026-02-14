@@ -67,6 +67,24 @@ editable mode together with the optional tooling::
 Quick start
 -----------
 
+Import high-level helpers directly from ``pyFDN``::
+
+    import numpy as np
+    from pyFDN import (
+        dss2ss,
+        matrix_delay_approximation,
+        one_pole_absorption,
+        random_matrix_shift,
+        random_orthogonal,
+    )
+
+    delays = np.array([149, 211, 263, 293], dtype=int)
+    feedback = random_orthogonal(delays.size)
+    loop_sos = one_pole_absorption(1.2, 0.9, delays, 48_000)
+    approx_row, approx_col = matrix_delay_approximation(feedback[:, :, np.newaxis])
+    ss_matrix, input_gain, output_gain, direct = dss2ss(delays, feedback)
+    shifted_feedback, _, _, _ = random_matrix_shift(2, feedback)
+
 .. The snippet below sketches the main steps involved in assembling a simple
 .. four-delay FDN and inspecting its stability bounds::
 

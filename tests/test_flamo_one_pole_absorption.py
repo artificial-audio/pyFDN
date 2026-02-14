@@ -13,8 +13,8 @@ from collections import OrderedDict
 
 from torch import jagged
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN import one_pole_absorption
+from pyFDN import random_orthogonal
 
 
 @pytest.fixture(scope="module")

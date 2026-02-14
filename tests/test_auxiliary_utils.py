@@ -4,19 +4,19 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.auxiliary.acoustics import rt60_to_slope
-from pyFDN.auxiliary.acoustics import slope_to_rt60
-from pyFDN.auxiliary.delay import ms2smp
-from pyFDN.auxiliary.math import negpolyder
-from pyFDN.auxiliary.math import outer_sum_approximation
-from pyFDN.auxiliary.math import polyder_rational
-from pyFDN.auxiliary.utils import ensure_3d
-from pyFDN.auxiliary.utils import hertz2unit
-from pyFDN.auxiliary.utils import is_bounding_curve
-from pyFDN.auxiliary.utils import last_nonzero_indices
-from pyFDN.auxiliary.utils import mag2db
-from pyFDN.auxiliary.utils import pole_boundaries
+from pyFDN import one_pole_absorption
+from pyFDN import rt60_to_slope
+from pyFDN import slope_to_rt60
+from pyFDN import ms2smp
+from pyFDN import negpolyder
+from pyFDN import outer_sum_approximation
+from pyFDN import polyder_rational
+from pyFDN import ensure_3d
+from pyFDN import hertz2unit
+from pyFDN import is_bounding_curve
+from pyFDN import last_nonzero_indices
+from pyFDN import mag2db
+from pyFDN import pole_boundaries
 
 
 # ============================================================================

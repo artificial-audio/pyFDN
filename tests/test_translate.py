@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from pyFDN.translate.dss2impz import dss2impz
-from pyFDN.translate.dss2ss import dss2ss
+from pyFDN import dss2impz
+from pyFDN import dss2ss
 
 
 def test_dss2ss_raises_for_inconsistent_delay_blocks():

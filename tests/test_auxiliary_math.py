@@ -3,13 +3,13 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.auxiliary.math import matrix_polyval
-from pyFDN.auxiliary.math import negpolyder
-from pyFDN.auxiliary.math import outer_sum_approximation
-from pyFDN.auxiliary.math import poly_degree
-from pyFDN.auxiliary.math import polyder_rational
-from pyFDN.auxiliary.math import polydiag
+from pyFDN import matrix_convolution
+from pyFDN import matrix_polyval
+from pyFDN import negpolyder
+from pyFDN import outer_sum_approximation
+from pyFDN import poly_degree
+from pyFDN import polyder_rational
+from pyFDN import polydiag
 
 
 # ============================================================================

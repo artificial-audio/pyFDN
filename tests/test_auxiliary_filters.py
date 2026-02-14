@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.filters import TFMatrix
-from pyFDN.auxiliary.filters import ZFilter
-from pyFDN.auxiliary.filters import ZFIR
-from pyFDN.auxiliary.filters import ZScalar
-from pyFDN.auxiliary.filters import ZSOS
-from pyFDN.auxiliary.filters import ZTF
+from pyFDN import TFMatrix
+from pyFDN import ZFilter
+from pyFDN import ZFIR
+from pyFDN import ZScalar
+from pyFDN import ZSOS
+from pyFDN import ZTF
 
 
 # ============================================================================

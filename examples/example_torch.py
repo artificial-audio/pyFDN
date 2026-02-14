@@ -8,7 +8,7 @@ with various example systems.
 
 import torch
 import matplotlib.pyplot as plt
-from pyFDN.recursive import (
+from pyFDN import (
     DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )

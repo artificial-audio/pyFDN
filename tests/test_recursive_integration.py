@@ -3,7 +3,7 @@
 import pytest
 import torch
 import numpy as np
-from pyFDN.recursive import (
+from pyFDN import (
     DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )

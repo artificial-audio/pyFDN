@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from pyFDN.recursive import Stage, RecursionCore, DelayRead, DelayWrite, OutputTap
+from pyFDN import Stage, RecursionCore, DelayRead, DelayWrite, OutputTap
 
 
 class DummyStage(Stage):
@@ -77,11 +77,11 @@ class TestRecursionCore:
     def test_state_initialization(self):
         """Test global state initialization."""
         stages = [
-            DelayRead(delay_length=16, num_lines=4),
+            DelayRead(delay_lengths=[16, 32, 64, 128], num_lines=4),
             DelayWrite(),
         ]
         core = RecursionCore(stages, block_size=16)
-        state = core.init_state(batch_size=2)
+        state = core.init_state(batch_size=2, block_size=16, device=torch.device("cpu"))
         
         assert "delay_buffers" in state
         assert "delay_pointer" in state
@@ -91,7 +91,7 @@ class TestRecursionCore:
     def test_batch_dimension_handling(self):
         """Test automatic batch dimension handling."""
         stages = [
-            DelayRead(delay_length=8, num_lines=2),
+            DelayRead(delay_lengths=[8, 16, 32, 64], num_lines=2),
             DelayWrite(),
             OutputTap(num_lines=2, num_outputs=1),
         ]

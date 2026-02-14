@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 from scipy.signal import sos2tf
 
-from pyFDN.auxiliary.filters import TFMatrix
-from pyFDN.auxiliary.filters import ZScalar
-from pyFDN.auxiliary.filters import ZSOS
-from pyFDN.auxiliary.filters import ZTF
-from pyFDN.dsp.filter_matrix import FilterMatrix
+from pyFDN import TFMatrix
+from pyFDN import ZScalar
+from pyFDN import ZSOS
+from pyFDN import ZTF
+from pyFDN import FilterMatrix
 
 
 # ============================================================================

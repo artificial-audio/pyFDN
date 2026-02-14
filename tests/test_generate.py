@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.generate.construct_cascaded_paraunitary_matrix import construct_cascaded_paraunitary_matrix
-from pyFDN.generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
-from pyFDN.generate.is_almost_zero import is_almost_zero
-from pyFDN.generate.random_matrix_shift import random_matrix_shift
-from pyFDN.generate.random_orthogonal import random_orthogonal
-from pyFDN.generate.shift_matrix import shift_matrix
-from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
+from pyFDN import matrix_convolution
+from pyFDN import construct_cascaded_paraunitary_matrix
+from pyFDN import construct_velvet_feedback_matrix
+from pyFDN import is_almost_zero
+from pyFDN import random_matrix_shift
+from pyFDN import random_orthogonal
+from pyFDN import shift_matrix
+from pyFDN import shift_matrix_distribute
 
 
 @pytest.fixture()
