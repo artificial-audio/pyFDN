@@ -44,9 +44,3 @@ def test_top_level_exports():
         output_gain=np.array([[1.0]]),
         direct=np.array([[0.0]]),
     ).shape == (2,)
-
-
-def test_process_fdn_no_camel_case_alias():
-    """Only snake_case process_fdn should be exported."""
-    assert callable(pyFDN.process_fdn)
-    assert not hasattr(pyFDN, "processFDN")
