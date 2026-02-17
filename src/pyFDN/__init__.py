@@ -32,6 +32,7 @@ __all__ = [
     "random_orthogonal",
     "shift_matrix",
     "shift_matrix_distribute",
+    "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
     "matrix_convolution",
@@ -112,6 +113,7 @@ from .generate.construct_cascaded_paraunitary_matrix import (
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.is_almost_zero import is_almost_zero
+from .generate.vanilla_FDN import vanilla_FDN
 
 #state-space translators
 from .translate.dss2ss import dss2ss
