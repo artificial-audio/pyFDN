@@ -31,7 +31,7 @@
     { "matlab": "example_isDiagonallyEquivalentToOrthogonal.m","python": "example_is_diagonally_equivalent_to_orthogonal.py", "status": "todo", "description": "" },
     { "matlab": "example_nearestSignAgnosticOrthogonal.m",     "python": "example_nearest_sign_agnostic_orthogonal.py",  "status": "todo", "description": "" },
     { "matlab": "example_newtonStep.m",                        "python": "example_newton_step.py",                       "status": "todo", "description": "" },
-    { "matlab": "example_onePoleAbsorption.m",                 "python": "example_one_pole_absorption.py",               "status": "todo", "description": "" },
+    { "matlab": "example_onePoleAbsorption.m",                 "python": "example_one_pole_absorption.ipynb",               "status": "todo", "description": "" },
     { "matlab": "example_parunitaryFDN.m",                     "python": "example_parunitary_fdn.py",                    "status": "todo", "description": "" },
     { "matlab": "example_poleBoundaries.m",                    "python": "example_pole_boundaries.py",                   "status": "todo", "description": "" },
     { "matlab": "example_processFDN.m",                        "python": "example_process_fdn.py",                       "status": "todo", "description": "" },
