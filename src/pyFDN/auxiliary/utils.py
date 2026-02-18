@@ -7,6 +7,18 @@ from numpy.linalg import svd
 from scipy.interpolate import interp1d
 from scipy.signal import freqz, group_delay
 
+
+def skew(X: ArrayLike) -> np.ndarray:
+    """Return skew-symmetric matrix from upper triangle (Matlab skew convention).
+
+    Y = triu(X, 1) - triu(X, 1).T so that Y is skew-symmetric. Equivalent to
+    skew.m: Y = X - X' with X = triu(X, 1).
+    """
+    X = np.asarray(X, dtype=np.float64)
+    upper = np.triu(X, 1)
+    return upper - upper.T
+
+
 def ensure_3d(matrix: ArrayLike) -> np.ndarray:
     """Ensure the matrix has a trailing polynomial dimension."""
 
@@ -46,6 +58,57 @@ def db2mag(db: ArrayLike) -> np.ndarray:
 
     db_arr = np.asarray(db, dtype=float)
     return np.power(10.0, db_arr / 20.0)
+
+
+def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
+    """Mu-law companding (encode): linear amplitude to companded.
+
+    Args:
+        x: Input signal. If input is in [-1, 1], the output will be in [-1, 1].
+        mu: Compression parameter (default 255, as in G.711).
+
+    Returns:
+        Companded signal.
+    """
+    x = np.asarray(x, dtype=float)
+    sgn = np.sign(x)
+    x_abs = np.abs(x)
+    return sgn * np.log1p(mu * x_abs) / np.log1p(mu)
+
+
+def mulaw_decode(y: ArrayLike, mu: float = 255.0) -> np.ndarray:
+    """Mu-law companding (decode): companded to linear amplitude.
+
+    Args:
+        y: Companded signal.
+        mu: Compression parameter (default 255, as in G.711).
+
+    Returns:
+        Linear-amplitude signal.
+    """
+    y = np.asarray(y, dtype=float)
+    sgn = np.sign(y)
+    y_abs = np.abs(y)
+    return sgn * ((1.0 + mu) ** y_abs - 1.0) / mu
+
+
+def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
+    """Scale array so the maximum absolute value equals target_peak.
+
+    If the array is all zeros, it is returned unchanged.
+
+    Args:
+        x: Input signal (any shape).
+        target_peak: Desired peak magnitude (default 1.0).
+
+    Returns:
+        Scaled array, same shape as input.
+    """
+    x = np.asarray(x, dtype=float)
+    peak = np.max(np.abs(x))
+    if peak > 0:
+        return x * (target_peak / peak)
+    return x
 
 
 def hertz2unit(hz: ArrayLike, fs: float) -> np.ndarray:
@@ -138,4 +201,5 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     f = w / np.pi * fs / 2
 
     return MinCurve, MaxCurve, f
+
 

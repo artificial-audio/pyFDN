@@ -122,6 +122,8 @@ Thumbs.db
 *.npz
 *.pkl
 
+!examples/resources/colorless_FDN/*.mat
+
 # Profiling outputs
 profile_default/
 *.prof
