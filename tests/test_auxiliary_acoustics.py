@@ -6,7 +6,7 @@ import pytest
 from pyFDN.auxiliary.acoustics import absorption_filters
 from pyFDN.auxiliary.acoustics import absorption_to_t60
 from pyFDN.auxiliary.acoustics import rt60_to_slope
-from pyFDN.auxiliary.utils import db2mag
+from pyFDN.auxiliary.utils import db_to_mag
 
 
 # ============================================================================
@@ -25,7 +25,7 @@ def test_absorption_filters_zero_order_matches_closed_form(target_rt, delays):
     filter_order = 0
     coeffs = absorption_filters(np.array([0.0, fs / 2]), target_rt, filter_order, delays, fs)
 
-    expected = db2mag(delays * rt60_to_slope(target_rt[0, :], fs))[:, None]
+    expected = db_to_mag(delays * rt60_to_slope(target_rt[0, :], fs))[:, None]
     assert coeffs.shape == (delays.size, filter_order + 1)
     assert np.allclose(coeffs, expected)
 

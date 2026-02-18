@@ -29,7 +29,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from pyFDN.auxiliary.acoustics import one_pole_absorption, rt60_to_slope as RT602slope
-from pyFDN.auxiliary.utils import db2mag
+from pyFDN.auxiliary.utils import db_to_mag
 
 
 # random seed for reproducibility that matches MATLAB's implementation

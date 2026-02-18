@@ -8,7 +8,7 @@ from numpy.linalg import svd
 from scipy.signal import firwin2, freqz, group_delay
 from scipy.interpolate import interp1d
 
-from pyFDN.auxiliary.utils import db2mag, mag2db, hertz2unit
+from pyFDN.auxiliary.utils import db_to_mag, mag_to_db, hertz_to_unit
 
 
 def rt60_to_slope(rt60: ArrayLike, fs: float) -> np.ndarray:
@@ -31,19 +31,19 @@ def absorption_filters(frequency, targetRT60, filterOrder, delays, fs):
     delays: array of length channels
     """
     num_channels = len(delays)
-    unit_freq = hertz2unit(frequency, fs)
+    unit_freq = hertz_to_unit(frequency, fs)
     FIR = np.zeros((num_channels, filterOrder + 1))
 
     if filterOrder == 0:
         rt60 = targetRT60[0, :]
         db = delays * rt60_to_slope(rt60, fs)
-        FIR[:, 0] = db2mag(db)
+        FIR[:, 0] = db_to_mag(db)
     else:
         for ch in range(num_channels):
             rt60 = targetRT60[:, ch]
             delay = delays[ch] + int(np.ceil(filterOrder / 2))
             db = delay * rt60_to_slope(rt60, fs)
-            target_amp = db2mag(db)
+            target_amp = db_to_mag(db)
             # firwin2 expects normalized [0..1] freqs and gain values
             FIR[ch, :] = firwin2(filterOrder + 1, unit_freq, target_amp)
     return FIR
@@ -59,7 +59,7 @@ def absorption_to_t60(filterCoeffs, delays, nfft, fs):
     freq = freq[:nfft // 2]
 
     totalDelay = delays[:, None] + filterLen / 2
-    decayPerSample = mag2db(np.abs(response)) / totalDelay
+    decayPerSample = mag_to_db(np.abs(response)) / totalDelay
     T60 = slope_to_rt60(decayPerSample, fs)
     return T60.T, freq  # shape: (freq_points, channels)
 
@@ -79,8 +79,8 @@ def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
     slope_ny = rt60_to_slope(rt_ny, fs)
     
     # Convert to linear magnitude
-    h_dc = db2mag(delays_arr * slope_dc)
-    h_ny = db2mag(delays_arr * slope_ny)
+    h_dc = db_to_mag(delays_arr * slope_dc)
+    h_ny = db_to_mag(delays_arr * slope_ny)
     
     # Design filters
     r = h_dc / h_ny

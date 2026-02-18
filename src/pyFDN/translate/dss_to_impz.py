@@ -1,10 +1,10 @@
-# dss2impz.py
+# dss_to_impz.py
 import numpy as np
 
 from pyFDN.auxiliary.filters import ZFilter
 from pyFDN.process import process_fdn
 
-def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=None, absorption_filters=None):
+def dss_to_impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=None, absorption_filters=None):
     """
     Compute impulse response from delay state-space (DSS) representation.
 
