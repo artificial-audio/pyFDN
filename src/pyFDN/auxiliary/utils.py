@@ -45,7 +45,7 @@ def last_nonzero_indices(mat: np.ndarray) -> np.ndarray:
     return last
 
 
-def mag2db(magnitude: ArrayLike) -> np.ndarray:
+def mag_to_db(magnitude: ArrayLike) -> np.ndarray:
     """Convert magnitudes to decibels with numerical guard."""
 
     mag = np.asarray(magnitude, dtype=float)
@@ -53,7 +53,7 @@ def mag2db(magnitude: ArrayLike) -> np.ndarray:
     return 20.0 * np.log10(np.maximum(np.abs(mag), tiny))
 
 
-def db2mag(db: ArrayLike) -> np.ndarray:
+def db_to_mag(db: ArrayLike) -> np.ndarray:
     """Convert decibel values to linear magnitude."""
 
     db_arr = np.asarray(db, dtype=float)
@@ -111,8 +111,8 @@ def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
     return x
 
 
-def hertz2unit(hz: ArrayLike, fs: float) -> np.ndarray:
-    """Convert frequency (Hz) to normalized frequency (0–1)."""
+def hertz_to_unit(hz: ArrayLike, fs: float) -> np.ndarray:
+    """Convert frequency (Hz) to normalised frequency (0-1)."""
     return np.asarray(hz) / fs * 2
 
 
@@ -201,5 +201,3 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     f = w / np.pi * fs / 2
 
     return MinCurve, MaxCurve, f
-
-

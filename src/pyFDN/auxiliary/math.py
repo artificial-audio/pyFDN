@@ -5,7 +5,7 @@ from typing import Tuple
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.utils import mag2db, ensure_3d
+from pyFDN.auxiliary.utils import mag_to_db, ensure_3d
 
 def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> int:
     """Return the polynomial degree, matching ``polyDegree.m`` semantics."""
@@ -17,9 +17,9 @@ def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> in
         return 0
 
     if tol is None:
-        tol = mag2db(np.finfo(float).eps)
+        tol = mag_to_db(np.finfo(float).eps)
 
-    coeff_db = mag2db(coeffs)
+    coeff_db = mag_to_db(coeffs)
     max_coeff = np.max(coeff_db)
     mask = coeff_db - max_coeff > tol
     active = np.nonzero(mask)[0]

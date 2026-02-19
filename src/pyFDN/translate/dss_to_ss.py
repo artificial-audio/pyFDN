@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.linalg import block_diag
 
-def dss2ss(m, A, b=None, c=None, d=None):
+def dss_to_ss(m, A, b=None, c=None, d=None):
     """
     Convert delay state-space (DSS) FDN to standard state-space.
     

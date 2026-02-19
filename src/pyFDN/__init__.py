@@ -23,7 +23,7 @@ __all__ = [
     # delay utilities
     "matrix_delay_approximation",
     "mgrpdelay",
-    "ms2smp",
+    "ms_to_smp",
     # matrix generators
     "construct_cascaded_paraunitary_matrix",
     "construct_velvet_feedback_matrix",
@@ -44,20 +44,20 @@ __all__ = [
     "polyder_rational",
     "polydiag",
     # general utilities
-    "skew",
-    "db2mag",
+    "db_to_mag",
     "ensure_3d",
-    "hertz2unit",
+    "hertz_to_unit",
     "is_bounding_curve",
     "last_nonzero_indices",
-    "mag2db",
+    "mag_to_db",
     "mulaw_decode",
     "mulaw_encode",
     "peak_normalize",
     "pole_boundaries",
+    "skew",
     # state-space translators
-    "dss2impz",
-    "dss2ss",
+    "dss_to_impz",
+    "dss_to_ss",
     # fdn processing
     "process_fdn",
 ]
@@ -72,7 +72,7 @@ from .auxiliary.acoustics import (
 )
 
 #delay utilities
-from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms2smp
+from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
 
 # filter classes
 from .auxiliary.filters import TFMatrix, ZFIR, ZFilter, ZScalar, ZSOS, ZTF
@@ -92,17 +92,17 @@ from .auxiliary.math import (
 
 #general utilities
 from .auxiliary.utils import (
-    skew,
-    db2mag,
+    db_to_mag,
     ensure_3d,
-    hertz2unit,
+    hertz_to_unit,
     is_bounding_curve,
     last_nonzero_indices,
-    mag2db,
+    mag_to_db,
     mulaw_decode,
     mulaw_encode,
     peak_normalize,
     pole_boundaries,
+    skew,
 )
 
 #matrix generators
@@ -118,8 +118,8 @@ from .generate.is_almost_zero import is_almost_zero
 from .generate.vanilla_FDN import vanilla_FDN
 
 #state-space translators
-from .translate.dss2ss import dss2ss
-from .translate.dss2impz import dss2impz
+from .translate.dss_to_ss import dss_to_ss
+from .translate.dss_to_impz import dss_to_impz
 
 #fdn processing
 from .process import process_fdn
