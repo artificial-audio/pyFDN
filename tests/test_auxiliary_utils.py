@@ -5,17 +5,17 @@ import pytest
 from types import SimpleNamespace
 
 from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.auxiliary.acoustics import rt60_to_slope
-from pyFDN.auxiliary.acoustics import slope_to_rt60
-from pyFDN.auxiliary.delay import ms2smp
+from pyFDN.auxiliary.acoustics import rt_to_slope
+from pyFDN.auxiliary.acoustics import slope_to_rt
+from pyFDN.auxiliary.delay import ms_to_smp
 from pyFDN.auxiliary.math import negpolyder
 from pyFDN.auxiliary.math import outer_sum_approximation
 from pyFDN.auxiliary.math import polyder_rational
 from pyFDN.auxiliary.utils import ensure_3d
-from pyFDN.auxiliary.utils import hertz2unit
+from pyFDN.auxiliary.utils import hertz_to_unit
 from pyFDN.auxiliary.utils import is_bounding_curve
 from pyFDN.auxiliary.utils import last_nonzero_indices
-from pyFDN.auxiliary.utils import mag2db
+from pyFDN.auxiliary.utils import lin_to_db
 from pyFDN.auxiliary.utils import pole_boundaries
 
 
@@ -23,49 +23,49 @@ from pyFDN.auxiliary.utils import pole_boundaries
 # Conversion Utility Tests
 # ============================================================================
 
-def test_ms2smp_round_trip_simple_values():
+def test_ms_to_smp_round_trip_simple_values():
     fs = 48_000
     times_ms = [0.0, 0.5, 1.0, 10.0]
     expected = np.array([0, 24, 48, 480])
-    assert np.array_equal(ms2smp(times_ms, fs), expected)
+    assert np.array_equal(ms_to_smp(times_ms, fs), expected)
 
 
-def test_hertz2unit_maps_to_nyquist():
+def test_hertz_to_unit_maps_to_nyquist():
     fs = 48_000
     hz = np.array([0.0, fs / 2])
-    normalized = hertz2unit(hz, fs)
+    normalized = hertz_to_unit(hz, fs)
     assert normalized[0] == 0.0
     assert normalized[1] == 1.0
 
 
-def test_rt60_slope_inverse_relationship():
+def test_rt_slope_inverse_relationship():
     fs = 48_000
-    rt60 = np.array([0.4, 1.2, 2.5])
-    slope = rt60_to_slope(rt60, fs)
-    recovered = slope_to_rt60(slope, fs)
-    assert np.allclose(recovered, rt60)
+    rt = np.array([0.4, 1.2, 2.5])
+    slope = rt_to_slope(rt, fs)
+    recovered = slope_to_rt(slope, fs)
+    assert np.allclose(recovered, rt)
 
 
 # ============================================================================
-# mag2db Tests
+# lin_to_db Tests
 # ============================================================================
 
-def test_mag2db_basic():
+def test_lin_to_db_basic():
     arr = np.array([1, 10, 100])
-    result = mag2db(arr)
+    result = lin_to_db(arr)
     expected = 20 * np.log10(arr)
     np.testing.assert_allclose(result, expected)
 
 
-def test_mag2db_zero():
+def test_lin_to_db_zero():
     arr = np.array([0])
-    result = mag2db(arr)
+    result = lin_to_db(arr)
     assert np.isfinite(result)
 
 
-def test_mag2db_from_poly_degree():
+def test_lin_to_db_from_poly_degree():
     arr = np.array([1, 10, 100])
-    result = mag2db(arr)
+    result = lin_to_db(arr)
     expected = 20 * np.log10(np.maximum(np.abs(arr), np.finfo(float).eps))
     np.testing.assert_allclose(result, expected)
 

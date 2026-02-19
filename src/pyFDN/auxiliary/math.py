@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
-from pyFDN.auxiliary.utils import mag2db, ensure_3d
+from pyFDN.auxiliary.utils import lin_to_db, ensure_3d
 
 
 def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray:
@@ -32,9 +32,9 @@ def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> in
         return 0
 
     if tol is None:
-        tol = mag2db(np.finfo(float).eps)
+        tol = lin_to_db(np.finfo(float).eps)
 
-    coeff_db = mag2db(coeffs)
+    coeff_db = lin_to_db(coeffs)
     max_coeff = np.max(coeff_db)
     mask = coeff_db - max_coeff > tol
     active = np.nonzero(mask)[0]
@@ -277,3 +277,27 @@ def outer_sum_approximation(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
     u = np.log(np.abs(eu)) * max_val
     v = np.log(np.abs(ev)) * max_val
     return u, v
+
+
+def matrix_sqrt(A: "torch.Tensor") -> "torch.Tensor":
+    """Matrix square root via eigenvalue decomposition.
+
+    sqrtm(A) = V @ sqrt(D) @ V^(-1) where A = V @ D @ V^(-1).
+
+    Parameters
+    ----------
+    A : torch.Tensor
+        Square matrix (real, will be cast to complex for eig).
+
+    Returns
+    -------
+    torch.Tensor
+        Real matrix square root of A.
+    """
+    import torch
+
+    eigenvals, eigenvecs = torch.linalg.eig(A.to(torch.complex64))
+    sqrt_eigenvals = torch.sqrt(eigenvals)
+    return torch.real(
+        eigenvecs @ torch.diag(sqrt_eigenvals) @ torch.linalg.inv(eigenvecs)
+    ).float()

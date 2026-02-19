@@ -9,7 +9,7 @@ from pyFDN.auxiliary.utils import ensure_3d
 from pyFDN.auxiliary.math import outer_sum_approximation
 
 
-def ms2smp(ms, fs):
+def ms_to_smp(ms, fs):
     """Convert milliseconds to samples."""
     return np.round(np.array(ms) * fs / 1000).astype(int)
 

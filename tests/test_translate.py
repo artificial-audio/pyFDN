@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from pyFDN.translate.dss2impz import dss2impz
-from pyFDN.translate.dss2ss import dss2ss
+from pyFDN.translate.dss_to_impz import dss_to_impz
+from pyFDN.translate.dss_to_ss import dss_to_ss
 
 
-def test_dss2ss_raises_for_inconsistent_delay_blocks():
+def test_dss_to_ss_raises_for_inconsistent_delay_blocks():
     delays = np.array([3, 4])
     A = np.eye(2)
     bb = np.ones((2, 1))
@@ -15,10 +15,10 @@ def test_dss2ss_raises_for_inconsistent_delay_blocks():
     dd = np.eye(1)
 
     with pytest.raises(ValueError):
-        dss2ss(delays, A, bb, cc, dd)
+        dss_to_ss(delays, A, bb, cc, dd)
 
 
-def test_dss2impz_produces_delayed_impulse():
+def test_dss_to_impz_produces_delayed_impulse():
     ir_len = 8
     delays = np.array([3])
     A = np.array([[0.0]])
@@ -26,7 +26,7 @@ def test_dss2impz_produces_delayed_impulse():
     C = np.array([[1.0]])
     D = np.array([[0.0]])
 
-    impulse = dss2impz(
+    impulse = dss_to_impz(
         ir_len,
         delays,
         A,
