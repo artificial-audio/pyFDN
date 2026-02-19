@@ -46,6 +46,7 @@ Highlights
 * Matrix polynomial helpers for evaluating, differentiating, and convolving FIR/IIR blocks.
 * Loop analysis utilities including pole boundary estimation and curve bounding checks.
 * Acoustic absorption design tools that translate RT60 targets into one-pole loop filters.
+* Echo density (Abel & Huang 2006) for analysing reverberation and mixing time.
 * Random orthogonal matrix generation to prototype energy-preserving feedback networks.
 
 
@@ -101,8 +102,9 @@ Alternatively, import specific functions directly::
     ``is_bounding_curve``), and absorption filter design utilities.
 ``src/pyFDN/generate``
     Random structure generators including ``random_orthogonal``.
-``src/pyFDN/examples``
-    Jupyter notebooks that demonstrate absorption design workflows.
+``examples``
+    Jupyter notebooks: absorption design, vanilla FDN, delay feedback matrix density
+    (compare topologies and echo density), colorless FDN, etc.
 ``tests``
     Pytest-based regression suite covering the numerical helpers.
 ``docs``

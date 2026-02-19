@@ -16,6 +16,7 @@ __all__ = [
     "ZTF",
     # acoustics
     "absorption_filters",
+    "echo_density",
     "absorption_to_rt",
     "edc",
     "one_pole_absorption",
@@ -38,6 +39,8 @@ __all__ = [
     "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
+    "interpolate_orthogonal",
+    "is_orthogonal",
     "matrix_convolution",
     "matrix_polyder",
     "matrix_polyval",
@@ -66,11 +69,15 @@ __all__ = [
     "dss_to_ss",
     # fdn processing
     "process_fdn",
+    # plotting
+    "plot_impulse_response_matrix",
+    "plot_system_matrix",
 ]
 
 #acoustics and absorption
 from .auxiliary.acoustics import (
     absorption_filters,
+    echo_density,
     absorption_to_rt,
     edc,
     one_pole_absorption,
@@ -88,6 +95,8 @@ from .auxiliary.filters import TFMatrix, ZFIR, ZFilter, ZScalar, ZSOS, ZTF
 #polynomial and matrix maths
 from .auxiliary.math import (
     det_polynomial,
+    interpolate_orthogonal,
+    is_orthogonal,
     matrix_convolution,
     matrix_polyder,
     matrix_polyval,
@@ -135,6 +144,12 @@ from .translate.dss_to_impz import dss_to_impz
 
 #fdn processing
 from .process import process_fdn
+
+#plotting
+from .auxiliary.plot import (
+    plot_impulse_response_matrix,
+    plot_system_matrix,
+)
 
 #dsp components
 from .dsp.filter_matrix import FilterMatrix

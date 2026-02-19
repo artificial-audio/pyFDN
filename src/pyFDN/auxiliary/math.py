@@ -4,8 +4,23 @@ import math
 from typing import Tuple
 import numpy as np
 from numpy.typing import ArrayLike
+from scipy.linalg import expm, logm
 
 from pyFDN.auxiliary.utils import lin_to_db, ensure_3d
+
+
+def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray:
+    """Geodesic interpolation between two orthogonal matrices.
+
+    C(t) = A @ expm(t * logm(A.T @ B)). C(0)=A, C(1)=B; each C(t) is orthogonal.
+    """
+    M = A.T @ B
+    return A @ expm(t * logm(M))
+
+
+def is_orthogonal(Q: np.ndarray, tol: float = 1e-10) -> bool:
+    """Check if Q is orthogonal (Q.T @ Q ≈ I)."""
+    return np.allclose(Q.T @ Q, np.eye(Q.shape[0]), atol=tol)
 
 def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> int:
     """Return the polynomial degree, matching ``polyDegree.m`` semantics."""
