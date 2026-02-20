@@ -1,0 +1,38 @@
+/* pyFDN custom styles for pydata-sphinx-theme */
+
+/* ---- Card styling ---- */
+.sd-card {
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    transition: box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.sd-card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.sd-card .sd-card-title {
+    font-weight: 600;
+}
+
+/* ---- Landing page spacing ---- */
+.bd-main .bd-content .bd-article-container {
+    max-width: 860px;
+}
+
+/* ---- Notebook badge spacing ---- */
+.nbsphinx-gallery .reference img {
+    margin-right: 4px;
+}
+
+/* ---- API reference table polish ---- */
+table.docutils td {
+    vertical-align: top;
+    padding: 8px 12px;
+}
+
+table.docutils td:first-child {
+    font-weight: 500;
+    white-space: nowrap;
+}

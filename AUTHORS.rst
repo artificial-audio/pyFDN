@@ -2,12 +2,10 @@
 Credits
 =======
 
-Development Lead
-----------------
 
-* Kalyan Pandey <pandey.kalyan416@gmail.com>
+Core Contributors
+-----------------
 
-Contributors
-------------
-
-None yet. Why not be the first?
+* Sebastian J. Schlecht
+* Facundo Franchino
+* Jeremy Bai

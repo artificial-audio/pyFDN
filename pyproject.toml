@@ -8,10 +8,13 @@ version = "0.1.0"
 description = "Python library for Feedback Delay Networks"
 readme = "README.rst"
 authors = [
-  {name = "Kalyan Pandey", email = "pandey.kalyan416@gmail.com"}
+  {name = "Sebastian J. Schlecht"},
+  {name = "Facundo Franchino"},
+  {name = "Jeremy Bai"},
 ]
 maintainers = [
-  {name = "Kalyan Pandey", email = "pandey.kalyan416@gmail.com"}
+  {name = "Facundo Franchino"},
+  {name = "Sebastian J. Schlecht"},
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -55,15 +58,20 @@ dev = [
     "watchdog>=3.0.0",  # development tools
 ]
 docs = [
-    "Sphinx>=6.0.0",  # documentation
-    "sphinx-rtd-theme>=1.0.0",  # documentation theme
-    "sphinx-autodoc-typehints>=1.0.0",  # documentation type hints
+    "Sphinx>=6.0.0",
+    "pydata-sphinx-theme>=0.15.0",
+    "sphinx-autodoc-typehints>=1.0.0",
+    "sphinx-design>=0.5.0",
+    "sphinx-copybutton>=0.5.0",
+    "nbsphinx>=0.9.0",
+    "ipykernel>=6.0.0",
+    "pandoc>=2.0",
 ]
 
 [project.urls]
-bugs = "https://github.com/pandeyKalyan/pyFDN/issues"
-changelog = "https://github.com/pandeyKalyan/pyFDN/blob/master/changelog.md"
-homepage = "https://github.com/pandeyKalyan/pyFDN"
+bugs = "https://github.com/artificial-audio/pyFDN/issues"
+changelog = "https://github.com/artificial-audio/pyFDN/blob/main/changelog.md"
+homepage = "https://github.com/artificial-audio/pyFDN"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
