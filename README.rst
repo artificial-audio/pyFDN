@@ -79,24 +79,6 @@ Alternatively, import specific functions directly::
     absorption = one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
 
 
-.. Repository index
-.. ----------------
-
-``src/pyFDN/auxiliary``
-    Matrix polynomial routines (``matrix_convolution``, ``matrix_polyval``,
-    ``matrix_polyder``), loop-analysis helpers (``pole_boundaries``,
-    ``is_bounding_curve``), and absorption filter design utilities.
-``src/pyFDN/generate``
-    Random structure generators including ``random_orthogonal``.
-``examples``
-    Jupyter notebooks: absorption design, vanilla FDN, delay feedback matrix density
-    (compare topologies and echo density), colorless FDN, etc.
-``tests``
-    Pytest-based regression suite covering the numerical helpers.
-``docs``
-    Sphinx project used to publish the `documentation <https://pyFDN.readthedocs.io>`_.
-
-
 Development
 -----------
 
@@ -110,11 +92,3 @@ Or, inside an activated virtual environment::
 
 For linting and packaging helpers see ``Makefile`` (``make lint``/``make docs``)
 and ``tox.ini`` for multi-environment testing.
-
-Credits
--------
-
-This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
-
-.. _Cookiecutter: https://github.com/audreyr/cookiecutter
-.. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
