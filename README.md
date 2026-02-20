@@ -68,9 +68,10 @@ See [CONTRIBUTING.rst](CONTRIBUTING.rst) for the full guide.
 
 ## Contributors
 
-- **Sebastian J. Schlecht**
-- **Facundo Franchino**
-- **Jeremy Bai**
+- [**Sebastian J. Schlecht**](https://github.com/SebastianJiroSchlecht) 
+- [**Facundo Franchino**](https://github.com/cucuwritescode) 
+- [**Jeremy Bai**](https://github.com/jeremybbq)
+
 
 ## License
 
