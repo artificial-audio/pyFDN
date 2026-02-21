@@ -154,7 +154,7 @@ from .auxiliary.plot import (
 )
 
 # SDN (scattering delay network)
-from .auxiliary.SDN import SDN
+from .auxiliary.sdn import SDN
 
 #dsp components
 from .dsp.filter_matrix import FilterMatrix
