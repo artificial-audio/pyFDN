@@ -5,6 +5,8 @@ Based on Poletti (1995) and "Allpass Feedback Delay Networks" by Sebastian J. Sc
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import solve_discrete_lyapunov
@@ -77,6 +79,7 @@ def is_uniallpass(
     # Check P is diagonal
     off_diag = P - np.diag(np.diag(P))
     if not is_almost_zero(off_diag, tol=tol):
+        warnings.warn("P is not diagonal; system is not uniallpass.")
         return False, P
     # Test: PP - U @ PP @ U' ≈ 0 with PP = blkdiag(P, I)
     U = np.block([[A, B], [C, D]])
