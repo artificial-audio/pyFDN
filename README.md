@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo/pyfdn_logo_wave.png" alt="pyFDN" width="320">
+  <img src="docs/logo/logo_pyFDN_4.png" alt="pyFDN" width="320">
 </p>
 
 <p align="center">

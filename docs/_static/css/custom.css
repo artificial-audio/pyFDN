@@ -1,5 +1,15 @@
 /* pyFDN custom styles for pydata-sphinx-theme */
 
+/* ---- Navbar logo sizing ---- */
+.bd-header {
+    min-height: 100px !important;
+}
+
+.navbar-brand img {
+    height: 80px !important;
+    max-height: 80px !important;
+}
+
 /* ---- Card styling ---- */
 .sd-card {
     border-radius: 10px;

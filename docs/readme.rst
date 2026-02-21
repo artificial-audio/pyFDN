@@ -1,7 +1,7 @@
-.. image:: logo/pyfdn_logo_wave.png
+.. image:: logo/logo_pyFDN_3.png
    :alt: pyFDN
    :align: center
-   :width: 300px
+   :width: 400px
 
 .. include:: ../README.rst
    :start-after: :width: 300px

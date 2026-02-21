@@ -2,7 +2,7 @@
 pyFDN
 =====
 
-.. image:: docs/logo/pyfdn_logo_wave.png
+.. image:: docs/logo/logo_pyFDN_4.png
    :alt: pyFDN
    :align: center
    :width: 300px

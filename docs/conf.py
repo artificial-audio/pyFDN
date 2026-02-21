@@ -39,13 +39,14 @@ extensions = [
 # Autodoc settings
 autodoc_default_options = {"members": True, "undoc-members": True}
 autosummary_generate = True
+autosummary_imported_members = True
 
 # Napoleon settings (Google / NumPy docstrings)
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 
 # nbsphinx settings
-nbsphinx_execute = "never"  # Don't re-execute notebooks during build
+nbsphinx_execute = "auto"   # Execute notebooks that have no stored outputs
 nbsphinx_allow_errors = True
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None) %}
@@ -86,8 +87,8 @@ html_theme = "pydata_sphinx_theme"
 html_title = "pyFDN"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
-html_logo = "logo/pyfdn_logo_wave.png"
-html_favicon = "logo/pyfdn_logo_wave.png"
+html_logo = "logo/logo_pyFDN_3.png"
+html_favicon = "logo/logo_pyFDN_3.png"
 
 html_theme_options = {
     "navbar_start": ["navbar-logo"],
@@ -116,7 +117,7 @@ html_context = {
 }
 
 html_sidebars = {
-    "index": [],
+    "**": [],  # Remove left sidebar on all pages
 }
 
 # -- Options for LaTeX output -------------------------------------------------
