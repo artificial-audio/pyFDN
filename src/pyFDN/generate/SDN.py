@@ -504,7 +504,7 @@ def _result_to_flamo(r, nfft, device):
 
     import torch
 
-    from .flamo import delay_module, gain_module, sos_filter_module
+    from ..auxiliary.flamo import delay_module, gain_module, sos_filter_module
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

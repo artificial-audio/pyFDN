@@ -94,6 +94,9 @@ from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
 # filter classes
 from .auxiliary.filters import TFMatrix, ZFIR, ZFilter, ZScalar, ZSOS, ZTF
 
+#tiny rotation matrix
+from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
+
 #polynomial and matrix maths
 from .auxiliary.math import (
     det_polynomial,
@@ -127,6 +130,13 @@ from .auxiliary.utils import (
     skew,
 )
 
+#plotting
+from .auxiliary.plot import (
+    plot_impulse_response_matrix,
+    plot_system_matrix,
+)
+
+
 #matrix generators
 from .generate.random_orthogonal import random_orthogonal
 from .generate.random_matrix_shift import random_matrix_shift
@@ -138,7 +148,7 @@ from .generate.construct_cascaded_paraunitary_matrix import (
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.is_almost_zero import is_almost_zero
 from .generate.vanilla_FDN import vanilla_FDN
-from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
+from .generate.SDN import SDN
 
 #state-space translators
 from .translate.dss_to_ss import dss_to_ss
@@ -147,14 +157,6 @@ from .translate.dss_to_impz import dss_to_impz
 #fdn processing
 from .process import process_fdn
 
-#plotting
-from .auxiliary.plot import (
-    plot_impulse_response_matrix,
-    plot_system_matrix,
-)
-
-# SDN (scattering delay network)
-from .auxiliary.sdn import SDN
 
 #dsp components
 from .dsp.filter_matrix import FilterMatrix
