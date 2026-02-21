@@ -72,6 +72,7 @@ __all__ = [
     # plotting
     "plot_impulse_response_matrix",
     "plot_system_matrix",
+    "plot_spectrogram",
     # SDN (scattering delay network)
     "SDN",
 ]
@@ -134,6 +135,7 @@ from .auxiliary.utils import (
 from .auxiliary.plot import (
     plot_impulse_response_matrix,
     plot_system_matrix,
+    plot_spectrogram,
 )
 
 

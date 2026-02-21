@@ -17,14 +17,11 @@ def process_fdn(
     *,
     absorption_filters: Optional[ZTF | ArrayLike] = None,
     extra_matrix: Optional[ArrayLike | ZTF] = None,
-    input_type: str = "mergeInput",
 ) -> np.ndarray:
-    """Simulate the feedback delay network using block processing."""
+    """Simulate the feedback delay network using block processing.
 
-    mode = input_type.lower()
-    if mode not in {"mergeinput", "merge"}:
-        raise NotImplementedError("Only 'mergeInput' processing is implemented")
-
+    Input is (num_samples, num_inputs); output is (num_samples, num_outputs).
+    """
     x = np.asarray(input_signal, dtype=float)
     if x.ndim == 1:
         x = x[:, np.newaxis]

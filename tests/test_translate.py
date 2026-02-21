@@ -26,18 +26,10 @@ def test_dss_to_impz_produces_delayed_impulse():
     C = np.array([[1.0]])
     D = np.array([[0.0]])
 
-    impulse = dss_to_impz(
-        ir_len,
-        delays,
-        A,
-        B,
-        C,
-        D,
-        input_type="mergeInput",
-    )
+    impulse = dss_to_impz(ir_len, delays, A, B, C, D)
 
-    assert impulse.shape == (ir_len,)
-    ir_vector = impulse
+    assert impulse.shape == (ir_len, 1, 1)
+    ir_vector = impulse.squeeze()
     expected = np.zeros(ir_len)
     expected[delays[0]] = 1.0
     assert np.allclose(ir_vector, expected)
