@@ -65,13 +65,43 @@ class _FlamoGraphProbe:
         return np.asarray(dh, dtype=np.complex128)
 
 
-def _to_probe(value: Any, *, name: str) -> _NumericMatrixProbe | _FlamoGraphProbe:
+class _PassthroughProbe:
+    """Adapter for objects that already expose at/der."""
+
+    def __init__(self, obj: Any):
+        self.obj = obj
+        out_ch = getattr(obj, "output_channels", None)
+        in_ch = getattr(obj, "input_channels", None)
+        if out_ch is None or in_ch is None:
+            val = np.asarray(obj.at(1.0 + 0j), dtype=np.complex128)
+            if val.ndim == 1:
+                val = np.diag(val)
+            if val.ndim != 2:
+                raise ValueError("Passthrough probe requires 2-D .at(z) output")
+            out_ch, in_ch = val.shape
+        self.output_channels = int(out_ch)
+        self.input_channels = int(in_ch)
+
+    def at(self, z: complex) -> np.ndarray:
+        val = np.asarray(self.obj.at(z), dtype=np.complex128)
+        if val.ndim == 1:
+            val = np.diag(val)
+        return val
+
+    def der(self, z: complex) -> np.ndarray:
+        val = np.asarray(self.obj.der(z), dtype=np.complex128)
+        if val.ndim == 1:
+            val = np.diag(val)
+        return val
+
+
+def _to_probe(
+    value: Any, *, name: str
+) -> _NumericMatrixProbe | _FlamoGraphProbe | _PassthroughProbe:
     if isinstance(value, (np.ndarray, list, tuple)):
         return _NumericMatrixProbe(value)
     if hasattr(value, "at") and hasattr(value, "der"):
-        # Already a probe-like object
-        probe = _FlamoGraphProbe(value)
-        return probe
+        return _PassthroughProbe(value)
     return _FlamoGraphProbe(value)
 
 
