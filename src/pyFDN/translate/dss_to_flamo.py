@@ -32,6 +32,7 @@ def dss_to_flamo(
     device: Any = None,
     *,
     shell: bool = True,
+    dtype: Any = None,
     sos_filter: np.ndarray | None = None,
     post_delay_module: Any = None,
 ) -> Any:
@@ -62,6 +63,9 @@ def dss_to_flamo(
     shell : bool
         If True (default), wrap the core in a Shell with FFT/iFFT for get_time_response().
         If False, return only the core (e.g. for use as post_delay_module in another dss_to_flamo).
+    dtype : torch.dtype or None
+        Data type for FLAMO delay and gain modules. Use torch.float64 for higher numerical
+        accuracy in probing and pole refinement (default None = torch.float32).
     sos_filter : (n_sections, 6, N) array or None
         Optional SOS filter in the loop after delays.
     post_delay_module : FLAMO module or None
@@ -94,14 +98,14 @@ def dss_to_flamo(
 
     # Delays: convert samples to seconds for FLAMO
     lengths_sec = m / float(Fs)
-    delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device)
-    gain_A = gain_module(A, nfft, device=device)
-    gain_B = gain_module(B, nfft, device=device)
-    gain_C = gain_module(C, nfft, device=device)
-    gain_D = gain_module(D, nfft, device=device)
+    delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device, dtype=dtype)
+    gain_A = gain_module(A, nfft, device=device, dtype=dtype)
+    gain_B = gain_module(B, nfft, device=device, dtype=dtype)
+    gain_C = gain_module(C, nfft, device=device, dtype=dtype)
+    gain_D = gain_module(D, nfft, device=device, dtype=dtype)
 
     if sos_filter is not None:
-        filter_module = sos_filter_module(sos_filter, nfft, device=device)
+        filter_module = sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
         delay_chain = system.Series(
             OrderedDict({"delay": delays, "filter": filter_module})
         )

@@ -170,15 +170,13 @@ class _FDNLoop:
         return self.forward_at_inv(1.0 / z) - self.feedback_at_inv(1.0 / z)
 
     def inverse_newton_step(self, z: complex) -> complex:
-        # The direct formula is used for all radii. This keeps the translation
-        # compact while still matching the core EAI update equation.
+        # EAI denominator: (d/dz) log det P(z) = trace(P^{-1} P').
         p = self.at(z)
         dp = self.der(z)
         try:
-            newton = np.trace(np.linalg.solve(p, dp))
+            return np.trace(np.linalg.solve(p, dp))
         except np.linalg.LinAlgError:
             return np.inf + 0j
-        return newton + self.number_of_matrix_delays / z
 
 
 def _pole_quality(poles: np.ndarray, loop: _FDNLoop) -> np.ndarray:

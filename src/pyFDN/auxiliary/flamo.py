@@ -29,6 +29,7 @@ def gain_module(
     nfft: int,
     *,
     device=None,
+    dtype=None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
 ):
@@ -43,6 +44,9 @@ def gain_module(
         FFT size for the FLAMO module.
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Data type for the module (e.g. torch.float64 for higher numerical accuracy).
+        Default None uses torch.float32.
     alias_decay_db : float
         FLAMO alias decay in dB.
     requires_grad : bool
@@ -62,6 +66,7 @@ def gain_module(
         values = values.reshape(-1, 1)
     n_out, n_in = values.shape
     dev = _get_device(device)
+    torch_dtype = dtype if dtype is not None else torch.float32
 
     gain = dsp.Gain(
         size=(n_out, n_in),
@@ -69,8 +74,9 @@ def gain_module(
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,
+        dtype=torch_dtype,
     )
-    gain.assign_value(torch.as_tensor(values, dtype=torch.float64, device=dev))
+    gain.assign_value(torch.as_tensor(values, dtype=torch_dtype, device=dev))
     return gain
 
 
@@ -80,6 +86,7 @@ def delay_module(
     *,
     Fs: float,
     device=None,
+    dtype=None,
     isint: bool = True,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
@@ -99,6 +106,9 @@ def delay_module(
         Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * Fs).
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Data type for the module (e.g. torch.float64 for higher numerical accuracy).
+        Default None uses torch.float32.
     isint : bool
         Whether delays are integer-sample (True) or fractional.
     alias_decay_db : float
@@ -120,6 +130,7 @@ def delay_module(
     max_len = int(np.ceil(np.max(lengths) * Fs)) if n else 1
     max_len = max(1, max_len)
     dev = _get_device(device)
+    torch_dtype = dtype if dtype is not None else torch.float32
 
     delays = dsp.parallelDelay(
         size=(n,),
@@ -131,8 +142,9 @@ def delay_module(
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,
+        dtype=torch_dtype,
     )
-    delays.assign_value(torch.as_tensor(lengths, dtype=torch.float32, device=dev))
+    delays.assign_value(torch.as_tensor(lengths, dtype=torch_dtype, device=dev))
     return delays
 
 

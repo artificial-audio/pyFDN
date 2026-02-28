@@ -121,6 +121,20 @@ class _FlamoRecursionCharacteristicProbe:
             )
         return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
 
+    def log_det_derivative(self, z: complex) -> complex:
+        """(d/dz) log det P(z) via FLAMO autodiff when available."""
+        z_t = _as_torch_complex_scalar(z, model=self.recursion)
+        out = self.recursion.log_det_derivative(z_t)
+        return complex(out.detach().cpu().numpy())
+
+    def log_det_derivative_w(self, w: complex) -> complex:
+        """(d/dw) log det P(w) at w = z^{-1}. Used when |z| < 1 for numerical stability."""
+        if not callable(getattr(self.recursion, "log_det_derivative_w", None)):
+            return np.nan + 0j
+        w_t = _as_torch_complex_scalar(w, model=self.recursion)
+        out = self.recursion.log_det_derivative_w(w_t)
+        return complex(out.detach().cpu().numpy())
+
 
 @dataclass
 class _CharacteristicDecomposition:
@@ -297,17 +311,50 @@ class _FDNLoopFlamo:
     def der(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
 
-    def inverse_newton_step(self, z: complex) -> complex:
+    def inverse_newton_step(
+        self, z: complex, *, use_w_plane_for_small_z: bool = True
+    ) -> complex:
+        """
+        EAI denominator: (d/dz) log det P(z).
+        When |z| < 1 and use_w_plane_for_small_z, compute via w = 1/z for numerical
+        stability: (d/dz) log det P = -z^{-2} (d/dw) log det P(w).
+        """
+        probe = self.characteristic_probe
+        if use_w_plane_for_small_z and np.abs(z) < 1.0:
+            if callable(getattr(probe, "log_det_derivative_w", None)):
+                try:
+                    w = 1.0 / z
+                    d_log_det_dw = probe.log_det_derivative_w(w)
+                    if np.isfinite(d_log_det_dw):
+                        return (-1.0 / (z * z)) * d_log_det_dw
+                except Exception:
+                    pass
         p = self.at(z)
         dp = self.der(z)
         try:
-            newton = np.trace(np.linalg.solve(p, dp))
+            out = np.trace(np.linalg.solve(p, dp))
+            if np.isfinite(out):
+                return out
         except np.linalg.LinAlgError:
-            return np.inf + 0j
-        return newton + self.number_of_delay_units / z
+            pass
+        if callable(getattr(probe, "log_det_derivative", None)):
+            try:
+                out = probe.log_det_derivative(z)
+                if np.isfinite(out):
+                    return out
+            except Exception:
+                pass
+        return np.inf + 0j
 
 
 def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
+    """
+    Pole quality = rcond(P(pole)) (reciprocal condition number of the characteristic matrix).
+
+    At a true pole, det(P)=0 so P is singular and quality ≈ 0. A pole is considered
+    converged when quality <= quality_threshold. Non-converged count is the number
+    of poles with quality > quality_threshold.
+    """
     quality = np.zeros_like(poles, dtype=np.float64)
     for i, pole in enumerate(np.asarray(poles, dtype=np.complex128).ravel()):
         m = loop.at(pole)
@@ -324,6 +371,14 @@ def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
 def _sort_by(a: np.ndarray, key: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     ind = np.argsort(key)
     return a[ind], ind
+
+
+def _deflation_w(it: int, poles: np.ndarray) -> complex:
+    """Deflation in w-plane: sum_{j!=it} 1/(w_i - w_j) with w = 1/z. Matches analytic/GCP EAI."""
+    w = 1.0 / poles
+    w_it = w[it]
+    w[it] = np.inf
+    return np.sum(1.0 / (w_it - w))
 
 
 def _compute_deflation(
@@ -388,6 +443,9 @@ def _refine_pole_positions(
     maximum_iterations: int,
     deflation_type: str,
     verbose: bool,
+    refinement_tol: float | None = None,
+    use_w_plane_step: bool = True,
+    use_w_plane_for_small_z: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     poles, _ = _sort_by(poles, np.angle(poles))
@@ -416,6 +474,7 @@ def _refine_pole_positions(
             quality = quality[sort_ind]
             quality_last = quality_last[sort_ind]
 
+        poles_old = poles.copy()
         non_converged = np.where(quality > quality_threshold)[0]
         if non_converged.size < n_poles / 10.0:
             current_deflation = "fullDeflation"
@@ -424,32 +483,62 @@ def _refine_pole_positions(
             if quality[it] <= quality_threshold:
                 continue
             step_counter += 1
-            inv_newton = loop.inverse_newton_step(poles[it])
-            deflation, is_exact = _compute_deflation(
-                it,
-                poles,
-                inv_newton,
-                deflation_type=current_deflation,
-                number_of_neighbors=number_of_neighbors,
-                deflation_max_error=deflation_max_error,
-                steps=steps,
+            z_i = poles[it]
+            inv_newton = loop.inverse_newton_step(
+                z_i, use_w_plane_for_small_z=use_w_plane_for_small_z
             )
-            denom = inv_newton - deflation
-            if not np.isfinite(denom) or np.abs(denom) == 0:
-                continue
-            poles[it] = poles[it] - 1.0 / denom
+            if use_w_plane_step:
+                # Same step as analytic/GCP EAI: (d/dz)log det P -> Q'/Q = -z^2 inv_newton,
+                # deflation in w, step in w, then z_new = 1/w_new
+                defl_w = _deflation_w(it, poles)
+                qp_over_q = -(z_i * z_i) * inv_newton
+                denom_w = qp_over_q - defl_w
+                if not np.isfinite(denom_w) or np.abs(denom_w) < 1e-20:
+                    continue
+                w_i = 1.0 / z_i
+                w_new = w_i - 1.0 / denom_w
+                if np.abs(w_new) < 1e-14:
+                    continue
+                poles[it] = 1.0 / w_new
+            else:
+                deflation, is_exact = _compute_deflation(
+                    it,
+                    poles,
+                    inv_newton,
+                    deflation_type=current_deflation,
+                    number_of_neighbors=number_of_neighbors,
+                    deflation_max_error=deflation_max_error,
+                    steps=steps,
+                )
+                denom = inv_newton - deflation
+                if not np.isfinite(denom) or np.abs(denom) == 0:
+                    continue
+                step_val = 1.0 / denom
+                # Z-plane step can overshoot; cap so refinement converges (same idea as example_two_channel_delay_feedback_z)
+                _z_plane_max_step = 0.15
+                if np.abs(step_val) > _z_plane_max_step:
+                    step_val = step_val * (_z_plane_max_step / np.abs(step_val))
+                poles[it] = z_i - step_val
+                exact_counter += int(is_exact)
             quality[it] = _pole_quality(np.array([poles[it]]), loop)[0]
-            exact_counter += int(is_exact)
 
         if verbose:
             record_poles.append(poles.copy())
 
-        max_improvement = float(np.abs(np.max(quality_last - quality)))
-        if max_improvement < quality_threshold:
-            if verbose:
-                print("No further improvement possible")
-            break
+        if refinement_tol is not None:
+            max_step = float(np.max(np.abs(poles - poles_old)))
+            if max_step < refinement_tol:
+                if verbose:
+                    print(f"Converged (max |Δz| = {max_step:.3e} < {refinement_tol})")
+                break
+        else:
+            max_improvement = float(np.abs(np.max(quality_last - quality)))
+            if max_improvement < quality_threshold:
+                if verbose:
+                    print("No further improvement possible")
+                break
         if verbose:
+            max_improvement = float(np.abs(np.max(quality_last - quality)))
             print(
                 f"Iteration: {steps}, Maximum Improvement: {max_improvement}, "
                 f"Worst Pole Quality: {np.max(quality)}, "
@@ -462,6 +551,7 @@ def _refine_pole_positions(
 
     meta = {
         "stepCounter": int(step_counter),
+        "iterations": int(steps),
         "exactCounter": int(exact_counter),
         "recordNeighborDeflation": [],
         "recordNewton": [],
@@ -540,7 +630,7 @@ def _dss_to_res_flamo(
         eig_right[:, it] = r
         eig_left[:, it] = l
 
-        cr = c @ r.reshape(-1, 1)
+        cr = np.dot(c,r) # c @ r.reshape(-1, 1)
         lh_b = np.conj(l).reshape(1, -1) @ b
         r_nom[it, :, :] = cr @ lh_b
 
@@ -573,6 +663,9 @@ def flamo_to_pr(
     verbose: bool = True,
     feedback_delay_units: int | None = 0,
     absorption_delay_units: int | None = 0,
+    refinement_tol: float | None = None,
+    use_w_plane_step: bool = True,
+    use_w_plane_for_small_z: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
     Poles/residues from explicit H(z)=C(z)P(z)^{-1}B(z)+D(z) decomposition.
@@ -580,6 +673,12 @@ def flamo_to_pr(
     Provide either:
       - ``decomposition`` with keys ``{"P","B","C","D"}``, or
       - ``model`` + ``recursion_module`` to extract that decomposition.
+
+    If ``refinement_tol`` is set, refinement stops when max |Δz| < refinement_tol.
+    If ``use_w_plane_step`` is True (default), the EAI step uses the w-plane formulation
+    (same as analytic/GCP EAI: deflation in w=1/z, step in w, z_new=1/w_new).
+    If ``use_w_plane_for_small_z`` is True (default), when |z| < 1 the Newton term
+    (d/dz) log det P is computed via w = 1/z for numerical stability (q, qp in w-plane).
     """
     if delays is None:
         raise ValueError("delays is required.")
@@ -607,7 +706,7 @@ def flamo_to_pr(
         )
 
     if quality_threshold is None:
-        quality_threshold = 1000.0 * np.finfo(float).eps
+        quality_threshold = 1e-7
 
     loop = _FDNLoopFlamo(
         characteristic_probe=decomposition_obj.p_probe,
@@ -629,6 +728,9 @@ def flamo_to_pr(
         maximum_iterations=int(maximum_iterations),
         deflation_type=str(deflation_type),
         verbose=bool(verbose),
+        refinement_tol=refinement_tol,
+        use_w_plane_step=bool(use_w_plane_step),
+        use_w_plane_for_small_z=bool(use_w_plane_for_small_z),
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
@@ -683,6 +785,10 @@ def dss_to_pr_flamo(
     verbose: bool = True,
     feedback_delay_units: int | None = 0,
     absorption_delay_units: int | None = 0,
+    refinement_tol: float | None = None,
+    use_w_plane_step: bool = True,
+    use_w_plane_for_small_z: bool = True,
+    dtype: Any = None,
     Fs: float = 1.0,
     nfft: int = 2**16,
     device: Any = None,
@@ -692,6 +798,9 @@ def dss_to_pr_flamo(
 
     Converts delay state-space to a FLAMO core using :func:`dss_to_flamo`, then
     decomposes that FLAMO model via :func:`flamo_to_pr`.
+
+    For higher numerical accuracy in probing and pole refinement, pass
+    ``dtype=torch.float64`` (builds FLAMO delay/gain modules in double precision).
     """
     if absorption_filters is not None:
         raise ValueError(
@@ -727,6 +836,7 @@ def dss_to_pr_flamo(
         nfft=int(nfft),
         device=device,
         shell=False,
+        dtype=dtype,
     )
 
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
@@ -749,5 +859,8 @@ def dss_to_pr_flamo(
         verbose=verbose,
         feedback_delay_units=feedback_delay_units,
         absorption_delay_units=absorption_delay_units,
+        refinement_tol=refinement_tol,
+        use_w_plane_step=use_w_plane_step,
+        use_w_plane_for_small_z=use_w_plane_for_small_z,
     )
 
