@@ -47,8 +47,6 @@ def main() -> None:
         quality_threshold=1e-10,
         refinement_tol=1e-7,
         maximum_iterations=40,
-        use_w_plane_step=True,
-        use_w_plane_for_small_z=True,
         verbose=False,
     )
 

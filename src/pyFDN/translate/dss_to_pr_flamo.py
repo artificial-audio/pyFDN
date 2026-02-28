@@ -313,28 +313,9 @@ class _FDNLoopFlamo:
     def der(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
 
-    def inverse_newton_step(
-        self,
-        z: complex,
-        *,
-        use_w_plane_for_small_z: bool = True,
-    ) -> complex:
-        """
-        Return (d/dz) log det P(z) for the recursion characteristic matrix.
-
-        When |z|<1 and native FLAMO w-plane derivative is available, use
-        (d/dz)log det P = -(1/z^2) (d/dw)log det P(w), w=1/z.
-        """
+    def log_det_derivative_z(self, z: complex) -> complex:
+        """Return (d/dz) log det P(z)."""
         probe = self.characteristic_probe
-        if use_w_plane_for_small_z and np.abs(z) < 1.0:
-            if callable(getattr(probe, "log_det_derivative_w", None)):
-                try:
-                    w = 1.0 / z
-                    d_log_det_dw = probe.log_det_derivative_w(w)
-                    if np.isfinite(d_log_det_dw):
-                        return (-1.0 / (z * z)) * d_log_det_dw
-                except Exception:
-                    pass
         if callable(getattr(probe, "log_det_derivative", None)):
             try:
                 out = probe.log_det_derivative(z)
@@ -352,6 +333,38 @@ class _FDNLoopFlamo:
             pass
         return np.inf + 0j
 
+    def log_det_derivative_w(self, w: complex) -> complex:
+        """
+        Return (d/dw) log det P(1/w), i.e. Newton term in w-domain.
+
+        If FLAMO exposes log_det_derivative_w directly we use it; otherwise we
+        convert from z-domain derivative with chain rule:
+            d/dw log det P(1/w) = -(1/w^2) * d/dz log det P(z), z=1/w.
+        """
+        probe = self.characteristic_probe
+        if callable(getattr(probe, "log_det_derivative_w", None)):
+            try:
+                out = probe.log_det_derivative_w(w)
+                if np.isfinite(out):
+                    return out
+            except Exception:
+                pass
+        if np.abs(w) < 1e-14:
+            return np.inf + 0j
+        z = 1.0 / w
+        nz = self.log_det_derivative_z(z)
+        if not np.isfinite(nz):
+            return np.inf + 0j
+        return -(1.0 / (w * w)) * nz
+
+    def inverse_newton_step(self, z: complex, *, use_w_plane_for_small_z: bool = True) -> complex:
+        """Backwards-compatible alias for z-domain Newton term."""
+        return self.log_det_derivative_z(z)
+
+    def inverse_newton_step_w(self, w: complex) -> complex:
+        """Newton term directly in w-domain."""
+        return self.log_det_derivative_w(w)
+
 
 def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
     quality = np.zeros_like(poles, dtype=np.float64)
@@ -367,17 +380,23 @@ def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
     return quality
 
 
+def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
+    """Pole quality evaluated in z-domain for roots represented in w-domain."""
+    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
+    z = np.empty_like(roots_w)
+    nonzero = np.abs(roots_w) > 1e-14
+    z[nonzero] = 1.0 / roots_w[nonzero]
+    z[~nonzero] = np.inf + 0j
+    quality = np.zeros_like(roots_w, dtype=np.float64)
+    valid = np.isfinite(z)
+    if np.any(valid):
+        quality[valid] = _pole_quality(z[valid], loop)
+    return quality
+
+
 def _sort_by(a: np.ndarray, key: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     ind = np.argsort(key)
     return a[ind], ind
-
-
-def _deflation_w(it: int, poles: np.ndarray) -> complex:
-    """Deflation term in w-plane (w=1/z): sum_{j!=i} 1 / (w_i - w_j)."""
-    w = 1.0 / np.asarray(poles, dtype=np.complex128)
-    w_i = w[it]
-    w[it] = np.inf
-    return np.sum(1.0 / (w_i - w))
 
 
 def _compute_deflation(
@@ -434,8 +453,8 @@ def _compute_deflation(
     return deflation, False
 
 
-def _refine_pole_positions(
-    poles: np.ndarray,
+def _refine_pole_positions_w(
+    roots_w: np.ndarray,
     loop: _FDNLoopFlamo,
     *,
     quality_threshold: float,
@@ -446,35 +465,42 @@ def _refine_pole_positions(
     use_w_plane_step: bool = True,
     use_w_plane_for_small_z: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    poles = np.asarray(poles, dtype=np.complex128).ravel()
-    poles, _ = _sort_by(poles, np.angle(poles))
-    n_poles = poles.size
+    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
+    roots_w, _ = _sort_by(roots_w, np.angle(roots_w))
+    n_poles = roots_w.size
 
     step_counter = 0
     exact_counter = 0
-    record_poles: list[np.ndarray] = [poles.copy()]
+    record_roots_w: list[np.ndarray] = [roots_w.copy()]
 
     number_of_neighbors = int(round(n_poles / 100.0 / 2.0) * 2.0)
     deflation_max_error = 1000.0
 
-    quality = _pole_quality(poles, loop)
+    quality = _pole_quality_w(roots_w, loop)
     quality_last = quality.copy()
     current_deflation = deflation_type
 
+    if not use_w_plane_step:
+        warnings.warn(
+            "use_w_plane_step=False is deprecated; refinement is now always in w-domain.",
+            stacklevel=2,
+        )
+    _ = use_w_plane_for_small_z  # kept for API compatibility
+
     if verbose:
         print(
-            f"Ehrlich-Aberth Iteration with {n_poles} poles and a maximum of "
+            f"Ehrlich-Aberth Iteration in w-domain with {n_poles} poles and a maximum of "
             f"{maximum_iterations} iterations"
         )
 
     steps = 0
     for steps in range(1, maximum_iterations + 1):
         if current_deflation == "neighborDeflation":
-            poles, sort_ind = _sort_by(poles, np.angle(poles))
+            roots_w, sort_ind = _sort_by(roots_w, np.angle(roots_w))
             quality = quality[sort_ind]
             quality_last = quality_last[sort_ind]
 
-        poles_old = poles.copy()
+        roots_w_old = roots_w.copy()
         non_converged = np.where(quality > quality_threshold)[0]
         if non_converged.size < n_poles / 10.0:
             current_deflation = "fullDeflation"
@@ -483,47 +509,32 @@ def _refine_pole_positions(
             if quality[it] <= quality_threshold:
                 continue
             step_counter += 1
-            z_i = poles[it]
-            inv_newton = loop.inverse_newton_step(
-                z_i,
-                use_w_plane_for_small_z=use_w_plane_for_small_z,
+            w_i = roots_w[it]
+            inv_newton_w = loop.inverse_newton_step_w(w_i)
+            deflation, is_exact = _compute_deflation(
+                it,
+                roots_w,
+                inv_newton_w,
+                deflation_type=current_deflation,
+                number_of_neighbors=number_of_neighbors,
+                deflation_max_error=deflation_max_error,
+                steps=steps,
             )
-            if use_w_plane_step:
-                q_prime_over_q = -(z_i * z_i) * inv_newton
-                deflation_w = _deflation_w(it, poles)
-                denom_w = q_prime_over_q - deflation_w
-                if not np.isfinite(denom_w) or np.abs(denom_w) < 1e-20:
-                    continue
-                w_i = 1.0 / z_i
-                w_new = w_i - 1.0 / denom_w
-                if np.abs(w_new) < 1e-14:
-                    continue
-                poles[it] = 1.0 / w_new
-            else:
-                deflation, is_exact = _compute_deflation(
-                    it,
-                    poles,
-                    inv_newton,
-                    deflation_type=current_deflation,
-                    number_of_neighbors=number_of_neighbors,
-                    deflation_max_error=deflation_max_error,
-                    steps=steps,
-                )
-                denom = inv_newton - deflation
-                if not np.isfinite(denom) or np.abs(denom) == 0:
-                    continue
-                poles[it] = z_i - 1.0 / denom
-                exact_counter += int(is_exact)
-            quality[it] = _pole_quality(np.array([poles[it]]), loop)[0]
+            denom = inv_newton_w - deflation
+            if not np.isfinite(denom) or np.abs(denom) < 1e-20:
+                continue
+            roots_w[it] = w_i - 1.0 / denom
+            quality[it] = _pole_quality_w(np.array([roots_w[it]]), loop)[0]
+            exact_counter += int(is_exact)
 
         if verbose:
-            record_poles.append(poles.copy())
+            record_roots_w.append(roots_w.copy())
 
         if refinement_tol is not None:
-            max_step = float(np.max(np.abs(poles - poles_old)))
+            max_step = float(np.max(np.abs(roots_w - roots_w_old)))
             if max_step < refinement_tol:
                 if verbose:
-                    print(f"Converged (max |Δz| = {max_step:.3e} < {refinement_tol})")
+                    print(f"Converged (max |Δw| = {max_step:.3e} < {refinement_tol})")
                 break
         else:
             max_improvement = float(np.abs(np.max(quality_last - quality)))
@@ -549,9 +560,9 @@ def _refine_pole_positions(
         "exactCounter": int(exact_counter),
         "recordNeighborDeflation": [],
         "recordNewton": [],
-        "recordPoles": np.asarray(record_poles, dtype=np.complex128),
+        "recordRootsW": np.asarray(record_roots_w, dtype=np.complex128),
     }
-    return poles, quality, meta
+    return roots_w, quality, meta
 
 
 def _reduce_conjugate_pairs(
@@ -670,9 +681,10 @@ def flamo_to_pr(
 
     Notes
     -----
-    The default refinement uses a w-plane EAI step (w=1/z), which is typically
-    more stable for high-order delay systems. You can disable this by setting
-    ``use_w_plane_step=False``.
+    Refinement is performed in w-domain (``w = z^{-1}``) and converted back to
+    z-domain only at the end before residue evaluation.
+    ``use_w_plane_step`` and ``use_w_plane_for_small_z`` are retained for
+    backward compatibility but no longer change this behavior.
     """
     if delays is None:
         raise ValueError("delays is required.")
@@ -711,12 +723,12 @@ def flamo_to_pr(
     if n_poles <= 0:
         raise ValueError("Computed number_of_poles must be positive.")
 
-    # Pole initialization
-    pole_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
-    poles = np.exp(1j * pole_angles)
+    # Initialize on unit circle in w-domain and refine there.
+    root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
+    roots_w = np.exp(1j * root_angles)
 
-    poles, quality, meta_refine = _refine_pole_positions(
-        poles,
+    roots_w, quality, meta_refine = _refine_pole_positions_w(
+        roots_w,
         loop,
         quality_threshold=float(quality_threshold),
         maximum_iterations=int(maximum_iterations),
@@ -728,24 +740,50 @@ def flamo_to_pr(
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
-    meta_data["refinedPoles"] = poles.copy()
+    refined_roots_w = roots_w.copy()
+    meta_data["refinedRootsW"] = refined_roots_w
+    valid_refined = np.abs(refined_roots_w) > 1e-14
+    refined_poles = np.full_like(refined_roots_w, np.inf + 0j)
+    refined_poles[valid_refined] = 1.0 / refined_roots_w[valid_refined]
+    meta_data["refinedPoles"] = refined_poles
 
     if reject_unstable_poles:
-        stable = np.abs(poles) <= 1.0
-        poles = poles[stable]
+        stable = np.abs(roots_w) >= 1.0
+        roots_w = roots_w[stable]
         quality = quality[stable]
 
     is_converged = quality < float(quality_threshold) * 1000.0
     if not np.any(is_converged):
         is_converged = np.ones_like(quality, dtype=bool)
-    poles = poles[is_converged]
-    meta_data["convergedPoles"] = poles.copy()
+    roots_w = roots_w[is_converged]
+    meta_data["convergedRootsW"] = roots_w.copy()
 
-    if poles.size != n_poles:
+    if roots_w.size != n_poles:
         warnings.warn(
-            f"Some poles did not converge: {poles.size} instead of {n_poles}",
+            f"Some poles did not converge: {roots_w.size} instead of {n_poles}",
             stacklevel=2,
         )
+
+    valid_conv = np.abs(roots_w) > 1e-14
+    poles = np.full_like(roots_w, np.inf + 0j)
+    poles[valid_conv] = 1.0 / roots_w[valid_conv]
+    finite_mask = np.isfinite(poles)
+    if not np.all(finite_mask):
+        warnings.warn(
+            f"Dropping {np.sum(~finite_mask)} non-finite poles from converged w roots.",
+            stacklevel=2,
+        )
+        poles = poles[finite_mask]
+    if poles.size == 0:
+        fallback = refined_poles[np.isfinite(refined_poles)]
+        if fallback.size == 0:
+            raise ValueError("No finite poles available after w->z conversion.")
+        warnings.warn(
+            "No converged finite poles remained after filtering; using refined finite poles.",
+            stacklevel=2,
+        )
+        poles = fallback
+    meta_data["convergedPoles"] = poles.copy()
 
     poles, is_conjugate, non_paired = _reduce_conjugate_pairs(poles)
     meta_data["nonPairedPoles"] = non_paired
