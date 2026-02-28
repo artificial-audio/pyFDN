@@ -79,6 +79,16 @@ class _FlamoRecursionCharacteristicProbe:
         return np.asarray(dp, dtype=np.complex128)
 
 
+@dataclass
+class _CharacteristicDecomposition:
+    """Explicit transfer decomposition H(z)=C(z)P(z)^{-1}B(z)+D(z)."""
+
+    p_probe: Any
+    b_probe: Any
+    c_probe: Any
+    d_probe: Any
+
+
 def _as_module_list(node: Any) -> list[Any]:
     """Return modules in processing order for a FLAMO node/series."""
     try:
@@ -118,7 +128,7 @@ def _extract_flamo_recursion_probes(
     model: Any,
     recursion_module: Any,
     delays: np.ndarray,
-) -> tuple[Any, Any, Any, Any, Any]:
+) -> _CharacteristicDecomposition:
     """
     Extract B/C/D probes and loop probes from a dss_to_flamo-like graph.
 
@@ -150,12 +160,17 @@ def _extract_flamo_recursion_probes(
     n = int(np.asarray(delays).size)
     in_modules = fdn_modules[:rec_idx]
     out_modules = fdn_modules[rec_idx + 1 :]
-    b_probe = _probe_from_modules(in_modules, identity_dim=n)
+    ff_modules = _as_module_list(recursion_module.feedforward)
+    b_probe = _probe_from_modules(in_modules + ff_modules, identity_dim=n)
     c_probe = _probe_from_modules(out_modules, identity_dim=n)
     direct_probe = _probe_from_modules(_as_module_list(direct_branch))
-    feedforward_probe = _FlamoGraphProbe(recursion_module.feedforward)
     characteristic_probe = _FlamoRecursionCharacteristicProbe(recursion_module)
-    return b_probe, c_probe, direct_probe, characteristic_probe, feedforward_probe
+    return _CharacteristicDecomposition(
+        p_probe=characteristic_probe,
+        b_probe=b_probe,
+        c_probe=c_probe,
+        d_probe=direct_probe,
+    )
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -166,22 +181,6 @@ def _rcond(mat: np.ndarray) -> float:
     if not np.isfinite(cond) or cond == 0:
         return 0.0
     return float(1.0 / cond)
-
-
-def _adjugate(a: np.ndarray) -> np.ndarray:
-    arr = np.asarray(a, dtype=np.complex128)
-    m, n = arr.shape
-    if m != n:
-        raise ValueError("Adjugate expects a square matrix.")
-    if n < 2:
-        return np.ones((1, 1), dtype=np.complex128)
-    u, s, vh = np.linalg.svd(arr, full_matrices=True)
-    v = vh.conj().T
-    s_ex = np.ones(n, dtype=np.complex128)
-    for i in range(n):
-        s_ex[i] = np.prod(np.delete(s, i)) if n > 1 else 1.0
-    det_uv = np.linalg.det(u @ v.conj().T)
-    return det_uv * ((v * s_ex.reshape(1, -1)) @ u.conj().T)
 
 
 @dataclass
@@ -418,23 +417,42 @@ def _reduce_conjugate_pairs(
 def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
-    b_probe: Any,
-    c_probe: Any,
-    direct_probe: Any,
-    feedforward_probe: Any,
+    decomposition: _CharacteristicDecomposition,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
 
-    b_ref = np.asarray(b_probe.at(1.0 + 0j), dtype=np.complex128)
-    c_ref = np.asarray(c_probe.at(1.0 + 0j), dtype=np.complex128)
+    b_ref = np.asarray(decomposition.b_probe.at(1.0 + 0j), dtype=np.complex128)
+    c_ref = np.asarray(decomposition.c_probe.at(1.0 + 0j), dtype=np.complex128)
     n_in = b_ref.shape[1]
     n_out = c_ref.shape[0]
     n = loop.n
 
     r_den = np.zeros(n_poles, dtype=np.complex128)
+    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
+    eig_right = np.zeros((n, n_poles), dtype=np.complex128)  # r_i
+    eig_left = np.zeros((n, n_poles), dtype=np.complex128)   # l_i (for l_i^H P = 0)
+
     for it, pole in enumerate(poles):
-        r_den[it] = np.trace(_adjugate(loop.at(pole)) @ loop.der(pole))
+        p = np.asarray(decomposition.p_probe.at(pole), dtype=np.complex128)
+        dp = np.asarray(decomposition.p_probe.der(pole), dtype=np.complex128)
+        b = np.asarray(decomposition.b_probe.at(pole), dtype=np.complex128)
+        c = np.asarray(decomposition.c_probe.at(pole), dtype=np.complex128)
+
+        # Null vectors for simple poles:
+        # P(lambda) r = 0,  l^H P(lambda) = 0
+        u, s, vh = np.linalg.svd(p, full_matrices=False)
+        r = vh.conj().T[:, -1]
+        l = u[:, -1]
+
+        denom = np.vdot(l, dp @ r)  # l^H (dP/dz) r
+        r_den[it] = denom
+        eig_right[:, it] = r
+        eig_left[:, it] = l
+
+        cr = c @ r.reshape(-1, 1)
+        lh_b = np.conj(l).reshape(1, -1) @ b
+        r_nom[it, :, :] = cr @ lh_b
 
     with np.errstate(divide="ignore", invalid="ignore"):
         undriven = 1.0 / r_den
@@ -444,30 +462,10 @@ def _dss_to_res_flamo(
         undriven[is_multiple] = 0.0
         r_den[is_multiple] = np.inf
 
-    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
-    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
-    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
-
-    for it, pole in enumerate(poles):
-        b = np.asarray(b_probe.at(pole), dtype=np.complex128)
-        c = np.asarray(c_probe.at(pole), dtype=np.complex128)
-        l = np.asarray(loop.at(pole), dtype=np.complex128)
-        f = np.asarray(feedforward_probe.at(pole), dtype=np.complex128)
-        adj_p = _adjugate(l)
-
-        r_nom[it, :, :] = c @ adj_p @ f @ b
-
-        u, s, vh = np.linalg.svd(adj_p, full_matrices=False)
-        s1 = s[0] if s.size else 0.0
-        denom = np.sqrt(r_den[it])
-        if np.abs(denom) > 0 and np.isfinite(denom):
-            eig_right[:, it] = u[:, 0] * np.sqrt(s1) / denom
-            eig_left[:, it] = vh.conj().T[:, 0] * np.conj(np.sqrt(s1)) / np.conj(denom)
-
     with np.errstate(divide="ignore", invalid="ignore"):
         residues = r_nom / r_den[:, None, None]
     residues = np.where(np.isfinite(residues), residues, 0.0)
-    direct_term = np.asarray(direct_probe.at(1.0 + 0j), dtype=np.complex128)
+    direct_term = np.asarray(decomposition.d_probe.at(1.0 + 0j), dtype=np.complex128)
     eigenvectors = {"right": eig_right, "left": eig_left}
     return residues, direct_term, undriven, eigenvectors
 
@@ -495,9 +493,7 @@ def flamo_to_pr(
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
 
-    b_probe, c_probe, direct_probe, recursion_characteristic_probe, feedforward_probe = (
-        _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
-    )
+    decomposition = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
     fb_delay_units_i = int(feedback_delay_units or 0)
     fwd_delay_units_i = int(absorption_delay_units or 0)
 
@@ -506,7 +502,7 @@ def flamo_to_pr(
 
     loop = _FDNLoopFlamo(
         delays=delays_arr,
-        characteristic_probe=recursion_characteristic_probe,
+        characteristic_probe=decomposition.p_probe,
         number_of_matrix_delays=fb_delay_units_i,
         number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
     )
@@ -555,10 +551,16 @@ def flamo_to_pr(
         print(f"Final number of poles are: {final_count} of possible {n_poles}")
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, b_probe, c_probe, direct_probe, feedforward_probe
+        poles, loop, decomposition
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
+    meta_data["decomposition"] = {
+        "P": decomposition.p_probe,
+        "B": decomposition.b_probe,
+        "C": decomposition.c_probe,
+        "D": decomposition.d_probe,
+    }
 
     return residues, poles, direct, is_conjugate, meta_data
 

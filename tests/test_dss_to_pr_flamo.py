@@ -66,7 +66,7 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     recursion_module = list(core.branchA)[1]
 
-    res_model, pol_model, direct_model, pair_model, _ = flamo_to_pr(
+    res_model, pol_model, direct_model, pair_model, meta_model = flamo_to_pr(
         model,
         delays,
         recursion_module=recursion_module,
@@ -91,6 +91,7 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
     np.testing.assert_allclose(res_model, res_wrap, rtol=1e-8, atol=1e-8)
     np.testing.assert_allclose(direct_model, direct_wrap, rtol=0, atol=0)
     np.testing.assert_array_equal(pair_model, pair_wrap)
+    assert {"P", "B", "C", "D"}.issubset(set(meta_model["decomposition"].keys()))
 
 
 def test_dss_to_pr_flamo_rejects_absorption_filters():
