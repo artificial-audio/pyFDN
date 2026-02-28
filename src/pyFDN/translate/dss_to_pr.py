@@ -474,7 +474,6 @@ def dss_to_pr(
     verbose: bool = True,
     feedback_delay_units: int | None = None,
     probe_backend: str = "manual",
-    **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
     From delay state-space to poles and residues (fdnToolbox dss2pr translation).
@@ -512,22 +511,6 @@ def dss_to_pr(
     -------
     residues, poles, direct, is_conjugate_pole_pair, meta_data
     """
-    # MATLAB-compat option aliases
-    inverse_matrix = kwargs.pop("inverseMatrix", inverse_matrix)
-    deflation_type = kwargs.pop("DeflationType", kwargs.pop("deflationType", deflation_type))
-    absorption_filters = kwargs.pop(
-        "AbsorptionFilters", kwargs.pop("absorptionFilters", absorption_filters)
-    )
-    reject_unstable_poles = kwargs.pop("rejectUnstablePoles", reject_unstable_poles)
-    quality_threshold = kwargs.pop("QualityThreshold", quality_threshold)
-    maximum_iterations = kwargs.pop("MaximumIterations", maximum_iterations)
-    verbose = kwargs.pop("Verbose", verbose)
-    feedback_delay_units = kwargs.pop("feedbackDelayUnits", feedback_delay_units)
-    probe_backend = kwargs.pop("probeBackend", probe_backend)
-    if kwargs:
-        unknown = ", ".join(sorted(kwargs.keys()))
-        raise TypeError(f"Unexpected keyword arguments: {unknown}")
-
     # FLAMO-graph probing in this legacy entrypoint is kept for compatibility.
     # Prefer dss_to_pr_flamo / dss_to_pr_flamo_direct for new code.
     graph_like = any(

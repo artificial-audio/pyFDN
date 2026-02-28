@@ -523,30 +523,8 @@ def dss_to_pr_flamo(
     verbose: bool = True,
     feedback_delay_units: int | None = None,
     absorption_delay_units: int | None = None,
-    **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """FLAMO/autograd-only DSS2PR path without ZFilter in this module."""
-    if "probe_backend" in kwargs or "probeBackend" in kwargs:
-        raise TypeError(
-            "dss_to_pr_flamo is autograd-only; do not pass probe_backend/probeBackend."
-        )
-
-    # MATLAB-style aliases
-    inverse_matrix = kwargs.pop("inverseMatrix", inverse_matrix)
-    deflation_type = kwargs.pop("DeflationType", kwargs.pop("deflationType", deflation_type))
-    absorption_filters = kwargs.pop(
-        "AbsorptionFilters", kwargs.pop("absorptionFilters", absorption_filters)
-    )
-    reject_unstable_poles = kwargs.pop("rejectUnstablePoles", reject_unstable_poles)
-    quality_threshold = kwargs.pop("QualityThreshold", quality_threshold)
-    maximum_iterations = kwargs.pop("MaximumIterations", maximum_iterations)
-    verbose = kwargs.pop("Verbose", verbose)
-    feedback_delay_units = kwargs.pop("feedbackDelayUnits", feedback_delay_units)
-    absorption_delay_units = kwargs.pop("absorptionDelayUnits", absorption_delay_units)
-    if kwargs:
-        unknown = ", ".join(sorted(kwargs.keys()))
-        raise TypeError(f"Unexpected keyword arguments: {unknown}")
-
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
