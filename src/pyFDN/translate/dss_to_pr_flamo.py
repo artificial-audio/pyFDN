@@ -56,51 +56,6 @@ def _as_torch_complex_scalar(z: complex, *, model: Any) -> torch.Tensor:
     )
 
 
-def _real_dtype_for_complex_dtype(dtype: torch.dtype) -> torch.dtype:
-    if dtype == torch.complex64:
-        return torch.float32
-    return torch.float64
-
-
-def _slogdet_log_derivative_from_recursion(recursion: Any, z: complex) -> complex:
-    """
-    Compute d/dz log det P(z) using torch autograd + torch.linalg.slogdet.
-
-    This is a fallback path when native Recursion.log_det_derivative is not
-    available.
-    """
-
-    if not callable(getattr(recursion, "probe_recursion", None)):
-        return np.nan + 0j
-
-    cdtype = _infer_model_complex_dtype(recursion)
-    rdtype = _real_dtype_for_complex_dtype(cdtype)
-    device = _infer_model_device(recursion)
-    zc = complex(np.asarray(z, dtype=np.complex128))
-
-    def _log_det_from_xy(xy: torch.Tensor) -> torch.Tensor:
-        z_t = torch.complex(xy[0], xy[1]).to(dtype=cdtype)
-        p = recursion.probe_recursion(z_t)
-        if isinstance(p, tuple):
-            if len(p) == 0:
-                raise RuntimeError("probe_recursion returned empty tuple")
-            p = p[0]
-        sign, logabsdet = torch.linalg.slogdet(p)
-        return torch.log(sign) + logabsdet
-
-    xy = torch.tensor(
-        [zc.real, zc.imag],
-        dtype=rdtype,
-        device=device,
-        requires_grad=True,
-    )
-    jac = torch.autograd.functional.jacobian(_log_det_from_xy, xy, create_graph=False)
-    dfdx = jac[0]
-    dfdy = jac[1]
-    dfdz = 0.5 * (dfdx - 1j * dfdy)
-    return complex(dfdz.detach().cpu().numpy())
-
-
 class _FlamoGraphProbe:
     """Probe adapter for FLAMO graph objects via autograd probing."""
 
@@ -359,19 +314,11 @@ class _FDNLoopFlamo:
         return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
 
     def log_det_derivative_z(self, z: complex) -> complex:
-        """Return (d/dz) log det P(z), preferring native FLAMO then slogdet fallback."""
+        """Return (d/dz) log det P(z)."""
         probe = self.characteristic_probe
         if callable(getattr(probe, "log_det_derivative", None)):
             try:
                 out = probe.log_det_derivative(z)
-                if np.isfinite(out):
-                    return out
-            except Exception:
-                pass
-        recursion = getattr(probe, "recursion", None)
-        if recursion is not None:
-            try:
-                out = _slogdet_log_derivative_from_recursion(recursion, z)
                 if np.isfinite(out):
                     return out
             except Exception:
