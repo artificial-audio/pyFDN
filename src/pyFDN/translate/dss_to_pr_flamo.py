@@ -132,6 +132,40 @@ class _CharacteristicDecomposition:
     d_probe: Any
 
 
+def _decomposition_to_public_dict(
+    decomposition: _CharacteristicDecomposition,
+) -> dict[str, Any]:
+    return {
+        "P": decomposition.p_probe,
+        "B": decomposition.b_probe,
+        "C": decomposition.c_probe,
+        "D": decomposition.d_probe,
+    }
+
+
+def _coerce_decomposition(
+    decomposition: Any,
+) -> _CharacteristicDecomposition:
+    if isinstance(decomposition, _CharacteristicDecomposition):
+        return decomposition
+    if isinstance(decomposition, dict):
+        required = {"P", "B", "C", "D"}
+        missing = required.difference(decomposition.keys())
+        if missing:
+            miss = ", ".join(sorted(missing))
+            raise ValueError(f"decomposition is missing required keys: {miss}")
+        return _CharacteristicDecomposition(
+            p_probe=decomposition["P"],
+            b_probe=decomposition["B"],
+            c_probe=decomposition["C"],
+            d_probe=decomposition["D"],
+        )
+    raise TypeError(
+        "decomposition must be a dict with keys P/B/C/D "
+        "or a _CharacteristicDecomposition instance."
+    )
+
+
 def _as_module_list(node: Any) -> list[Any]:
     """Return modules in processing order for a FLAMO node/series."""
     try:
@@ -214,6 +248,22 @@ def _extract_flamo_recursion_probes(
         c_probe=c_probe,
         d_probe=direct_probe,
     )
+
+
+def flamo_extract_pr_decomposition(
+    model: Any,
+    delays: ArrayLike,
+    *,
+    recursion_module: Any,
+) -> dict[str, Any]:
+    """
+    Extract explicit H(z)=C(z)P(z)^{-1}B(z)+D(z) probes from a FLAMO model.
+    """
+    delays_arr = np.asarray(delays, dtype=int).ravel()
+    if delays_arr.ndim != 1 or delays_arr.size == 0:
+        raise ValueError("delays must be a non-empty 1-D array")
+    decomposition = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
+    return _decomposition_to_public_dict(decomposition)
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -511,10 +561,11 @@ def _dss_to_res_flamo(
 
 
 def flamo_to_pr(
-    model: Any,
-    delays: ArrayLike,
+    model: Any | None = None,
+    delays: ArrayLike | None = None,
     *,
-    recursion_module: Any,
+    recursion_module: Any | None = None,
+    decomposition: Any | None = None,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
     quality_threshold: float | None = None,
@@ -524,20 +575,31 @@ def flamo_to_pr(
     absorption_delay_units: int | None = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
-    Poles/residues directly from a FLAMO model and explicit recursion module.
+    Poles/residues from explicit H(z)=C(z)P(z)^{-1}B(z)+D(z) decomposition.
 
-    Passing ``recursion_module`` avoids ambiguous recursion discovery and makes
-    the decomposition path strictly tied to FLAMO's native recursion probe API.
+    Provide either:
+      - ``decomposition`` with keys ``{"P","B","C","D"}``, or
+      - ``model`` + ``recursion_module`` to extract that decomposition.
     """
+    if delays is None:
+        raise ValueError("delays is required.")
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
 
-    decomposition = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
+    if decomposition is None:
+        if model is None or recursion_module is None:
+            raise ValueError(
+                "Either provide decomposition={P,B,C,D} or pass model and recursion_module."
+            )
+        decomposition_obj = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
+    else:
+        decomposition_obj = _coerce_decomposition(decomposition)
+
     fb_delay_units_i = int(feedback_delay_units or 0)
     fwd_delay_units_i = int(absorption_delay_units or 0)
-    p_out = int(getattr(decomposition.p_probe, "output_channels"))
-    p_in = int(getattr(decomposition.p_probe, "input_channels"))
+    p_out = int(getattr(decomposition_obj.p_probe, "output_channels"))
+    p_in = int(getattr(decomposition_obj.p_probe, "input_channels"))
     if p_out != delays_arr.size or p_in != delays_arr.size:
         raise ValueError(
             "Characteristic probe dimensions must match delay count: "
@@ -548,7 +610,7 @@ def flamo_to_pr(
         quality_threshold = 1000.0 * np.finfo(float).eps
 
     loop = _FDNLoopFlamo(
-        characteristic_probe=decomposition.p_probe,
+        characteristic_probe=decomposition_obj.p_probe,
         number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
     )
 
@@ -596,16 +658,11 @@ def flamo_to_pr(
         print(f"Final number of poles are: {final_count} of possible {n_poles}")
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, decomposition
+        poles, loop, decomposition_obj
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
-    meta_data["decomposition"] = {
-        "P": decomposition.p_probe,
-        "B": decomposition.b_probe,
-        "C": decomposition.c_probe,
-        "D": decomposition.d_probe,
-    }
+    meta_data["decomposition"] = _decomposition_to_public_dict(decomposition_obj)
 
     return residues, poles, direct, is_conjugate, meta_data
 

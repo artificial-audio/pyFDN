@@ -36,10 +36,14 @@ def main() -> None:
     )
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     recursion_module = list(core.branchA)[1]
-    residues, poles, direct, is_pair, _ = pyFDN.flamo_to_pr(
+    decomposition = pyFDN.flamo_extract_pr_decomposition(
         model,
         delays,
         recursion_module=recursion_module,
+    )
+    residues, poles, direct, is_pair, _ = pyFDN.flamo_to_pr(
+        delays=delays,
+        decomposition=decomposition,
         feedback_delay_units=0,
         maximum_iterations=70,
         verbose=False,
