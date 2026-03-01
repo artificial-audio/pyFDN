@@ -130,56 +130,6 @@ def _sort_by_torch(a: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, to
     ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
     return a[ind_t], ind_t
 
-
-# class _FlamoGraphProbe:
-#     """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w). Returns torch."""
-
-#     def __init__(self, model: Any):
-#         self.model = model
-#         h0 = self.at_z(1.0 + 0j)
-#         if h0.ndim != 2:
-#             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
-#         self.output_channels, self.input_channels = h0.shape
-
-#     def at_z(self, z: complex) -> torch.Tensor:
-#         """H(z) via FLAMO model.probe(z)."""
-#         z_t = _as_torch_complex_scalar(z, model=self.model)
-#         out = self.model.probe(z_t)
-#         if isinstance(out, tuple):
-#             if len(out) == 0:
-#                 raise RuntimeError("model.probe returned empty tuple")
-#             out = out[0]
-#         return out.detach()
-
-#     def at_w(self, w: complex) -> torch.Tensor:
-#         """H(1/w) via FLAMO model.probe_w(w) when available, else at_z(1/w)."""
-#         probe_w_fn = getattr(self.model, "probe_w", None)
-#         if callable(probe_w_fn):
-#             w_t = _as_torch_complex_scalar(w, model=self.model)
-#             out = probe_w_fn(w_t)
-#             if isinstance(out, tuple) and out:
-#                 out = out[0]
-#             return out.detach()
-#         return self.at_z(1.0 / w)
-
-#     def at(self, z: complex) -> torch.Tensor:
-#         """Backward-compatible alias for at_z(z)."""
-#         return self.at_z(z)
-
-#     def der(self, z: complex) -> torch.Tensor:
-#         """dH/dz(z) via JVP in pyFDN; FLAMO only provides H(z) via model.probe(z)."""
-#         z_t = _as_torch_complex_scalar(z, model=self.model)
-#         dz = torch.ones_like(z_t)
-
-#         def _eval(z_val: torch.Tensor) -> torch.Tensor:
-#             if hasattr(self.model, "_Shell__core"):
-#                 return self.model.probe(z_val, include_shell_io=False)
-#             return self.model.probe(z_val)
-
-#         _, dH_dz = torch.autograd.functional.jvp(_eval, (z_t,), (dz,))
-#         return dH_dz.detach()
-
-
 @dataclass
 class _CharacteristicDecomposition:
     """H(z)=C(z)P(z)^{-1}B(z)+D(z) with probes for B,C,D."""
@@ -308,19 +258,6 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     samples = delay_mod.s2sample(sec)
     out = np.asarray(samples.detach().cpu().numpy(), dtype=np.float64).ravel()
     return np.asarray(np.round(out), dtype=int)
-
-
-# def _subgraph_to_probe(
-#     subgraph: Any | None,
-#     *,
-#     identity_dim: int,
-#     device: torch.device | None = None,
-#     dtype: torch.dtype | None = None,
-# ) -> Any:
-#     """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> torch."""
-#     if subgraph is None:
-#         return _IdentityProbe(identity_dim, device=device, dtype=dtype)
-#     return _FlamoGraphProbe(subgraph)
 
 
 def _extract_flamo_recursion_probes(
