@@ -23,6 +23,7 @@ __all__ = [
     "rt_to_gain_per_sample",
     "rt_to_slope",
     "slope_to_rt",
+    "sos_gain_per_sample_curves",
     # delay utilities
     "matrix_delay_approximation",
     "mgrpdelay",
@@ -56,6 +57,8 @@ __all__ = [
     "db_to_sq",
     "ensure_3d",
     "hertz_to_unit",
+    "hertz_to_rad",
+    "rad_to_hertz",
     "is_bounding_curve",
     "last_nonzero_indices",
     "lin_to_db",
@@ -68,7 +71,6 @@ __all__ = [
     # state-space translators
     "dss_to_flamo",
     "dss_to_impz",
-    "dss_to_pr",
     "dss_to_pr_direct",
     "flamo_to_pr",
     "flamo_extract_pr_decomposition",
@@ -88,15 +90,6 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "draw_flamo_graph",
-    "probe_flamo_z",
-    "FlamoGraphZFilter",
-    "flamo_graph_to_zfilter",
-    "probe_flamo_z_autograd",
-    "FlamoAutogradGraphZFilter",
-    "flamo_graph_to_autograd_zfilter",
-    "attach_autograd_probe",
-    "has_flamo_native_probe",
-    "probe_flamo_runtime",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -136,6 +129,7 @@ from .auxiliary.acoustics import (
     rt_to_gain_per_sample,
     rt_to_slope,
     slope_to_rt,
+    sos_gain_per_sample_curves,
 )
 
 #delay utilities
@@ -170,6 +164,8 @@ from .auxiliary.utils import (
     db_to_sq,
     ensure_3d,
     hertz_to_unit,
+    hertz_to_rad,
+    rad_to_hertz,
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
@@ -191,21 +187,6 @@ from .auxiliary.flamo_graph import (
     flamo_model_to_nodes,
     flamo_nodes_flat,
     draw_flamo_graph,
-)
-from .auxiliary.flamo_probe import (
-    probe_flamo_z,
-    FlamoGraphZFilter,
-    flamo_graph_to_zfilter,
-)
-from .auxiliary.flamo_autograd_probe import (
-    probe_flamo_z_autograd,
-    FlamoAutogradGraphZFilter,
-    flamo_graph_to_autograd_zfilter,
-    attach_autograd_probe,
-)
-from .auxiliary.flamo_runtime_probe import (
-    has_flamo_native_probe,
-    probe_flamo_runtime,
 )
 
 from .auxiliary.allpass import (
@@ -255,7 +236,6 @@ from .generate.SDN import SDN
 from .translate.dss_to_flamo import dss_to_flamo
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
-from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_pr_direct import dss_to_pr_direct
 from .translate.dss_to_pr_flamo import (
     dss_to_pr_flamo,

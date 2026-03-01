@@ -223,4 +223,52 @@ def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
     return sos
 
 
+def sos_gain_per_sample_curves(
+    sos_6n: np.ndarray,
+    delays: ArrayLike,
+    nfft: int = 512,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Magnitude response (gain per sample vs angle) for SOS filters in (6, N) format.
+
+    Evaluates |H(e^{j omega})| at nfft angles from 0 to 2*pi for each channel, then
+    scales by delay length so that the result is gain per sample: for channel j with
+    delay m_j, the curve is |H|^(1/m_j), so that after m_j samples the effective gain
+    is |H|. Useful for plotting absorption/gain curves (e.g. on a pole plot).
+
+    Parameters
+    ----------
+    sos_6n : (6, N) array
+        SOS coefficients with rows [b0, b1, b2, a0, a1, a2] per column (channel).
+        Same format as :func:`one_pole_absorption` returns.
+    delays : (N,) array-like
+        Delay lengths in samples, one per channel. Used to scale gain to per-sample.
+    nfft : int
+        Number of frequency points (default 512).
+
+    Returns
+    -------
+    angles : (nfft,) array
+        Angles in rad/sample, 0 to 2*pi.
+    magnitude : (nfft, N) array
+        Gain per sample (linear), i.e. |H(e^{j angle})|^(1/m) per channel.
+    """
+    sos_6n = np.asarray(sos_6n, dtype=np.float64)
+    delays_arr = np.asarray(delays, dtype=np.float64).ravel()
+    if sos_6n.shape[0] != 6:
+        raise ValueError("sos_6n must have shape (6, N)")
+    N = sos_6n.shape[1]
+    if delays_arr.shape[0] != N:
+        raise ValueError("delays must have length N (number of channels in sos_6n)")
+    if np.any(delays_arr < 1):
+        raise ValueError("delays must be >= 1")
+    magnitude = np.zeros((nfft, N), dtype=np.float64)
+    for ch in range(N):
+        b = sos_6n[0:3, ch]
+        a = sos_6n[3:6, ch]
+        angles, h = freqz(b, a, worN=nfft)
+        mag = np.abs(h)
+        magnitude[:, ch] = np.power(mag, 1.0 / delays_arr[ch])
+    return angles, magnitude
+
+
 

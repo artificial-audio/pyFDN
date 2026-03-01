@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 import torch
 
+from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
@@ -273,7 +274,11 @@ def flamo_extract_pr_decomposition(
     recursion_module: Any,
 ) -> dict[str, Any]:
     """
-    Extract explicit H(z)=C(z)P(z)^{-1}B(z)+D(z) probes from a FLAMO model.
+    Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
+
+    Returns a dict with keys ``"P"``, ``"B"``, ``"C"``, ``"D"`` (probe objects).
+    Pass it to :func:`flamo_to_pr` as ``decomposition=...``, or use
+    :func:`flamo_to_pr` with ``model`` and ``recursion_module`` to do both in one call.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -309,6 +314,12 @@ class _FDNLoopFlamo:
 
     def at(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.at(z), dtype=np.complex128)
+
+    def at_w(self, w: complex) -> np.ndarray:
+        """P(1/w) for w-domain probing (z = 1/w)."""
+        if np.abs(w) < 1e-14:
+            return np.full((self.n, self.n), np.inf + 0j, dtype=np.complex128)
+        return self.at(1.0 / w)
 
     def der(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
@@ -381,16 +392,19 @@ def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
 
 
 def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
-    """Pole quality evaluated in z-domain for roots represented in w-domain."""
+    """Pole quality via w-domain probing: rcond(P(1/w)) for each root w."""
     roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
-    z = np.empty_like(roots_w)
-    nonzero = np.abs(roots_w) > 1e-14
-    z[nonzero] = 1.0 / roots_w[nonzero]
-    z[~nonzero] = np.inf + 0j
     quality = np.zeros_like(roots_w, dtype=np.float64)
-    valid = np.isfinite(z)
-    if np.any(valid):
-        quality[valid] = _pole_quality(z[valid], loop)
+    for i, w in enumerate(roots_w):
+        m = loop.at_w(w)
+        if np.ndim(m) == 0:
+            q = float(np.abs(m))
+        else:
+            m = np.asarray(m, dtype=np.complex128)
+            q = _rcond(m)
+            if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
+                q = 1e10
+        quality[i] = q
     return quality
 
 
@@ -462,8 +476,6 @@ def _refine_pole_positions_w(
     deflation_type: str,
     verbose: bool,
     refinement_tol: float | None = None,
-    use_w_plane_step: bool = True,
-    use_w_plane_for_small_z: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
     roots_w, _ = _sort_by(roots_w, np.angle(roots_w))
@@ -479,13 +491,6 @@ def _refine_pole_positions_w(
     quality = _pole_quality_w(roots_w, loop)
     quality_last = quality.copy()
     current_deflation = deflation_type
-
-    if not use_w_plane_step:
-        warnings.warn(
-            "use_w_plane_step=False is deprecated; refinement is now always in w-domain.",
-            stacklevel=2,
-        )
-    _ = use_w_plane_for_small_z  # kept for API compatibility
 
     if verbose:
         print(
@@ -565,40 +570,6 @@ def _refine_pole_positions_w(
     return roots_w, quality, meta
 
 
-def _reduce_conjugate_pairs(
-    poles: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    poles = np.asarray(poles, dtype=np.complex128).ravel()
-    n_poles = poles.size
-    lhs = np.column_stack([np.real(poles), np.imag(poles)])
-    rhs = np.column_stack([np.real(poles), -np.imag(poles)])
-    dist = np.linalg.norm(lhs[:, None, :] - rhs[None, :, :], axis=2)
-    pair_index = np.argmin(dist, axis=1)
-
-    pair_type = np.zeros(n_poles, dtype=int)
-    for it in range(n_poles):
-        if pair_type[it] != 0:
-            continue
-        if it == pair_index[it]:
-            pair_type[it] = 1
-        elif it == pair_index[pair_index[it]]:
-            pair_type[it] = 2
-            pair_type[pair_index[it]] = 3
-        else:
-            pair_type[it] = -1
-
-    if np.any(pair_type == -1):
-        warnings.warn(f"{np.sum(pair_type == -1)} poles could not be paired", stacklevel=2)
-
-    is_conjugate = np.ones(n_poles, dtype=bool)
-    is_conjugate[pair_type == 1] = False
-    non_paired = poles[pair_type == -1]
-    select = (pair_type == 1) | (pair_type == 2) | (pair_type == -1)
-    poles_out = poles[select]
-    poles_out = np.real(poles_out) + 1j * np.abs(np.imag(poles_out))
-    return poles_out, is_conjugate[select], non_paired
-
-
 def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
@@ -669,22 +640,22 @@ def flamo_to_pr(
     feedback_delay_units: int | None = 0,
     absorption_delay_units: int | None = 0,
     refinement_tol: float | None = None,
-    use_w_plane_step: bool = True,
-    use_w_plane_for_small_z: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
-    Poles/residues from explicit H(z)=C(z)P(z)^{-1}B(z)+D(z) decomposition.
+    Poles/residues from a FLAMO transfer H(z)=C(z)P(z)^{-1}B(z)+D(z).
 
-    Provide either:
-      - ``decomposition`` with keys ``{"P","B","C","D"}``, or
-      - ``model`` + ``recursion_module`` to extract that decomposition.
+    Two ways to call:
 
-    Notes
-    -----
-    Refinement is performed in w-domain (``w = z^{-1}``) and converted back to
-    z-domain only at the end before residue evaluation.
-    ``use_w_plane_step`` and ``use_w_plane_for_small_z`` are retained for
-    backward compatibility but no longer change this behavior.
+    1. **From a decomposition dict** (e.g. from :func:`flamo_extract_pr_decomposition`):
+       ``flamo_to_pr(delays=delays, decomposition={"P": p_probe, "B": b_probe, "C": c_probe, "D": d_probe}, ...)``
+
+    2. **From a FLAMO model**: ``flamo_to_pr(model=model, delays=delays, recursion_module=recursion_module, ...)``
+       The recursion module is the closed-loop block in the FLAMO core (e.g. ``core.branchA[1]`` for a model built with :func:`dss_to_flamo`).
+
+    For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead, which does
+    DSS -> FLAMO -> PR in one call.
+
+    Refinement is done in the w-domain (w = 1/z) and converted back to z for residues.
     """
     if delays is None:
         raise ValueError("delays is required.")
@@ -735,8 +706,6 @@ def flamo_to_pr(
         deflation_type=str(deflation_type),
         verbose=bool(verbose),
         refinement_tol=refinement_tol,
-        use_w_plane_step=bool(use_w_plane_step),
-        use_w_plane_for_small_z=bool(use_w_plane_for_small_z),
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
@@ -785,7 +754,7 @@ def flamo_to_pr(
         poles = fallback
     meta_data["convergedPoles"] = poles.copy()
 
-    poles, is_conjugate, non_paired = _reduce_conjugate_pairs(poles)
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles)
     meta_data["nonPairedPoles"] = non_paired
     if verbose:
         final_count = int(np.sum(is_conjugate.astype(int) + 1))
@@ -818,18 +787,16 @@ def dss_to_pr_flamo(
     feedback_delay_units: int | None = 0,
     absorption_delay_units: int | None = 0,
     refinement_tol: float | None = None,
-    use_w_plane_step: bool = True,
-    use_w_plane_for_small_z: bool = True,
     dtype: Any = None,
     Fs: float = 1.0,
     nfft: int = 2**16,
     device: Any = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
-    DSS -> FLAMO -> PR wrapper.
+    DSS -> FLAMO -> PR in one call.
 
-    Converts delay state-space to a FLAMO core using :func:`dss_to_flamo`, then
-    decomposes that FLAMO model via :func:`flamo_to_pr`.
+    Builds a FLAMO model with :func:`dss_to_flamo`, then runs :func:`flamo_to_pr`
+    on it. For an existing FLAMO model use :func:`flamo_to_pr` directly.
     """
     if absorption_filters is not None:
         raise ValueError(
@@ -889,7 +856,5 @@ def dss_to_pr_flamo(
         feedback_delay_units=feedback_delay_units,
         absorption_delay_units=absorption_delay_units,
         refinement_tol=refinement_tol,
-        use_w_plane_step=use_w_plane_step,
-        use_w_plane_for_small_z=use_w_plane_for_small_z,
     )
 

@@ -128,9 +128,10 @@ def dss_to_flamo(
     core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
 
     if shell:
+        torch_dtype = torch.float32 if dtype is None else dtype
         return system.Shell(
             core=core,
-            input_layer=dsp.FFT(nfft),
-            output_layer=dsp.iFFT(nfft),
+            input_layer=dsp.FFT(nfft, dtype=torch_dtype),
+            output_layer=dsp.iFFT(nfft, dtype=torch_dtype),
         )
     return core

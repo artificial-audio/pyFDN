@@ -3,113 +3,68 @@
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.math import general_char_poly
+from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 from pyFDN.translate.dss_to_ss import dss_to_ss
-
-
-def _adjugate(a: np.ndarray) -> np.ndarray:
-    arr = np.asarray(a, dtype=np.complex128)
-    m, n = arr.shape
-    if m != n:
-        raise ValueError("Adjugate expects a square matrix")
-    if n < 2:
-        return np.ones((1, 1), dtype=np.complex128)
-    u, s, vh = np.linalg.svd(arr, full_matrices=True)
-    v = vh.conj().T
-    s_ex = np.ones(n, dtype=np.complex128)
-    for i in range(n):
-        s_ex[i] = np.prod(np.delete(s, i)) if n > 1 else 1.0
-    det_uv = np.linalg.det(u @ v.conj().T)
-    return det_uv * ((v * s_ex.reshape(1, -1)) @ u.conj().T)
-
-
-def _reduce_conjugate_pairs(
-    poles: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    poles = np.asarray(poles, dtype=np.complex128).ravel()
-    n_poles = poles.size
-    lhs = np.column_stack([np.real(poles), np.imag(poles)])
-    rhs = np.column_stack([np.real(poles), -np.imag(poles)])
-    dist = np.linalg.norm(lhs[:, None, :] - rhs[None, :, :], axis=2)
-    pair_index = np.argmin(dist, axis=1)
-
-    pair_type = np.zeros(n_poles, dtype=int)
-    for it in range(n_poles):
-        if pair_type[it] != 0:
-            continue
-        if it == pair_index[it]:
-            pair_type[it] = 1
-        elif it == pair_index[pair_index[it]]:
-            pair_type[it] = 2
-            pair_type[pair_index[it]] = 3
-        else:
-            pair_type[it] = -1
-
-    if np.any(pair_type == -1):
-        warnings.warn(f"{np.sum(pair_type == -1)} poles could not be paired", stacklevel=2)
-
-    is_conjugate = np.ones(n_poles, dtype=bool)
-    is_conjugate[pair_type == 1] = False
-    non_paired = poles[pair_type == -1]
-    select = (pair_type == 1) | (pair_type == 2) | (pair_type == -1)
-    poles_out = poles[select]
-    poles_out = np.real(poles_out) + 1j * np.abs(np.imag(poles_out))
-    return poles_out, is_conjugate[select], non_paired
-
-
-@dataclass
-class _SimpleLoop:
-    delays: np.ndarray
-    feedback: np.ndarray
-
-    def __post_init__(self):
-        self.delays = np.asarray(self.delays, dtype=np.float64).ravel()
-        self.feedback = np.asarray(self.feedback, dtype=np.complex128)
-        self.n = int(self.delays.size)
-        if self.feedback.shape != (self.n, self.n):
-            raise ValueError(
-                "Feedback dimensions must match number of delays: "
-                f"expected ({self.n},{self.n}), got {self.feedback.shape}"
-            )
-
-    def _delay_inv_at(self, z: complex) -> np.ndarray:
-        return np.diag(np.power(z, self.delays)).astype(np.complex128)
-
-    def _delay_inv_der(self, z: complex) -> np.ndarray:
-        return np.diag(self.delays * np.power(z, self.delays - 1.0)).astype(np.complex128)
-
-    def at(self, z: complex) -> np.ndarray:
-        return self._delay_inv_at(z) - self.feedback
-
-    def der(self, z: complex) -> np.ndarray:
-        return self._delay_inv_der(z)
 
 
 def _dss_to_res_direct(
     poles: np.ndarray,
-    loop: _SimpleLoop,
-    b_mat: np.ndarray,
-    c_mat: np.ndarray,
-    d_term: np.ndarray,
+    delays: np.ndarray,
+    A: np.ndarray,
+    B: np.ndarray,
+    C: np.ndarray,
+    D: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    poles = np.asarray(poles, dtype=np.complex128).ravel()
-    n_poles = poles.size
-    n = loop.n
+    """
+    Residues from poles using SVD-based formula (same as FLAMO path).
 
-    b0 = np.asarray(b_mat, dtype=np.complex128)
-    c0 = np.asarray(c_mat, dtype=np.complex128)
-    n_in = b0.shape[1]
-    n_out = c0.shape[0]
+    P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1}). At each pole: SVD(P) gives
+    right null vector r, left null vector l; denom = l^H (dP/dz) r;
+    residue numerator = (C @ r) @ (l^H @ B).
+    """
+    poles = np.asarray(poles, dtype=np.complex128).ravel()
+    delays = np.asarray(delays, dtype=np.float64).ravel()
+    A = np.asarray(A, dtype=np.complex128)
+    B = np.asarray(B, dtype=np.complex128)
+    C = np.asarray(C, dtype=np.complex128)
+    D = np.asarray(D, dtype=np.complex128)
+
+    n_poles = poles.size
+    n = delays.size
+    n_in = B.shape[1]
+    n_out = C.shape[0]
 
     r_den = np.zeros(n_poles, dtype=np.complex128)
+    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
+    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
+    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
+
     for it, pole in enumerate(poles):
-        r_den[it] = np.trace(_adjugate(loop.at(pole)) @ loop.der(pole))
+        # P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1})
+        z_m = np.power(pole, delays)
+        z_m1 = np.power(pole, delays - 1.0)
+        p = np.diag(z_m) - A
+        dp = np.diag(delays * z_m1)
+
+        # Null vectors: P r = 0, l^H P = 0 (same as FLAMO)
+        u, s, vh = np.linalg.svd(p, full_matrices=False)
+        r = vh.conj().T[:, -1]
+        l = u[:, -1]
+
+        denom = np.vdot(l, dp @ r)
+        r_den[it] = denom
+        eig_right[:, it] = r
+        eig_left[:, it] = l
+
+        cr = C @ r.reshape(-1, 1)
+        lh_b = np.conj(l).reshape(1, -1) @ B
+        r_nom[it, :, :] = cr @ lh_b
 
     with np.errstate(divide="ignore", invalid="ignore"):
         undriven = 1.0 / r_den
@@ -119,28 +74,12 @@ def _dss_to_res_direct(
         undriven[is_multiple] = 0.0
         r_den[is_multiple] = np.inf
 
-    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
-    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
-    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
-
-    for it, pole in enumerate(poles):
-        l = np.asarray(loop.at(pole), dtype=np.complex128)
-        adj = _adjugate(l)
-        r_nom[it, :, :] = c0 @ adj @ b0
-
-        u, s, vh = np.linalg.svd(adj, full_matrices=False)
-        s1 = s[0] if s.size else 0.0
-        denom = np.sqrt(r_den[it])
-        if np.abs(denom) > 0 and np.isfinite(denom):
-            eig_right[:, it] = u[:, 0] * np.sqrt(s1) / denom
-            eig_left[:, it] = vh.conj().T[:, 0] * np.conj(np.sqrt(s1)) / np.conj(denom)
-
     with np.errstate(divide="ignore", invalid="ignore"):
         residues = r_nom / r_den[:, None, None]
     residues = np.where(np.isfinite(residues), residues, 0.0)
 
     eigenvectors = {"right": eig_right, "left": eig_left}
-    return residues, np.asarray(d_term, dtype=np.complex128), undriven, eigenvectors
+    return residues, D, undriven, eigenvectors
 
 
 def dss_to_pr_direct(
@@ -173,8 +112,6 @@ def dss_to_pr_direct(
     if a_mat.shape != (n, n):
         raise ValueError(f"A must have shape ({n},{n}), got {a_mat.shape}")
 
-    loop = _SimpleLoop(delays=delays_arr, feedback=a_mat)
-
     mode_l = str(mode).lower()
     a_poly = np.real_if_close(a_mat, tol=1000)
     if np.iscomplexobj(a_poly) and np.max(np.abs(np.imag(a_poly))) > 1e-12:
@@ -186,22 +123,22 @@ def dss_to_pr_direct(
     if mode_l == "eig":
         aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
         poles = np.linalg.eigvals(aa)
-    elif mode_l == "roots":
+    elif mode_l in ("roots", "polyeig"):
+        if mode_l == "polyeig":
+            warnings.warn(
+                "mode='polyeig' is currently mapped to roots-based extraction in dss_to_pr_direct.",
+                stacklevel=2,
+            )
+        # GCP p has p[k] = coef of z^{-k}; polynomial in w = z^{-1} is sum_k p[k] w^k
         p = general_char_poly(delays_arr, a_poly)
-        poles = np.roots(p)
-    elif mode_l == "polyeig":
-        warnings.warn(
-            "mode='polyeig' is currently mapped to roots-based extraction in dss_to_pr_direct.",
-            stacklevel=2,
-        )
-        p = general_char_poly(delays_arr, a_poly)
-        poles = np.roots(p)
+        w_roots = np.roots(p[::-1])  # np.roots expects high-to-low coefficient order
+        poles = np.array([1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128)
     else:
         raise ValueError("mode must be 'eig', 'roots', or 'polyeig'")
 
-    poles, is_conjugate_pair, non_paired = _reduce_conjugate_pairs(poles)
+    poles, is_conjugate_pair, non_paired = reduce_conjugate_pairs(poles)
     residues, direct, undriven, eigenvectors = _dss_to_res_direct(
-        poles, loop, b_mat, c_mat, d_mat
+        poles, delays_arr, a_mat, b_mat, c_mat, d_mat
     )
 
     meta_data: dict[str, Any] = {
@@ -210,4 +147,3 @@ def dss_to_pr_direct(
         "eigenvectors": eigenvectors,
     }
     return residues, poles, direct, is_conjugate_pair, meta_data
-

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
-from pyFDN.translate.dss_to_pr import dss_to_pr
+from pyFDN.translate.dss_to_pr_direct import dss_to_pr_direct
 from pyFDN.translate.dss_to_pr_flamo import (
     dss_to_pr_flamo,
     flamo_extract_pr_decomposition,
@@ -14,21 +14,20 @@ from pyFDN.translate.dss_to_pr_flamo import (
 )
 
 
-def test_dss_to_pr_flamo_matches_autograd_backend():
+def test_dss_to_pr_flamo_matches_direct_backend():
     delays = np.array([2, 3], dtype=int)
     a = np.array([[0.25, -0.1], [0.15, 0.3]])
     b = np.eye(2, 1)
     c = np.eye(1, 2)
     d = np.zeros((1, 1))
 
-    res_ref, pol_ref, direct_ref, pair_ref, _ = dss_to_pr(
+    res_ref, pol_ref, direct_ref, pair_ref, _ = dss_to_pr_direct(
         delays,
         a,
         b,
         c,
         d,
         feedback_delay_units=0,
-        probe_backend="autograd",
         verbose=False,
     )
     res_new, pol_new, direct_new, pair_new, _ = dss_to_pr_flamo(

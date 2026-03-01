@@ -107,9 +107,9 @@ _Generated: 2025-11-13T15:04:12.427402Z_
 |---|---|---|---|
 | `dss2impz.m` | `dss2impz.py` | `dss2impz.py` | **Translated** |
 | `dss2impzTransposed.m` | `dss_to_impz_transposed.py` | `` | **TODO** |
-| `dss2pr.m` | `dss_to_pr.py` | `dss_to_pr.py` | **Translated** |
-| `dss2pr_direct.m` | `dss_to_pr_direct.py` | `` | **TODO** |
-| `dss2res.m` | `dss_to_res.py` | `dss_to_pr.py` | **Translated** |
+| `dss2pr.m` | (removed) | — | Replaced by `dss_to_pr_direct` / `dss_to_pr_flamo` |
+| `dss2pr_direct.m` | `dss_to_pr_direct.py` | `dss_to_pr_direct.py` | **Translated** |
+| `dss2res.m` | `dss_to_res.py` | `dss_to_pr_direct.py` / `dss_to_pr_flamo.py` | **Translated** |
 | `dss2ss.m` | `dss2ss.py` | `dss2ss.py` | **Translated** |
 | `dss2tf.m` | `dss_to_tf.py` | `` | **TODO** |
 | `dss2tfSym.m` | `dss_to_tf_sym.py` | `` | **TODO** |

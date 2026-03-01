@@ -1,4 +1,4 @@
-"""Tests for dss_to_pr / pr_to_impz / impz_to_res translations."""
+"""Tests for dss_to_pr_direct / dss_to_pr_flamo and pr_to_impz / impz_to_res pipeline."""
 
 from __future__ import annotations
 
@@ -6,19 +6,19 @@ import numpy as np
 
 from pyFDN.generate.random_orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_impz import dss_to_impz
-from pyFDN.translate.dss_to_pr import dss_to_pr
+from pyFDN.translate.dss_to_pr_direct import dss_to_pr_direct
 from pyFDN.translate.impz_to_res import impz_to_res
 from pyFDN.translate.pr_to_impz import pr_to_impz
 
 
-def test_dss_to_pr_reconstructs_impulse_response():
+def test_dss_to_pr_direct_reconstructs_impulse_response():
     delays = np.array([3, 4, 5, 6], dtype=int)
     a = 0.65 * random_orthogonal(delays.size)
     b = np.eye(delays.size, 1)
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_conj, _ = dss_to_pr(
+    residues, poles, direct, is_conj, _ = dss_to_pr_direct(
         delays,
         a,
         b,
@@ -49,7 +49,7 @@ def test_example_dss_to_pr_residue_lstsq_match():
 
     ir_len = 4 * int(np.sum(delays))
     ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
-    residues, poles, direct, is_conj, _ = dss_to_pr(
+    residues, poles, direct, is_conj, _ = dss_to_pr_direct(
         delays,
         a,
         b,
@@ -68,42 +68,3 @@ def test_example_dss_to_pr_residue_lstsq_match():
         rtol=1e-6,
         atol=1e-7,
     )
-
-
-def test_dss_to_pr_accepts_flamo_graph_like_feedback():
-    class ConstantFeedbackGraph:
-        def __init__(self, matrix: np.ndarray):
-            self._matrix = np.asarray(matrix, dtype=np.float64)
-            self.input_channels = self._matrix.shape[1]
-            self.output_channels = self._matrix.shape[0]
-
-        def at(self, z):
-            return self._matrix
-
-        def der(self, z):
-            return np.zeros_like(self._matrix)
-
-    delays = np.array([2, 3], dtype=int)
-    a = np.array([[0.3, -0.1], [0.2, 0.35]])
-    b = np.eye(2, 1)
-    c = np.eye(1, 2)
-    d = np.zeros((1, 1))
-
-    residues_num, poles_num, _, is_conj_num, _ = dss_to_pr(
-        delays, a, b, c, d, verbose=False
-    )
-    residues_graph, poles_graph, _, is_conj_graph, _ = dss_to_pr(
-        delays,
-        ConstantFeedbackGraph(a),
-        b,
-        c,
-        d,
-        feedback_delay_units=0,
-        probe_backend="autograd",
-        verbose=False,
-    )
-
-    np.testing.assert_allclose(poles_graph, poles_num, rtol=1e-8, atol=1e-8)
-    np.testing.assert_array_equal(is_conj_graph, is_conj_num)
-    np.testing.assert_allclose(residues_graph, residues_num, rtol=1e-8, atol=1e-8)
-

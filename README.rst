@@ -82,12 +82,12 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     # one-pole absorption filters targeting rt60 of 1.2s at dc and 0.9s at nyquist
     absorption = pyFDN.one_pole_absorption(1.2, 0.9, delays, fs)
 
-    # convert delay state-space to standard state-space
-    ss_matrix, b, c, d = pyFDN.dss2ss(delays, feedback)
+    # convert delay state-space to standard state-space (A_ss, b, c, d)
+    A_ss, b, c, d = pyFDN.dss_to_ss(delays, feedback)
 
 Alternatively, import specific functions directly::
 
-    from pyFDN import random_orthogonal, one_pole_absorption, mag2db
+    from pyFDN import random_orthogonal, one_pole_absorption, lin_to_db
 
     feedback = random_orthogonal(4)
     absorption = one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
