@@ -131,53 +131,53 @@ def _sort_by_torch(a: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, to
     return a[ind_t], ind_t
 
 
-class _FlamoGraphProbe:
-    """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w). Returns torch."""
+# class _FlamoGraphProbe:
+#     """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w). Returns torch."""
 
-    def __init__(self, model: Any):
-        self.model = model
-        h0 = self.at_z(1.0 + 0j)
-        if h0.ndim != 2:
-            raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
-        self.output_channels, self.input_channels = h0.shape
+#     def __init__(self, model: Any):
+#         self.model = model
+#         h0 = self.at_z(1.0 + 0j)
+#         if h0.ndim != 2:
+#             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
+#         self.output_channels, self.input_channels = h0.shape
 
-    def at_z(self, z: complex) -> torch.Tensor:
-        """H(z) via FLAMO model.probe(z)."""
-        z_t = _as_torch_complex_scalar(z, model=self.model)
-        out = self.model.probe(z_t)
-        if isinstance(out, tuple):
-            if len(out) == 0:
-                raise RuntimeError("model.probe returned empty tuple")
-            out = out[0]
-        return out.detach()
+#     def at_z(self, z: complex) -> torch.Tensor:
+#         """H(z) via FLAMO model.probe(z)."""
+#         z_t = _as_torch_complex_scalar(z, model=self.model)
+#         out = self.model.probe(z_t)
+#         if isinstance(out, tuple):
+#             if len(out) == 0:
+#                 raise RuntimeError("model.probe returned empty tuple")
+#             out = out[0]
+#         return out.detach()
 
-    def at_w(self, w: complex) -> torch.Tensor:
-        """H(1/w) via FLAMO model.probe_w(w) when available, else at_z(1/w)."""
-        probe_w_fn = getattr(self.model, "probe_w", None)
-        if callable(probe_w_fn):
-            w_t = _as_torch_complex_scalar(w, model=self.model)
-            out = probe_w_fn(w_t)
-            if isinstance(out, tuple) and out:
-                out = out[0]
-            return out.detach()
-        return self.at_z(1.0 / w)
+#     def at_w(self, w: complex) -> torch.Tensor:
+#         """H(1/w) via FLAMO model.probe_w(w) when available, else at_z(1/w)."""
+#         probe_w_fn = getattr(self.model, "probe_w", None)
+#         if callable(probe_w_fn):
+#             w_t = _as_torch_complex_scalar(w, model=self.model)
+#             out = probe_w_fn(w_t)
+#             if isinstance(out, tuple) and out:
+#                 out = out[0]
+#             return out.detach()
+#         return self.at_z(1.0 / w)
 
-    def at(self, z: complex) -> torch.Tensor:
-        """Backward-compatible alias for at_z(z)."""
-        return self.at_z(z)
+#     def at(self, z: complex) -> torch.Tensor:
+#         """Backward-compatible alias for at_z(z)."""
+#         return self.at_z(z)
 
-    def der(self, z: complex) -> torch.Tensor:
-        """dH/dz(z) via JVP in pyFDN; FLAMO only provides H(z) via model.probe(z)."""
-        z_t = _as_torch_complex_scalar(z, model=self.model)
-        dz = torch.ones_like(z_t)
+#     def der(self, z: complex) -> torch.Tensor:
+#         """dH/dz(z) via JVP in pyFDN; FLAMO only provides H(z) via model.probe(z)."""
+#         z_t = _as_torch_complex_scalar(z, model=self.model)
+#         dz = torch.ones_like(z_t)
 
-        def _eval(z_val: torch.Tensor) -> torch.Tensor:
-            if hasattr(self.model, "_Shell__core"):
-                return self.model.probe(z_val, include_shell_io=False)
-            return self.model.probe(z_val)
+#         def _eval(z_val: torch.Tensor) -> torch.Tensor:
+#             if hasattr(self.model, "_Shell__core"):
+#                 return self.model.probe(z_val, include_shell_io=False)
+#             return self.model.probe(z_val)
 
-        _, dH_dz = torch.autograd.functional.jvp(_eval, (z_t,), (dz,))
-        return dH_dz.detach()
+#         _, dH_dz = torch.autograd.functional.jvp(_eval, (z_t,), (dz,))
+#         return dH_dz.detach()
 
 
 @dataclass
@@ -310,43 +310,30 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     return np.asarray(np.round(out), dtype=int)
 
 
-def _subgraph_to_probe(
-    subgraph: Any | None,
-    *,
-    identity_dim: int,
-    device: torch.device | None = None,
-    dtype: torch.dtype | None = None,
-) -> Any:
-    """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> torch."""
-    if subgraph is None:
-        return _IdentityProbe(identity_dim, device=device, dtype=dtype)
-    return _FlamoGraphProbe(subgraph)
+# def _subgraph_to_probe(
+#     subgraph: Any | None,
+#     *,
+#     identity_dim: int,
+#     device: torch.device | None = None,
+#     dtype: torch.dtype | None = None,
+# ) -> Any:
+#     """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> torch."""
+#     if subgraph is None:
+#         return _IdentityProbe(identity_dim, device=device, dtype=dtype)
+#     return _FlamoGraphProbe(subgraph)
 
 
 def _extract_flamo_recursion_probes(
     decomposition: FlamoDecompositionForPR,
 ) -> _CharacteristicDecomposition:
     """Build characteristic decomposition from pre-decomposed FLAMO subgraphs."""
-    n = int(decomposition.delays.size)
     rec = decomposition.recursion_module
-    device = _infer_model_device(rec)
-    dtype = _infer_model_complex_dtype(rec)
-
-    f_probe = _FlamoGraphProbe(decomposition.f_subgraph)
-    in_probe = _subgraph_to_probe(
-        decomposition.in_subgraph, identity_dim=n, device=device, dtype=dtype
-    )
-    out_probe = _subgraph_to_probe(
-        decomposition.out_subgraph, identity_dim=n, device=device, dtype=dtype
-    )
-    direct_probe = _FlamoGraphProbe(decomposition.direct_subgraph)
-
     return _CharacteristicDecomposition(
         p_probe=rec,
-        f_probe=f_probe,
-        in_probe=in_probe,
-        out_probe=out_probe,
-        direct_probe=direct_probe,
+        f_probe=decomposition.f_subgraph,
+        in_probe=decomposition.in_subgraph,
+        out_probe=decomposition.out_subgraph,
+        direct_probe=decomposition.direct_subgraph,
     )
 
 
@@ -410,20 +397,12 @@ class _FDNLoopFlamo:
 
     def at_z(self, z: complex) -> torch.Tensor:
         """P(z) via Recursion.probe_recursion(z)."""
-        z_t = _as_torch_complex_scalar(z, model=self.recursion)
-        out = self.recursion.probe_recursion(z_t)
-        out = out[0] if isinstance(out, tuple) else out
+        out = self.recursion.probe_recursion(z)
         return out.detach()
 
     def at_w(self, w: complex) -> torch.Tensor:
         """P(w) via Recursion.probe_recursion_w(w)."""
-        if np.abs(w) < 1e-14:
-            return torch.full(
-                (self.n, self.n), float("inf"),
-                device=self._device, dtype=self._dtype,
-            )
-        w_t = _as_torch_complex_scalar(w, model=self.recursion)
-        out = self.recursion.probe_recursion_w(w_t)
+        out = self.recursion.probe_recursion_w(w)
         return out.detach()
 
     def der(self, z: complex) -> torch.Tensor:
@@ -726,10 +705,10 @@ def _dss_to_res_flamo(
 
     for it, pole in enumerate(poles):
         p, dp = loop.get_P_and_dP_dz(pole)
-        f_at = decomposition.f_probe.at(pole)
-        in_at = decomposition.in_probe.at(pole)
+        f_at = decomposition.f_probe.probe(pole)
+        in_at = decomposition.in_probe.probe(pole)
         b = f_at @ in_at
-        c = decomposition.out_probe.at(pole)
+        c = decomposition.out_probe.probe(pole)
 
         u, s, vh = torch.linalg.svd(p)
         r = vh.conj().T[:, -1]
@@ -754,7 +733,8 @@ def _dss_to_res_flamo(
     residues = r_nom / r_den[:, None, None]
     zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
     residues = torch.where(torch.isfinite(residues), residues, zero)
-    direct_term = decomposition.direct_probe.at(1.0 + 0j)
+    direct_term = decomposition.direct_probe.probe(1.0 + 0j)
+    # direct_term = 0.0 + 0.0j # TODO: fix later by removing this whole direct term
 
     return (
         _to_numpy(residues),
@@ -770,7 +750,7 @@ def flamo_to_pr(
     decomposition: FlamoDecompositionForPR | None = None,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
-    quality_threshold: float = 1e-7,
+    quality_threshold: float = 1e-10,
     maximum_iterations: int = 50,
     refinement_tol: float = 1e-12,
     verbose: bool = True,
