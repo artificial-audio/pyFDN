@@ -10,6 +10,7 @@ from .allpass import (
     is_paraunitary,
 )
 from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, draw_flamo_graph
+from .poles import reduce_conjugate_pairs
 
 __all__ = [
     "skew",
@@ -25,4 +26,5 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "draw_flamo_graph",
+    "reduce_conjugate_pairs",
 ]

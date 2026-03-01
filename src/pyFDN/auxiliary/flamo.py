@@ -29,6 +29,7 @@ def gain_module(
     nfft: int,
     *,
     device=None,
+    dtype=None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
 ):
@@ -43,6 +44,9 @@ def gain_module(
         FFT size for the FLAMO module.
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Optional dtype for module parameters (e.g., torch.float64).
+        If None, uses float32.
     alias_decay_db : float
         FLAMO alias decay in dB.
     requires_grad : bool
@@ -63,14 +67,16 @@ def gain_module(
     n_out, n_in = values.shape
     dev = _get_device(device)
 
+    torch_dtype = torch.float32 if dtype is None else dtype
     gain = dsp.Gain(
         size=(n_out, n_in),
         nfft=nfft,
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,
+        dtype=torch_dtype,
     )
-    gain.assign_value(torch.as_tensor(values, dtype=torch.float64, device=dev))
+    gain.assign_value(torch.as_tensor(values, dtype=torch_dtype, device=dev))
     return gain
 
 
@@ -80,6 +86,7 @@ def delay_module(
     *,
     Fs: float,
     device=None,
+    dtype=None,
     isint: bool = True,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
@@ -99,6 +106,9 @@ def delay_module(
         Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * Fs).
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Optional dtype for module parameters (e.g., torch.float64).
+        If None, uses float32 to preserve previous behavior.
     isint : bool
         Whether delays are integer-sample (True) or fractional.
     alias_decay_db : float
@@ -121,6 +131,7 @@ def delay_module(
     max_len = max(1, max_len)
     dev = _get_device(device)
 
+    torch_dtype = torch.float32 if dtype is None else dtype
     delays = dsp.parallelDelay(
         size=(n,),
         max_len=max_len,
@@ -131,8 +142,9 @@ def delay_module(
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,
+        dtype=torch_dtype,
     )
-    delays.assign_value(torch.as_tensor(lengths, dtype=torch.float32, device=dev))
+    delays.assign_value(torch.as_tensor(lengths, dtype=torch_dtype, device=dev))
     return delays
 
 
@@ -141,6 +153,7 @@ def sos_filter_module(
     nfft: int,
     *,
     device=None,
+    dtype=None,
     requires_grad: bool = False,
 ):
     """
@@ -154,6 +167,9 @@ def sos_filter_module(
         FFT size for the FLAMO module.
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Optional dtype for module parameters (e.g., torch.float64).
+        If None, uses float32 to preserve previous behavior.
     requires_grad : bool
         Whether the filter parameters are trainable.
 
@@ -174,11 +190,13 @@ def sos_filter_module(
         raise ValueError("sos must have at least one channel")
 
     dev = _get_device(device)
+    torch_dtype = torch.float32 if dtype is None else dtype
     filt = dsp.parallelSOSFilter(
         size=(N,),
         n_sections=n_sections,
         nfft=nfft,
         device=dev,
+        dtype=torch_dtype,
     )
-    filt.assign_value(torch.as_tensor(sos_pad, dtype=torch.float32, device=dev))
+    filt.assign_value(torch.as_tensor(sos_pad, dtype=torch_dtype, device=dev))
     return filt

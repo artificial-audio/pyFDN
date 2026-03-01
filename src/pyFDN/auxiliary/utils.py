@@ -131,6 +131,22 @@ def hertz_to_unit(hz: ArrayLike, fs: float) -> np.ndarray:
     return np.asarray(hz) / fs * 2
 
 
+def rad_to_hertz(rad: ArrayLike, fs: float) -> np.ndarray:
+    """Convert angular frequency (rad/sample) to frequency (Hz).
+
+    Relationship: omega = 2*pi*f/fs, so f = omega * fs / (2*pi).
+    """
+    return np.asarray(rad, dtype=np.float64) * fs / (2.0 * np.pi)
+
+
+def hertz_to_rad(hz: ArrayLike, fs: float) -> np.ndarray:
+    """Convert frequency (Hz) to angular frequency (rad/sample).
+
+    Relationship: omega = 2*pi*f/fs. Inverse of :func:`rad_to_hertz`.
+    """
+    return np.asarray(hz, dtype=np.float64) * (2.0 * np.pi) / fs
+
+
 def is_bounding_curve(x_points, y_points, x_curve, y_curve, bound_type):
     """
     Check if all value points are bounded by the curve.
