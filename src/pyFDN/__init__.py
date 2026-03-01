@@ -73,7 +73,9 @@ __all__ = [
     "dss_to_impz",
     "dss_to_pr_direct",
     "flamo_to_pr",
+    "flamo_decompose_for_pr",
     "flamo_extract_pr_decomposition",
+    "FlamoDecompositionForPR",
     "dss_to_pr_flamo",
     "dss_to_ss",
     "dss_to_tf",
@@ -239,8 +241,10 @@ from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr_direct import dss_to_pr_direct
 from .translate.dss_to_pr_flamo import (
     dss_to_pr_flamo,
+    flamo_decompose_for_pr,
     flamo_extract_pr_decomposition,
     flamo_to_pr,
+    FlamoDecompositionForPR,
 )
 from .translate.dss_to_tf import dss_to_tf
 from .translate.impz_to_res import impz_to_res

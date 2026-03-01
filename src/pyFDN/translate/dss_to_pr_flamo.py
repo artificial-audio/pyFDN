@@ -141,46 +141,26 @@ class _FlamoRecursionCharacteristicProbe:
 
 @dataclass
 class _CharacteristicDecomposition:
-    """Explicit transfer decomposition H(z)=C(z)P(z)^{-1}B(z)+D(z)."""
+    """H(z)=C(z)P(z)^{-1}B(z)+D(z) with probes for B,C,D."""
 
     p_probe: Any
-    b_probe: Any
-    c_probe: Any
-    d_probe: Any
+    f_probe: Any
+    in_probe: Any
+    out_probe: Any
+    direct_probe: Any
 
 
 def _decomposition_to_public_dict(
     decomposition: _CharacteristicDecomposition,
 ) -> dict[str, Any]:
+    """Public dict: P, F (feedforward), B (input path), C, D probes. H = C P^{-1} F B + D."""
     return {
         "P": decomposition.p_probe,
-        "B": decomposition.b_probe,
-        "C": decomposition.c_probe,
-        "D": decomposition.d_probe,
+        "F": decomposition.f_probe,
+        "B": decomposition.in_probe,
+        "C": decomposition.out_probe,
+        "D": decomposition.direct_probe,
     }
-
-
-def _coerce_decomposition(
-    decomposition: Any,
-) -> _CharacteristicDecomposition:
-    if isinstance(decomposition, _CharacteristicDecomposition):
-        return decomposition
-    if isinstance(decomposition, dict):
-        required = {"P", "B", "C", "D"}
-        missing = required.difference(decomposition.keys())
-        if missing:
-            miss = ", ".join(sorted(missing))
-            raise ValueError(f"decomposition is missing required keys: {miss}")
-        return _CharacteristicDecomposition(
-            p_probe=decomposition["P"],
-            b_probe=decomposition["B"],
-            c_probe=decomposition["C"],
-            d_probe=decomposition["D"],
-        )
-    raise TypeError(
-        "decomposition must be a dict with keys P/B/C/D "
-        "or a _CharacteristicDecomposition instance."
-    )
 
 
 def _as_module_list(node: Any) -> list[Any]:
@@ -194,49 +174,82 @@ def _as_module_list(node: Any) -> list[Any]:
     return modules
 
 
-def _build_flamo_series(modules: list[Any]) -> Any:
-    """Build a FLAMO Series model from a list of modules."""
-    if len(modules) == 1:
-        return modules[0]
+@dataclass
+class FlamoDecompositionForPR:
+    """
+    Decomposition of a FLAMO model into small subgraphs for poles/residues.
+    All subgraph fields are FLAMO modules (with .probe(z)); None means identity.
+    """
+
+    recursion_module: Any
+    delays: np.ndarray
+    in_subgraph: Any | None
+    f_subgraph: Any
+    out_subgraph: Any | None
+    direct_subgraph: Any
+
+
+def _series_slice_to_subgraph(series: Any, start: int, end: int) -> Any | None:
+    """
+    Return the slice of a FLAMO Series as a subgraph (same module refs).
+    Returns None for empty slice, single module ref, or new Series(OrderedDict(slice)).
+    """
+    n = end - start
+    if n <= 0:
+        return None
+    if n == 1:
+        return series[start]
     try:
         from flamo.processor import system as flamo_system  # type: ignore
     except Exception as exc:
         raise RuntimeError(
-            "FLAMO system.Series is required to compose branch subchains."
+            "FLAMO system.Series is required for multi-module subgraphs."
         ) from exc
-    return flamo_system.Series(
-        OrderedDict((f"m{i}", module) for i, module in enumerate(modules))
-    )
+    items = list(series._modules.items())[start:end]
+    return flamo_system.Series(OrderedDict(items))
 
 
-def _probe_from_modules(modules: list[Any], *, identity_dim: int | None = None) -> Any:
-    """Create a probe adapter from a FLAMO module chain."""
-    if len(modules) == 0:
-        if identity_dim is None:
-            raise ValueError("Empty module chain requires identity_dim.")
-        return _IdentityProbe(identity_dim)
-    return _FlamoGraphProbe(_build_flamo_series(modules))
+def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
+    """
+    Decompose a FLAMO model into the subgraphs needed for poles/residues.
 
-
-def _get_recursion_from_model(model: Any) -> Any:
-    """Return the unique Recursion module in the model's branchA."""
+    Expects core with branchA (Series of input_gain, Recursion(feedforward, feedback), output_gain)
+    and branchB (direct path). Returns small FLAMO subgraphs (no probing); pass the result
+    to :func:`flamo_to_pr` as ``decomposition=...``.
+    """
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
-    if not hasattr(core, "branchA"):
+    if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
         raise ValueError(
-            "flamo_to_pr expects a FLAMO core with branchA "
-            "(e.g., produced by dss_to_flamo)."
+            "Model core must have branchA and branchB "
+            "(e.g., from dss_to_flamo)."
         )
-    fdn_modules = _as_module_list(core.branchA)
+    fdn_branch = core.branchA
+    direct_branch = core.branchB
+    fdn_modules = _as_module_list(fdn_branch)
     recs = [
         m
         for m in fdn_modules
         if hasattr(m, "feedforward") and hasattr(m, "feedback")
     ]
     if len(recs) != 1:
-        raise ValueError(
-            "Model must contain exactly one Recursion in branchA."
-        )
-    return recs[0]
+        raise ValueError("branchA must contain exactly one Recursion.")
+    recursion_module = recs[0]
+    rec_idx = fdn_modules.index(recursion_module)
+    n_fdn = len(fdn_modules)
+    delays = _delays_from_recursion(recursion_module)
+    if delays.size == 0:
+        raise ValueError("Recursion has no delays (empty delay module).")
+
+    in_subgraph = _series_slice_to_subgraph(fdn_branch, 0, rec_idx)
+    out_subgraph = _series_slice_to_subgraph(fdn_branch, rec_idx + 1, n_fdn)
+    return FlamoDecompositionForPR(
+        recursion_module=recursion_module,
+        delays=delays,
+        in_subgraph=in_subgraph,
+        f_subgraph=recursion_module.feedforward,
+        out_subgraph=out_subgraph,
+        direct_subgraph=direct_branch,
+    )
 
 
 def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
@@ -256,80 +269,46 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     return np.asarray(np.round(out), dtype=int)
 
 
-def _get_recursion_and_delays_from_model(model: Any) -> tuple[Any, np.ndarray]:
-    """Return (recursion_module, delays_arr) from a FLAMO model."""
-    rec = _get_recursion_from_model(model)
-    delays = _delays_from_recursion(rec)
-    if delays.size == 0:
-        raise ValueError("Recursion has no delays (empty delay module).")
-    return rec, delays
+def _subgraph_to_probe(subgraph: Any | None, *, identity_dim: int) -> Any:
+    """Wrap a FLAMO subgraph (or None) as a probe with .at(z) -> ndarray."""
+    if subgraph is None:
+        return _IdentityProbe(identity_dim)
+    return _FlamoGraphProbe(subgraph)
 
 
 def _extract_flamo_recursion_probes(
-    model: Any,
-    recursion_module: Any,
-    delays: np.ndarray,
+    decomposition: FlamoDecompositionForPR,
 ) -> _CharacteristicDecomposition:
-    """
-    Extract B/C/D probes and loop probes from a dss_to_flamo-like graph.
+    """Build characteristic decomposition from pre-decomposed FLAMO subgraphs."""
+    n = int(decomposition.delays.size)
+    rec = decomposition.recursion_module
 
-    Expected core topology:
-        Parallel(sum_output=True):
-            branchA = Series(input_gain, Recursion(feedforward, feedback), output_gain)
-            branchB = direct gain path
-    """
-    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+    f_probe = _FlamoGraphProbe(decomposition.f_subgraph)
+    in_probe = _subgraph_to_probe(decomposition.in_subgraph, identity_dim=n)
+    out_probe = _subgraph_to_probe(decomposition.out_subgraph, identity_dim=n)
+    direct_probe = _FlamoGraphProbe(decomposition.direct_subgraph)
 
-    if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
-        raise ValueError(
-            "flamo_to_pr expects a FLAMO core with branchA/branchB "
-            "(e.g., produced by dss_to_flamo)."
-        )
-
-    fdn_branch = core.branchA
-    direct_branch = core.branchB
-    fdn_modules = _as_module_list(fdn_branch)
-
-    rec_indices = [i for i, mod in enumerate(fdn_modules) if mod is recursion_module]
-    if len(rec_indices) != 1:
-        raise ValueError(
-            "recursion_module is not uniquely contained in branchA. "
-            "Pass the exact recursion instance used in the model."
-        )
-    rec_idx = int(rec_indices[0])
-
-    n = int(np.asarray(delays).size)
-    in_modules = fdn_modules[:rec_idx]
-    out_modules = fdn_modules[rec_idx + 1 :]
-    ff_modules = _as_module_list(recursion_module.feedforward)
-    b_probe = _probe_from_modules(in_modules + ff_modules, identity_dim=n)
-    c_probe = _probe_from_modules(out_modules, identity_dim=n)
-    direct_probe = _probe_from_modules(_as_module_list(direct_branch))
-    characteristic_probe = _FlamoRecursionCharacteristicProbe(recursion_module)
+    characteristic_probe = _FlamoRecursionCharacteristicProbe(rec)
     return _CharacteristicDecomposition(
         p_probe=characteristic_probe,
-        b_probe=b_probe,
-        c_probe=c_probe,
-        d_probe=direct_probe,
+        f_probe=f_probe,
+        in_probe=in_probe,
+        out_probe=out_probe,
+        direct_probe=direct_probe,
     )
 
 
-def flamo_extract_pr_decomposition(
-    model: Any,
-    delays: ArrayLike,
-    *,
-    recursion_module: Any,
-) -> dict[str, Any]:
+def flamo_extract_pr_decomposition(model: Any) -> dict[str, Any]:
     """
     Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
 
-    Returns a dict with keys ``"P"``, ``"B"``, ``"C"``, ``"D"`` (probe objects).
-    For poles/residues use :func:`flamo_to_pr`(model), which does extraction internally.
+    Uses :func:`flamo_decompose_for_pr` then builds probe adapters. Returns a dict
+    with keys ``"P"``, ``"F"`` (feedforward), ``"B"`` (input path), ``"C"``, ``"D"``.
+    For poles/residues use
+    :func:`flamo_to_pr`(model) or :func:`flamo_to_pr`(decomposition=...).
     """
-    delays_arr = np.asarray(delays, dtype=int).ravel()
-    if delays_arr.ndim != 1 or delays_arr.size == 0:
-        raise ValueError("delays must be a non-empty 1-D array")
-    decomposition = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
+    decomp = flamo_decompose_for_pr(model)
+    decomposition = _extract_flamo_recursion_probes(decomp)
     return _decomposition_to_public_dict(decomposition)
 
 
@@ -422,26 +401,11 @@ class _FDNLoopFlamo:
         return self.log_det_derivative_w(w)
 
 
-def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
-    quality = np.zeros_like(poles, dtype=np.float64)
-    for i, pole in enumerate(np.asarray(poles, dtype=np.complex128).ravel()):
-        m = loop.at(pole)
-        if np.ndim(m) == 0:
-            q = float(np.abs(m))
-        else:
-            q = _rcond(np.asarray(m, dtype=np.complex128))
-        if np.max(np.abs(np.asarray(m))) > 1e10:
-            q = 1e10
-        quality[i] = q
-    return quality
-
-
-def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
-    """Pole quality via w-domain probing: rcond(P(1/w)) for each root w."""
-    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
-    quality = np.zeros_like(roots_w, dtype=np.float64)
-    for i, w in enumerate(roots_w):
-        m = loop.at_w(w)
+def _pole_quality_z(poles_z: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
+    """Pole quality in z-domain: rcond(P(z)) for each pole z."""
+    quality = np.zeros_like(poles_z, dtype=np.float64)
+    for i, z in enumerate(np.asarray(poles_z, dtype=np.complex128).ravel()):
+        m = loop.at(z)
         if np.ndim(m) == 0:
             q = float(np.abs(m))
         else:
@@ -449,6 +413,31 @@ def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
             q = _rcond(m)
             if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
                 q = 1e10
+        quality[i] = q
+    return quality
+
+
+def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
+    """
+    Pole quality for roots w: rcond(P(1/w)).
+    Uses z-domain (P(z) at z=1/w) when |w| > 1 for numerical stability;
+    otherwise uses w-domain probing (handles small |w| via loop.at_w).
+    """
+    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
+    quality = np.zeros_like(roots_w, dtype=np.float64)
+    for i, w in enumerate(roots_w):
+        if np.abs(w) > 1:
+            z = 1.0 / w
+            q = _pole_quality_z(np.array([z]), loop)[0]
+        else:
+            m = loop.at_w(w)
+            if np.ndim(m) == 0:
+                q = float(np.abs(m))
+            else:
+                m = np.asarray(m, dtype=np.complex128)
+                q = _rcond(m)
+                if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
+                    q = 1e10
         quality[i] = q
     return quality
 
@@ -616,7 +605,7 @@ def _refine_pole_positions_w(
 
     if verbose:
         print(f"Number of Exact Deflations: {exact_counter}")
-
+        print(f"Number of Newton Steps: {newton_step_counter}")
     meta = {
         "newtonStepCounter": int(newton_step_counter),
         "iterations": int(iteration_counter),
@@ -635,23 +624,22 @@ def _dss_to_res_flamo(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
-
-    b_ref = np.asarray(decomposition.b_probe.at(1.0 + 0j), dtype=np.complex128)
-    c_ref = np.asarray(decomposition.c_probe.at(1.0 + 0j), dtype=np.complex128)
-    n_in = b_ref.shape[1]
-    n_out = c_ref.shape[0]
+    n_in = int(getattr(decomposition.in_probe, "input_channels"))
+    n_out = int(getattr(decomposition.out_probe, "output_channels"))
     n = loop.n
 
     r_den = np.zeros(n_poles, dtype=np.complex128)
     r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
-    eig_right = np.zeros((n, n_poles), dtype=np.complex128)  # r_i
-    eig_left = np.zeros((n, n_poles), dtype=np.complex128)   # l_i (for l_i^H P = 0)
+    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
+    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
 
     for it, pole in enumerate(poles):
         p = np.asarray(decomposition.p_probe.at(pole), dtype=np.complex128)
         dp = np.asarray(decomposition.p_probe.der(pole), dtype=np.complex128)
-        b = np.asarray(decomposition.b_probe.at(pole), dtype=np.complex128)
-        c = np.asarray(decomposition.c_probe.at(pole), dtype=np.complex128)
+        f_at = np.asarray(decomposition.f_probe.at(pole), dtype=np.complex128)
+        in_at = np.asarray(decomposition.in_probe.at(pole), dtype=np.complex128)
+        b = f_at @ in_at
+        c = np.asarray(decomposition.out_probe.at(pole), dtype=np.complex128)
 
         # Null vectors for simple poles:
         # P(lambda) r = 0,  l^H P(lambda) = 0
@@ -679,14 +667,17 @@ def _dss_to_res_flamo(
     with np.errstate(divide="ignore", invalid="ignore"):
         residues = r_nom / r_den[:, None, None]
     residues = np.where(np.isfinite(residues), residues, 0.0)
-    direct_term = np.asarray(decomposition.d_probe.at(1.0 + 0j), dtype=np.complex128)
+    direct_term = np.asarray(
+        decomposition.direct_probe.at(1.0 + 0j), dtype=np.complex128
+    )
     eigenvectors = {"right": eig_right, "left": eig_left}
     return residues, direct_term, undriven, eigenvectors
 
 
 def flamo_to_pr(
-    model: Any,
+    model: Any | None = None,
     *,
+    decomposition: FlamoDecompositionForPR | None = None,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
     quality_threshold: float = 1e-7,
@@ -697,17 +688,18 @@ def flamo_to_pr(
     """
     Poles/residues from a FLAMO transfer H(z)=C(z)P(z)^{-1}B(z)+D(z).
 
-    Extracts the recursion and delay lengths from the model, builds the characteristic
-    decomposition internally, then refines poles in the w-domain (w = 1/z) and
-    converts back to z for residues.
+    Pass either a full FLAMO **model** (decomposition is done via
+    :func:`flamo_decompose_for_pr`) or a **decomposition** returned by that
+    function. Poles are refined in the w-domain (w = 1/z) then converted to z.
 
-    For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead, which does
-    DSS -> FLAMO -> PR in one call.
+    For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead.
     """
-    recursion_module, delays_arr = _get_recursion_and_delays_from_model(model)
-    decomposition_obj = _extract_flamo_recursion_probes(
-        model, recursion_module, delays_arr
-    )
+    if decomposition is None:
+        if model is None:
+            raise ValueError("Provide model or decomposition.")
+        decomposition = flamo_decompose_for_pr(model)
+    delays_arr = decomposition.delays
+    decomposition_obj = _extract_flamo_recursion_probes(decomposition)
 
     loop = _FDNLoopFlamo(characteristic_probe=decomposition_obj.p_probe)
 
