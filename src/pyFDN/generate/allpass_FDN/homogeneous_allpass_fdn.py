@@ -89,7 +89,7 @@ def homogeneous_allpass_fdn(
     b_hat = b_hat / factor
 
     # Coupling equation for X-uniallpass (scalar output):
-    c = (-np.linalg.inv(X) @ np.linalg.inv(A) @ b * float(d)).T
+    c = (-np.linalg.inv(X) @ np.linalg.inv(A) @ b * d).T
 
     if verbose:
         from pyFDN.auxiliary.allpass import is_uniallpass, is_allpass

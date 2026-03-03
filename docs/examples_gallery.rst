@@ -48,7 +48,7 @@ Advanced Topics
      - Analyse echo density and mixing behaviour of different delay-line topologies.
    * - :doc:`Interpolate Matrix <examples/example_interpolate_matrix>`
      - Smoothly interpolate between orthogonal feedback matrices.
-   * - :doc:`DSS to State-Space <examples/example_dss2ss>`
+   * - :doc:`DSS to State-Space <examples/example_dss_to_ss>`
      - Convert delay state-space representations to standard state-space form.
 
 ----
@@ -71,5 +71,18 @@ Advanced Topics
    examples/example_coupled_rooms
    examples/example_delay_matrix_density
    examples/example_interpolate_matrix
-   examples/example_dss2ss
+   examples/example_dss_to_ss
+   examples/allpass_FDN/example_allpass_FDN_completion
+   examples/allpass_FDN/example_allpass_FDN_homogeneous_mimo
+   examples/allpass_FDN/example_allpass_FDN_homogeneous_siso
+   examples/allpass_FDN/example_allpass_FDN_in_FDN
+   examples/allpass_FDN/example_allpass_FDN_nested
+   examples/allpass_FDN/example_allpass_FDN_not_uniallpass
+   examples/allpass_FDN/example_allpass_FDN_poletti
+   examples/allpass_FDN/example_allpass_FDN_schroeder
+   examples/allpass_FDN/example_allpass_FDN_schroeder_in_loop
+   examples/example_dss_to_pr_direct
+   examples/example_dss_to_pr_flamo
+   examples/example_dss_to_tf
+   examples/example_sdn_coefficients
 

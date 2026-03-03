@@ -24,9 +24,10 @@ def reduce_conjugate_pairs(
 
     For real-coefficient systems, poles are either real or occur in conjugate
     pairs. This uses the linear sum assignment problem (Hungarian method): cost
-    C[i,j] = |poles[j] - conj(poles[i])|; the minimum-cost permutation pairs each
-    pole with its conjugate (or itself for real poles). Then:
-    - Real: assignment[i] == i and C[i,i] < tol_real (i.e. |Im(pole_i)| small).
+    :math:`C[i,j] = |poles[j] - conj(poles[i])|`; the minimum-cost permutation
+    pairs each pole with its conjugate (or itself for real poles). Then:
+
+    - Real: assignment[i] == i and C[i,i] < tol_real (i.e. :math:`|Im(pole_i)|` small).
     - Conjugate pair: assignment[i] == j, assignment[j] == i, C[i,j] < tol_pair.
     - Unpaired: otherwise (ambiguous or numerical orphans).
 

@@ -5,8 +5,10 @@ Recursive DSP Framework
 A modular, block-based framework for recursive DSP systems using PyTorch tensors.
 
 This module provides:
+
 - Core abstractions: Stage (base class) and RecursionCore (coordinator)
 - Concrete stages for building FDN-like recursive systems:
+
   * DelayRead/DelayWrite: Circular delay buffer management
   * Biquads: IIR filter bank
   * FeedbackMix: Feedback matrix application

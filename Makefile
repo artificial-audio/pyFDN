@@ -70,6 +70,7 @@ docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/pyFDN.rst
 	rm -f docs/modules.rst
 	sphinx-apidoc -o docs/ src/pyFDN
+	python docs/patch_rst.py
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html

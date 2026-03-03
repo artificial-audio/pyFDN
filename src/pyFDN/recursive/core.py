@@ -12,12 +12,14 @@ class RecursionCore:
     Coordinator for recursive DSP processing using a sequence of stages.
     
     This class manages:
+
     - Ordered list of processing stages
     - Global state dictionary shared across all stages
     - Block-based processing of input signals
     - Propagation of a single block-local context tensor (`lines`)
-    
-    Typical usage:
+
+    Typical usage::
+
         stages = [
             DelayRead(...),         # read delayed lines -> lines
             InputTap(...),          # inject external input into lines
