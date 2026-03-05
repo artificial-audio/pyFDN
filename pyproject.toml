@@ -32,7 +32,7 @@ dependencies = [
   'torchaudio',
   'soundfile',
   "scipy",
-  "flamo>=0.2.0",
+  "flamo>=0.2.13",
   "flareverb"
 ]
 
