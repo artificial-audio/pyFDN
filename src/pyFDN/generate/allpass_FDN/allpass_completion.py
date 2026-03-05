@@ -202,19 +202,23 @@ def complete_general_mimo_svd(A: np.ndarray, k: int, tol_one: float = 1e-8, choo
     """
     General MIMO completion via defect subspace (CS/SVD-based).
 
-    Given A (NxN) and k <= N, we aim for a balanced orthogonal/unitary block
+    Given A (NxN) and k <= N, we aim for a balanced orthogonal/unitary block::
+
         V = [[A, B],
              [C, D]]
+
     with B in Nxk, C in kxN, D in kxk.
 
     Exact orthogonality is guaranteed when A has:
-        - N-k singular values equal to 1 (within tol_one)
-        - k singular values strictly < 1
+
+    - N-k singular values equal to 1 (within tol_one)
+    - k singular values strictly < 1
 
     If the singular value pattern doesn't match, we can still build the completion using
     the k smallest singular values (choose_smallest_if_needed=True), but V may deviate from unitary.
 
-    Construction (in the singular vector basis):
+    Construction (in the singular vector basis)::
+
         A = U1 S V1^* + U2 I V2^*
         B = U1 sqrt(I - S^2)
         C = sqrt(I - S^2) V1^*

@@ -2,12 +2,15 @@
 from __future__ import annotations
 import math
 from itertools import combinations
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
 from pyFDN.auxiliary.utils import lin_to_db, ensure_3d
+
+if TYPE_CHECKING:
+    import torch
 
 
 def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray:
@@ -338,7 +341,7 @@ def outer_sum_approximation(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
     return u, v
 
 
-def matrix_sqrt(A: "torch.Tensor") -> "torch.Tensor":
+def matrix_sqrt(A: torch.Tensor) -> torch.Tensor:
     """Matrix square root via eigenvalue decomposition.
 
     sqrtm(A) = V @ sqrt(D) @ V^(-1) where A = V @ D @ V^(-1).

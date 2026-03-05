@@ -170,12 +170,16 @@ class SDN:
             - node_positions : list of 6 (x, y, z) tuples, wall node positions in metres.
             - Fs : float, sampling frequency in Hz.
             - c : float, speed of sound in m/s.
+
             Input routing (FDN): 6 gains -> 6 delays -> 6-to-30 matrix (0.5 in matrix).
+
             - input_delays : np.ndarray shape (6,), seconds
             - input_gains : np.ndarray shape (6,), gain per node (source_to_wall_gains, 1/r).
             - input_matrix : np.ndarray shape (30, 6), input_matrix[k, j] = 0.5 if delay k leaves node j else 0.
               Use: x = input_gains * input; x = delay(x, input_delays); injection = input_matrix @ x.
+
             Output routing (FDN): 30-to-6 matrix -> 6 delays -> 6 gains -> sum.
+
             - output_matrix : np.ndarray shape (6, 30), output_matrix[j, k] = (2/5) if delay k leaves node j else 0.
             - output_gains : np.ndarray shape (6,), wall_to_receiver_gains.
             - output_delays : np.ndarray shape (6,), seconds

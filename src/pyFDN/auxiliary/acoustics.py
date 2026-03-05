@@ -230,10 +230,11 @@ def sos_gain_per_sample_curves(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Magnitude response (gain per sample vs angle) for SOS filters in (6, N) format.
 
-    Evaluates |H(e^{j omega})| at nfft angles from 0 to 2*pi for each channel, then
-    scales by delay length so that the result is gain per sample: for channel j with
-    delay m_j, the curve is |H|^(1/m_j), so that after m_j samples the effective gain
-    is |H|. Useful for plotting absorption/gain curves (e.g. on a pole plot).
+    Evaluates :math:`|H(e^{j\\omega})|` at nfft angles from 0 to :math:`2\\pi` for each
+    channel, then scales by delay length so that the result is gain per sample: for
+    channel j with delay m_j, the curve is :math:`|H|^{1/m_j}`, so that after m_j
+    samples the effective gain is :math:`|H|`. Useful for plotting absorption/gain
+    curves (e.g. on a pole plot).
 
     Parameters
     ----------
@@ -250,7 +251,7 @@ def sos_gain_per_sample_curves(
     angles : (nfft,) array
         Angles in rad/sample, 0 to 2*pi.
     magnitude : (nfft, N) array
-        Gain per sample (linear), i.e. |H(e^{j angle})|^(1/m) per channel.
+        Gain per sample (linear), i.e. :math:`|H(e^{j\\omega})|^{1/m}` per channel.
     """
     sos_6n = np.asarray(sos_6n, dtype=np.float64)
     delays_arr = np.asarray(delays, dtype=np.float64).ravel()
