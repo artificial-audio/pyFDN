@@ -40,6 +40,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Install system libraries required by soundfile (via flamo)
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1
+
       # Install Sphinx and dependencies
       - name: Install dependencies
         run: |
