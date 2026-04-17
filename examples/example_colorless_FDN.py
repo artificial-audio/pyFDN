@@ -229,7 +229,7 @@ def cell_modal(Ag, B, C, D, fs, m, pyFDN, torch):
         reject_unstable_poles=True,
         deflation_type="fullDeflation",
     )
-    return poles, residues
+    return direct, is_pair, poles, residues
 
 
 @app.cell
@@ -245,7 +245,7 @@ def cell_modal_init(Ag_i, B_i, C_i, D_i, fs, m_i, pyFDN, torch):
         reject_unstable_poles=True,
         deflation_type="fullDeflation",
     )
-    return poles_i, residues_i
+    return direct_i, is_pair_i, poles_i, residues_i
 
 
 @app.cell
@@ -332,6 +332,61 @@ def cell_residue_scatter(
 
     fig_res_sc.tight_layout()
     fig_res_sc
+    return
+
+
+@app.cell
+def cell_modal_comparison(
+    direct,
+    direct_i,
+    ir_init,
+    ir_len,
+    ir_optim,
+    is_pair,
+    is_pair_i,
+    plt,
+    poles,
+    poles_i,
+    pyFDN,
+    residues,
+    residues_i,
+):
+    ir_pr = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len).squeeze()
+    ir_pr_i = pyFDN.pr_to_impz(residues_i, poles_i, direct_i, is_pair_i, ir_len).squeeze()
+
+    diff = ir_optim - ir_pr
+    diff_i = ir_init - ir_pr_i
+
+    fig_cmp, axes_cmp = plt.subplots(3, 2, figsize=(12, 8), sharex=True)
+
+    for col, ir_ref, ir_modal, diff_ir, label_ir in zip(
+        [0, 1],
+        [ir_init, ir_optim],
+        [ir_pr_i, ir_pr],
+        [diff_i, diff],
+        ["Random Init", "Optimized"],
+    ):
+        axes_cmp[0, col].plot(ir_ref, lw=0.5, alpha=0.8, label="DSS (reference)")
+        axes_cmp[0, col].plot(ir_modal, lw=0.5, alpha=0.8, label="PR (modal)")
+        axes_cmp[0, col].set_title(label_ir)
+        axes_cmp[0, col].set_ylabel("Amplitude")
+        axes_cmp[0, col].legend(fontsize=8)
+        axes_cmp[0, col].grid(True, alpha=0.3)
+
+        axes_cmp[1, col].plot(pyFDN.mulaw_encode(ir_ref), lw=0.4, alpha=0.8, label="DSS")
+        axes_cmp[1, col].plot(pyFDN.mulaw_encode(ir_modal), lw=0.4, alpha=0.8, label="PR")
+        axes_cmp[1, col].set_ylabel("Amplitude [mu-law]")
+        axes_cmp[1, col].legend(fontsize=8)
+        axes_cmp[1, col].grid(True, alpha=0.3)
+
+        axes_cmp[2, col].plot(pyFDN.mulaw_encode(diff_ir), lw=0.4, color="C2")
+        axes_cmp[2, col].set_ylabel("Difference [mu-law]")
+        axes_cmp[2, col].set_xlabel("Sample")
+        axes_cmp[2, col].grid(True, alpha=0.3)
+
+    fig_cmp.suptitle("Modal Decomposition vs DSS Reference", y=1.01)
+    fig_cmp.tight_layout()
+    fig_cmp
     return
 
 
