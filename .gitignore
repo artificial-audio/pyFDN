@@ -131,3 +131,4 @@ profile_default/
 
 # Matlab
 *.m
+/examples/__marimo__
