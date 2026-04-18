@@ -8,36 +8,53 @@ app = marimo.App(width="medium")
 def cell_imports():
     import marimo as mo
     import numpy as np
-    import matplotlib.pyplot as plt
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     from pathlib import Path
     from scipy.io import loadmat
     from scipy.linalg import expm
+    from scipy import signal as scipy_signal
     import soundfile as sf
     from io import BytesIO
     import torch
     import pyFDN
 
-    return BytesIO, Path, expm, loadmat, mo, np, plt, pyFDN, sf, torch
-
-
-@app.cell
-def cell_header(mo):
-    header = mo.md(
-        """
-        # Colorless FDN
-
-        FDN optimized for reduced metallic ringing (perceptually colorless reverberation).
-        Original method published in *"Differentiable Feedback Delay Network for Colorless Reverberation,"
-        G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, DAFx23, 244-251.*
-
-        Parameters are loaded from `.mat` files (e.g. from
-        [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)).
-
-        - Original script in Matlab: Gloria Dal Santo, Wed, 18. Oct 2023
-        - Python translation: Sebastian J. Schlecht, 2026-02-18
-        - Marimo port with modal decomposition: 2026-04-17
-        """
+    return (
+        BytesIO,
+        Path,
+        expm,
+        go,
+        loadmat,
+        make_subplots,
+        mo,
+        np,
+        pyFDN,
+        scipy_signal,
+        sf,
+        torch,
     )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    # Colorless FDN
+
+    FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in *"Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.*
+
+    Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss2impz`.
+
+    - Original script in Matlab: Gloria Dal Santo, Wed, 18. Oct 2023
+    - Python translation: Sebastian J. Schlecht, 2026-02-18
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Parameters
+    """)
     return
 
 
@@ -74,6 +91,16 @@ def cell_params(N_ui, Path, delay_set_ui, pyFDN):
     N = N_ui.value
     delay_set = delay_set_ui.value
     return N, delay_set, fs, g, ir_len, param_dir
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Load parameters from mat file
+
+    `load_colorless_params(path)` loads m, A, B, C from the mat file, builds `Ag = expm(skew(A)) @ diag(g^m)` using `pyFDN.skew`, and returns `(m_int, Ag, B, C, D)` for use with `pyFDN.dss_to_impz`.
+    """)
+    return
 
 
 @app.cell
@@ -118,6 +145,14 @@ def cell_ir_optim(
     return Ag, B, C, D, ir_optim, m
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Compare to Initialization Parameters
+    """)
+    return
+
+
 @app.cell
 def cell_ir_init(
     N,
@@ -139,21 +174,23 @@ def cell_ir_init(
 
 @app.cell
 def cell_header_ir(mo):
-    header_ir = mo.md("## Impulse Responses")
+    mo.md("""
+    ## Impulse Responses
+    """)
     return
 
 
 @app.cell
-def cell_plot_ir(fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
+def cell_plot_ir(fs, go, ir_init, ir_len, ir_optim, np, pyFDN):
     t = np.arange(ir_len) / fs
-    fig_ir, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(t, pyFDN.mulaw_encode(ir_optim), alpha=0.8, lw=0.6, label="Optimized")
-    ax.plot(t, pyFDN.mulaw_encode(ir_init), alpha=0.8, lw=0.6, label="Random Init")
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Amplitude [mu-law]")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    fig_ir.tight_layout()
+    fig_ir = go.Figure()
+    fig_ir.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_optim), name="Optimized", line=dict(width=0.6), opacity=0.8))
+    fig_ir.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_init), name="Random Init", line=dict(width=0.6), opacity=0.8))
+    fig_ir.update_layout(
+        xaxis_title="Time [s]",
+        yaxis_title="Amplitude [mu-law]",
+        height=300,
+    )
     return
 
 
@@ -171,17 +208,21 @@ def cell_audio(BytesIO, fs, ir_init, ir_optim, mo, np, sf):
             mo.vstack([mo.md("**Optimized**"), _ir_to_audio(ir_optim)]),
         ]
     )
+
+    audio_panel
     return
 
 
 @app.cell
 def cell_header_edc(mo):
-    header_edc = mo.md("## Energy Decay Curves")
+    mo.md("""
+    ## Energy Decay Curves
+    """)
     return
 
 
 @app.cell
-def cell_edc(fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
+def cell_edc(fs, go, ir_init, ir_len, ir_optim, np, pyFDN):
     edc_optim = pyFDN.edc(ir_optim)
     edc_init = pyFDN.edc(ir_init)
 
@@ -189,30 +230,28 @@ def cell_edc(fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
         return 10 * np.log10(np.maximum(e / (e[0] + 1e-30), 1e-8))
 
     t_edc = np.arange(ir_len) / fs
-    fig_edc, ax_edc = plt.subplots(figsize=(10, 3))
-    ax_edc.plot(t_edc, _to_db(edc_optim), lw=1, label="Optimized")
-    ax_edc.plot(t_edc, _to_db(edc_init), lw=1, label="Random Init")
-    ax_edc.axhline(-60, color="k", lw=0.6, ls="--", alpha=0.6, label="−60 dB (RT60)")
-    ax_edc.set_ylim(-80, 5)
-    ax_edc.set_xlabel("Time [s]")
-    ax_edc.set_ylabel("EDC [dB]")
-    ax_edc.legend()
-    ax_edc.grid(True, alpha=0.3)
-    fig_edc.tight_layout()
+    fig_edc = go.Figure()
+    fig_edc.add_trace(go.Scatter(x=t_edc, y=_to_db(edc_optim), name="Optimized", line=dict(width=1)))
+    fig_edc.add_trace(go.Scatter(x=t_edc, y=_to_db(edc_init), name="Random Init", line=dict(width=1)))
+    fig_edc.add_hline(y=-60, line=dict(color="black", width=0.6, dash="dash"), opacity=0.6, annotation_text="−60 dB (RT60)")
+    fig_edc.update_layout(
+        xaxis_title="Time [s]",
+        yaxis_title="EDC [dB]",
+        yaxis=dict(range=[-80, 5]),
+        height=300,
+    )
     return
 
 
 @app.cell
 def cell_header_modal(mo):
-    header_modal = mo.md(
-        """
-        ## Modal Decomposition
+    mo.md("""
+    ## Modal Decomposition
 
-        Poles and residues via `flamo_to_pr` (FLAMO-based Newton/Ehrlich–Aberth refinement).
-        The **residue histogram** shows how uniformly modal energy is distributed —
-        a colorless design aims for a flat distribution across frequencies.
-        """
-    )
+    Poles and residues via `pyFDN.flamo_to_pr` (FLAMO-based Newton/Ehrlich–Aberth refinement).
+    The **residue histogram** shows how uniformly modal energy is distributed —
+    a colorless design aims for a flat distribution across frequencies.
+    """)
     return
 
 
@@ -249,63 +288,76 @@ def cell_modal_init(Ag_i, B_i, C_i, D_i, fs, m_i, pyFDN, torch):
 
 
 @app.cell
-def cell_residue_histogram(fs, np, plt, poles, poles_i, residues, residues_i):
+def cell_residue_histogram(
+    fs,
+    go,
+    make_subplots,
+    np,
+    poles,
+    poles_i,
+    residues,
+    residues_i,
+):
     res_mag = np.abs(residues[:, 0, 0])
     res_mag_i = np.abs(residues_i[:, 0, 0])
     pole_freq = np.abs(np.angle(poles)) / np.pi * (fs / 2)
     pole_freq_i = np.abs(np.angle(poles_i)) / np.pi * (fs / 2)
 
-    fig_residue, axes_res = plt.subplots(1, 2, figsize=(12, 4))
-
-    axes_res[0].hist(res_mag, bins=60, alpha=0.7, label="Optimized", edgecolor="none")
-    axes_res[0].hist(res_mag_i, bins=60, alpha=0.7, label="Random Init", edgecolor="none")
-    axes_res[0].set_xlabel("|Residue|")
-    axes_res[0].set_ylabel("Count")
-    axes_res[0].set_title("Residue Magnitude Distribution")
-    axes_res[0].legend()
-    axes_res[0].grid(True, alpha=0.3)
-
-    axes_res[1].scatter(pole_freq_i, res_mag_i, s=3, alpha=0.4, label="Random Init")
-    axes_res[1].scatter(pole_freq, res_mag, s=3, alpha=0.4, label="Optimized")
-    axes_res[1].set_xlabel("Modal Frequency [Hz]")
-    axes_res[1].set_ylabel("|Residue|")
-    axes_res[1].set_title("Residue vs Modal Frequency")
-    axes_res[1].legend()
-    axes_res[1].grid(True, alpha=0.3)
-
-    fig_residue.tight_layout()
+    fig_residue = make_subplots(rows=1, cols=2, subplot_titles=["Residue Magnitude Distribution", "Residue vs Modal Frequency"])
+    fig_residue.add_trace(go.Histogram(x=res_mag, nbinsx=60, name="Optimized", opacity=0.7), row=1, col=1)
+    fig_residue.add_trace(go.Histogram(x=res_mag_i, nbinsx=60, name="Random Init", opacity=0.7), row=1, col=1)
+    fig_residue.add_trace(go.Scatter(x=pole_freq_i, y=res_mag_i, mode="markers", name="Random Init", marker=dict(size=3, opacity=0.4), showlegend=False), row=1, col=2)
+    fig_residue.add_trace(go.Scatter(x=pole_freq, y=res_mag, mode="markers", name="Optimized", marker=dict(size=3, opacity=0.4), showlegend=False), row=1, col=2)
+    fig_residue.update_xaxes(title_text="|Residue|", row=1, col=1)
+    fig_residue.update_yaxes(title_text="Count", row=1, col=1)
+    fig_residue.update_xaxes(title_text="Modal Frequency [Hz]", row=1, col=2)
+    fig_residue.update_yaxes(title_text="|Residue|", row=1, col=2)
+    fig_residue.update_layout(barmode="overlay", height=400)
     return
 
 
 @app.cell
-def cell_pole_plot(np, plt, poles, poles_i):
+def cell_pole_plot(go, make_subplots, np, poles, poles_i):
     _theta = np.linspace(0, 2 * np.pi, 500)
-    fig_poles, axes_poles = plt.subplots(1, 2, figsize=(12, 5))
+    fig_poles = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=[f"Poles — Random Init ({len(poles_i)} modes)", f"Poles — Optimized ({len(poles)} modes)"],
+    )
 
-    for ax_p, p, label_z in zip(
-        axes_poles,
-        [poles_i, poles],
-        ["Random Init", "Optimized"],
-    ):
-        ax_p.plot(np.cos(_theta), np.sin(_theta), "k--", lw=0.8, alpha=0.5, label="Unit circle")
-        sc = ax_p.scatter(p.real, p.imag, s=4, c=np.abs(p), cmap="plasma", alpha=0.7)
-        fig_poles.colorbar(sc, ax=ax_p, label="|pole| (decay rate)")
-        ax_p.set_aspect("equal")
-        ax_p.set_xlabel("Re")
-        ax_p.set_ylabel("Im")
-        ax_p.set_title(f"Poles — {label_z} ({len(p)} modes)")
-        ax_p.grid(True, alpha=0.2)
+    for _col_idx, _p in enumerate([poles_i, poles], start=1):
+        fig_poles.add_trace(
+            go.Scatter(
+                x=np.cos(_theta), y=np.sin(_theta),
+                mode="lines", line=dict(color="black", width=0.8, dash="dash"),
+                opacity=0.5, name="Unit circle", showlegend=(_col_idx == 1),
+            ),
+            row=1, col=_col_idx,
+        )
+        _marker = dict(size=4, color=np.abs(_p), colorscale="plasma", opacity=0.7, showscale=(_col_idx == 2))
+        if _col_idx == 2:
+            _marker["colorbar"] = dict(title="|pole| (decay rate)")
+        fig_poles.add_trace(
+            go.Scatter(
+                x=_p.real, y=_p.imag, mode="markers",
+                marker=_marker,
+                name=["Random Init", "Optimized"][_col_idx - 1],
+            ),
+            row=1, col=_col_idx,
+        )
 
-    fig_poles.tight_layout()
-    fig_poles
+    fig_poles.update_xaxes(title_text="Re")
+    fig_poles.update_yaxes(title_text="Im", scaleanchor="x", scaleratio=1, row=1, col=1)
+    fig_poles.update_yaxes(title_text="Im", scaleanchor="x2", scaleratio=1, row=1, col=2)
+    fig_poles.update_layout(height=500)
     return
 
 
 @app.cell
 def cell_residue_scatter(
     fs,
+    go,
+    make_subplots,
     np,
-    plt,
     poles,
     poles_i,
     pyFDN,
@@ -317,21 +369,15 @@ def cell_residue_scatter(
     _freq = np.abs(np.angle(poles)) / np.pi * (fs / 2)
     _freq_i = np.abs(np.angle(poles_i)) / np.pi * (fs / 2)
 
-    fig_res_sc, axes_res_sc = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
-    for ax_r, freq, res, label_r in zip(
-        axes_res_sc,
-        [_freq_i, _freq],
-        [_res_mag_i, _res_mag],
-        ["Random Init", "Optimized"],
-    ):
-        ax_r.scatter(freq, pyFDN.lin_to_db(res), s=4, alpha=0.7)
-        ax_r.set_xlabel("Modal Frequency [Hz]")
-        ax_r.set_ylabel("|Residue|")
-        ax_r.set_title(f"Residue Magnitudes — {label_r} ({len(res)} modes)")
-        ax_r.grid(True, alpha=0.3)
-
-    fig_res_sc.tight_layout()
-    fig_res_sc
+    fig_res_sc = make_subplots(
+        rows=1, cols=2, shared_yaxes=True,
+        subplot_titles=[f"Residue Magnitudes — Random Init ({len(_res_mag_i)} modes)", f"Residue Magnitudes — Optimized ({len(_res_mag)} modes)"],
+    )
+    fig_res_sc.add_trace(go.Scatter(x=_freq_i, y=pyFDN.lin_to_db(_res_mag_i), mode="markers", marker=dict(size=4, opacity=0.7), name="Random Init"), row=1, col=1)
+    fig_res_sc.add_trace(go.Scatter(x=_freq, y=pyFDN.lin_to_db(_res_mag), mode="markers", marker=dict(size=4, opacity=0.7), name="Optimized"), row=1, col=2)
+    fig_res_sc.update_xaxes(title_text="Modal Frequency [Hz]")
+    fig_res_sc.update_yaxes(title_text="|Residue|", row=1, col=1)
+    fig_res_sc.update_layout(height=400)
     return
 
 
@@ -339,12 +385,13 @@ def cell_residue_scatter(
 def cell_modal_comparison(
     direct,
     direct_i,
+    go,
     ir_init,
     ir_len,
     ir_optim,
     is_pair,
     is_pair_i,
-    plt,
+    make_subplots,
     poles,
     poles_i,
     pyFDN,
@@ -357,54 +404,53 @@ def cell_modal_comparison(
     diff = ir_optim - ir_pr
     diff_i = ir_init - ir_pr_i
 
-    fig_cmp, axes_cmp = plt.subplots(3, 2, figsize=(12, 8), sharex=True)
+    fig_cmp = make_subplots(
+        rows=3, cols=2, shared_xaxes=True,
+        subplot_titles=["Random Init", "Optimized", "", "", "", ""],
+    )
 
-    for col, ir_ref, ir_modal, diff_ir, label_ir in zip(
-        [0, 1],
+    for _col, (_ir_ref, _ir_modal, _diff_ir) in enumerate(zip(
         [ir_init, ir_optim],
         [ir_pr_i, ir_pr],
         [diff_i, diff],
-        ["Random Init", "Optimized"],
-    ):
-        axes_cmp[0, col].plot(ir_ref, lw=0.5, alpha=0.8, label="DSS (reference)")
-        axes_cmp[0, col].plot(ir_modal, lw=0.5, alpha=0.8, label="PR (modal)")
-        axes_cmp[0, col].set_title(label_ir)
-        axes_cmp[0, col].set_ylabel("Amplitude")
-        axes_cmp[0, col].legend(fontsize=8)
-        axes_cmp[0, col].grid(True, alpha=0.3)
+    ), start=1):
+        fig_cmp.add_trace(go.Scatter(y=_ir_ref, name="DSS (reference)", line=dict(width=0.5), opacity=0.8, showlegend=(_col == 1)), row=1, col=_col)
+        fig_cmp.add_trace(go.Scatter(y=_ir_modal, name="PR (modal)", line=dict(width=0.5), opacity=0.8, showlegend=(_col == 1)), row=1, col=_col)
+        fig_cmp.add_trace(go.Scatter(y=pyFDN.mulaw_encode(_ir_ref), name="DSS", line=dict(width=0.4), opacity=0.8, showlegend=False), row=2, col=_col)
+        fig_cmp.add_trace(go.Scatter(y=pyFDN.mulaw_encode(_ir_modal), name="PR", line=dict(width=0.4), opacity=0.8, showlegend=False), row=2, col=_col)
+        fig_cmp.add_trace(go.Scatter(y=pyFDN.mulaw_encode(_diff_ir), line=dict(width=0.4, color="green"), showlegend=False), row=3, col=_col)
 
-        axes_cmp[1, col].plot(pyFDN.mulaw_encode(ir_ref), lw=0.4, alpha=0.8, label="DSS")
-        axes_cmp[1, col].plot(pyFDN.mulaw_encode(ir_modal), lw=0.4, alpha=0.8, label="PR")
-        axes_cmp[1, col].set_ylabel("Amplitude [mu-law]")
-        axes_cmp[1, col].legend(fontsize=8)
-        axes_cmp[1, col].grid(True, alpha=0.3)
-
-        axes_cmp[2, col].plot(pyFDN.mulaw_encode(diff_ir), lw=0.4, color="C2")
-        axes_cmp[2, col].set_ylabel("Difference [mu-law]")
-        axes_cmp[2, col].set_xlabel("Sample")
-        axes_cmp[2, col].grid(True, alpha=0.3)
-
-    fig_cmp.suptitle("Modal Decomposition vs DSS Reference", y=1.01)
-    fig_cmp.tight_layout()
-    fig_cmp
+    fig_cmp.update_yaxes(title_text="Amplitude", row=1, col=1)
+    fig_cmp.update_yaxes(title_text="Amplitude [mu-law]", row=2, col=1)
+    fig_cmp.update_yaxes(title_text="Difference [mu-law]", row=3, col=1)
+    fig_cmp.update_xaxes(title_text="Sample", row=3)
+    fig_cmp.update_layout(title_text="Modal Decomposition vs DSS Reference", height=700)
     return
 
 
 @app.cell
-def cell_spectrogram(fs, ir_init, ir_optim, plt):
-    fig_spec, axes_spec = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
-    for ax_s, ir, label in zip(
-        axes_spec,
-        [ir_init, ir_optim],
-        ["Random Init", "Optimized"],
-    ):
-        ax_s.specgram(ir, Fs=fs, NFFT=2048, noverlap=1792, cmap="inferno", vmin=-120, vmax=-20)
-        ax_s.set_xlabel("Time [s]")
-        ax_s.set_ylabel("Frequency [Hz]")
-        ax_s.set_title(label)
-        ax_s.set_ylim(0, fs / 2)
-    fig_spec.tight_layout()
-    fig_spec
+def cell_spectrogram(
+    fs,
+    go,
+    ir_init,
+    ir_optim,
+    make_subplots,
+    np,
+    scipy_signal,
+):
+    def _specgram(ir, fs):
+        f, t, Sxx = scipy_signal.spectrogram(ir, fs=fs, nperseg=2048, noverlap=1792)
+        return f, t, np.clip(10 * np.log10(np.maximum(Sxx, 1e-12)), -120, -20)
+
+    _f_i, _t_i, _Sxx_i = _specgram(ir_init, fs)
+    _f_o, _t_o, _Sxx_o = _specgram(ir_optim, fs)
+
+    fig_spec = make_subplots(rows=1, cols=2, subplot_titles=["Random Init", "Optimized"], shared_yaxes=True)
+    fig_spec.add_trace(go.Heatmap(x=_t_i, y=_f_i, z=_Sxx_i, colorscale="inferno", showscale=False, zmin=-120, zmax=-20), row=1, col=1)
+    fig_spec.add_trace(go.Heatmap(x=_t_o, y=_f_o, z=_Sxx_o, colorscale="inferno", showscale=True, zmin=-120, zmax=-20, colorbar=dict(title="dB")), row=1, col=2)
+    fig_spec.update_xaxes(title_text="Time [s]")
+    fig_spec.update_yaxes(title_text="Frequency [Hz]", range=[0, fs / 2], row=1, col=1)
+    fig_spec.update_layout(height=400)
     return
 
 

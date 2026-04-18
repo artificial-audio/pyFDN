@@ -11,7 +11,7 @@ def pr_to_impz(
     direct: np.ndarray,
     is_conjugate_pole_pair: np.ndarray,
     impulse_response_length: int,
-    mode: str = "fast",
+    mode: str = "lowMemory",
 ) -> np.ndarray:
     """
     Synthesize impulse response from poles and residues.
@@ -35,6 +35,8 @@ def pr_to_impz(
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     direct = np.asarray(direct, dtype=np.complex128)
     pair_flag = np.asarray(is_conjugate_pole_pair).astype(np.int64).ravel()
+
+    print(mode)
 
     factor = pair_flag + 1
     num_poles = poles.size

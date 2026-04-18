@@ -101,3 +101,5 @@ module = "tests.*"
 allow_untyped_defs = true
 disable_error_code = "attr-defined"
 
+[tool.marimo.runtime]
+output_max_bytes = 10_000_000
