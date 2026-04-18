@@ -11,7 +11,8 @@ def pr_to_impz(
     direct: np.ndarray,
     is_conjugate_pole_pair: np.ndarray,
     impulse_response_length: int,
-    mode: str = "lowMemory",
+    mode: str = "chunked",
+    max_memory_bytes: int = 256 * 1024 * 1024,
 ) -> np.ndarray:
     """
     Synthesize impulse response from poles and residues.
@@ -29,14 +30,16 @@ def pr_to_impz(
     impulse_response_length
         Number of samples in the synthesized response.
     mode
-        ``"fast"`` (vectorized) or ``"lowMemory"``.
+        ``"fast"`` (vectorized), ``"lowMemory"`` (pole-by-pole), or
+        ``"chunked"`` (batched; chunk size derived from ``max_memory_bytes``).
+    max_memory_bytes
+        Memory budget in bytes for intermediate arrays when
+        ``mode="chunked"``.  Defaults to 256 MiB.
     """
     residues = np.asarray(residues, dtype=np.complex128)
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     direct = np.asarray(direct, dtype=np.complex128)
     pair_flag = np.asarray(is_conjugate_pole_pair).astype(np.int64).ravel()
-
-    print(mode)
 
     factor = pair_flag + 1
     num_poles = poles.size
@@ -49,22 +52,28 @@ def pr_to_impz(
     mag = np.abs(poles).reshape(1, -1)
 
     if mode == "fast":
-        c = factor.reshape(1, -1) * np.exp(1j * t * angle)
         e = np.exp(np.log(mag) * t)
-        ce = c * e
-        for in_idx in range(num_inputs):
-            response[:, :, in_idx] = np.real(ce @ residues[:, :, in_idx])
+        ce = factor.reshape(1, -1) * np.exp(1j * t * angle) * e
+        response[:] = np.real(np.einsum('tp,poi->toi', ce, residues))
     elif mode == "lowMemory":
         for pole_idx in range(num_poles):
-            c = factor[pole_idx] * np.exp(1j * t[:, 0] * np.angle(poles[pole_idx]))
-            e = np.exp(np.log(np.abs(poles[pole_idx])) * t[:, 0])
+            c = factor[pole_idx] * np.exp(1j * t[:, 0] * angle[0, pole_idx])
+            e = np.exp(np.log(mag[0, pole_idx]) * t[:, 0])
             ce = c * e
-            for in_idx in range(num_inputs):
-                response[:, :, in_idx] += np.real(
-                    ce.reshape(-1, 1) @ residues[pole_idx, :, in_idx].reshape(1, -1)
-                )
+            response += np.real(
+                np.outer(ce, residues[pole_idx]).reshape(impulse_response_length, num_outputs, num_inputs)
+            )
+    elif mode == "chunked":
+        # Per pole: e (float64, 8 B) + complex-exp temp (complex128, 16 B) + ce (complex128, 16 B)
+        bytes_per_pole = impulse_response_length * (8 + 16 + 16)
+        chunk_size = max(1, min(num_poles, int(max_memory_bytes // bytes_per_pole)))
+        for start in range(0, num_poles, chunk_size):
+            end = min(start + chunk_size, num_poles)
+            e = np.exp(np.log(mag[:, start:end]) * t)
+            ce = factor[start:end].reshape(1, -1) * np.exp(1j * t * angle[:, start:end]) * e
+            response += np.real(np.einsum('tp,poi->toi', ce, residues[start:end]))
     else:
-        raise ValueError("mode must be 'fast' or 'lowMemory'")
+        raise ValueError("mode must be 'fast', 'lowMemory', or 'chunked'")
 
     response[0, :, :] = np.real_if_close(direct)
     return response

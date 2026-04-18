@@ -295,11 +295,12 @@ def cell_residue_histogram(
     np,
     poles,
     poles_i,
+    pyFDN,
     residues,
     residues_i,
 ):
-    res_mag = np.abs(residues[:, 0, 0])
-    res_mag_i = np.abs(residues_i[:, 0, 0])
+    res_mag = pyFDN.lin_to_db(np.abs(residues[:, 0, 0]))
+    res_mag_i = pyFDN.lin_to_db(np.abs(residues_i[:, 0, 0]))
     pole_freq = np.abs(np.angle(poles)) / np.pi * (fs / 2)
     pole_freq_i = np.abs(np.angle(poles_i)) / np.pi * (fs / 2)
 
