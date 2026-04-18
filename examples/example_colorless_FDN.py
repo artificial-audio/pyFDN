@@ -29,7 +29,6 @@ def cell_imports():
         mo,
         np,
         pyFDN,
-        scipy_signal,
         sf,
         torch,
     )
@@ -230,9 +229,10 @@ def cell_edc(fs, go, ir_init, ir_len, ir_optim, np, pyFDN):
         return 10 * np.log10(np.maximum(e / (e[0] + 1e-30), 1e-8))
 
     t_edc = np.arange(ir_len) / fs
+    _stride = max(1, ir_len // 4000)
     fig_edc = go.Figure()
-    fig_edc.add_trace(go.Scatter(x=t_edc, y=_to_db(edc_optim), name="Optimized", line=dict(width=1)))
-    fig_edc.add_trace(go.Scatter(x=t_edc, y=_to_db(edc_init), name="Random Init", line=dict(width=1)))
+    fig_edc.add_trace(go.Scatter(x=t_edc[::_stride], y=_to_db(edc_optim)[::_stride], name="Optimized", line=dict(width=1)))
+    fig_edc.add_trace(go.Scatter(x=t_edc[::_stride], y=_to_db(edc_init)[::_stride], name="Random Init", line=dict(width=1)))
     fig_edc.add_hline(y=-60, line=dict(color="black", width=0.6, dash="dash"), opacity=0.6, annotation_text="−60 dB (RT60)")
     fig_edc.update_layout(
         xaxis_title="Time [s]",
@@ -353,35 +353,6 @@ def cell_pole_plot(go, make_subplots, np, poles, poles_i):
 
 
 @app.cell
-def cell_residue_scatter(
-    fs,
-    go,
-    make_subplots,
-    np,
-    poles,
-    poles_i,
-    pyFDN,
-    residues,
-    residues_i,
-):
-    _res_mag = np.abs(residues[:, 0, 0])
-    _res_mag_i = np.abs(residues_i[:, 0, 0])
-    _freq = np.abs(np.angle(poles)) / np.pi * (fs / 2)
-    _freq_i = np.abs(np.angle(poles_i)) / np.pi * (fs / 2)
-
-    fig_res_sc = make_subplots(
-        rows=1, cols=2, shared_yaxes=True,
-        subplot_titles=[f"Residue Magnitudes — Random Init ({len(_res_mag_i)} modes)", f"Residue Magnitudes — Optimized ({len(_res_mag)} modes)"],
-    )
-    fig_res_sc.add_trace(go.Scatter(x=_freq_i, y=pyFDN.lin_to_db(_res_mag_i), mode="markers", marker=dict(size=4, opacity=0.7), name="Random Init"), row=1, col=1)
-    fig_res_sc.add_trace(go.Scatter(x=_freq, y=pyFDN.lin_to_db(_res_mag), mode="markers", marker=dict(size=4, opacity=0.7), name="Optimized"), row=1, col=2)
-    fig_res_sc.update_xaxes(title_text="Modal Frequency [Hz]")
-    fig_res_sc.update_yaxes(title_text="|Residue|", row=1, col=1)
-    fig_res_sc.update_layout(height=400)
-    return
-
-
-@app.cell
 def cell_modal_comparison(
     direct,
     direct_i,
@@ -425,37 +396,6 @@ def cell_modal_comparison(
     fig_cmp.update_yaxes(title_text="Difference [mu-law]", row=3, col=1)
     fig_cmp.update_xaxes(title_text="Sample", row=3)
     fig_cmp.update_layout(title_text="Modal Decomposition vs DSS Reference", height=700)
-    return
-
-
-@app.cell
-def cell_spectrogram(
-    fs,
-    go,
-    ir_init,
-    ir_optim,
-    make_subplots,
-    np,
-    scipy_signal,
-):
-    def _specgram(ir, fs):
-        f, t, Sxx = scipy_signal.spectrogram(ir, fs=fs, nperseg=2048, noverlap=1792)
-        return f, t, np.clip(10 * np.log10(np.maximum(Sxx, 1e-12)), -120, -20)
-
-    _f_i, _t_i, _Sxx_i = _specgram(ir_init, fs)
-    _f_o, _t_o, _Sxx_o = _specgram(ir_optim, fs)
-
-    fig_spec = make_subplots(rows=1, cols=2, subplot_titles=["Random Init", "Optimized"], shared_yaxes=True)
-    fig_spec.add_trace(go.Heatmap(x=_t_i, y=_f_i, z=_Sxx_i, colorscale="inferno", showscale=False, zmin=-120, zmax=-20), row=1, col=1)
-    fig_spec.add_trace(go.Heatmap(x=_t_o, y=_f_o, z=_Sxx_o, colorscale="inferno", showscale=True, zmin=-120, zmax=-20, colorbar=dict(title="dB")), row=1, col=2)
-    fig_spec.update_xaxes(title_text="Time [s]")
-    fig_spec.update_yaxes(title_text="Frequency [Hz]", range=[0, fs / 2], row=1, col=1)
-    fig_spec.update_layout(height=400)
-    return
-
-
-@app.cell
-def _():
     return
 
 
