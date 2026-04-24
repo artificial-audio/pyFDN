@@ -571,12 +571,8 @@ def _result_to_flamo(r, nfft, device):
     """Build FLAMO model from SDN result dict."""
     from collections import OrderedDict
 
-    try:
-        from flamo.processor import dsp, system
-    except ImportError as e:
-        raise ImportError("sdn_to_flamo requires flamo (pip install flamo)") from e
-
     import torch
+    from flamo.processor import dsp, system
 
     from ..auxiliary.flamo import delay_module, gain_module, sos_filter_module
 

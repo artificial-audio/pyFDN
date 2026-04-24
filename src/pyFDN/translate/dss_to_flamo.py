@@ -11,15 +11,9 @@ from collections import OrderedDict
 from typing import Any
 
 import numpy as np
+from flamo.processor import dsp, system
 
 from pyFDN.auxiliary.flamo import delay_module, gain_module
-
-try:
-    from flamo.processor import dsp, system
-
-    _HAS_FLAMO = True
-except ImportError:
-    _HAS_FLAMO = False
 
 
 def dss_to_flamo(
@@ -79,9 +73,6 @@ def dss_to_flamo(
         If shell=True, FLAMO Shell (use model.get_time_response() for IR).
         If shell=False, the core module (same I/O as B.shape[1] / C.shape[0]).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("dss_to_flamo requires flamo (pip install flamo)")
-
     import torch
 
     from pyFDN.auxiliary.flamo import sos_filter_module
@@ -97,6 +88,8 @@ def dss_to_flamo(
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if dtype is None:
+        dtype = torch.float64
 
     # Delays: convert samples to seconds for FLAMO
     lengths_sec = m / float(Fs)

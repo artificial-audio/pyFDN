@@ -57,10 +57,14 @@ class InputTap(Stage):
     def init_state(
         self,
         batch_size: int,
-        block_size: int,
-        device: torch.device,
+        block_size: int | torch.device | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """No state needed - purely feedforward."""
+        if device is None and isinstance(block_size, torch.device):
+            device = block_size
+        if device is None:
+            device = torch.device("cpu")
         # Move matrix to device
         self.B = self.B.to(device)
         return {}

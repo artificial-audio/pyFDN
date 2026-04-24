@@ -43,94 +43,84 @@ def one_pole_absorption_reference(loadmat):
     # Generate coefficients in Python (SOS format: shape (6, N))
     sos_python = one_pole_absorption(RT_DC, RT_NY, delays, fs)
 
-    # Generate impulse response via FLAMO integration (if available)
-    try:
-        import torch  # type: ignore
-        from flamo.processor import dsp, system  # type: ignore
-    except ImportError:
-        ir_python = None
-    else:
-        nfft = 2**16
-        device = "cpu"
+    # Generate impulse response via FLAMO integration
+    import torch  # type: ignore
+    from flamo.processor import dsp, system  # type: ignore
 
-        delays_torch = torch.tensor(delays, dtype=torch.float32)
-        feedback_matrix_torch = torch.tensor(feedback_matrix, dtype=torch.float32)
+    nfft = 2**16
+    device = "cpu"
 
-        absorption_coeff = torch.tensor(
-            sos_python[np.newaxis, ...], dtype=torch.float32
+    delays_torch = torch.tensor(delays, dtype=torch.float32)
+    feedback_matrix_torch = torch.tensor(feedback_matrix, dtype=torch.float32)
+
+    absorption_coeff = torch.tensor(sos_python[np.newaxis, ...], dtype=torch.float32)
+
+    input_gain = dsp.Gain(size=(N, 1), nfft=nfft, device=device)
+    input_gain.assign_value(torch.ones(N, 1))
+
+    output_gain = dsp.Gain(size=(1, N), nfft=nfft, device=device)
+    output_gain.assign_value(torch.ones(1, N))
+
+    delay = dsp.parallelDelay(
+        size=(N,),
+        max_len=int(delays_torch.max()),
+        nfft=nfft,
+        isint=True,
+        unit=1,
+        device=device,
+    )
+    delay.assign_value(delay.sample2s(delays_torch))
+
+    mixing_matrix = dsp.Matrix(
+        size=(N, N),
+        nfft=nfft,
+        matrix_type="random",
+        device=device,
+    )
+    mixing_matrix.assign_value(feedback_matrix_torch)
+
+    absorption = dsp.parallelSOSFilter(
+        size=(N,), n_sections=1, nfft=nfft, device=device
+    )
+    absorption.assign_value(absorption_coeff)
+
+    attenuated_delay = system.Series(
+        OrderedDict(
+            {
+                "delay": delay,
+                "absorption": absorption,
+            }
         )
+    )
 
-        input_gain = dsp.Gain(size=(N, 1), nfft=nfft, device=device)
-        input_gain.assign_value(torch.ones(N, 1))
+    feedback_loop = system.Recursion(fF=attenuated_delay, fB=mixing_matrix)
 
-        output_gain = dsp.Gain(size=(1, N), nfft=nfft, device=device)
-        output_gain.assign_value(torch.ones(1, N))
-
-        delay = dsp.parallelDelay(
-            size=(N,),
-            max_len=int(delays_torch.max()),
-            nfft=nfft,
-            isint=True,
-            unit=1,
-            device=device,
+    fdn = system.Series(
+        OrderedDict(
+            {
+                "input_gain": input_gain,
+                "feedback_loop": feedback_loop,
+                "output_gain": output_gain,
+            }
         )
-        delay.assign_value(delay.sample2s(delays_torch))
+    )
 
-        mixing_matrix = dsp.Matrix(
-            size=(N, N),
-            nfft=nfft,
-            matrix_type="random",
-            device=device,
-        )
-        mixing_matrix.assign_value(feedback_matrix_torch)
+    direct_gain = dsp.Gain(size=(1, 1), nfft=nfft, device=device)
+    direct_gain.assign_value(torch.ones(1, 1))
 
-        absorption = dsp.parallelSOSFilter(
-            size=(N,), n_sections=1, nfft=nfft, device=device
-        )
-        absorption.assign_value(absorption_coeff)
+    complete_system = system.Parallel(
+        brA=direct_gain,
+        brB=fdn,
+        sum_output=True,
+    )
 
-        attenuated_delay = system.Series(
-            OrderedDict(
-                {
-                    "delay": delay,
-                    "absorption": absorption,
-                }
-            )
-        )
+    model = system.Shell(
+        core=complete_system,
+        input_layer=dsp.FFT(nfft),
+        output_layer=dsp.iFFT(nfft),
+    )
 
-        feedback_loop = system.Recursion(fF=attenuated_delay, fB=mixing_matrix)
-
-        fdn = system.Series(
-            OrderedDict(
-                {
-                    "input_gain": input_gain,
-                    "feedback_loop": feedback_loop,
-                    "output_gain": output_gain,
-                }
-            )
-        )
-
-        direct_gain = dsp.Gain(size=(1, 1), nfft=nfft, device=device)
-        direct_gain.assign_value(torch.ones(1, 1))
-
-        complete_system = system.Parallel(
-            brA=direct_gain,
-            brB=fdn,
-            sum_output=True,
-        )
-
-        model = system.Shell(
-            core=complete_system,
-            input_layer=dsp.FFT(nfft),
-            output_layer=dsp.iFFT(nfft),
-        )
-
-        # with torch.no_grad():
-        #     impulse = torch.zeros(1, nfft, 1)
-        #     impulse[0, 0, 0] = 1.0
-        #     ir_python = model(impulse).squeeze().cpu().numpy()
-
-        ir_python = model.get_time_response().flatten()
+    ir_python = model.get_time_response().flatten()
 
     return {
         "sos_matlab": sos_matlab,
@@ -174,9 +164,6 @@ def test_impulse_response(one_pole_absorption_reference):
 
     ir_matlab = one_pole_absorption_reference["ir_matlab"]
     ir_python = one_pole_absorption_reference["ir_python"]
-
-    if ir_python is None:
-        pytest.skip("FLAMO integration not available")
 
     min_len = min(len(ir_python), len(ir_matlab))
     ir_python = ir_python[:min_len]

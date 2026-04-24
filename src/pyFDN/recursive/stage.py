@@ -36,7 +36,10 @@ class Stage(ABC):
 
     @abstractmethod
     def init_state(
-        self, batch_size: int, device: torch.device
+        self,
+        batch_size: int,
+        block_size: int | torch.device | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Initialize state for this stage.

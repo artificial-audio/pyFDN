@@ -39,8 +39,11 @@ def tiny_rotation_matrix(
         >>> torch.allclose(R @ R.T, torch.eye(6), atol=1e-5)
         True
     """
+    dtype = torch.float64
     if log_matrix is None:
-        log_matrix = torch.randn(n, n)
+        log_matrix = torch.randn(n, n, dtype=dtype)
+    else:
+        log_matrix = log_matrix.to(dtype=dtype)
 
     # Generate skew symmetric matrix
     skew_symmetric = (log_matrix - log_matrix.T) / 2
@@ -57,7 +60,7 @@ def tiny_rotation_matrix(
     v_conj = torch.conj(eigenvectors)
 
     # Compute distance matrix: |v_i - conj(v_j)|^2 for all i,j
-    distances = torch.zeros(n, n)
+    distances = torch.zeros(n, n, dtype=dtype)
     for i in range(n):
         for j in range(n):
             # Distance between eigenvector i and conjugate of eigenvector j
@@ -68,7 +71,7 @@ def tiny_rotation_matrix(
     idx = torch.argmin(distances, dim=1)
 
     # Generate frequency spread
-    frequency_spread = 2 * (torch.rand(n) - 0.5) * spread + 1
+    frequency_spread = 2 * (torch.rand(n, dtype=dtype) - 0.5) * spread + 1
 
     # Average spreads for conjugate pairs
     frequency_spread = (frequency_spread[idx] + frequency_spread) / 2

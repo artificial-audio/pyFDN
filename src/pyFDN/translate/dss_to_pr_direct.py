@@ -92,6 +92,9 @@ def dss_to_pr_direct(
     D: ArrayLike,
     *,
     mode: str = "eig",
+    verbose: bool | None = None,
+    maximum_iterations: int | None = None,
+    feedback_delay_units: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
     Direct poles/residues from simple DSS (numeric matrices only).
@@ -100,6 +103,9 @@ def dss_to_pr_direct(
       - ``eig``: eigenvalues of equivalent state-space matrix
       - ``roots``: roots of generalized characteristic polynomial
       - ``polyeig``: currently mapped to roots-based extraction
+
+    Additional keyword arguments are accepted for compatibility with earlier
+    interfaces and are currently ignored by the direct backend.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -123,8 +129,20 @@ def dss_to_pr_direct(
     a_poly = np.asarray(np.real(a_poly), dtype=float)
 
     if mode_l == "eig":
-        aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
-        poles = np.linalg.eigvals(aa)
+        try:
+            aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
+            poles = np.linalg.eigvals(aa)
+        except Exception:
+            warnings.warn(
+                "mode='eig' fell back to roots-based pole extraction because the "
+                "state-space realization could not be built.",
+                stacklevel=2,
+            )
+            p = general_char_poly(delays_arr, a_poly)
+            w_roots = np.roots(p[::-1])
+            poles = np.array(
+                [1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128
+            )
     elif mode_l in ("roots", "polyeig"):
         if mode_l == "polyeig":
             warnings.warn(

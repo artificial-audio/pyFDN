@@ -63,7 +63,6 @@ def vanilla_FDN(
     model
         FLAMO Shell instance (core = direct + FDN, with FFT/iFFT layers).
     """
-
     delays_arr = np.random.randint(delay_min, delay_max, size=n).astype(np.float64)
     delays_torch = torch.tensor(delays_arr, dtype=torch.float32, device=device)
     delay_module = dsp.parallelDelay(

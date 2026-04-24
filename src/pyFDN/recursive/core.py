@@ -69,8 +69,8 @@ class RecursionCore:
     def init_state(
         self,
         batch_size: int,
-        block_size: int,
-        device: torch.device,
+        block_size: int | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Initialize global state by merging all stage states.
@@ -81,9 +81,16 @@ class RecursionCore:
         Returns:
             Merged state dictionary containing all stage states
         """
+        if block_size is None:
+            block_size = self.block_size
+        if device is None:
+            device = self.device
         state: dict[str, torch.Tensor] = {}
         for stage in self.stages:
-            stage_state = stage.init_state(batch_size, block_size, device)
+            try:
+                stage_state = stage.init_state(batch_size, block_size, device)
+            except TypeError:
+                stage_state = stage.init_state(batch_size, device)
             # Ensure no key conflicts (should already be caught by validation)
             for key in stage_state:
                 if key in state:
@@ -143,6 +150,8 @@ class RecursionCore:
         num_blocks = (T_total + block_size - 1) // block_size
 
         for block_idx in range(num_blocks):
+            lines = None
+            y_block = None
             # Determine current block size
             start_t = block_idx * block_size
             end_t = min(start_t + block_size, T_total)

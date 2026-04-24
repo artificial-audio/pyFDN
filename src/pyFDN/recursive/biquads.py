@@ -63,13 +63,20 @@ class Biquads(Stage):
             self.num_sections = self.coeffs.shape[1]
 
     def init_state(
-        self, batch_size: int, block_size: int, device: torch.device
+        self,
+        batch_size: int,
+        block_size: int | torch.device | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Initialize biquad filter states.
 
         State shape: [B, N, num_sections, 2] for DF2T states [z1, z2]
         """
+        if device is None and isinstance(block_size, torch.device):
+            device = block_size
+        if device is None:
+            device = torch.device("cpu")
         # Move coefficients to device
         self.coeffs = self.coeffs.to(device)
 

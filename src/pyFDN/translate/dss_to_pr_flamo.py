@@ -90,6 +90,54 @@ def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
     return t.detach().cpu().resolve_conj().numpy()
 
 
+def _pole_sort_index(poles: np.ndarray) -> np.ndarray:
+    """Stable pole ordering for deterministic API output."""
+    poles_arr = np.asarray(poles, dtype=np.complex128).ravel()
+    return np.lexsort((np.imag(poles_arr), np.real(poles_arr)))
+
+
+def _normalize_poles_for_pairing(poles: np.ndarray) -> np.ndarray:
+    """Project numerically real poles back to the real axis before pairing."""
+    poles_arr = np.asarray(poles, dtype=np.complex128).copy().ravel()
+    nearly_real = np.abs(np.imag(poles_arr)) < 1e-9
+    poles_arr[nearly_real] = np.real(poles_arr[nearly_real]) + 0j
+    return poles_arr
+
+
+def _to_high_precision_module(module: Any) -> Any:
+    """Move a FLAMO/PyTorch module to float64 when possible."""
+    if module is None:
+        return None
+    to_fn = getattr(module, "to", None)
+    if callable(to_fn):
+        try:
+            return to_fn(dtype=torch.float64)
+        except TypeError:
+            return to_fn(torch.float64)
+        except Exception:
+            return module
+    return module
+
+
+def _ensure_high_precision_model(model: Any) -> Any:
+    """Upgrade a FLAMO model to float64 in-place when supported."""
+    return _to_high_precision_module(model)
+
+
+def _ensure_high_precision_decomposition(
+    decomposition: FlamoDecompositionForPR,
+) -> FlamoDecompositionForPR:
+    """Upgrade FLAMO modules inside a decomposition to float64."""
+    return FlamoDecompositionForPR(
+        recursion_module=_to_high_precision_module(decomposition.recursion_module),
+        delays=decomposition.delays,
+        in_subgraph=_to_high_precision_module(decomposition.in_subgraph),
+        f_subgraph=_to_high_precision_module(decomposition.f_subgraph),
+        out_subgraph=_to_high_precision_module(decomposition.out_subgraph),
+        direct_subgraph=_to_high_precision_module(decomposition.direct_subgraph),
+    )
+
+
 def _device_dtype_from_decomposition(
     decomposition: Any,
 ) -> tuple[torch.device, torch.dtype]:
@@ -209,17 +257,13 @@ def _series_slice_to_subgraph(series: Any, start: int, end: int) -> Any | None:
     Return the slice of a FLAMO Series as a subgraph (same module refs).
     Returns None for empty slice, single module ref, or new Series(OrderedDict(slice)).
     """
+    from flamo.processor import system as flamo_system  # type: ignore
+
     n = end - start
     if n <= 0:
         return None
     if n == 1:
         return series[start]
-    try:
-        from flamo.processor import system as flamo_system  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(
-            "FLAMO system.Series is required for multi-module subgraphs."
-        ) from exc
     items = list(series._modules.items())[start:end]
     return flamo_system.Series(OrderedDict(items))
 
@@ -714,7 +758,7 @@ def flamo_to_pr(
     decomposition: FlamoDecompositionForPR | None = None,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
-    quality_threshold: float = 1e-10,
+    quality_threshold: float = 1e-7,
     maximum_iterations: int = 50,
     refinement_tol: float = 1e-12,
     verbose: bool = True,
@@ -731,7 +775,9 @@ def flamo_to_pr(
     if decomposition is None:
         if model is None:
             raise ValueError("Provide model or decomposition.")
+        model = _ensure_high_precision_model(model)
         decomposition = flamo_decompose_for_pr(model)
+    decomposition = _ensure_high_precision_decomposition(decomposition)
     delays_arr = decomposition.delays
     decomposition_obj = _extract_flamo_recursion_probes(decomposition)
 
@@ -779,8 +825,11 @@ def flamo_to_pr(
 
     poles_torch = 1.0 / roots_w
     # Convert to numpy only for scipy.optimize.linear_sum_assignment in reduce_conjugate_pairs
-    poles_np = _to_numpy(poles_torch)
+    poles_np = _normalize_poles_for_pairing(_to_numpy(poles_torch))
     poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
+    sort_ind = _pole_sort_index(poles)
+    poles = poles[sort_ind]
+    is_conjugate = is_conjugate[sort_ind]
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
@@ -808,6 +857,7 @@ def dss_to_pr_flamo(
     refinement_tol: float = 1e-12,
     verbose: bool = True,
     dtype: Any = None,
+    absorption_filters: Any = None,
     Fs: float = 1.0,
     nfft: int = 2**16,
     device: Any = None,
@@ -818,7 +868,14 @@ def dss_to_pr_flamo(
     Builds a FLAMO model with :func:`dss_to_flamo`, then runs :func:`flamo_to_pr`
     on it. For an existing FLAMO model use :func:`flamo_to_pr` directly.
     """
+    if absorption_filters is not None:
+        raise ValueError(
+            "dss_to_pr_flamo does not support absorption_filters; use a plain DSS model."
+        )
+
     delays_arr = np.asarray(delays, dtype=int).ravel()
+    if dtype is None:
+        dtype = torch.float64
     model = dss_to_flamo(
         A=np.asarray(A, dtype=np.float64),
         B=np.asarray(B, dtype=np.float64),

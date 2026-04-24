@@ -9,17 +9,11 @@ values assigned.
 from __future__ import annotations
 
 import numpy as np
-
-try:
-    from flamo.processor import dsp
-
-    _HAS_FLAMO = True
-except ImportError:
-    _HAS_FLAMO = False
+from flamo.processor import dsp
 
 
 def _get_device(device):
-    if device is None and _HAS_FLAMO:
+    if device is None:
         import torch
 
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,8 +53,6 @@ def gain_module(
     flamo.processor.dsp.Gain
         FLAMO Gain module with values assigned.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("gain_module requires flamo (pip install flamo)")
     import torch
 
     values = np.asarray(values, dtype=np.float64)
@@ -123,8 +115,6 @@ def delay_module(
     flamo.processor.dsp.parallelDelay
         FLAMO parallelDelay module with lengths assigned (in seconds).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("delay_module requires flamo (pip install flamo)")
     import torch
 
     lengths = np.asarray(lengths_seconds, dtype=np.float64).ravel()
@@ -180,8 +170,6 @@ def sos_filter_module(
     flamo.processor.dsp.parallelSOSFilter
         FLAMO parallelSOSFilter with coefficients assigned.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("sos_filter_module requires flamo (pip install flamo)")
     import torch
 
     sos_pad = np.asarray(sos, dtype=np.float64)

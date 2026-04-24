@@ -21,8 +21,9 @@ class DelayRead(Stage):
 
     def __init__(
         self,
-        delay_lengths: torch.Tensor = torch.tensor([81, 100, 121, 169]),
+        delay_lengths: torch.Tensor | list[int] | tuple[int, ...] | None = None,
         num_lines: int = 4,
+        delay_length: int | None = None,
     ):
         """
         Initialize delay read stage.
@@ -33,14 +34,19 @@ class DelayRead(Stage):
         """
         # Stateless: delay state is owned/initialized by DelayWrite
         super().__init__(state_keys=set())
-        self.delay_lengths = delay_lengths
+        if delay_lengths is None:
+            if delay_length is None:
+                delay_lengths = torch.tensor([81, 100, 121, 169])
+            else:
+                delay_lengths = torch.full((num_lines,), int(delay_length))
+        self.delay_lengths = torch.as_tensor(delay_lengths, dtype=torch.long)
         self.num_lines = num_lines
 
     def init_state(
         self,
         batch_size: int,
-        block_size: int,
-        device: torch.device,
+        block_size: int | torch.device | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Initialize delay buffers and pointer.
@@ -54,8 +60,13 @@ class DelayRead(Stage):
                 "delay_buffers": Delay buffers of shape [B, N, L]
                 "delay_pointer": Delay pointer of shape [B, N]
         """
-        max_delay = self.delay_lengths.max().item()
-        buffer_size = max_delay + block_size
+        if device is None and isinstance(block_size, torch.device):
+            device = block_size
+            block_size = None
+        if device is None:
+            device = torch.device("cpu")
+        max_delay = int(self.delay_lengths.max().item())
+        buffer_size = max_delay
         return {
             "delay_buffers": torch.zeros(
                 batch_size,
@@ -216,8 +227,9 @@ class Delay(Stage):
 
     def __init__(
         self,
-        delay_lengths: torch.Tensor = torch.tensor([81, 100, 121, 169]),
+        delay_lengths: torch.Tensor | list[int] | tuple[int, ...] | None = None,
         num_lines: int = 4,
+        delay_length: int | None = None,
     ):
         """
         Initialize delay read stage.
@@ -228,14 +240,19 @@ class Delay(Stage):
         """
         # Stateless: delay state is owned/initialized by DelayWrite
         super().__init__(state_keys=set())
-        self.delay_lengths = delay_lengths
+        if delay_lengths is None:
+            if delay_length is None:
+                delay_lengths = torch.tensor([81, 100, 121, 169])
+            else:
+                delay_lengths = torch.full((num_lines,), int(delay_length))
+        self.delay_lengths = torch.as_tensor(delay_lengths, dtype=torch.long)
         self.num_lines = num_lines
 
     def init_state(
         self,
         batch_size: int,
-        block_size: int,
-        device: torch.device,
+        block_size: int | torch.device | None = None,
+        device: torch.device | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Initialize delay buffers and pointer.
@@ -249,8 +266,13 @@ class Delay(Stage):
                 "delay_buffers": Delay buffers of shape [B, N, L]
                 "delay_pointer": Delay pointer of shape [B, N]
         """
-        max_delay = self.delay_lengths.max().item()
-        buffer_size = max_delay + block_size
+        if device is None and isinstance(block_size, torch.device):
+            device = block_size
+            block_size = None
+        if device is None:
+            device = torch.device("cpu")
+        max_delay = int(self.delay_lengths.max().item())
+        buffer_size = max_delay
         return {
             "delay_buffers": torch.zeros(
                 batch_size,
