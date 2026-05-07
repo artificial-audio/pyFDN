@@ -1,0 +1,129 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "e14ba161b9ea3ea1287aa13f3d8ff820",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"one-pole-absorption-fdn-flamo-integration\">One-pole absorption FDN (FLAMO integration)</h1>\n<span class=\"paragraph\">This example builds an FDN with <strong>one-pole absorption filters</strong> (designed with pyFDN) and runs it in <strong>FLAMO</strong> for the impulse response. Results are compared to a MATLAB reference when the reference file is available.</span>\n<span class=\"paragraph\"><strong>What it does:</strong></span>\n<ul>\n<li>Loads reference parameters from a MATLAB export (or uses the path below).</li>\n<li>Designs one-pole absorption coefficients with <code>pyFDN.one_pole_absorption</code> (T60 at DC and Nyquist).</li>\n<li>Assembles the FDN in FLAMO (delays, absorption, feedback matrix, I/O gains) and computes the IR.</li>\n<li>Plots IR vs reference, filter responses, spectrogram, RT60 curve, and coefficients.</li>\n</ul>\n<span class=\"paragraph\"><em>(Run from repo root or <code>examples/</code> so <code>tests/reference/example_onePoleAbsorption.mat</code> is found.)</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "a2283a82751be7084a80597574a98e6f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "b5ef4e3e6e90f3900d1d43dbaca590e2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"load-reference-data\">Load reference data</h2>\n<span class=\"paragraph\">Load parameters and MATLAB reference IR from the regression .mat file (run from repo root or <code>examples/</code>).</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "e8ed8206ad5c5c6b5a9d5e829d0dfae8",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "ac47e37905bfe96ecf419166328a4dbd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"one-pole-absorption-coefficients-pyfdn\">One-pole absorption coefficients (pyFDN)</h2>\n<span class=\"paragraph\">Design SOS coefficients for each delay line from target T60 at DC and Nyquist.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "6548ebcff310e1f2634372c4dfb3b4cd",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "882676f0b3af678b6e309aa5893da902",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"build-fdn-in-flamo\">Build FDN in FLAMO</h2>\n<span class=\"paragraph\">Wire delays, one-pole absorption, feedback matrix, and I/O gains; then wrap in FFT/iFFT shell for time response.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "732d32793160619c63626aa335865029",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "e086a64cec268b59e5c1bdfd437c3b99",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"generate-and-compare-ir\">Generate and compare IR</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "db816b1362f4f899f15e2f7216e32282",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "9d41360076cf4e8dd39cc504d0ffb62b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"plots\">Plots</h2>\n<span class=\"paragraph\">IR vs reference, one-pole filter responses, spectrogram, theoretical RT60, and filter coefficients.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "69be275bd3828f85f25da4708753d83c",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

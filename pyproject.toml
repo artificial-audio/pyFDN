@@ -167,3 +167,6 @@ disable_error_code = ["no-untyped-call", "no-untyped-def", "override", "arg-type
 module = "pyFDN.auxiliary.acoustics"
 disable_error_code = ["operator", "index", "arg-type"]
 
+# Configure the max output size in Marimo nootebooks
+[tool.marimo.runtime]
+output_max_bytes = 50_000_000

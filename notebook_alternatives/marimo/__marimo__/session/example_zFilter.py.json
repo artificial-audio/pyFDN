@@ -1,0 +1,72 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "4111c8bbd5bdfe044bec4fd478750e7d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"z-filter-example-ztf-and-zsos\">Z-filter example (ZTF and ZSOS)</h1>\n<span class=\"paragraph\">This notebook checks that pyFDN\u2019s <strong>ZTF</strong> (transfer function) and <strong>ZSOS</strong> (second-order sections) filter classes match <code>scipy.signal.freqz</code> / <code>sosfreqz</code>, and that their frequency-derivative (<code>.der</code>) matches a numerical derivative.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "8e64649430b4de4be2174d039c2bf83f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "1fccfdf25a68320b8c24c32d47690945",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"ztf-transfer-function\">ZTF (transfer function)</h2>\n<span class=\"paragraph\">Compare <code>pyFDN.ZTF</code> frequency response and derivative to <code>scipy.signal.freqz</code> and a numerical derivative.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "0b73936a0b71f0f81ecb9999703b1891",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "910505c66f6d3422fd99f4d448fdd5b4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"zsos-second-order-sections\">ZSOS (second-order sections)</h2>\n<span class=\"paragraph\">Same comparison for <code>pyFDN.ZSOS</code> vs <code>scipy.signal.sosfreqz</code>.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "ee83d70b8924c2af7d08a3a4ae23a795",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

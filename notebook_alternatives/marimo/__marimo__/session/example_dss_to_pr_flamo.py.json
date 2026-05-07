@@ -1,0 +1,137 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.4",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "ecd8f67d95376533d2383e45958ccbec",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"flamo-dsspr-notebook\">FLAMO DSS\u2192PR (Notebook)</h1>\n<span class=\"paragraph\"><strong>In-depth math documentation</strong> of the refinement fix, with an <strong>SOS filter in the loop</strong> and plotting.</span>\n<h2 id=\"goals\">Goals</h2>\n<ol>\n<li>Build a delay state-space model with a <strong>one-pole absorption (SOS) in the loop</strong> via <code>dss_to_flamo(..., sos_filter=...)</code>.</li>\n<li>Extract poles/residues via <code>pyFDN.flamo_to_pr</code>.</li>\n<li>Explain the key math fix: why we evaluate Newton/Ehrlich\u2013Aberth in <strong>w-plane</strong> (<code>w = z^{-1}</code>) while FLAMO probing naturally gives derivatives in <strong>z-plane</strong>.</li>\n<li>Verify numerically that the derivative identities are consistent.</li>\n<li>Verify time-domain impulse response reconstruction from modal data and <strong>plot poles + IR</strong>.</li>\n</ol></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "491eda11af4f3e449111869674673fa0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"notation\">Notation</h2>\n<ul>\n<li>Characteristic matrix of the recursive loop with feedforward <marimo-tex class=\"arithmatex\">||(F(z)||)</marimo-tex> and feedback <marimo-tex class=\"arithmatex\">||(G(z)||)</marimo-tex></li>\n</ul>\n<span class=\"paragraph\">$$\n  P(z) = I - F(z)G(z)\n  $$</span>\n<span class=\"paragraph\">In the standard FDN delay form this matches</span>\n<span class=\"paragraph\">$$\n  P(z) = I - A\\,\\mathrm{diag}(z<sup>{-m_1},\\dots,z</sup>{-m_N}).\n  $$</span>\n<ul>\n<li>Transfer decomposition:</li>\n</ul>\n<span class=\"paragraph\">$$\n  H(z) = C(z)\\,P(z)^{-1}F(z)B(z) + D(z).\n  $$</span>\n<ul>\n<li>Poles are roots of</li>\n</ul>\n<span class=\"paragraph\">$$\n  \\det P(z)=0.\n  $$</span>\n<span class=\"paragraph\">We use FLAMO's native recursion probes (<code>probe_recursion</code>, <code>probe_recursion_with_derivative</code>, <code>log_det_derivative</code>, <code>log_det_derivative_w</code>) directly.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "10035e088777c37435900e3761199ef5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"1-core-decomposition-and-residue-formula\">1) Core decomposition and residue formula</h2>\n<span class=\"paragraph\">Given</span>\n<marimo-tex class=\"arithmatex\">||[\nH(z) = C(z)\\,P(z)^{-1}F(z)B(z)+D(z),\n||]</marimo-tex><span class=\"paragraph\">and a simple pole <marimo-tex class=\"arithmatex\">||(\\lambda_i||)</marimo-tex> where <marimo-tex class=\"arithmatex\">||(\\det P(\\lambda_i)=0||)</marimo-tex>, define right/left null vectors</span>\n<marimo-tex class=\"arithmatex\">||[\nP(\\lambda_i)r_i=0,\\qquad \\ell_i^H P(\\lambda_i)=0.\n||]</marimo-tex><span class=\"paragraph\">Then the residue matrix is</span>\n<marimo-tex class=\"arithmatex\">||[\n\\rho_i = \\frac{\\left(C(\\lambda_i)r_i\\right)\\left(\\ell_i^H F(\\lambda_i) B(\\lambda_i)\\right)}{\\ell_i^H\\,\\frac{dP}{dz}(\\lambda_i)\\,r_i}.\n||]</marimo-tex><span class=\"paragraph\">This is the adjugate-free null-vector formula used in <code>flamo_to_pr</code>.</span>\n<span class=\"paragraph\">Why it is useful:</span>\n<ul>\n<li>It works for general matrix-polynomial/rational characteristic forms.</li>\n<li>It avoids explicitly forming adjugates.</li>\n<li>It aligns naturally with FLAMO probes for <marimo-tex class=\"arithmatex\">||(P(z)||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(dP/dz||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(F(z)||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(B(z)||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(C(z)||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(D(z)||)</marimo-tex>.</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "5d8ffdb2f8008057884be2158ec8a2e4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"2-newton-term-in-z-plane\">2) Newton term in z-plane</h2>\n<span class=\"paragraph\">For simultaneous pole refinement (Ehrlich\u2013Aberth style), we need a scalar Newton-like term. For matrix characteristic equations, the natural choice is</span>\n<marimo-tex class=\"arithmatex\">||[\nN_z(z) = \\frac{d}{dz}\\log\\det P(z).\n||]</marimo-tex><span class=\"paragraph\">Using Jacobi's formula:</span>\n<marimo-tex class=\"arithmatex\">||[\n\\frac{d}{dz}\\log\\det P(z) = \\mathrm{tr}\\left(P(z)^{-1}\\frac{dP}{dz}(z)\\right).\n||]</marimo-tex><span class=\"paragraph\">This is exactly what FLAMO exposes natively via:</span>\n<ul>\n<li><code>Recursion.log_det_derivative(z)</code> (z-plane), and</li>\n<li><code>Recursion.log_det_derivative_w(w)</code> (w-plane).</li>\n</ul>\n<span class=\"paragraph\">When these are available we can avoid numerical <code>solve+trace</code> fallback for the Newton term.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "d8e6ba92efb35486b4941ed15e51f40b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"3-why-switch-to-w-plane-wz-1\">3) Why switch to w-plane (<marimo-tex class=\"arithmatex\">||(w=z^{-1}||)</marimo-tex>)?</h2>\n<span class=\"paragraph\">For delay systems, the characteristic expression is naturally a polynomial-like object in <marimo-tex class=\"arithmatex\">||(w=z^{-1}||)</marimo-tex>.</span>\n<span class=\"paragraph\">Define</span>\n<marimo-tex class=\"arithmatex\">||[\nq(w) = \\det P(1/w).\n||]</marimo-tex><span class=\"paragraph\">Then poles in z map to roots in w by <marimo-tex class=\"arithmatex\">||(w_i = 1/z_i||)</marimo-tex>.</span>\n<span class=\"paragraph\">Chain rule gives the key identity:</span>\n<marimo-tex class=\"arithmatex\">||[\n\\frac{d}{dw}\\log q(w)\n= \\frac{d}{dz}\\log\\det P(z)\\cdot\\frac{dz}{dw}\n= N_z(z)\\cdot\\left(-\\frac{1}{w^2}\\right)\n= -z^2 N_z(z),\\quad z=1/w.\n||]</marimo-tex><span class=\"paragraph\">So</span>\n<marimo-tex class=\"arithmatex\">||[\nN_w(w):=\\frac{q'(w)}{q(w)} = -z^2\\,N_z(z).\n||]</marimo-tex><span class=\"paragraph\">This is exactly the conversion implemented in the refinement step.</span>\n<hr />\n<h3 id=\"eai-form-used-in-code\">EAI form used in code</h3>\n<span class=\"paragraph\">At pole index <marimo-tex class=\"arithmatex\">||(i||)</marimo-tex>:</span>\n<ol>\n<li>Compute <marimo-tex class=\"arithmatex\">||(N_z(z_i)||)</marimo-tex>.</li>\n<li>Convert to w-plane Newton term:</li>\n</ol>\n<span class=\"paragraph\">$$\n   N_w(w_i) = -z_i^2 N_z(z_i),\\quad w_i=1/z_i.\n   $$</span>\n<ol start=\"3\">\n<li>Deflation in w-plane:</li>\n</ol>\n<span class=\"paragraph\">$$\n   D_w(w_i)=\\sum_{j\\neq i}\\frac{1}{w_i-w_j}.\n   $$</span>\n<ol start=\"4\">\n<li>EAI update in w:</li>\n</ol>\n<span class=\"paragraph\">$$\n   w_i^{\\text{new}} = w_i - \\frac{1}{N_w(w_i)-D_w(w_i)}.\n   $$</span>\n<ol start=\"5\">\n<li>Map back:</li>\n</ol>\n<span class=\"paragraph\">$$\n   z_i^{\\text{new}} = 1/w_i^{\\text{new}}.\n   $$</span>\n<span class=\"paragraph\">Using deflation directly in w-plane is important because roots are distributed more naturally for delay-polynomial structure there.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "04ebcff693d04a2e6c1d7d0333315017",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"4-numerical-stability-note\">4) Numerical stability note</h2>\n<span class=\"paragraph\">The refinement variable is now always <marimo-tex class=\"arithmatex\">||(w||)</marimo-tex>. So we evaluate Newton terms directly as</span>\n<marimo-tex class=\"arithmatex\">||[\nN_w(w)=\\frac{d}{dw}\\log\\det P(1/w)\n||]</marimo-tex><span class=\"paragraph\">whenever FLAMO exposes <code>log_det_derivative_w(w)</code>.</span>\n<span class=\"paragraph\">If only z-domain derivatives are available, we use the exact chain-rule fallback:</span>\n<marimo-tex class=\"arithmatex\">||[\nN_w(w)= -\\frac{1}{w^2} N_z(1/w),\n\\quad N_z(z)=\\frac{d}{dz}\\log\\det P(z).\n||]</marimo-tex><span class=\"paragraph\">This keeps the optimization state in one variable (w) and minimizes numerical conversions during iteration.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "7be3e797bdb0fd4c4a0a6c1ad25c8485",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "2ecb43f3b4c4b122e5dba152c954dca3",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "689eee3e1b69b0e8247b42fb63d2526c",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "67c816bec184bde0656ac114a016fb30",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "fb371f131497fe1fb01d1b0f2e42f717",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"5-practical-interpretation-of-the-fix\">5) Practical interpretation of the fix</h2>\n<h3 id=\"what-changed-conceptually\">What changed conceptually</h3>\n<ul>\n<li><strong>Before:</strong> parts of the refinement were still expressed in z-domain and then converted for w updates.</li>\n<li><strong>Now (fully w-domain):</strong><ul>\n<li>Root variables are represented as <marimo-tex class=\"arithmatex\">||(w||)</marimo-tex> throughout refinement.</li>\n<li>Newton term is computed as <marimo-tex class=\"arithmatex\">||(d/dw\\,\\log\\det P(1/w)||)</marimo-tex> (native FLAMO when available, chain-rule fallback otherwise).</li>\n<li>Deflation and EAI update are done directly in <marimo-tex class=\"arithmatex\">||(w||)</marimo-tex>.</li>\n<li>Conversion to <marimo-tex class=\"arithmatex\">||(z=1/w||)</marimo-tex> happens only once at the end, before residue computation.</li>\n</ul>\n</li>\n</ul>\n<h3 id=\"why-this-is-better\">Why this is better</h3>\n<ol>\n<li><strong>Single-variable formulation:</strong> easier to reason about and debug.</li>\n<li><strong>Closer to delay-polynomial structure:</strong> delays are naturally polynomial in <marimo-tex class=\"arithmatex\">||(w=z^{-1}||)</marimo-tex>.</li>\n<li><strong>Numerical robustness:</strong> avoids repeated z\u2194w conversion during iteration.</li>\n<li><strong>Lower layering:</strong> direct calls into FLAMO recursion APIs, fewer adaptation layers.</li>\n</ol>\n<span class=\"paragraph\">If you want, the next extension is to add a side-by-side diagnostic cell comparing convergence traces of the new fully-w formulation against a legacy z-formulation.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

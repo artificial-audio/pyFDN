@@ -1,0 +1,165 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "4befa67559dbec3e003cae56d9f15477",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"delay-state-space-to-transfer-function\">Delay state-space to transfer function</h1>\n<span class=\"paragraph\">Convert the delay state-space form of an FDN into matrix transfer function form (<code>dss_to_tf</code>). Verify by comparing the impulse response from the TF with the one from direct delay state-space simulation (<code>dss_to_impz</code>).</span>\n<span class=\"paragraph\"><strong>What it does:</strong></span>\n<ul>\n<li>Defines an FDN with random orthogonal feedback, random delays, and MIMO B, C, D.</li>\n<li>Converts to transfer function: <code>(tfB, tfA) = dss_to_tf(delays, A, B, C, D)</code>.</li>\n<li>Computes IR via TF: <code>mtf_to_impz(tfB, tfA, ir_len)</code>.</li>\n<li>Computes IR via delay state-space: <code>dss_to_impz(ir_len, delays, A, B, C, D)</code>.</li>\n<li>Plots poles (from <code>roots(tfA)</code>) and one channel IR (TF vs DSS), and asserts the two IRs match.</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "ae7547cc4d82972b5db59e7c7400fc48",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"setup\">Setup</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "f1a734ce55e5146e62a32da4f9afe7ca",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "aacfe660df30dffccd6582e51d996156",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"transfer-function-path\">Transfer function path</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "30967a685d8048ad3a70ef1281eace56",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "0bad26b192de79b913d8933a93e52377",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"delay-state-space-path\">Delay state-space path</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "df244ca3e9171972b075da14bcbcd317",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "3bd47645578c3017e94c4152a53f2182",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"plots\">Plots</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "0565fa7557fac743d899912071be6eb0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "85353a42c675440c4301031e73cbd61d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"verification\">Verification</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "ba92ef3741e137b9aa5609458639521a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

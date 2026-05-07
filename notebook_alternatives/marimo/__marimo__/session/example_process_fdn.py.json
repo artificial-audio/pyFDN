@@ -1,0 +1,173 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "b3261b8abc39c7f2dfb7691c4ba091b7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"processing-an-fdn-in-python\">Processing an FDN in Python</h1>\n<span class=\"paragraph\">End-to-end example: load a dry signal, run it through a feedback delay network (FDN), and write a stereo reverb output to disk.</span>\n<span class=\"paragraph\"><strong>What it does:</strong></span>\n<ul>\n<li>Loads a dry audio example from the package and normalizes it to float in [-1, 1].</li>\n<li>Configures an FDN with random delay lengths and a velvet feedback matrix (with random shifts).</li>\n<li>Designs one-pole absorption filters from target T60 at DC and Nyquist.</li>\n<li>Runs <code>process_fdn</code> and saves the result as a WAV file (and optionally plays it on macOS).</li>\n</ul>\n<span class=\"paragraph\"><em>(Python translation of <code>example_processFDN.m</code>.)</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "da59b5459c303c03fa284f5d41d23a79",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "c4ae11d69d013521391b1736306f2446",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"load-and-prepare-the-input-signal\">Load and prepare the input signal</h2>\n<span class=\"paragraph\">Read the packaged dry audio example, convert to float in [-1, 1], and append silence so the reverb tail can decay.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "11bd440e01bbf0d109b804183b892aac",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Sampling rate: 48000 Hz\nInput length:  196000 samples\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "PKri",
+      "code_hash": "c6a27478aa5ee2fed34d9bb81ec71866",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"configure-the-fdn-structure\">Configure the FDN structure</h2>\n<span class=\"paragraph\">Set number of delay lines, random input/output gains, and build a velvet feedback matrix with random shifts. Matrix-delay approximation is computed for diagnostics.</span>\n<span class=\"paragraph\">The velvet matrix introduces a delay, so we need to add it to the delay lines for accurately computing the absorption filters</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "db9fd97342f8214661d9e56577ec5321",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Delay lengths (samples): [ 634 1795  533 1312  620  949 1222 1134]\nMatrix delay (samples): [120. 111. 124. 137. 115. 104. 144. 100.]\nApproximation mean abs error: 2.272896833081445\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "deae75d6e9df01ab6a2ff7515b30a048",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"design-one-pole-absorption-filters\">Design one-pole absorption filters</h2>\n<span class=\"paragraph\">Use <code>one_pole_absorption</code> to get first-order IIR filters with given T60 at DC and Nyquist per delay line, then wrap them in a diagonal <code>ZTF</code> filter matrix.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "29cdf9975d9f1fb8539fbe6eb6cb2dbf",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "module 'pyFDN' has no attribute 'ZTF'",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;C:\\Users\\almah\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\marimo\\_runtime\\executor.py&quot;</span>, line <span class=\"m\">138</span>, in <span class=\"n\">execute_cell</span>\n<span class=\"w\">    </span><span class=\"n\">exec</span><span class=\"p\">(</span><span class=\"n\">cell</span><span class=\"o\">.</span><span class=\"n\">body</span><span class=\"p\">,</span> <span class=\"n\">glbls</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;C:\\Users\\almah\\AppData\\Local\\Temp\\marimo_24432\\__marimo__cell_BYtC_.py&quot;</span>, line <span class=\"m\">14</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">z_absorption</span> <span class=\"o\">=</span> <span class=\"n\">pyFDN</span><span class=\"o\">.</span><span class=\"n\">ZTF</span><span class=\"p\">(</span><span class=\"n\">b_abs</span><span class=\"p\">,</span> <span class=\"n\">a_abs</span><span class=\"p\">,</span> <span class=\"n\">is_diagonal</span><span class=\"o\">=</span><span class=\"kc\">True</span><span class=\"p\">)</span>\n<span class=\"w\">                   </span><span class=\"pm\">^^^^^^^^^</span>\n<span class=\"gr\">AttributeError</span>: <span class=\"n\">module &#39;pyFDN&#39; has no attribute &#39;ZTF&#39;</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "641328bd35fe77d086eb83875c01617c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"process-the-signal-through-the-fdn\">Process the signal through the FDN</h2>\n<span class=\"paragraph\">Run the block-based FDN processor, normalize the output to avoid clipping, save as WAV, and optionally play with <code>afplay</code> on macOS.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "88f929c7f02707f49756437e1361720a",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AttributeError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    }
+  ]
+}
