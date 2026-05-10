@@ -28,8 +28,6 @@ requires-python = ">=3.10"
 license = {text = "MIT license"}
 dependencies = [
   "numpy",
-  'torch',
-  'torchaudio',
   'soundfile',
   "scipy",
   "flamo>=0.2.13",
