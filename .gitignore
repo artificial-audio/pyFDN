@@ -109,6 +109,7 @@ ENV/
 .vscode/
 !.vscode/settings.json
 .idea/
+.claude/
 
 # OS-specific cruft
 .DS_Store
