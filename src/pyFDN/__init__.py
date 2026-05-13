@@ -248,3 +248,6 @@ from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
 
 allpass = auxiliary.allpass
+
+# Declarative graph-IR configuration subpackage
+from . import config
