@@ -1,0 +1,3 @@
+[submodule "rt-fdn"]
+	path = rt-fdn
+	url = git@github.com:cucuwritescode/rt-fdn.git
