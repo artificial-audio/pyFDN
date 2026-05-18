@@ -114,6 +114,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# Claude
+.claude/
+
 # Generated audio / data artefacts
 *.wav
 *.flac

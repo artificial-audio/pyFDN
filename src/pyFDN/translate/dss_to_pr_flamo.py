@@ -657,6 +657,22 @@ def _dss_to_res_flamo(
     n_out = int(decomposition.out_probe.output_channels)
     n = loop.n
 
+    if n_poles == 0:
+        warnings.warn(
+            "FLAMO pole finder returned no poles; residues are empty.",
+            stacklevel=2,
+        )
+        direct_term = decomposition.direct_probe.probe(1.0 + 0j)
+        return (
+            np.zeros((0, n_out, n_in), dtype=np.complex128),
+            _to_numpy(direct_term),
+            np.zeros(0, dtype=np.complex128),
+            {
+                "right": np.zeros((n, 0), dtype=np.complex128),
+                "left": np.zeros((n, 0), dtype=np.complex128),
+            },
+        )
+
     p0, _ = loop.get_P_and_dP_dz(poles[0])
     device, dtype = p0.device, p0.dtype
 

@@ -24,8 +24,7 @@ def test_dss_to_pr_direct_reconstructs_impulse_response():
         b,
         c,
         d,
-        verbose=False,
-        maximum_iterations=60,
+        mode="roots",
     )
 
     ir_len = 512
@@ -55,8 +54,7 @@ def test_example_dss_to_pr_residue_lstsq_match():
         b,
         c,
         d,
-        verbose=False,
-        maximum_iterations=70,
+        mode="eig",
     )
     ir_modal = pr_to_impz(residues, poles, direct, is_conj, ir_len)[:, 0, 0]
     residues_from_ir, _, _ = impz_to_res(ir_time, poles, is_conj)
