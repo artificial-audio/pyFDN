@@ -32,7 +32,7 @@ def test_tiny_rotation_matrix():
 
     # Test parameters
     n = 6
-    delta = 12
+    delta = 0.12
     spread = 0.1
 
     # generate rotation matrix

@@ -48,24 +48,15 @@ def tiny_rotation_matrix(
     # Eigenvalue decomposition
     eigenvalues, eigenvectors = torch.linalg.eig(skew_symmetric)
 
-    # Find nearest neighbors: for each eigenvector, find closest among conjugates
-    # The MATLAB nearestneighbour(v, conj(v)) finds for each column of v,
-    # the closest column in conj(v) using Euclidean distance
-
-    # Calculate pairwise distances between eigenvectors and their conjugates
-    # Each eigenvector is a column, so we transpose for proper broadcasting
-    v_conj = torch.conj(eigenvectors)
-
-    # Compute distance matrix: |v_i - conj(v_j)|^2 for all i,j
-    distances = torch.zeros(n, n)
-    for i in range(n):
-        for j in range(n):
-            # Distance between eigenvector i and conjugate of eigenvector j
-            diff = eigenvectors[:, i] - v_conj[:, j]
-            distances[i, j] = torch.norm(diff).real
-
-    # Find nearest neighbor index for each eigenvector
-    idx = torch.argmin(distances, dim=1)
+    # Pair each eigenvalue with its complex-conjugate partner. A real
+    # skew-symmetric matrix has purely imaginary eigenvalues in conjugate
+    # pairs (plus a possible real/zero eigenvalue when n is odd). Matching on
+    # eigenvalues is exact and phase-independent; matching eigenvectors is not,
+    # because torch.linalg.eig returns eigenvectors with an arbitrary phase.
+    conj_distances = torch.abs(
+        eigenvalues.unsqueeze(1) - torch.conj(eigenvalues).unsqueeze(0)
+    )
+    idx = torch.argmin(conj_distances, dim=1)
 
     # Generate frequency spread
     frequency_spread = 2 * (torch.rand(n) - 0.5) * spread + 1

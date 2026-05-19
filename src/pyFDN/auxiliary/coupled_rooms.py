@@ -61,8 +61,8 @@ def create_coupled_rooms_fdn():
     coupling = 0.3
 
     # Generate feedback matrices using tinyRotationMatrix
-    A1 = tiny_rotation_matrix(N_per_room, 12).float()
-    A2 = tiny_rotation_matrix(N_per_room, 12).float()
+    A1 = tiny_rotation_matrix(N_per_room, 0.07).float()
+    A2 = tiny_rotation_matrix(N_per_room, 0.07).float()
 
     # Compute matrix square roots using eigenvalue decomposition
     def matrix_sqrt(A):
