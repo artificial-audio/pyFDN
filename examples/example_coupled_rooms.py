@@ -279,7 +279,7 @@ def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
     ax1.legend()
 
     ax1.grid(True, alpha=0.3)
-    ax1.set_xlim([0, len(ir)])
+    ax1.set_xlim((0, len(ir)))
 
     # Plot 2: Feedback matrix
     ax2 = plt.subplot(1, 3, 2)
@@ -301,8 +301,8 @@ def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
     ax3.set_title("Energy Decay Curves")
     ax3.legend()
     ax3.grid(True, alpha=0.3)
-    ax3.set_xlim([0, min(2, len(ir) / fs)])
-    ax3.set_ylim([-40, 15])
+    ax3.set_xlim((0, min(2, len(ir) / fs)))
+    ax3.set_ylim((-40, 15))
 
     plt.tight_layout()
     plt.show()

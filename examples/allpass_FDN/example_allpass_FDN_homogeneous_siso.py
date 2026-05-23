@@ -130,9 +130,8 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np):
+def _(Fs, impulse_response, ir_len, mo, np):
     import matplotlib.pyplot as plt
-    from IPython.display import Audio, display
 
     t = np.arange(ir_len) / Fs
     _fig, ax = plt.subplots(figsize=(10, 3))
@@ -144,7 +143,7 @@ def _(Fs, impulse_response, ir_len, np):
     plt.tight_layout()
     plt.show()
 
-    display(Audio(impulse_response, rate=Fs))
+    mo.vstack([mo.audio(impulse_response, Fs)])
     return
 
 

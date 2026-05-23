@@ -200,15 +200,13 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, pyFDN):
-    from IPython.display import Audio, display
-
+def _(Fs, impulse_response, mo, pyFDN):
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
     _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2), clim=(-200, -100))
     _fig.show()
 
-    display(Audio(channel_ir, rate=Fs))
+    mo.vstack([mo.audio(channel_ir, Fs)])
     return
 
 

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -54,7 +54,7 @@ def _(np, plt, pyFDN):
     rt_curve_2 = np.array([2, 2, 1, 0.5, 0.5])  # seconds
     target_rt = np.column_stack([rt_curve_1, rt_curve_2])
 
-    delays_ms = [20, 40]  # ms
+    delays_ms = np.array([20, 40])  # ms
     delays = pyFDN.ms_to_smp(delays_ms, fs)
 
     filter_length = 10  # ms

@@ -37,10 +37,9 @@ def _():
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
     from flamo.processor import dsp, system
-    from IPython.display import Audio, display
     import pyFDN
 
-    return Audio, OrderedDict, copy, display, dsp, go, np, pyFDN, system, torch
+    return OrderedDict, copy, dsp, go, np, pyFDN, system, torch
 
 
 @app.cell(hide_code=True)
@@ -242,9 +241,9 @@ def _(mo):
 @app.cell
 def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     # generate new delays for swapped model
-    delays_swapped = rng.integers(1000 / 3, 4000 / 3, size=N).astype(np.int64)
-    delays_in_swapped = rng.integers(1000 / 3, 7000 / 3, size=N).astype(np.int64)
-    delays_out_swapped = rng.integers(1000 / 3, 7000 / 3, size=N).astype(np.int64)
+    delays_swapped = rng.integers(333, 1333, size=N).astype(np.int64)
+    delays_in_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
+    delays_out_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
 
     total_delay_swapped = delays_swapped + delays_in_swapped + delays_out_swapped
 
@@ -287,17 +286,7 @@ def _(mo):
 
 
 @app.cell
-def _(
-    Audio,
-    display,
-    fs,
-    go,
-    ir_delay_matrix,
-    ir_swapped,
-    ir_vanilla,
-    np,
-    pyFDN,
-):
+def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
     ir_v = np.asarray(ir_vanilla).ravel()
     ir_dm = np.asarray(ir_delay_matrix).ravel()
     ir_sw = np.asarray(ir_swapped).ravel()
@@ -348,7 +337,6 @@ def _(
         height=500,
         margin=dict(l=60, r=40, t=50, b=50),
     )
-    fig.show()
 
     fig2 = go.Figure()
     fig2.add_trace(
@@ -394,11 +382,20 @@ def _(
         height=350,
         margin=dict(l=60, r=40, t=50, b=50),
     )
-    fig2.show()
 
-    display(Audio(ir_vanilla, rate=fs))
-    display(Audio(ir_delay_matrix, rate=fs))
-    display(Audio(ir_swapped, rate=fs))
+    plots = mo.vstack([fig, fig2])
+
+    audio_blocks = mo.vstack(
+        [
+            mo.md("Vanilla:"),
+            mo.audio(np.asarray(ir_vanilla), rate=fs),
+            mo.md("Delay matrix:"),   
+            mo.audio(np.asarray(ir_delay_matrix), rate=fs),
+            mo.md("Swapped:"),       
+            mo.audio(np.asarray(ir_swapped), rate=fs),
+    ])
+
+    mo.vstack([plots, audio_blocks])
     return
 
 

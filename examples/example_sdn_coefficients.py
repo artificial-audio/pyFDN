@@ -41,11 +41,10 @@ def _():
     import plotly.io as pio
     from scipy.signal import butter, tf2sos
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
-    from IPython.display import Audio, display
 
     import pyFDN
 
-    return Audio, butter, display, go, np, pyFDN, tf2sos
+    return butter, go, np, pyFDN, tf2sos
 
 
 @app.cell(hide_code=True)
@@ -147,7 +146,7 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, Fs, display, go, ir, np):
+def _(Fs, go, ir, mo, np):
     t = np.arange(len(ir)) / Fs
     fig = go.Figure(
         data=[
@@ -165,7 +164,7 @@ def _(Audio, Fs, display, go, ir, np):
     )
     fig.show()
 
-    display(Audio(ir, rate=Fs))
+    mo.vstack([mo.audio(ir, Fs)])
     return
 
 

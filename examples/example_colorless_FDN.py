@@ -32,13 +32,12 @@ def _():
 
     import matplotlib.pyplot as plt
     import numpy as np
-    from IPython.display import HTML, Audio, display
     from scipy.io import loadmat
     from scipy.linalg import expm
 
     import pyFDN
 
-    return Audio, HTML, Path, display, expm, loadmat, np, plt, pyFDN
+    return Path, expm, loadmat, np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -139,7 +138,7 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, HTML, display, fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
+def _(fs, ir_init, ir_len, ir_optim, mo, np, plt, pyFDN):
     t = np.arange(ir_len) / fs
     plt.figure(figsize=(10, 3))
     plt.plot(t, pyFDN.mulaw_encode(ir_optim), alpha=0.8, lw=0.6, label="Optimized")
@@ -151,13 +150,23 @@ def _(Audio, HTML, display, fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.show()
 
-    display(HTML("<h4>Random Initialization</h4>"))
-    display(Audio(ir_init, rate=fs))
+    fig = plt.gca()
 
-    display(HTML("<h4>Optimized</h4>"))
-    display(Audio(ir_optim, rate=fs))
+    plot = mo.vstack([fig])
+
+    audio_blocks = mo.vstack(
+        [
+            mo.Html("Random Initialization").style({"font-size": "2.0em"}),
+            mo.audio(np.asarray(ir_init), rate=fs),
+            mo.Html("Optimized").style({"font-size": "2.0em"}),
+            mo.audio(np.asarray(ir_optim), rate=fs),
+        ],
+        gap=1
+    )
+    mo.vstack([plot, audio_blocks],
+                gap=3
+    )
     return
 
 

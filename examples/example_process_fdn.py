@@ -30,11 +30,10 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import soundfile as sf
-    from IPython.display import Audio, display
 
     import pyFDN
 
-    return Audio, display, files, np, plt, pyFDN, sf
+    return files, np, plt, pyFDN, sf
 
 
 @app.cell(hide_code=True)
@@ -46,14 +45,14 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, display, files, sf):
+def _(files, mo, sf):
     path = files("pyFDN.audio") / "synth_dry.wav"
     with path.open("rb") as f:
         dry, fs = sf.read(f, dtype="float64")
     dry = dry[:, 0] if dry.ndim > 1 else dry
 
     print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry) / fs:.2f} s)")
-    display(Audio(dry, rate=fs))
+    mo.vstack([mo.audio(dry, fs)])
     return dry, fs
 
 
@@ -93,12 +92,12 @@ def _(mo):
 
 
 @app.cell
-def _(A, Audio, B, C, D, delays, display, dry, fs, pyFDN):
+def _(A, B, C, D, delays, dry, fs, mo, pyFDN):
     wet = pyFDN.process_fdn(dry, delays, A, B, C, D)
     wet = pyFDN.peak_normalize(wet)
 
     print(f"Output shape: {wet.shape}")
-    display(Audio(wet, rate=fs))
+    mo.vstack([mo.audio(wet, fs)])
     return
 
 

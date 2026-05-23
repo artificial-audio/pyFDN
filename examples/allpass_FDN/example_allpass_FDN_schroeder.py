@@ -44,11 +44,10 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    from IPython.display import Audio, display
     import pyFDN
 
     np.random.seed(42)
-    return Audio, display, np, pyFDN
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -153,14 +152,14 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, Fs, display, impulse_response, np, pyFDN):
+def _(Fs, impulse_response, mo, np, pyFDN):
     channel_ir = np.asarray(impulse_response).squeeze()
     _fig = pyFDN.plot_spectrogram(
         channel_ir, Fs, title="Schroeder series allpass — spectrogram", clim=(-170, -70)
     )
     _fig.show()
 
-    display(Audio(channel_ir, rate=Fs))
+    mo.vstack([mo.audio(channel_ir, Fs)])
     return
 
 

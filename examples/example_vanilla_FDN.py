@@ -27,12 +27,11 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import torch
-    from IPython.display import Audio, display
 
     import pyFDN
     from flamo.processor import dsp, system
 
-    return Audio, OrderedDict, display, dsp, np, plt, pyFDN, system, torch
+    return OrderedDict, dsp, np, plt, pyFDN, system, torch
 
 
 @app.cell(hide_code=True)
@@ -111,7 +110,7 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, display, fs, ir_altered, ir_original, np, plt, pyFDN):
+def _(fs, ir_altered, ir_original, mo, np, plt, pyFDN):
     t = np.arange(len(ir_original)) / fs
     plt.figure(figsize=(10, 3))
     plt.plot(t, pyFDN.mulaw_encode(ir_original), alpha=0.8, lw=0.6, label="Original")
@@ -126,8 +125,13 @@ def _(Audio, display, fs, ir_altered, ir_original, np, plt, pyFDN):
     plt.tight_layout()
     plt.show()
 
-    display(Audio(ir_original, rate=fs))
-    display(Audio(ir_altered, rate=fs))
+
+    mo.vstack([
+        mo.md("Original:"),
+        mo.audio(np.asanyarray(ir_original), fs),
+        mo.md("Altered:"),
+        mo.audio(np.asarray(ir_altered), fs)
+    ])
     return
 
 
@@ -142,7 +146,7 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, display, fs, model, torch):
+def _(fs, mo, model, np, torch):
     from importlib.resources import files
 
     import soundfile as sf
@@ -166,8 +170,13 @@ def _(Audio, display, fs, model, torch):
     with torch.no_grad():  # pad with zeros to avoid wrap around
         wet = model(x).squeeze().cpu().numpy()
 
-    display(Audio(dry, rate=fs))
-    display(Audio(wet, rate=fs))
+
+    mo.vstack([
+        mo.md("Dry:"),
+        mo.audio(np.asanyarray(dry), fs),
+        mo.md("Wet:"),
+        mo.audio(np.asarray(wet), fs)
+    ])
     return
 
 

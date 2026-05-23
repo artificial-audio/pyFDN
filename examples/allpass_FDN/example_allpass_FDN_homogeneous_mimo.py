@@ -64,7 +64,7 @@ def _(np, pyFDN):
     U = pyFDN.random_orthogonal(N)
     A = G @ U
 
-    B, C, D, X = pyFDN.complete_fdn(A, N, numio)
+    B, C, D, X = pyFDN.complete_fdn(A, N, str(numio))
     return A, B, C, D, Fs, delays
 
 
@@ -131,9 +131,8 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np):
+def _(Fs, impulse_response, ir_len, mo, np):
     import matplotlib.pyplot as plt
-    from IPython.display import Audio, display
 
     ir_channel = impulse_response[:, 2, 1]
     t = np.arange(ir_len) / Fs
@@ -145,7 +144,7 @@ def _(Fs, impulse_response, ir_len, np):
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
-    display(Audio(ir_channel, rate=Fs))
+    mo.vstack([mo.audio(ir_channel, Fs)])
     return
 
 

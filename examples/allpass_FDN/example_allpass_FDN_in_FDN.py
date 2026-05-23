@@ -41,7 +41,6 @@ def _():
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
     from flamo.processor import dsp, system
-    from IPython.display import Audio, display
     import pyFDN
     from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
 
@@ -50,12 +49,10 @@ def _():
     nfft = 2**17
     N = 4  # number of delay lines (1→N input gain, N→2 output gain)
     return (
-        Audio,
         Fs,
         N,
         OrderedDict,
         delay_module,
-        display,
         dsp,
         gain_module,
         go,
@@ -205,9 +202,9 @@ def _(mo):
 
 
 @app.cell
-def _(display, model, pyFDN):
+def _(model, pyFDN):
     _g = pyFDN.draw_flamo_graph(model)
-    display(_g)
+    _g
     return
 
 
@@ -220,7 +217,7 @@ def _(mo):
 
 
 @app.cell
-def _(Audio, Fs, display, go, ir_stereo, np, pyFDN):
+def _(Fs, go, ir_stereo, mo, np, pyFDN):
     t = np.arange(ir_stereo.shape[0]) / Fs
 
     fig = go.Figure()
@@ -241,7 +238,7 @@ def _(Audio, Fs, display, go, ir_stereo, np, pyFDN):
     )
     fig.show()
 
-    display(Audio(ir_stereo.T, rate=Fs))
+    mo.vstack([mo.audio(ir_stereo.T, Fs)])
     return
 
 

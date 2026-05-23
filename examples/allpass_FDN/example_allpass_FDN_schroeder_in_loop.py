@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -46,7 +46,6 @@ def _():
     import plotly.io as pio
 
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
-    from IPython.display import Audio, display
 
     import pyFDN
 
@@ -54,7 +53,7 @@ def _():
     Fs = 48000
     nfft = 2**17
     irLen = nfft
-    return Audio, Fs, display, go, nfft, np, pyFDN
+    return Fs, go, nfft, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -108,7 +107,7 @@ def _(A_sch, B_sch, C_sch, D_sch, delays_sch, ir_sch, pyFDN):
 
 
 @app.cell
-def _(Audio, Fs, display, go, ir_sch, np, pyFDN):
+def _(Fs, go, ir_sch, mo, np, pyFDN):
     ir_sch_channel = ir_sch[0, :, 1].squeeze()
     _t = np.arange(len(ir_sch_channel)) / Fs
     _fig = go.Figure()
@@ -123,7 +122,8 @@ def _(Audio, Fs, display, go, ir_sch, np, pyFDN):
         xaxis=dict(range=[0, 0.1]),
     )
     _fig.show()
-    display(Audio(ir_sch_channel, rate=Fs))
+
+    mo.vstack([mo.audio(np.asarray(ir_sch_channel), Fs)])
     return
 
 
@@ -167,7 +167,7 @@ def _(delays_fdn):
 
 
 @app.cell
-def _(Audio, Fs, display, go, ir_fdn, np, pyFDN):
+def _(Fs, go, ir_fdn, mo, np, pyFDN):
     _t = np.arange(len(ir_fdn)) / Fs
     _fig = go.Figure()
     _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn), mode="lines"))
@@ -180,7 +180,8 @@ def _(Audio, Fs, display, go, ir_fdn, np, pyFDN):
         showlegend=False,
     )
     _fig.show()
-    display(Audio(ir_fdn, rate=Fs))
+
+    mo.vstack([mo.audio(np.asarray(ir_fdn), Fs)])
     return
 
 
@@ -238,7 +239,7 @@ def _(
 
 
 @app.cell
-def _(Audio, Fs, display, go, ir_fdn_ap, np, pyFDN):
+def _(Fs, go, ir_fdn_ap, mo, np, pyFDN):
     _t = np.arange(len(ir_fdn_ap)) / Fs
     _fig = go.Figure()
     _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn_ap), mode="lines"))
@@ -251,7 +252,8 @@ def _(Audio, Fs, display, go, ir_fdn_ap, np, pyFDN):
         showlegend=False,
     )
     _fig.show()
-    display(Audio(ir_fdn_ap, rate=Fs))
+
+    mo.vstack([mo.audio(np.asarray(ir_fdn_ap), Fs)])
     return
 
 
@@ -264,7 +266,7 @@ def _(mo):
 
 
 @app.cell
-def _(display, model_fdn_ap, pyFDN):
+def _(model_fdn_ap, pyFDN):
     # List all nodes with paths
     root = pyFDN.flamo_model_to_nodes(model_fdn_ap)
     flat = pyFDN.flamo_nodes_flat(root)
@@ -273,7 +275,7 @@ def _(display, model_fdn_ap, pyFDN):
 
     # Draw flowchart
     g = pyFDN.draw_flamo_graph(model_fdn_ap)
-    display(g)
+    g
     return
 
 
