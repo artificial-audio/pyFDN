@@ -35,16 +35,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+examples = [
+    "marimo",  # the example notebooks are marimo apps
+    "matplotlib>=3.5.0",  # examples build matplotlib figures
+    "plotly>=5.0.0",  # examples build plotly figures
+    "graphviz>=0.20",  # draw_flamo_graph (also needs the system 'dot' binary to render)
+]
 test = [
+    "pyFDN[examples]",  # deps to run the example notebooks under test
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
-    "marimo",
-    "matplotlib>=3.5.0",  # examples build matplotlib figures
-    "plotly>=5.0.0",  # examples build plotly figures
 ]
 dev = [
-    "pyFDN[test]",  # everything from the [test] extra
+    "pyFDN[test]",  # everything from [test] (and transitively [examples])
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
     "mypy>=1.0.0",  # type checking

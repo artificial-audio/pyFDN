@@ -129,7 +129,7 @@ Thumbs.db
 !examples/resources/colorless_FDN/*.mat
 
 # marimo temp files
-examples/__marimo__
+__marimo__/
 
 # Profiling outputs
 profile_default/
