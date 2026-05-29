@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,6 +18,7 @@ def reduce_conjugate_pairs(
     tol_real: float = 1e-10,
     tol_pair: float = 1e-8,
     verbose: bool = False,
+    strict: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Group poles into real and conjugate pairs using optimal assignment.
@@ -29,6 +31,10 @@ def reduce_conjugate_pairs(
     - Real: assignment[i] == i and C[i,i] < tol_real (i.e. :math:`|Im(pole_i)|` small).
     - Conjugate pair: assignment[i] == j, assignment[j] == i, C[i,j] < tol_pair.
     - Unpaired: otherwise (ambiguous or numerical orphans).
+
+    Unpaired poles are reported via ``non_paired`` AND a :class:`UserWarning`
+    so callers cannot silently lose poles to imprecise pairing. Set
+    ``strict=True`` to raise :class:`ValueError` instead of warning.
 
     Returns
     -------
@@ -80,6 +86,16 @@ def reduce_conjugate_pairs(
     is_conjugate[pair_type == 1] = False
 
     non_paired = poles[pair_type == -1]
+
+    if non_paired.size > 0:
+        msg = (
+            f"reduce_conjugate_pairs: {non_paired.size} unpaired pole(s) "
+            f"will be dropped (tol_pair={tol_pair:.1e}, tol_real={tol_real:.1e}). "
+            f"This often indicates imprecise pole estimates upstream."
+        )
+        if strict:
+            raise ValueError(msg)
+        warnings.warn(msg, stacklevel=2)
 
     select = (pair_type == 1) | (pair_type == 2)  # | (pair_type == -1)
 

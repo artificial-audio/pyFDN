@@ -1,4 +1,10 @@
-"""Direct DSS modal decomposition (dss2pr_direct-style, numeric only)."""
+"""Modal decomposition for delay state-space (DSS) FDNs.
+
+H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k/(1 − p_k z^{-1}) + D
+
+This module is numpy-only. ``mode="eai"`` lazily imports torch + FLAMO, so
+callers using only ``"eig"``/``"roots"`` never pay that import cost.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,7 @@ from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 from pyFDN.translate.dss_to_ss import dss_to_ss
 
 
-def _dss_to_res_direct(
+def _dss_to_res(
     poles: np.ndarray,
     delays: np.ndarray,
     A: np.ndarray,
@@ -21,12 +27,8 @@ def _dss_to_res_direct(
     C: np.ndarray,
     D: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """
-    Residues from poles using SVD-based formula (same as FLAMO path).
-
-    P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1}). At each pole: SVD(P) gives
-    right null vector r, left null vector l; denom = l^H (dP/dz) r;
-    residue numerator = (C @ r) @ (l^H @ B).
+    """Residues from poles via SVD null-vector formula on
+    ``P(z) = diag(z^m) − A``.
     """
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     delays = np.asarray(delays, dtype=np.float64).ravel()
@@ -52,7 +54,7 @@ def _dss_to_res_direct(
         p = np.diag(z_m) - A
         dp = np.diag(delays * z_m1)
 
-        # Null vectors: P r = 0, l^H P = 0 (same as FLAMO)
+        # Null vectors: P r = 0, l^H P = 0
         u, s, vh = np.linalg.svd(p, full_matrices=False)
         r = vh.conj().T[:, -1]
         l = u[:, -1]
@@ -84,7 +86,7 @@ def _dss_to_res_direct(
     return residues, D, undriven, eigenvectors
 
 
-def dss_to_pr_direct(
+def dss_to_pr(
     delays: ArrayLike,
     A: ArrayLike,
     B: ArrayLike,
@@ -92,14 +94,49 @@ def dss_to_pr_direct(
     D: ArrayLike,
     *,
     mode: str = "eig",
+    # ─── EAI-only knobs (ignored for mode in {"eig","roots"}) ─────────────
+    deflation_type: str = "fullDeflation",
+    quality_threshold: float = 1e-10,
+    maximum_iterations: int = 50,
+    refinement_tol: float = 1e-12,
+    reject_unstable_poles: bool = False,
+    svd_refine: bool = True,
+    symmetrize: bool = True,
+    verbose: bool = False,
+    # ─── FLAMO model-construction (only used for mode="eai") ──────────────
+    Fs: float = 1.0,
+    nfft: int = 2**16,
+    dtype: Any = None,
+    device: Any = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    """
-    Direct poles/residues from simple DSS (numeric matrices only).
+    """Modal decomposition of an FDN from raw DSS matrices.
 
-    Pole extraction modes:
-      - ``eig``: eigenvalues of equivalent state-space matrix
-      - ``roots``: roots of generalized characteristic polynomial
-      - ``polyeig``: currently mapped to roots-based extraction
+    ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (1 − p_k z^{-1}) + D``
+
+    Parameters
+    ----------
+    delays : array-like of int, shape ``(N,)``
+        Per-line delays in samples.
+    A : array-like ``(N, N)``
+        Static feedback matrix.
+    B : array-like ``(N, n_in)``
+    C : array-like ``(n_out, N)``
+    D : array-like ``(n_out, n_in)``
+    mode : ``{"eig", "roots", "eai"}``, default ``"eig"``
+        Pole-extraction algorithm.
+
+        - ``"eig"``   — eigenvalues of the minimal state-space realization.
+        - ``"roots"`` — roots of the generalized characteristic polynomial.
+        - ``"eai"``   — Ehrlich-Aberth iteration in w = 1/z via FLAMO
+          (delegates to :func:`pyFDN.translate.flamo_to_pr.flamo_to_pr`).
+
+    Returns
+    -------
+    residues : ndarray ``(n_poles_reduced, n_out, n_in)``, complex
+    poles : ndarray ``(n_poles_reduced,)``, complex
+    direct : ndarray ``(n_out, n_in)``, complex
+    is_conjugate : ndarray of bool ``(n_poles_reduced,)``
+    meta : dict
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -115,22 +152,54 @@ def dss_to_pr_direct(
         raise ValueError(f"A must have shape ({n},{n}), got {a_mat.shape}")
 
     mode_l = str(mode).lower()
+
+    if mode_l == "eai":
+        # Lazy: torch + FLAMO are imported only when EAI is actually requested,
+        # keeping the eig/roots path numpy-only. Float64 by default for
+        # machine-precision EAI (FLAMO's own default is float32).
+        import torch
+
+        from pyFDN.translate.dss_to_flamo import dss_to_flamo
+        from pyFDN.translate.flamo_to_pr import flamo_to_pr
+
+        if dtype is None:
+            dtype = torch.float64
+        model = dss_to_flamo(
+            A=np.asarray(A, dtype=np.float64),
+            B=np.asarray(B, dtype=np.float64),
+            C=np.asarray(C, dtype=np.float64),
+            D=np.asarray(D, dtype=np.float64),
+            m=delays_arr,
+            Fs=float(Fs),
+            nfft=int(nfft),
+            device=device,
+            shell=False,
+            dtype=dtype,
+        )
+        return flamo_to_pr(
+            model,
+            deflation_type=deflation_type,
+            reject_unstable_poles=reject_unstable_poles,
+            quality_threshold=quality_threshold,
+            maximum_iterations=maximum_iterations,
+            refinement_tol=refinement_tol,
+            svd_refine=svd_refine,
+            symmetrize=symmetrize,
+            verbose=verbose,
+        )
+
+    # eig / roots: pure-numpy pole finding, shared SVD residue extractor.
     a_poly = np.real_if_close(a_mat, tol=1000)
     if np.iscomplexobj(a_poly) and np.max(np.abs(np.imag(a_poly))) > 1e-12:
         raise ValueError(
-            "roots/polyeig mode currently requires a real-valued static feedback matrix."
+            "roots mode currently requires a real-valued static feedback matrix."
         )
     a_poly = np.asarray(np.real(a_poly), dtype=float)
 
     if mode_l == "eig":
         aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
         poles = np.linalg.eigvals(aa)
-    elif mode_l in ("roots", "polyeig"):
-        if mode_l == "polyeig":
-            warnings.warn(
-                "mode='polyeig' is currently mapped to roots-based extraction in dss_to_pr_direct.",
-                stacklevel=2,
-            )
+    elif mode_l == "roots":
         # GCP p has p[k] = coef of z^{-k}; polynomial in w = z^{-1} is sum_k p[k] w^k
         p = general_char_poly(delays_arr, a_poly)
         w_roots = np.roots(p[::-1])  # np.roots expects high-to-low coefficient order
@@ -138,10 +207,10 @@ def dss_to_pr_direct(
             [1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128
         )
     else:
-        raise ValueError("mode must be 'eig', 'roots', or 'polyeig'")
+        raise ValueError("mode must be 'eig', 'roots', or 'eai'")
 
     poles, is_conjugate_pair, non_paired = reduce_conjugate_pairs(poles)
-    residues, direct, undriven, eigenvectors = _dss_to_res_direct(
+    residues, direct, undriven, eigenvectors = _dss_to_res(
         poles, delays_arr, a_mat, b_mat, c_mat, d_mat
     )
 
