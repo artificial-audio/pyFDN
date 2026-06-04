@@ -182,6 +182,12 @@ def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
     Expects core with branchA (Series of input_gain, Recursion(feedforward, feedback), output_gain)
     and branchB (direct path). Returns small FLAMO subgraphs (no probing); pass the result
     to :func:`flamo_to_pr` as ``decomposition=...``.
+
+    Supported architecture (see :func:`flamo_to_pr` for the full contract):
+    branchA must contain exactly **one, non-nested** ``Recursion``, and the
+    delay lines must live in that recursion's **feedforward** path. SOS-format
+    filters (incl. biquad/SVF cascades) anywhere in the feedforward/feedback are
+    fine; a ``Recursion`` nested inside another loop is **not** supported.
     """
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
@@ -230,6 +236,64 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     samples = delay_mod.s2sample(sec)
     out = np.asarray(samples.detach().cpu().numpy(), dtype=np.float64).ravel()
     return np.asarray(np.round(out), dtype=int)
+
+
+def _iter_leaf_modules(node: Any):
+    """Yield the leaf modules of a FLAMO subgraph, descending into Series-like
+    containers. Non-iterable modules (Gain, Delay, SOSFilter, …) are leaves."""
+    try:
+        children = list(node)
+    except TypeError:
+        children = []
+    if not children:
+        yield node
+        return
+    for child in children:
+        yield from _iter_leaf_modules(child)
+
+
+def _sos_denominator_order(module: Any) -> int:
+    """IIR poles an SOS-format filter contributes: denominator degree summed over
+    sections and channels. Returns 0 for non-SOS modules (gains, delays, FIR),
+    which add no poles of their own.
+
+    Recognizes any module exposing ``n_sections`` and a ``map(param)`` yielding
+    second-order-section coefficients of shape ``(n_sections, 6, *channels)`` with
+    rows ``[b0, b1, b2, a0, a1, a2]`` — how SOS filters (and biquad/SVF cascades
+    expressed as SOS) store coefficients in FLAMO. Per section/channel the order
+    is 2 if ``a2 != 0``, else 1 if ``a1 != 0``, else 0.
+    """
+    n_sec = getattr(module, "n_sections", None)
+    mapping = getattr(module, "map", None)
+    param = getattr(module, "param", None)
+    if n_sec is None or not callable(mapping) or param is None:
+        return 0
+    try:
+        mapped = mapping(param).detach().cpu().numpy()
+    except Exception:
+        return 0
+    if mapped.ndim < 2 or mapped.shape[0] != int(n_sec) or mapped.shape[1] != 6:
+        return 0
+    a = mapped[:, 3:6, ...].reshape(int(n_sec), 3, -1)  # (sections, [a0,a1,a2], chan)
+    tol = 1e-12
+    a1_nz = np.abs(a[:, 1, :]) > tol
+    a2_nz = np.abs(a[:, 2, :]) > tol
+    order_per = np.where(a2_nz, 2, np.where(a1_nz, 1, 0))
+    return int(order_per.sum())
+
+
+def _count_loop_filter_poles(recursion_module: Any) -> int:
+    """Extra poles contributed by IIR filters in the recursion's feedforward and
+    feedback paths, beyond the pure delays (which are counted via the delays).
+
+    Walks Series containers; nested ``Recursion`` modules are treated as opaque
+    leaves and contribute 0 (nested loops are unsupported — see
+    :func:`flamo_to_pr`)."""
+    total = 0
+    for branch in (recursion_module.feedforward, recursion_module.feedback):
+        for leaf in _iter_leaf_modules(branch):
+            total += _sos_denominator_order(leaf)
+    return total
 
 
 def flamo_extract_pr_decomposition(model: Any) -> dict[str, Any]:
@@ -292,9 +356,17 @@ class _FDNLoopFlamo:
 
 
 def _matrix_quality(m: torch.Tensor) -> float:
-    """rcond(P) as a pole-quality score; 1e10 sentinel for blown-up matrices."""
+    """rcond(P) as a pole-quality score; 1e10 sentinel for blown-up matrices.
+
+    A non-finite ``P`` (e.g. a root that ran off to ``w → ∞`` / ``z → 0`` where
+    the loop's ``z^{-m}`` terms overflow) must score *worst*, not best — otherwise
+    ``_rcond_torch`` returns 0 for it and the runaway is mistaken for a perfectly
+    converged pole and survives into residue extraction.
+    """
+    if not torch.isfinite(m).all():
+        return 1e10
     q = m.abs().item() if m.ndim == 0 else _rcond_torch(m)
-    if torch.isfinite(m).all() and m.abs().max().item() > 1e10:
+    if m.abs().max().item() > 1e10:
         q = 1e10
     return q
 
@@ -516,7 +588,19 @@ def _refine_pole_via_svd(
     z = complex(z_init)
     for _ in range(max_iters):
         P, dP = loop.get_P_and_dP_dz(z)
-        u, s, vh = torch.linalg.svd(P)
+        if not (torch.isfinite(P).all() and torch.isfinite(dP).all()):
+            break
+        # Scale P and dP together before the SVD: poles far from the unit circle
+        # (|z| << 1 makes the loop's z^{-m} terms huge) otherwise yield an
+        # ill-conditioned matrix that fails to decompose. Null vectors are
+        # scale-invariant and dz cancels the shared scale, so the step is unchanged.
+        scale = P.abs().max()
+        if scale > 0 and torch.isfinite(scale):
+            P, dP = P / scale, dP / scale
+        try:
+            u, s, vh = torch.linalg.svd(P)
+        except Exception:
+            break
         sigma_min = float(s[-1].cpu().item())
         r = vh.conj().T[:, -1]  # right singular vector for sigma_min
         l = u[:, -1]  # left singular vector for sigma_min
@@ -602,7 +686,11 @@ def _dss_to_res_flamo(
         b = f_at @ in_at
         c = decomposition.out_subgraph.probe(pole)
 
-        u, s, vh = torch.linalg.svd(p)
+        # Scale p before the SVD (null vectors are scale-invariant) so poles far
+        # from the unit circle stay well-conditioned; dp is left unscaled for denom.
+        scale = p.abs().max()
+        p_svd = p / scale if (scale > 0 and torch.isfinite(scale)) else p
+        u, s, vh = torch.linalg.svd(p_svd)
         r = vh.conj().T[:, -1]
         l = u[:, -1]
 
@@ -660,6 +748,25 @@ def flamo_to_pr(
     Pass either a FLAMO ``model`` or a ``decomposition`` from
     :func:`flamo_decompose_for_pr`.
 
+    Supported architecture
+    ----------------------
+    The model must reduce to a **single, non-nested** ``Recursion`` (the canonical
+    FDN: ``Parallel(branchA=Series(in_gain, Recursion, out_gain), branchB=direct)``,
+    as produced by :func:`pyFDN.translate.dss_to_flamo.dss_to_flamo`). Two
+    constraints are assumed and **not** auto-detected:
+
+    - **Delays live in the recursion's feedforward path.** Delay lengths are read
+      from ``feedforward`` to size the pole search.
+    - **No nested recursion.** A ``Recursion`` placed inside another loop's
+      feedforward/feedback (e.g. an allpass realized as its own sub-FDN) is *not*
+      supported: its internal poles are folded into ``F(z)`` by ``probe`` but are
+      not roots of the outer ``det P`` and would be silently dropped.
+
+    SOS-format filters (one-pole/biquad/SVF cascades stored as second-order
+    sections) anywhere in the feedforward or feedback are supported: their poles
+    are added to the pole count via :func:`_count_loop_filter_poles` so the
+    Ehrlich-Aberth search is sized correctly.
+
     Parameters
     ----------
     svd_refine : bool, default True
@@ -679,10 +786,23 @@ def flamo_to_pr(
     device = _infer_model_device(rec)
     dtype = _infer_model_complex_dtype(rec)
 
-    n_poles = int(np.sum(delays_arr))
+    # Pole count = delay-line poles (sum of delays) + IIR poles from any SOS-format
+    # filters in the loop. Pure-delay loops keep the original sum(delays) count.
+    n_delay_poles = int(np.sum(delays_arr))
+    n_filter_poles = _count_loop_filter_poles(rec)
+    n_poles = n_delay_poles + n_filter_poles
 
-    # Initialize on unit circle in w-domain (torch), refine in torch
-    root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
+    # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
+    # in the loop the poles spread inward (off the unit circle) and plain
+    # Ehrlich-Aberth tends to leave one root homeless — it runs off to w → ∞ while
+    # two seeds collide on a single pole. Over-provisioning the seed count gives the
+    # iteration enough roots that every true pole is covered; surplus roots diverge
+    # and are dropped by the convergence filter below (deflation keeps them from
+    # duplicating real poles). Pure-delay loops keep the exact original seeding.
+    n_seed = n_poles
+    if n_filter_poles > 0:
+        n_seed = n_poles + max(8, 2 * n_filter_poles)
+    root_angles = np.linspace(0.0, 2.0 * np.pi, n_seed, endpoint=False)
     roots_w = torch.tensor(
         np.exp(1j * root_angles).astype(np.complex128),
         device=device,
