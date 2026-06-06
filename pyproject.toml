@@ -42,7 +42,10 @@ examples = [
     "graphviz>=0.20",  # draw_flamo_graph (also needs the system 'dot' binary to render)
 ]
 test = [
-    "pyFDN[examples]",  # deps to run the example notebooks under test
+    "marimo",  # deps to run the example notebooks under test
+    "matplotlib>=3.5.0",
+    "plotly>=5.0.0",
+    "graphviz>=0.20",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling

@@ -188,7 +188,14 @@ def _patch_marimo_static_export():
 
     def _build_notebook_impl(self, notebook_path, output_dir):
         """Static-HTML replacement for MarimoBuilder._build_notebook_impl."""
-        relative_path = notebook_path.relative_to(self.source_dir)
+        from pathlib import Path
+
+        notebook_root = Path(marimo_notebook_dir).resolve()
+        try:
+            relative_path = notebook_path.relative_to(self.source_dir)
+        except ValueError:
+            relative_path = notebook_path.relative_to(notebook_root)
+
         output_name = str(relative_path).replace("/", "_").replace(".py", "")
         output_path = output_dir / f"{output_name}.html"
 
