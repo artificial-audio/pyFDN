@@ -11,32 +11,6 @@ sys.path.insert(
 
 import pyFDN  # noqa: E402
 
-# # -- Symlink examples into docs so nbsphinx can find them --------------------
-# # Use real dir + per-notebook symlinks to avoid nbsphinx image path issues (GH#49)
-# _docs_dir = os.path.dirname(os.path.abspath(__file__))
-# _examples_src = os.path.join(os.path.dirname(_docs_dir), "examples")
-# _examples_dst = os.path.join(_docs_dir, "examples")
-# if os.path.islink(_examples_dst):
-#     os.unlink(_examples_dst)
-# if not os.path.exists(_examples_dst):
-#     os.makedirs(_examples_dst, exist_ok=True)
-# for root, _dirs, files in os.walk(_examples_src):
-#     rel = os.path.relpath(root, _examples_src)
-#     if rel != ".":
-#         dst_sub = os.path.join(_examples_dst, rel)
-#         os.makedirs(dst_sub, exist_ok=True)
-#     for f in files:
-#         if f.endswith(".py"):
-#             src_file = os.path.join(root, f)
-#             dst_file = (
-#                 os.path.join(_examples_dst, rel, f)
-#                 if rel != "."
-#                 else os.path.join(_examples_dst, f)
-#             )
-#             if os.path.exists(dst_file):
-#                 os.unlink(dst_file)
-#             os.symlink(os.path.relpath(src_file, os.path.dirname(dst_file)), dst_file)
-
 # -- Project information ------------------------------------------------------
 project = "pyFDN"
 copyright = "2026, Artificial Audio Lab"
@@ -52,7 +26,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    # "nbsphinx",
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx_autodoc_typehints",
@@ -68,23 +41,6 @@ autosummary_imported_members = True
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 
-# # nbsphinx settings
-# nbsphinx_execute = "auto"  # Execute notebooks that have no stored outputs
-# nbsphinx_allow_errors = False
-# nbsphinx_prolog = """
-# {% set docname = env.doc2path(env.docname, base=None) %}
-
-# .. only:: html
-
-#     .. role:: raw-html(raw)
-#         :format: html
-
-#     .. note::
-
-#         | This page was generated from a Jupyter notebook.
-#         | :raw-html:`<a href="https://github.com/artificial-audio/pyFDN/blob/main/{{ docname }}"><img src="https://img.shields.io/badge/GitHub-view%20source-blue?logo=github" alt="View on GitHub"></a>`
-#         | :raw-html:`<a href="{{ env.docname.split('/')[-1] }}.ipynb" download><img src="https://img.shields.io/badge/Download-notebook-orange?logo=jupyter" alt="Download notebook"></a>`
-# """
 
 # Intersphinx mapping
 intersphinx_mapping = {
@@ -98,7 +54,7 @@ intersphinx_mapping = {
 source_suffix = ".rst"
 master_doc = "index"
 language = "en"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # Pygments
 pygments_style = "friendly"

@@ -73,23 +73,23 @@ Allpass FDN Examples
    :widths: 35 65
    :header-rows: 0
 
-   * - `Allpass FDN Completion <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_completion.html>`_
+   * - `Allpass FDN Completion <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_completion.html>`_
      - Construct ``b``, ``c``, and ``d`` for a given feedback matrix so the FDN becomes uniallpass.
-   * - `Homogeneous Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_homogeneous_mimo.html>`_
+   * - `Homogeneous Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_mimo.html>`_
      - MIMO allpass FDN with homogeneous decay, giving every pole the same decay rate with extra degrees of freedom.
-   * - `Homogeneous Allpass (SISO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_homogeneous_siso.html>`_
+   * - `Homogeneous Allpass (SISO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_siso.html>`_
      - SISO allpass FDN with homogeneous decay so all poles share the same decay rate.
-   * - `Allpass FDN in FDN <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_in_FDN.html>`_
+   * - `Allpass FDN in FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_in_FDN.html>`_
      - Embed an allpass MIMO FDN inside a larger FDN loop, with single input and stereo output.
-   * - `Nested Allpass (Gardner) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_nested.html>`_
+   * - `Nested Allpass (Gardner) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_nested.html>`_
      - Gardner's nested allpass structure, built by iteratively nesting feedforward/back allpass sections.
-   * - `Allpass but not Uniallpass <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_not_uniallpass.html>`_
+   * - `Allpass but not Uniallpass <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_not_uniallpass.html>`_
      - An FDN that is allpass only for specific delay lengths, built via a non-diagonal similarity transform.
-   * - `Poletti's Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_poletti.html>`_
+   * - `Poletti's Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_poletti.html>`_
      - Poletti's unitary MIMO reverberator for reduced colouration in assisted reverberation systems.
-   * - `Schroeder Series Allpass <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_schroeder.html>`_
+   * - `Schroeder Series Allpass <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
      - Schroeder's cascade of first-order allpass sections realised as an FDN with diagonal feedback.
-   * - `Schroeder Allpass in Loop <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_schroeder_in_loop.html>`_
+   * - `Schroeder Allpass in Loop <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder_in_loop.html>`_
      - Place Schroeder allpass filters behind the delays in the FDN loop to increase echo density, rendered with FLAMO.
 
 ----
