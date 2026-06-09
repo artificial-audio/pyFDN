@@ -11,6 +11,7 @@ from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
 from pyFDN.auxiliary.utils import ensure_3d, lin_to_db
+from pyFDN.generate.is_almost_zero import is_almost_zero
 
 if TYPE_CHECKING:
     import torch
@@ -28,6 +29,49 @@ def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray
 def is_orthogonal(Q: np.ndarray, tol: float = 1e-10) -> bool:
     """Check if Q is orthogonal (Q.T @ Q ≈ I)."""
     return np.allclose(Q.T @ Q, np.eye(Q.shape[0]), atol=tol)
+
+
+def _is_diagonally_equivalent_to_orthogonal(
+    A: np.ndarray, tol: float = 1e-10
+) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray]:
+    """Find Q = E @ A @ D with diagonal E, D such that Q is orthogonal.
+
+    Implements the Berman–Parlett–Plemmons (1981) diagonal scaling approach via
+    a rank-1 SVD of the Hadamard quotient C = inv(A) / A^T.
+
+    Returns:
+        (is_doe, Q, D, E)
+    """
+    inv_A = np.linalg.inv(A)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        C = inv_A / A.T
+    # 0/0 entries are structurally zero in both numerator and denominator;
+    # for orthogonal (or diagonally similar to orthogonal) matrices the true
+    # limit is 1, so substituting 1 preserves the expected rank-1 structure.
+    C = np.where(np.isnan(C), 1.0, C)
+    U, s, Vh = np.linalg.svd(C)
+    d2 = U[:, 0] * np.sqrt(s[0])
+    e2 = Vh[0, :] * np.sqrt(s[0])
+    # normalise so d2 is non-negative (absorb signs into e2)
+    signs = np.sign(d2)
+    d2 = d2 * signs
+    e2 = e2 * signs
+    D = np.diag(np.sqrt(d2))
+    E = np.diag(np.sqrt(e2))
+    Q = E @ A @ D
+    return is_orthogonal(Q, tol=tol), Q, D, E
+
+
+def is_unilossless(A: np.ndarray, tol: float = 1e-10) -> bool:
+    """Test whether A is diagonally similar to an orthogonal matrix.
+
+    A is unilossless if there exists a diagonal D such that D^{-1} @ A @ D is
+    orthogonal, i.e. the diagonal scaling is a similarity transform (inv(D) == E).
+
+    Translates ``isDiagonallySimilarToOrthogonal.m`` from fdnToolbox.
+    """
+    is_doe, _Q, D, E = _is_diagonally_equivalent_to_orthogonal(A, tol=tol)
+    return is_doe and is_almost_zero(np.linalg.inv(D) - E, tol=tol)
 
 
 def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:

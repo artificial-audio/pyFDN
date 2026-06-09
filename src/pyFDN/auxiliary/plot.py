@@ -9,6 +9,58 @@ from matplotlib import pyplot as plt
 from numpy.typing import ArrayLike
 
 
+def plot_matrix(
+    A: ArrayLike,
+    title: str | None = None,
+    zmin: float | None = None,
+    zmax: float | None = None,
+) -> Any:
+    """Plot a single matrix as a Plotly heatmap (RdBu, square pixels).
+
+    Parameters
+    ----------
+    A : array-like
+        2-D matrix to visualise.
+    title : str, optional
+        Figure title (supports HTML/``<sup>`` for subtitles).
+    zmin, zmax : float, optional
+        Color limits. Default ``(-1, 1)``.
+
+    Returns
+    -------
+    go.Figure
+        Call ``.show()`` to display.
+    """
+    import plotly.graph_objects as go
+
+    A = np.asarray(A, dtype=float)
+    if zmin is None and zmax is None:
+        zmin, zmax = -1.0, 1.0
+
+    n = A.shape[0]
+    size = max(160, 28 * n)
+    fig = go.Figure(
+        go.Heatmap(
+            z=A,
+            colorscale="RdBu",
+            zmid=0,
+            zmin=zmin,
+            zmax=zmax,
+            showscale=False,
+        )
+    )
+    fig.update_layout(
+        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
+        width=size,
+        height=size,
+        margin={"t": 50 if title else 10, "b": 10, "l": 10, "r": 10},
+        template="plotly_white",
+    )
+    fig.update_xaxes(showticklabels=False)
+    fig.update_yaxes(showticklabels=False, autorange="reversed")
+    return fig
+
+
 def plot_system_matrix(
     A: ArrayLike,
     b: ArrayLike,
@@ -16,8 +68,9 @@ def plot_system_matrix(
     d: ArrayLike,
     zmin: float | None = None,
     zmax: float | None = None,
+    title: str | None = None,
 ) -> Any:
-    """Plot system matrix [A b; c d] as 2x2 Plotly heatmaps via px.imshow, shared color scale.
+    """Plot system matrix [A b; c d] as 2x2 Plotly heatmaps, shared RdBu color scale.
 
     Subplot sizes are proportional to block dimensions so that each matrix element
     (pixel) has the same physical size across all four plots.
@@ -28,19 +81,31 @@ def plot_system_matrix(
         Feedback matrix, input gain, output gain, direct gain.
     zmin, zmax : float, optional
         Shared color limits. If both None, uses (-1, 1).
+    title : str, optional
+        Figure title (supports HTML/``<sup>`` for subtitles).
 
     Returns
     -------
     go.Figure
         Call .show() to display.
     """
-    import plotly.express as px
+    import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
     A = np.asarray(A, dtype=float)
     b = np.asarray(b, dtype=float)
     c = np.asarray(c, dtype=float)
     d = np.asarray(d, dtype=float)
+
+    # Normalise to 2-D so go.Heatmap always gets a matrix.
+    if b.ndim == 1:
+        b = b.reshape(-1, 1)
+    if c.ndim == 1:
+        c = c.reshape(1, -1)
+    if d.ndim == 0:
+        d = d.reshape(1, 1)
+    elif d.ndim == 1:
+        d = d.reshape(1, -1)
 
     if zmin is None and zmax is None:
         zmin, zmax = -1.0, 1.0
@@ -52,17 +117,14 @@ def plot_system_matrix(
     # Proportional sizes so one "cell" has the same physical size in all four subplots.
     # Layout: [A (m×n)  b (m×p);  c (q×n)  d (q×p)]
     m, n = A.shape
-    b_rows, b_cols = b.shape if b.ndim == 2 else (b.shape[0], 1)
-    c_rows, c_cols = c.shape if c.ndim == 2 else (1, c.shape[0])
-    d_rows, d_cols = d.shape if d.ndim == 2 else (1, 1)
+    b_rows, b_cols = b.shape
+    c_rows, c_cols = c.shape
 
     # Ensure block compatibilities for visualization.
     if b_rows != m:
         raise ValueError("b must have same number of rows as A")
     if c_cols != n:
         raise ValueError("c must have same number of columns as A")
-    if d_rows != c_rows or d_cols != b_cols:
-        raise ValueError("d must match c rows and b cols")
 
     row_heights = [m / (m + c_rows), c_rows / (m + c_rows)]
     column_widths = [n / (n + b_cols), b_cols / (n + b_cols)]
@@ -72,35 +134,38 @@ def plot_system_matrix(
         cols=2,
         row_heights=row_heights,
         column_widths=column_widths,
+        subplot_titles=["A", "b", "c", "d"],
         horizontal_spacing=0.05,
-        vertical_spacing=0.05,
+        vertical_spacing=0.10,
     )
 
     blocks = [A, b, c, d]
     positions = [(1, 1), (1, 2), (2, 1), (2, 2)]
     for (row, col), blk in zip(positions, blocks, strict=False):
-        sub = px.imshow(
-            blk,
-            range_color=[zmin, zmax],
-            color_continuous_midpoint=0,
-            color_continuous_scale="RdBu",
-            aspect="equal",
-            origin="upper",
-            binary_string=False,  # force Heatmap so RdBu is used (not grayscale)
+        fig.add_trace(
+            go.Heatmap(
+                z=blk,
+                colorscale="RdBu",
+                zmid=0,
+                zmin=zmin,
+                zmax=zmax,
+                showscale=(row == 2 and col == 2),
+            ),
+            row=row,
+            col=col,
         )
-        trace = sub.data[0]
-        trace.showscale = row == 2 and col == 2
-        # Ensure colorscale is RdBu (in case layout overwrites)
-        trace.update(colorscale="RdBu", zmin=zmin, zmax=zmax, zmid=0)
-        fig.add_trace(trace, row=row, col=col)
+        # Origin at top-left: reverse y-axis per subplot.
+        fig.update_yaxes(autorange="reversed", row=row, col=col)
 
-    # Square figure so proportional row_heights/column_widths give square pixels overall
     size = 500
     fig.update_layout(
+        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
         width=size,
-        height=size,
+        height=size + (40 if title else 0),
+        margin={"t": 80 if title else 40},
+        template="plotly_white",
     )
-    fig.update_xaxes(showticklabels=False, scaleanchor="y", scaleratio=1)
+    fig.update_xaxes(showticklabels=False)
     fig.update_yaxes(showticklabels=False)
     return fig
 

@@ -1,14 +1,27 @@
-"""Gallery of feedback matrices for FDNs.
+"""Gallery of feedback matrices and FDN systems.
 
 Translation of fdnMatrixGallery.m from fdnToolbox.
 """
 
+# TODO: Menzel matrix
+
 from __future__ import annotations
+
+from typing import NamedTuple
 
 import numpy as np
 
 from .householder_matrix import householder_matrix
 from .random_orthogonal import random_orthogonal
+
+
+class FDNSystem(NamedTuple):
+    """Full FDN system matrices returned by :func:`fdn_system_gallery`."""
+
+    A: np.ndarray
+    B: np.ndarray
+    C: np.ndarray
+    D: np.ndarray
 
 
 def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
@@ -22,24 +35,28 @@ def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
     return np.array(rows)
 
 
-# Types that require additional functions not yet translated (allpassInFDN,
-# SchroederReverberator) raise NotImplementedError.
-_SUPPORTED_TYPES = [
+# Pure feedback-matrix types (return np.ndarray).
+_MATRIX_TYPES = [
     "orthogonal",
     "Hadamard",
     "circulant",
     "Householder",
     "parallel",
-    "series",
+    "permutation",
+    "diagonallySimilarToOrthogonal",
     "diagonalConjugated",
     "tinyRotation",
-    "nestedAllpass",
+    "Anderson",
 ]
 
-_ALL_TYPES = _SUPPORTED_TYPES + [
-    "allpassInFDN",
+# Full-system types (return FDNSystem).
+_SYSTEM_TYPES = [
+    "series",
+    "nestedAllpass",
+    "polettiAllpass",
+    "homogeneousAllpass",
     "SchroederReverberator",
-    "AndersonMatrix",
+    "allpassInFDN",
 ]
 
 
@@ -64,7 +81,7 @@ def fdn_matrix_gallery(
         fdn_matrix_gallery(8, "Hadamard")
     """
     if matrix_type is None:
-        return list(_ALL_TYPES)
+        return list(_MATRIX_TYPES)
 
     if N is None:
         raise ValueError("N must be provided when matrix_type is specified")
@@ -90,34 +107,117 @@ def fdn_matrix_gallery(
     if matrix_type == "parallel":
         return np.eye(N)
 
-    if matrix_type == "series":
-        return np.tril(np.random.randn(N, N), -1) / N + np.eye(N)
+    if matrix_type == "permutation":
+        P = np.eye(N)
+        return P[np.random.permutation(N)]
 
-    if matrix_type == "diagonalConjugated":
+    if matrix_type == "diagonallySimilarToOrthogonal":
         D = np.diag(np.random.randn(N))
         return np.linalg.solve(D, random_orthogonal(N)) @ D
 
+    if matrix_type == "diagonalConjugated":
+        D = np.diag(np.random.choice([-1.0, 1.0], N))
+        return D @ random_orthogonal(N) @ D
+
     if matrix_type == "tinyRotation":
+        import torch
+
         from ..auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
-        return tiny_rotation_matrix(N, 0.01).numpy()
+        return tiny_rotation_matrix(
+            N, 0.01, log_matrix=torch.randn(N, N, dtype=torch.float64)
+        ).numpy()
 
-    if matrix_type == "nestedAllpass":
-        from ..auxiliary.allpass import nested_allpass
-
-        g = np.random.rand(N) * 0.2 + 0.6
-        matrix, _, _, _ = nested_allpass(g)
-        return matrix
-
-    if matrix_type in ("allpassInFDN", "SchroederReverberator"):
-        raise NotImplementedError(
-            f"'{matrix_type}' is not yet implemented in pyFDN. "
-            "Use the allpass_FDN submodule for allpass structures."
-        )
-
-    if matrix_type == "AndersonMatrix":
+    if matrix_type == "Anderson":
         from .anderson_matrix import anderson_matrix
 
         return anderson_matrix(N)
 
-    raise ValueError(f"Unknown matrix_type {matrix_type!r}. Supported: {_ALL_TYPES}")
+    if matrix_type in _SYSTEM_TYPES:
+        raise ValueError(
+            f"'{matrix_type}' returns a full FDN system; use fdn_system_gallery() instead."
+        )
+
+    raise ValueError(f"Unknown matrix_type {matrix_type!r}. Supported: {_MATRIX_TYPES}")
+
+
+def fdn_system_gallery(
+    N: int | None = None,
+    system_type: str | None = None,
+) -> FDNSystem | list[str]:
+    """Return a full FDN system (A, B, C, D) of the requested type, or list all type names.
+
+    Args:
+        N: System order.  Ignored when ``system_type`` is ``None``.
+        system_type: One of the supported type strings.  Pass ``None`` (or call
+                     with no arguments) to get the list of all type names.
+
+    Returns:
+        :class:`FDNSystem` named tuple ``(A, B, C, D)``, or a list of type-name strings.
+
+    Example::
+
+        fdn_system_gallery()                         # → list of type strings
+        fdn_system_gallery(8, "allpassInFDN")
+    """
+    if system_type is None:
+        return list(_SYSTEM_TYPES)
+
+    if N is None:
+        raise ValueError("N must be provided when system_type is specified")
+
+    if system_type == "series":
+        from ..auxiliary.allpass import series_allpass
+
+        g = np.random.rand(N) * 0.6 + 0.2
+        A, B, C, D = series_allpass(g)
+        return FDNSystem(A, B, C, D)
+
+    if system_type == "nestedAllpass":
+        from ..auxiliary.allpass import nested_allpass
+
+        g = np.random.rand(N) * 0.6 + 0.2
+        A, B, C, D = nested_allpass(g)
+        return FDNSystem(A, B, C, D)
+
+    if system_type == "polettiAllpass":
+        from ..auxiliary.allpass import poletti_allpass
+
+        A, B, C, D = poletti_allpass(0.7, random_orthogonal(N))
+        return FDNSystem(A, B, C, D)
+
+    if system_type == "homogeneousAllpass":
+        from .allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
+        from .allpass_FDN.rand_admissible_homogeneous_allpass import (
+            rand_admissible_homogeneous_allpass,
+        )
+
+        G = np.diag(np.random.uniform(0.9, 0.99, N))
+        X = rand_admissible_homogeneous_allpass(G, (0.8, 0.99))
+        A, B, C, D, _ = homogeneous_allpass_fdn(G, X)
+        return FDNSystem(A, B, C, D)
+
+    if system_type == "SchroederReverberator":
+        from .schroeder_reverberator import schroeder_reverberator
+
+        N_c = N // 2
+        N_a = N - N_c
+        comb_gain = np.random.uniform(0.5, 0.9, N_c) * np.random.choice([-1, 1], N_c)
+        allpass_gain = np.random.uniform(0.2, 0.7, N_a)
+        b = np.random.randn(N_c, 1) / np.sqrt(N_c)
+        c = np.random.randn(1, N_c) / np.sqrt(N_c)
+        d = 0.0
+        A, B, C, D = schroeder_reverberator(allpass_gain, comb_gain, b, c, d)
+        return FDNSystem(A, B, C, D)
+
+    if system_type == "allpassInFDN":
+        from .allpass_in_fdn import allpass_in_fdn
+
+        g = np.random.uniform(-0.8, 0.8, N // 2)
+        A_inner = random_orthogonal(N // 2)
+        b_inner = np.random.randn(N // 2, 1) / np.sqrt(N // 2)
+        c_inner = np.random.randn(1, N // 2) / np.sqrt(N // 2)
+        A, B, C, D = allpass_in_fdn(g, A_inner, b_inner, c_inner, 0.0)
+        return FDNSystem(A, B, C, D)
+
+    raise ValueError(f"Unknown system_type {system_type!r}. Supported: {_SYSTEM_TYPES}")

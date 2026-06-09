@@ -48,7 +48,7 @@ def _():
     import pyFDN
 
     pio.renderers.default = "sphinx_gallery"
-    return go, make_subplots, np, pio, pyFDN
+    return go, make_subplots, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -71,11 +71,6 @@ def _(np, pyFDN):
     A_original = pyFDN.random_orthogonal(N)
     # Target: absolute values only (signs removed)
     B = np.abs(A_original)
-
-    print("Original orthogonal matrix A:")
-    print(np.round(A_original, 3))
-    print("\nInput |A| (signs stripped):")
-    print(np.round(B, 3))
     return A_original, B, N
 
 
@@ -91,7 +86,7 @@ def _(mo):
 
 
 @app.cell
-def _(A_original, B, N, np, pyFDN):
+def _(B, N, np, pyFDN):
     classic = pyFDN.nearest_orthogonal(B)
     sign_agnostic = pyFDN.nearest_sign_agnostic_orthogonal(B, max_trials=10_000)
 
@@ -107,7 +102,7 @@ def _(A_original, B, N, np, pyFDN):
     assert error_sign_agnostic <= error_classic + 1e-10, (
         "sign-agnostic should not be worse"
     )
-    return classic, error_classic, error_sign_agnostic, sign_agnostic
+    return classic, sign_agnostic
 
 
 @app.cell(hide_code=True)
@@ -121,13 +116,40 @@ def _(mo):
 
 
 @app.cell
-def _(A_original, B, classic, go, make_subplots, np, sign_agnostic):
-    matrices = [A_original, B, classic, sign_agnostic]
-    titles = ["Original A", "|A| (input)", "Nearest orthogonal", "Sign-agnostic"]
-    N = A_original.shape[0]
+def _(A_original, B, N, classic, go, make_subplots, np, pyFDN, sign_agnostic):
+    def align_signs(M, ref):
+        M = M * np.sign(np.sum(M * ref, axis=1, keepdims=True))  # rows
+        M = M * np.sign(np.sum(M * ref, axis=0, keepdims=True))  # cols
+        return M
 
-    fig = make_subplots(rows=1, cols=4, subplot_titles=titles)
-    for col, (mat, _title) in enumerate(zip(matrices, titles, strict=False), start=1):
+    classic_aligned = align_signs(classic, A_original)
+    sign_agnostic_aligned = align_signs(sign_agnostic, A_original)
+
+    def orth_label(M):
+        return "orth ✓" if pyFDN.is_orthogonal(M, tol=1e-8) else "orth ✗"
+
+    matrices = [
+        A_original,
+        B,
+        sign_agnostic_aligned,
+        np.abs(sign_agnostic_aligned),
+        classic_aligned,
+        np.abs(classic_aligned),
+    ]
+    titles = [
+        f"Original A ({orth_label(A_original)})",
+        "|A| (input)",
+        f"Sign-agnostic aligned<br>({orth_label(sign_agnostic_aligned)})",
+        "|Sign-agnostic aligned|",
+        f"Nearest orthogonal aligned<br>({orth_label(classic_aligned)})",
+        "|Nearest orthogonal aligned|",
+    ]
+
+    fig = make_subplots(rows=3, cols=2, subplot_titles=titles)
+    tick_vals = list(range(N))
+    for idx, (mat, _title) in enumerate(zip(matrices, titles, strict=True)):
+        row, col = divmod(idx, 2)
+        row, col = row + 1, col + 1
         fig.add_trace(
             go.Heatmap(
                 z=mat,
@@ -135,32 +157,34 @@ def _(A_original, B, classic, go, make_subplots, np, sign_agnostic):
                 zmid=0,
                 zmin=-1,
                 zmax=1,
-                showscale=(col == 4),
+                showscale=(idx == 5),
             ),
-            row=1,
+            row=row,
             col=col,
         )
-
-    tick_vals = list(range(N))
-    for col in range(1, 5):
         fig.update_xaxes(
-            tickvals=tick_vals, ticktext=[str(i) for i in tick_vals], row=1, col=col
+            tickvals=tick_vals, ticktext=[str(i) for i in tick_vals], row=row, col=col
         )
         fig.update_yaxes(
             tickvals=tick_vals,
             ticktext=[str(i) for i in tick_vals],
             autorange="reversed",
-            row=1,
+            row=row,
             col=col,
         )
 
     fig.update_layout(
         title="Sign-agnostic vs. classic nearest orthogonal",
-        height=360,
+        height=1000,
         template="plotly_white",
     )
     fig.show()
-    return (fig,)
+    return
+
+
+@app.cell
+def _():
+    return
 
 
 if __name__ == "__main__":

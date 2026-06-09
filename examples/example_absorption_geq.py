@@ -26,7 +26,8 @@ def _(mo):
     2. Run a one-channel FDN using FLAMO.
     3. Estimate T60 from the impulse response and compare with the target.
 
-    Reference: *Välimäki and Reiss 2016; Schlecht and Habets 2020.*
+    Reference: *Schlecht and Habets 2020.*
+    Reference: *Välimäki and Reiss, "All About Audio Equalization: Solutions and Frontiers," Applied Sciences, vol. 6, no. 5, p. 129, 2016.*
 
     Original MATLAB: Sebastian J. Schlecht, 22 October 2020.
     """)
@@ -60,15 +61,29 @@ def _(np, pyFDN):
     num_delays = 8
     rir_len = 3 * fs  # 3 seconds
 
+    # TODO: replace with vanilla FDN parameter
     delays = np.sort(np.random.randint(500, 2001, size=num_delays))
     feedback_matrix = pyFDN.random_orthogonal(num_delays)
+    B_in = np.ones((num_delays, 1)) / num_delays
+    C_out = np.ones((1, num_delays))
+    D_dir = np.zeros((1, 1))
 
     # Target RT at the 10 GEQ bands (seconds)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
     print(f"Delays: {delays}")
     print(f"Target RT: {target_rt}")
-    return delays, feedback_matrix, fs, num_delays, rir_len, target_rt
+    return (
+        B_in,
+        C_out,
+        D_dir,
+        delays,
+        feedback_matrix,
+        fs,
+        num_delays,
+        rir_len,
+        target_rt,
+    )
 
 
 @app.cell(hide_code=True)
@@ -108,17 +123,20 @@ def _(mo):
 def _(delays, fs, go, np, num_delays, pyFDN, sos_absorption):
     fft_len = 2**14
 
+    ## TODO: replace by a fdn summary plot
+
     fig_mag = go.Figure()
     for i in range(num_delays):
         _, H_bands, W_bands = pyFDN.probe_sos(
             sos_absorption[i], np.array([]), fft_len=fft_len, fs=fs
         )
         mag_db = pyFDN.lin_to_db(np.abs(np.prod(H_bands, axis=1)))
+        mag_db_per_sample = mag_db / delays[i]
 
         fig_mag.add_trace(
             go.Scatter(
                 x=W_bands[:, 0],
-                y=mag_db,
+                y=mag_db_per_sample,
                 mode="lines",
                 name=f"delay={delays[i]}",
                 line={"width": 1.2},
@@ -153,19 +171,17 @@ def _(mo):
 
 @app.cell
 def _(
+    B_in,
+    C_out,
+    D_dir,
     delays,
     feedback_matrix,
     fs,
     np,
-    num_delays,
     pyFDN,
     rir_len,
     sos_absorption,
 ):
-    B_in = np.ones((num_delays, 1)) / num_delays
-    C_out = np.ones((1, num_delays))
-    D_dir = np.zeros((1, 1))
-
     # reshape (N, n_sections, 6) → (n_sections, 6, N) for dss_to_flamo
     sos_loop = sos_absorption.transpose(1, 2, 0)
 

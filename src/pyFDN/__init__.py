@@ -22,18 +22,22 @@ __all__ = [
     "mgrpdelay",
     "ms_to_smp",
     # matrix generators
+    "allpass_in_fdn",
     "anderson_matrix",
     "complete_orthogonal",
     "construct_cascaded_paraunitary_matrix",
     "construct_velvet_feedback_matrix",
     "degree_one_lossless",
     "fdn_matrix_gallery",
+    "fdn_system_gallery",
+    "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
     "nearest_orthogonal",
     "nearest_sign_agnostic_orthogonal",
     "random_matrix_shift",
     "random_orthogonal",
+    "schroeder_reverberator",
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
@@ -50,6 +54,7 @@ __all__ = [
     "general_char_poly",
     "interpolate_orthogonal",
     "is_orthogonal",
+    "is_unilossless",
     "matrix_convolution",
     "matrix_polyder",
     "matrix_polyval",
@@ -93,6 +98,7 @@ __all__ = [
     "process_fdn",
     # plotting
     "plot_impulse_response_matrix",
+    "plot_matrix",
     "plot_system_matrix",
     "plot_spectrogram",
     # FLAMO graph
@@ -166,6 +172,7 @@ from .auxiliary.math import (
     general_char_poly,
     interpolate_orthogonal,
     is_orthogonal,
+    is_unilossless,
     matrix_convolution,
     matrix_polyder,
     matrix_polyval,
@@ -180,6 +187,7 @@ from .auxiliary.math import (
 # plotting
 from .auxiliary.plot import (
     plot_impulse_response_matrix,
+    plot_matrix,
     plot_spectrogram,
     plot_system_matrix,
 )
@@ -229,6 +237,7 @@ from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fd
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
     rand_admissible_homogeneous_allpass,
 )
+from .generate.allpass_in_fdn import allpass_in_fdn
 from .generate.anderson_matrix import anderson_matrix
 from .generate.complete_orthogonal import complete_orthogonal
 from .generate.construct_cascaded_paraunitary_matrix import (
@@ -236,7 +245,11 @@ from .generate.construct_cascaded_paraunitary_matrix import (
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
-from .generate.fdn_matrix_gallery import fdn_matrix_gallery
+from .generate.fdn_matrix_gallery import (
+    FDNSystem,
+    fdn_matrix_gallery,
+    fdn_system_gallery,
+)
 from .generate.householder_matrix import householder_matrix
 from .generate.is_almost_zero import is_almost_zero
 from .generate.nearest_orthogonal import nearest_orthogonal
@@ -245,6 +258,7 @@ from .generate.random_matrix_shift import random_matrix_shift
 
 # matrix generators
 from .generate.random_orthogonal import random_orthogonal
+from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
