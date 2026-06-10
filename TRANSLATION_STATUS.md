@@ -224,9 +224,9 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
 | 2 | `example_spreadFDNpoles.m` | `examples/example_spread_fdn_poles.py` | ✅ | none |
 | 3 | `example_randomFDNstatistics.m` | `examples/example_random_fdn_statistics.py` | ✅ | none (`dss_to_pr_direct` meta has `undrivenResidues`) |
 | 4 | `example_FDNEigenvectors.m` | `examples/example_fdn_eigenvectors.py` | ✅ | none (`dss_to_pr_direct` meta has `eigenvectors`) |
-| 5 | `example_poleBoundaries.m` | `examples/example_pole_boundaries.py` | ✅ | polynomial-A support in `dss_to_pr_direct` (FIR absorption folded into loop) |
+| 5 | `example_poleBoundaries.m` | `examples/example_pole_boundaries.py` | ✅ | none (FIR absorption as SOS in the FLAMO loop: `dss_to_flamo(sos_filter=...)` + `flamo_to_pr`) |
 | 6 | `example_scatteringFDN.m` | `examples/example_scattering_fdn.py` | ✅ | `generate/construct_paraunitary_from_elementals.py`; FIR feedback matrix in `process_fdn`/`dss_to_impz` |
-| 7 | `example_paraunitaryFDN.m` | `examples/example_paraunitary_fdn.py` | ✅ | FIR feedback in `process_fdn` + polynomial-A modal decomposition (shared with #5/#6) |
+| 7 | `example_paraunitaryFDN.m` | `examples/example_paraunitary_fdn.py` | ✅ | FIR feedback in `process_fdn`; polynomial-A in `dss_to_flamo` + `flamo_to_pr(num_poles=...)` |
 | 8 | `example_decorrelation.m` | `examples/example_decorrelation.py` | 🔜 | `auxiliary/math.py::adjugate`, `adj_poly`, `loop_tf`; `auxiliary/utils.py::max_corr` |
 | 9 | `example_timeVaryingFDN.m` | `examples/example_time_varying_fdn.py` | 🔜 | `dsp/complex_oscillator_bank.py`, `dsp/time_varying_matrix.py`; `process_fdn` extensions (`absorption_filters`, `extra_matrix`) |
 | 10 | `example_RIR2FDN.m` | `examples/example_rir_to_fdn.py` | 🔜 | uses `estimate_rt_bands` instead of DecayFitNet (architecture decision); copy `s3_r4_o.wav` from fdnToolbox |
@@ -239,9 +239,13 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
   `absorption_filters`, and `extra_matrix` (object with `.filter(block)`), matching the
   MATLAB `processFDN` loop ordering (delay → absorption → C; absorption → A → extra → +B).
   Validated against FLAMO (1e-9) and frequency-domain inversion (1e-13).
-- `dss_to_pr_direct` accepts polynomial (FIR) feedback matrices in `mode="roots"`;
-  residue derivative includes the −A′(z) term. Validated to 1e-12 on a cascaded
-  paraunitary FDN.
+- Polynomial (FIR) feedback matrices go through the FLAMO path, not
+  `dss_to_pr_direct` (which is numeric-static only): `dss_to_flamo` accepts a
+  (N,N,L) feedback matrix (placed as a FLAMO `Filter` via
+  `auxiliary/flamo.py::fir_matrix_module`), and `flamo_to_pr` gained a
+  `num_poles` override for loops whose pole count exceeds sum(m) — set it to
+  the degree of `general_char_poly(delays, A)`. Validated to 1e-11 on a
+  cascaded paraunitary FDN.
 - **Bug fix** in `general_char_poly` (polyphase branch): determinant coefficients were
   accumulated at `p_ind − j` instead of `p_ind + j`, so the GCP was wrong for every
   polynomial feedback matrix. Now matches `det(diag(z^m) − A(z))` exactly
@@ -259,17 +263,20 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
 - **example_paraunitary_fdn** — N = 4, K = 3 cascade with
   `matrix_type="random"` (NOT the Hadamard default — Hadamard stages create structural
   double poles at z = ±1 where the simple-pole residue formula fails); delays scaled
-  down to 150–500 samples (MATLAB uses 1250–6500; GCP root-finding on a sum(m)≈15k
-  polynomial would be far too slow). IR-vs-modal match ~1e-9 (MATLAB only reaches 1e-3
-  with its Hadamard cascade). `is_paraunitary` and `plot_impulse_response_matrix`
-  expect time-first shape → pass `fbm.transpose(2, 0, 1)`.
+  down to 150–500 samples (MATLAB uses 1250–6500; pole refinement on ≈15k poles
+  would be far too slow). Modal decomposition via `dss_to_flamo` (FIR matrix as
+  FLAMO `Filter` feedback) + `flamo_to_pr` with `num_poles` set to the GCP degree —
+  the FIR feedback adds deg(det A) poles beyond sum(m), which the default seeding
+  would miss. IR-vs-modal match ~1e-11 (MATLAB only reaches 1e-3 with its Hadamard
+  cascade). `is_paraunitary` and `plot_impulse_response_matrix` expect time-first
+  shape → pass `fbm.transpose(2, 0, 1)`.
 - **example_pole_boundaries** — found + fixed a bug in `pole_boundaries`: `freqz` was
   unpacked in MATLAB order (`h, w`) instead of scipy's `(w, h)`, so the absorption term
-  and the frequency axis were garbage. Poles are computed by folding the FIR absorption
-  into a polynomial feedback matrix and using `dss_to_pr_direct(mode="roots")` (instead of
-  MATLAB's `dss2pr` + `zTF`). The folded loop has N extra near-defective, zero-residue
-  poles clustered at the absorption FIR's zero (z = −b1/b0); these are excluded from the
-  bound check (MATLAB's pole finder never sees them as it only tracks sum(m) poles).
+  and the frequency axis were garbage. Poles are computed via FLAMO: the two-tap FIR
+  absorption is one SOS section per delay line in the loop (`dss_to_flamo(sos_filter=...)`)
+  and `flamo_to_pr` refines sum(m) seeds (matching MATLAB's `dss2pr` + `zTF`). The loop's
+  N extra near-defective, zero-residue roots at the absorption FIR's zero (z = −b1/b0)
+  are never seeded, so no exclusion is needed.
 - **example_fdn_eigenvectors** — pyFDN eigenvectors are raw SVD null vectors (MATLAB
   normalises them by the derivative denominator), so the compact residue formula includes
   the `undrivenResidues` factor: `res = undriven * (c·rv) * (lv^H·b)`. Verified to machine

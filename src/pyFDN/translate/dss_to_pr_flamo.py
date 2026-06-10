@@ -718,6 +718,7 @@ def flamo_to_pr(
     maximum_iterations: int = 50,
     refinement_tol: float = 1e-12,
     verbose: bool = True,
+    num_poles: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
     Poles/residues from a FLAMO transfer H(z)=C(z)P(z)^{-1}B(z)+D(z).
@@ -725,6 +726,11 @@ def flamo_to_pr(
     Pass either a full FLAMO **model** (decomposition is done via
     :func:`flamo_decompose_for_pr`) or a **decomposition** returned by that
     function. Poles are refined in the w-domain (w = 1/z) then converted to z.
+
+    ``num_poles`` overrides the number of root seeds (default: sum of the
+    recursion delays). Use it when the loop contains filters that add poles
+    beyond the delays, e.g. a polynomial (FIR) feedback matrix, where the
+    pole count is the degree of the generalized characteristic polynomial.
 
     For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead.
     """
@@ -738,7 +744,7 @@ def flamo_to_pr(
     loop = _FDNLoopFlamo(recursion=decomposition_obj.p_probe)
     device, dtype = _device_dtype_from_decomposition(decomposition_obj)
 
-    n_poles = int(np.sum(delays_arr))
+    n_poles = int(np.sum(delays_arr)) if num_poles is None else int(num_poles)
 
     # Initialize on unit circle in w-domain (torch), refine in torch
     root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)

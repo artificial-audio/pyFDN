@@ -43,11 +43,12 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
+    import torch
 
     import pyFDN
 
     pio.renderers.default = "sphinx_gallery"
-    return SimpleNamespace, go, np, pyFDN
+    return SimpleNamespace, go, np, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -86,7 +87,6 @@ def _(SimpleNamespace, np, pyFDN):
         feedback_matrix,
         fs,
         input_gain,
-        num_delays,
         output_gain,
     )
 
@@ -98,9 +98,10 @@ def _(mo):
 
     `pole_boundaries` combines the singular values of the feedback matrix with
     the absorption magnitude responses and group delays. For the poles, the
-    FIR absorption is folded into the loop as a polynomial feedback matrix
-    $A(z) = A\,\mathrm{diag}(h(z))$ and `dss_to_pr_direct` is used in
-    ``roots`` mode.
+    FIR absorption is placed as an SOS filter behind the delays in a FLAMO
+    model (loop: delay → absorption → $A$) via `dss_to_flamo`, and
+    `flamo_to_pr` extracts the poles with Ehrlich–Aberth refinement in the
+    $w = z^{-1}$ domain.
     """)
     return
 
@@ -116,33 +117,40 @@ def _(
     np,
     output_gain,
     pyFDN,
+    torch,
 ):
     min_curve, max_curve, f_bounds = pyFDN.pole_boundaries(
         delays, absorption, feedback_matrix[:, :, None], fs
     )
 
-    # fold FIR absorption into a polynomial feedback matrix
-    A_poly = np.stack(
-        [feedback_matrix @ np.diag(absorption.b[:, 0, k]) for k in range(2)],
-        axis=2,
-    )
-    residues, poles_all, _, _, _ = pyFDN.dss_to_pr_direct(
-        delays, A_poly, input_gain, output_gain, direct, mode="roots"
-    )
+    # absorption FIR as one SOS section per delay line: [b0, b1, b2, a0, a1, a2]
+    sos_loop = np.zeros((1, 6, delays.size))
+    sos_loop[0, 0, :] = absorption.b[:, 0, 0]
+    sos_loop[0, 1, :] = absorption.b[:, 0, 1]
+    sos_loop[0, 3, :] = 1.0
 
-    # The folded loop has N extra near-defective poles clustered at the zero of
-    # the absorption FIR (z = -b1/b0). They carry (numerically) zero residue, so
-    # they do not contribute to the response and are not covered by the
-    # boundary theory; exclude the cluster.
-    fir_zero = -absorption.b[0, 0, 1] / absorption.b[0, 0, 0]
-    fdn_poles = np.abs(poles_all - fir_zero) > 0.1
-    poles = poles_all[fdn_poles]
-    print(f"Number of FDN poles: {poles.size} (of {poles_all.size} roots)")
-    print(
-        "Max |residue| in excluded cluster: "
-        f"{np.max(np.abs(residues[~fdn_poles, 0, 0]), initial=0):.2e}"
+    model = pyFDN.dss_to_flamo(
+        A=feedback_matrix,
+        B=input_gain,
+        C=output_gain,
+        D=direct,
+        m=delays,
+        Fs=fs,
+        shell=False,
+        sos_filter=sos_loop,
+        dtype=torch.float64,
     )
-    return A_poly, f_bounds, max_curve, min_curve, poles
+    _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(
+        model,
+        quality_threshold=1e-10,
+        refinement_tol=1e-10,
+        maximum_iterations=80,
+        reject_unstable_poles=True,
+        deflation_type="fullDeflation",
+        verbose=False,
+    )
+    print(f"Number of FDN poles: {poles.size} (conjugate pairs reduced)")
+    return f_bounds, max_curve, min_curve, poles
 
 
 @app.cell(hide_code=True)

@@ -27,12 +27,6 @@ def _(mo):
 
     Original MATLAB: `example_paraunitaryFDN.m`, Sebastian J. Schlecht,
     23 April 2018.
-
-    Deviations from MATLAB: delays are scaled down (150–500 instead of
-    1250–6500 samples) so the characteristic-polynomial root finding stays
-    fast, and the cascade uses random orthogonal stages instead of Hadamard
-    ones — Hadamard stages create structural double poles at $z = \pm 1$
-    where the simple-pole residue formula is inaccurate.
     """)
     return
 
@@ -43,11 +37,12 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
+    import torch
 
     import pyFDN
 
     pio.renderers.default = "sphinx_gallery"
-    return go, np, plt, pyFDN
+    return go, np, plt, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -62,7 +57,7 @@ def _(mo):
 def _(np, pyFDN):
     np.random.seed(2)
     fs = 48000
-    ir_len = fs
+    ir_len = int(fs / 10)
 
     num_delays = 4
     num_stages = 3
@@ -76,16 +71,30 @@ def _(np, pyFDN):
     )
     print(f"Delays: {delays} (sum = {delays.sum()})")
     print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
-    return (
-        delays,
-        direct,
-        feedback_matrix,
-        fs,
-        input_gain,
-        ir_len,
-        num_delays,
-        output_gain,
+    return delays, direct, feedback_matrix, fs, input_gain, ir_len, output_gain
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Feedback matrix impulse responses
+
+    Each subplot shows the FIR of one matrix entry.
+    """)
+    return
+
+
+@app.cell
+def _(feedback_matrix, np, plt, pyFDN):
+    pyFDN.plot_impulse_response_matrix(
+        np.arange(feedback_matrix.shape[2]),
+        pyFDN.mulaw_encode(feedback_matrix.transpose(2, 0, 1)),
+        xlabel="Time (samples)",
+        ylabel="Amplitude (mu)",
+        title="Paraunitary feedback matrix",
     )
+    plt.show()
+    return
 
 
 @app.cell(hide_code=True)
@@ -115,21 +124,54 @@ def _(mo):
     ## Impulse response and modal decomposition
 
     The FIR feedback matrix runs directly in the time-domain recursion.
-    For the modal decomposition the loop $P(z) = \mathrm{diag}(z^m) - A(z)$
-    is solved via the generalized characteristic polynomial
-    (`dss_to_pr_direct` in ``roots`` mode).
+    For the modal decomposition the FIR matrix is placed as a FLAMO Filter
+    module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles
+    with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the
+    delay count, so the number of root seeds is set to the degree of the
+    generalized characteristic polynomial.
     """)
     return
 
 
 @app.cell
-def _(delays, direct, feedback_matrix, input_gain, ir_len, np, output_gain, pyFDN):
+def _(
+    delays,
+    direct,
+    feedback_matrix,
+    fs,
+    input_gain,
+    ir_len,
+    np,
+    output_gain,
+    pyFDN,
+    torch,
+):
     ir_time = pyFDN.dss_to_impz(
         ir_len, delays, feedback_matrix, input_gain, output_gain, direct
     )[:, 0, 0]
 
-    residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr_direct(
-        delays, feedback_matrix, input_gain, output_gain, direct, mode="roots"
+    # pole count = degree of the generalized characteristic polynomial in w = z^{-1}
+    gcp = pyFDN.general_char_poly(delays, feedback_matrix)
+    num_poles = int(np.nonzero(np.abs(gcp) > 1e-12 * np.max(np.abs(gcp)))[0][-1])
+
+    model = pyFDN.dss_to_flamo(
+        A=feedback_matrix,
+        B=input_gain,
+        C=output_gain,
+        D=direct,
+        m=delays,
+        Fs=fs,
+        shell=False,
+        dtype=torch.float64,
+    )
+    residues, poles, direct_term, is_pair, _meta = pyFDN.flamo_to_pr(
+        model,
+        quality_threshold=1e-10,
+        refinement_tol=1e-10,
+        maximum_iterations=80,
+        deflation_type="fullDeflation",
+        verbose=False,
+        num_poles=num_poles,
     )
     ir_modal = pyFDN.pr_to_impz(
         residues, poles, direct_term, is_pair, ir_len, mode="lowMemory"
@@ -152,7 +194,7 @@ def _(mo):
 
 
 @app.cell
-def _(difference, go, ir_modal, ir_time, np):
+def _(difference, go, ir_modal, ir_time, np, pyFDN):
     fig_ir = go.Figure()
     t_axis = np.arange(len(ir_time))
     for _sig, _name, _offset in [
@@ -163,7 +205,7 @@ def _(difference, go, ir_modal, ir_time, np):
         fig_ir.add_trace(
             go.Scatter(
                 x=t_axis,
-                y=_sig + _offset,
+                y=pyFDN.mulaw_encode(_sig) + _offset,
                 mode="lines",
                 name=_name,
                 line={"width": 0.7},
@@ -172,7 +214,7 @@ def _(difference, go, ir_modal, ir_time, np):
     fig_ir.update_layout(
         title="Impulse response: time-domain recursion vs modal synthesis",
         xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Amplitude (offset for display)"},
+        yaxis={"title": "Amplitude (mu) (offset for display)"},
         template="plotly_white",
         height=420,
     )
@@ -236,29 +278,6 @@ def _(np, poles, pyFDN):
     max_pole_deviation = np.max(np.abs(np.abs(poles) - 1.0))
     print(f"Max | |pole| - 1 | = {max_pole_deviation:.3e}")
     assert pyFDN.is_almost_zero(np.abs(poles) - 1.0)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Feedback matrix impulse responses
-
-    Each subplot shows the FIR of one matrix entry.
-    """)
-    return
-
-
-@app.cell
-def _(feedback_matrix, np, plt, pyFDN):
-    pyFDN.plot_impulse_response_matrix(
-        np.arange(feedback_matrix.shape[2]),
-        feedback_matrix.transpose(2, 0, 1),
-        xlabel="Time (samples)",
-        ylabel="Amplitude (lin)",
-        title="Paraunitary feedback matrix",
-    )
-    plt.show()
     return
 
 

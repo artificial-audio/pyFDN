@@ -1,6 +1,5 @@
-"""Tests for FIR feedback matrices, absorption filters, and polynomial-A modal
-decomposition (infrastructure for the paraunitary / scattering / pole-boundary
-examples)."""
+"""Tests for FIR feedback matrices and absorption filters (infrastructure for
+the paraunitary / scattering / pole-boundary examples)."""
 
 from __future__ import annotations
 
@@ -67,34 +66,19 @@ def test_process_fdn_fir_matrix_matches_frequency_inversion(
     np.testing.assert_allclose(ir_time, ir_freq, atol=1e-9)
 
 
-def test_dss_to_pr_direct_polynomial_matrix(paraunitary_fdn: FDNFixture) -> None:
-    A = paraunitary_fdn["A"]
-    delays = paraunitary_fdn["delays"]
-    B, C, D = paraunitary_fdn["B"], paraunitary_fdn["C"], paraunitary_fdn["D"]
-    res, pol, direct, pair, _ = pyFDN.dss_to_pr_direct(delays, A, B, C, D, mode="roots")
-    # paraunitary loop is lossless: all poles on the unit circle
-    np.testing.assert_allclose(np.abs(pol), 1.0, atol=1e-10)
-    # number of modes = sum(delays) + deg(det A)
-    num_modes = np.sum(np.asarray(pair).astype(int) + 1)
-    assert num_modes >= delays.sum()
-
-    ir_len = 1024
-    ir_time = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)[:, 0, 0]
-    ir_modal = pyFDN.pr_to_impz(res, pol, direct, pair, ir_len)[:, 0, 0]
-    np.testing.assert_allclose(ir_time, ir_modal, atol=1e-9)
-
-
-def test_dss_to_pr_direct_polynomial_requires_roots(
+def test_dss_to_pr_direct_rejects_polynomial_matrix(
     paraunitary_fdn: FDNFixture,
 ) -> None:
-    with pytest.raises(ValueError, match="roots"):
+    """Polynomial (FIR) feedback matrices are not supported by the direct path;
+    use the FLAMO-based decomposition instead."""
+    with pytest.raises(ValueError):
         pyFDN.dss_to_pr_direct(
             paraunitary_fdn["delays"],
             paraunitary_fdn["A"],
             paraunitary_fdn["B"],
             paraunitary_fdn["C"],
             paraunitary_fdn["D"],
-            mode="eig",
+            mode="roots",
         )
 
 

@@ -24,11 +24,9 @@ def _dss_to_res_direct(
     """
     Residues from poles using SVD-based formula (same as FLAMO path).
 
-    P(z) = diag(z^m) - A(z), dP/dz = diag(m z^{m-1}) - A'(z). For a static A
-    the derivative term vanishes; for an FIR polynomial A of shape (N, N, L)
-    in z^{-1} convention, A'(z) = sum_k (-k) A_k z^{-k-1}. At each pole:
-    SVD(P) gives right null vector r, left null vector l;
-    denom = l^H (dP/dz) r; residue numerator = (C @ r) @ (l^H @ B).
+    P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1}). At each pole: SVD(P) gives
+    right null vector r, left null vector l; denom = l^H (dP/dz) r;
+    residue numerator = (C @ r) @ (l^H @ B).
     """
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     delays = np.asarray(delays, dtype=np.float64).ravel()
@@ -47,24 +45,12 @@ def _dss_to_res_direct(
     eig_right = np.zeros((n, n_poles), dtype=np.complex128)
     eig_left = np.zeros((n, n_poles), dtype=np.complex128)
 
-    a_orders = np.arange(A.shape[2]) if A.ndim == 3 else None
-
     for it, pole in enumerate(poles):
-        # P(z) = diag(z^m) - A(z), dP/dz = diag(m z^{m-1}) - A'(z)
+        # P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1})
         z_m = np.power(pole, delays)
         z_m1 = np.power(pole, delays - 1.0)
-        if a_orders is None:
-            a_val = A
-            da_val = 0.0
-        else:
-            z_pow = np.power(pole, -a_orders)  # z^{-k}
-            a_val = np.sum(A * z_pow[None, None, :], axis=2)
-            da_val = np.sum(
-                A * (-a_orders * np.power(pole, -a_orders - 1))[None, None, :],
-                axis=2,
-            )
-        p = np.diag(z_m) - a_val
-        dp = np.diag(delays * z_m1) - da_val
+        p = np.diag(z_m) - A
+        dp = np.diag(delays * z_m1)
 
         # Null vectors: P r = 0, l^H P = 0 (same as FLAMO)
         u, s, vh = np.linalg.svd(p, full_matrices=False)
@@ -110,11 +96,6 @@ def dss_to_pr_direct(
     """
     Direct poles/residues from simple DSS (numeric matrices only).
 
-    ``A`` may be a static matrix of shape (N, N) or an FIR polynomial matrix
-    of shape (N, N, L) in z^{-1} convention (e.g. a paraunitary feedback
-    matrix or absorption FIRs folded into the loop). Polynomial matrices
-    require ``mode='roots'``.
-
     Pole extraction modes:
       - ``eig``: eigenvalues of equivalent state-space matrix
       - ``roots``: roots of generalized characteristic polynomial
@@ -130,21 +111,14 @@ def dss_to_pr_direct(
     d_mat = np.asarray(D, dtype=np.complex128)
 
     n = delays_arr.size
-    if a_mat.shape[:2] != (n, n) or a_mat.ndim not in (2, 3):
-        raise ValueError(
-            f"A must have shape ({n},{n}) or ({n},{n},L), got {a_mat.shape}"
-        )
+    if a_mat.shape != (n, n):
+        raise ValueError(f"A must have shape ({n},{n}), got {a_mat.shape}")
 
     mode_l = str(mode).lower()
-    if a_mat.ndim == 3 and mode_l == "eig":
-        raise ValueError(
-            "Polynomial (FIR) feedback matrices require mode='roots' "
-            "(no equivalent static state-space matrix)."
-        )
     a_poly = np.real_if_close(a_mat, tol=1000)
     if np.iscomplexobj(a_poly) and np.max(np.abs(np.imag(a_poly))) > 1e-12:
         raise ValueError(
-            "roots/polyeig mode currently requires a real-valued feedback matrix."
+            "roots/polyeig mode currently requires a real-valued static feedback matrix."
         )
     a_poly = np.asarray(np.real(a_poly), dtype=float)
 
