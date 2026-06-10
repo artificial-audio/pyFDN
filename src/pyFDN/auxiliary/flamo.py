@@ -150,6 +150,61 @@ def delay_module(
     return delays
 
 
+def fir_matrix_module(
+    coeffs: np.ndarray,
+    nfft: int,
+    *,
+    device=None,
+    dtype=None,
+    requires_grad: bool = False,
+):
+    """
+    Build a FLAMO Filter module from a matrix FIR coefficient array.
+
+    Parameters
+    ----------
+    coeffs : np.ndarray
+        FIR matrix in z^{-1} convention, shape (n_output, n_input, n_taps)
+        (e.g. a paraunitary feedback matrix).
+    nfft : int
+        FFT size for the FLAMO module.
+    device : torch device or None
+        Device for the module; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Optional dtype for module parameters (e.g., torch.float64).
+        If None, uses float32.
+    requires_grad : bool
+        Whether the filter parameters are trainable.
+
+    Returns
+    -------
+    flamo.processor.dsp.Filter
+        FLAMO Filter module with coefficients assigned.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("fir_matrix_module requires flamo (pip install flamo)")
+    import torch
+
+    coeffs = np.asarray(coeffs, dtype=np.float64)
+    if coeffs.ndim != 3:
+        raise ValueError("coeffs must have shape (n_output, n_input, n_taps)")
+    n_out, n_in, n_taps = coeffs.shape
+
+    dev = _get_device(device)
+    torch_dtype = torch.float32 if dtype is None else dtype
+    filt = dsp.Filter(
+        size=(n_taps, n_out, n_in),
+        nfft=nfft,
+        requires_grad=requires_grad,
+        device=dev,
+        dtype=torch_dtype,
+    )
+    filt.assign_value(
+        torch.as_tensor(coeffs.transpose(2, 0, 1), dtype=torch_dtype, device=dev)
+    )
+    return filt
+
+
 def sos_filter_module(
     sos: np.ndarray,
     nfft: int,

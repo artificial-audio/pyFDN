@@ -314,10 +314,10 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
             p_ind = int(delays[ind].sum())
             sub = A[np.ix_(ind, ind, np.arange(A.shape[2]))]
             dd = det_polynomial(sub)
+            # det(A_sub(z)) * z^{-sum(m_sub)}: coefficient dd[j] of z^{-j}
+            # lands at z^{-(p_ind + j)} (matches generalCharPoly.m polyphase branch)
             for j, c in enumerate(dd):
-                idx = p_ind - j
-                if 0 <= idx < p_len:
-                    p[idx] += ((-1) ** nn) * c
+                p[p_ind + j] += ((-1) ** nn) * c
     return p
 
 

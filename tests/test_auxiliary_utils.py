@@ -156,6 +156,10 @@ def test_pole_boundaries_basic():
     assert MinCurve.shape == (8,)
     assert MaxCurve.shape == (8,)
     assert f.shape == (8,)
+    # regression: freqz unpacking once swapped (w, h), making f complex
+    assert not np.iscomplexobj(f)
+    assert np.all(np.diff(f) > 0)
+    assert np.all(MinCurve >= 0) and np.all(MaxCurve >= MinCurve - 1e-12)
 
 
 # ============================================================================

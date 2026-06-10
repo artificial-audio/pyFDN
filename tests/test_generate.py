@@ -101,6 +101,32 @@ def test_construct_velvet_feedback_matches_wrapper(monkeypatch):
     np.testing.assert_equal(rev, 1.0)
 
 
+def test_filter_matrix_gallery_types_are_paraunitary():
+    import pyFDN
+
+    np.random.seed(0)
+    n = 4
+    types = pyFDN.filter_matrix_gallery()
+    assert types == ["RandomDense", "Velvet", "FromElementals"]
+    for mtype in types:
+        mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2)
+        assert mat.ndim == 3 and mat.shape[:2] == (n, n)
+        is_pu, _, _ = pyFDN.is_paraunitary(mat.transpose(2, 0, 1))
+        assert is_pu, mtype
+
+    # stage_matrix_type is honored for the cascaded types
+    mat_rnd = pyFDN.filter_matrix_gallery(
+        n, "Velvet", num_stages=2, stage_matrix_type="random"
+    )
+    is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd.transpose(2, 0, 1))
+    assert is_pu
+
+    with pytest.raises(ValueError, match="Unknown matrix_type"):
+        pyFDN.filter_matrix_gallery(n, "nope")
+    with pytest.raises(ValueError, match="N must be provided"):
+        pyFDN.filter_matrix_gallery(matrix_type="Velvet")
+
+
 def test_is_almost_zero_true_and_false():
     np.testing.assert_(is_almost_zero(np.array([1e-13])))
     np.testing.assert_(not is_almost_zero(np.array([1e-8])))
@@ -233,12 +259,6 @@ def test_fdn_matrix_gallery_hadamard():
 
 def test_fdn_matrix_gallery_parallel():
     assert np.allclose(fdn_matrix_gallery(4, "parallel"), np.eye(4))
-
-
-def test_fdn_matrix_gallery_diagonal_conjugated_lossless():
-    A = fdn_matrix_gallery(4, "diagonalConjugated")
-    eigs = np.abs(np.linalg.eigvals(A))
-    np.testing.assert_allclose(np.sort(eigs), np.ones(4), atol=1e-8)
 
 
 def test_fdn_matrix_gallery_unknown_type_raises():

@@ -45,8 +45,9 @@ def dss_to_flamo(
 
     Parameters
     ----------
-    A : (N, N) array
-        Feedback matrix.
+    A : (N, N) or (N, N, L) array
+        Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
+        convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
     B : (N, num_in) array
         Input gain.
     C : (num_out, N) array
@@ -84,7 +85,7 @@ def dss_to_flamo(
 
     import torch
 
-    from pyFDN.auxiliary.flamo import sos_filter_module
+    from pyFDN.auxiliary.flamo import fir_matrix_module, sos_filter_module
 
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -101,7 +102,10 @@ def dss_to_flamo(
     # Delays: convert samples to seconds for FLAMO
     lengths_sec = m / float(Fs)
     delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device, dtype=dtype)
-    gain_A = gain_module(A, nfft, device=device, dtype=dtype)
+    if A.ndim == 3:
+        gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
+    else:
+        gain_A = gain_module(A, nfft, device=device, dtype=dtype)
     gain_B = gain_module(B, nfft, device=device, dtype=dtype)
     gain_C = gain_module(C, nfft, device=device, dtype=dtype)
     gain_D = gain_module(D, nfft, device=device, dtype=dtype)

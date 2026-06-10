@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 from pyFDN.dsp.feedback_delay import FeedbackDelay
+from pyFDN.dsp.sos_filter_bank import SOSFilterBank
 
 
 def process_fdn(
@@ -15,13 +19,38 @@ def process_fdn(
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
+    *,
+    absorption_filters: ArrayLike | None = None,
+    extra_matrix: Any | None = None,
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
 
-    All matrices must be static (numeric). For FDNs with absorption filters
-    use the FLAMO path (dss_to_flamo / vanilla_FDN).
+    Recursion per block (same ordering as the MATLAB ``processFDN``):
+    delay output -> absorption filters -> output gains C, and in the feedback
+    path: absorbed delay output -> feedback matrix A -> extra matrix -> + B input.
 
-    Input is (num_samples, num_inputs); output is (num_samples, num_outputs).
+    Parameters
+    ----------
+    input_signal : array
+        Input of shape (num_samples,) or (num_samples, num_inputs).
+    delays : array
+        Delay lengths in samples, shape (N,).
+    A : array
+        Feedback matrix: static (N, N) or FIR polynomial (N, N, order) in
+        z^{-1} convention.
+    B, C, D : array
+        Static input, output, and direct gains.
+    absorption_filters : array, optional
+        Per-delay-line SOS filters; see :class:`pyFDN.dsp.SOSFilterBank` for
+        accepted shapes. Applied to the delay outputs inside the loop.
+    extra_matrix : object, optional
+        Object with a ``filter(block) -> block`` method applied after the
+        feedback matrix (e.g. ``TimeVaryingMatrix``).
+
+    Returns
+    -------
+    output : ndarray
+        Shape (num_samples, num_outputs), squeezed.
     """
     x = np.asarray(input_signal, dtype=float)
     if x.ndim == 1:
@@ -37,6 +66,19 @@ def process_fdn(
     delays_arr = np.asarray(delays, dtype=int).reshape(-1)
     if np.any(delays_arr <= 0):
         raise ValueError("Delays must be positive integers")
+    n = delays_arr.size
+
+    if A_mat.ndim == 3:
+        feedback_filter: FIRMatrixFilter | None = FIRMatrixFilter(A_mat)
+    elif A_mat.ndim == 2:
+        feedback_filter = None
+    else:
+        raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
+
+    if absorption_filters is not None:
+        absorption: SOSFilterBank | None = SOSFilterBank(absorption_filters, n)
+    else:
+        absorption = None
 
     max_block_size = min(int(2**12), int(np.min(delays_arr)))
     delay_bank = FeedbackDelay(delays_arr, max_block_size)
@@ -51,7 +93,17 @@ def process_fdn(
         block_in = x[start : start + block_size, :]
 
         delay_out = delay_bank.get_values(block_size)  # (block, N)
-        delay_bank.set_values(block_in @ B_mat.T + delay_out @ A_mat.T)
+        if absorption is not None:
+            delay_out = absorption.filter(delay_out)
+
+        if feedback_filter is not None:
+            feedback = feedback_filter.filter(delay_out)
+        else:
+            feedback = delay_out @ A_mat.T
+        if extra_matrix is not None:
+            feedback = extra_matrix.filter(feedback)
+
+        delay_bank.set_values(block_in @ B_mat.T + feedback)
 
         output[start : start + block_size] = delay_out @ C_mat.T + block_in @ D_mat.T
         delay_bank.advance(block_size)

@@ -107,6 +107,17 @@ warn_no_return = true
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
+# Third-party packages without complete PEP 561 typing metadata
+module = [
+    "flamo.*",
+    "graphviz.*",
+    "plotly.*",
+    "pyroomacoustics.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # Tests: relaxed — focus on source correctness, not test annotation coverage
 module = "tests.*"
 allow_untyped_defs = true

@@ -2,11 +2,224 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from matplotlib import pyplot as plt
 from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
+
+def downsample_minmax(
+    x: ArrayLike | None,
+    y: ArrayLike,
+    *,
+    max_points: int = 10_000,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Downsample a line while preserving local minima and maxima.
+
+    This is intended for dense time-domain traces such as impulse responses,
+    where naive stride decimation can miss narrow peaks. The returned samples
+    are sorted by their original order, include the first and last sample, and
+    use at most ``max_points`` points for long inputs.
+
+    Parameters
+    ----------
+    x : array-like or None
+        X-values. If None, uses sample indices ``0 .. len(y)-1``.
+    y : array-like
+        Real-valued y-values.
+    max_points : int, optional
+        Maximum number of samples to return. Must be at least 4.
+
+    Returns
+    -------
+    x_ds, y_ds : ndarray
+        Downsampled x- and y-values.
+    """
+    if max_points < 4:
+        raise ValueError("max_points must be at least 4")
+
+    y_arr = np.asarray(y).ravel()
+    if np.iscomplexobj(y_arr):
+        raise ValueError("y must be real-valued")
+
+    if x is None:
+        x_arr = np.arange(y_arr.size)
+    else:
+        x_arr = np.asarray(x).ravel()
+
+    if x_arr.size != y_arr.size:
+        raise ValueError("x and y must have the same length")
+
+    n_samples = y_arr.size
+    if n_samples <= max_points:
+        return x_arr, y_arr
+    if n_samples == 0:
+        return x_arr, y_arr
+
+    # Two extrema per bin plus first/last point keeps the point count bounded.
+    n_bins = max(1, (max_points - 2) // 2)
+    edges = np.linspace(0, n_samples, n_bins + 1, dtype=int)
+    indices: set[int] = {0, n_samples - 1}
+
+    for start, stop in zip(edges[:-1], edges[1:], strict=False):
+        if stop <= start:
+            continue
+        segment = y_arr[start:stop]
+        finite = np.isfinite(segment)
+        if not np.any(finite):
+            indices.add(start)
+            continue
+
+        finite_positions = np.flatnonzero(finite)
+        finite_segment = segment[finite]
+        indices.add(start + int(finite_positions[np.argmin(finite_segment)]))
+        indices.add(start + int(finite_positions[np.argmax(finite_segment)]))
+
+    ordered = np.fromiter(sorted(indices), dtype=int)
+    return x_arr[ordered], y_arr[ordered]
+
+
+def downsample_lttb(
+    x: ArrayLike | None,
+    y: ArrayLike,
+    *,
+    max_points: int = 10_000,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Downsample a line with Largest-Triangle-Three-Buckets.
+
+    LTTB keeps points that preserve the visual shape of the connected line. It
+    is a better default for Plotly ``mode="lines"`` than min/max bucketing,
+    because it avoids artificial vertical segments between bucket extrema.
+    """
+    if max_points < 3:
+        raise ValueError("max_points must be at least 3")
+
+    y_arr = np.asarray(y).ravel()
+    if np.iscomplexobj(y_arr):
+        raise ValueError("y must be real-valued")
+
+    if x is None:
+        x_arr = np.arange(y_arr.size, dtype=float)
+    else:
+        x_arr = np.asarray(x).ravel()
+
+    if x_arr.size != y_arr.size:
+        raise ValueError("x and y must have the same length")
+
+    n_samples = y_arr.size
+    if n_samples <= max_points:
+        return x_arr, y_arr
+    if n_samples == 0:
+        return x_arr, y_arr
+
+    finite = np.isfinite(x_arr) & np.isfinite(y_arr)
+    if not np.all(finite):
+        finite_indices = np.flatnonzero(finite)
+        if finite_indices.size <= max_points:
+            return x_arr[finite_indices], y_arr[finite_indices]
+        x_work = x_arr[finite_indices]
+        y_work = y_arr[finite_indices]
+        original_indices = finite_indices
+    else:
+        x_work = x_arr
+        y_work = y_arr
+        original_indices = np.arange(n_samples)
+
+    n_work = y_work.size
+    if n_work <= max_points:
+        return x_work, y_work
+
+    bucket_count = max_points - 2
+    bucket_size = (n_work - 2) / bucket_count
+    sampled = np.empty(max_points, dtype=int)
+    sampled[0] = 0
+    sampled[-1] = n_work - 1
+
+    anchor = 0
+    for i in range(bucket_count):
+        bucket_start = int(np.floor(i * bucket_size)) + 1
+        bucket_stop = int(np.floor((i + 1) * bucket_size)) + 1
+
+        next_start = int(np.floor((i + 1) * bucket_size)) + 1
+        next_stop = int(np.floor((i + 2) * bucket_size)) + 1
+        next_stop = min(next_stop, n_work)
+        if next_start >= next_stop:
+            avg_x = x_work[-1]
+            avg_y = y_work[-1]
+        else:
+            avg_x = np.mean(x_work[next_start:next_stop])
+            avg_y = np.mean(y_work[next_start:next_stop])
+
+        bucket_stop = min(bucket_stop, n_work - 1)
+        if bucket_start >= bucket_stop:
+            selected = bucket_start
+        else:
+            bucket = np.arange(bucket_start, bucket_stop)
+            area = np.abs(
+                (x_work[anchor] - avg_x) * (y_work[bucket] - y_work[anchor])
+                - (x_work[anchor] - x_work[bucket]) * (avg_y - y_work[anchor])
+            )
+            selected = int(bucket[np.argmax(area)])
+
+        sampled[i + 1] = selected
+        anchor = selected
+
+    sampled = original_indices[np.unique(sampled)]
+    return x_arr[sampled], y_arr[sampled]
+
+
+def downsample_plotly_trace(
+    trace: Any,
+    *,
+    max_points: int = 10_000,
+    method: str = "lttb",
+) -> Any:
+    """Return a copy of a Plotly trace with downsampled ``x`` and ``y`` data.
+
+    Traces without ``y`` data are returned unchanged. If a trace has no ``x``
+    data, sample indices are generated.
+    """
+    y = getattr(trace, "y", None)
+    if y is None:
+        return trace
+
+    x = getattr(trace, "x", None)
+    if method == "lttb":
+        x_ds, y_ds = downsample_lttb(x, y, max_points=max_points)
+    elif method == "minmax":
+        x_ds, y_ds = downsample_minmax(x, y, max_points=max_points)
+    else:
+        raise ValueError("method must be 'lttb' or 'minmax'")
+
+    trace_data = trace.to_plotly_json()
+    trace_data["x"] = x_ds
+    trace_data["y"] = y_ds
+    return trace.__class__(trace_data)
+
+
+def downsampled_scatter(
+    *args: Any,
+    max_points: int = 10_000,
+    method: str = "lttb",
+    **kwargs: Any,
+) -> Any:
+    """Create a Plotly ``go.Scatter`` trace with downsampled line data.
+
+    The call mirrors ``plotly.graph_objects.Scatter`` and only adds the
+    ``max_points`` and ``method`` keywords:
+
+    ``fig.add_trace(pyFDN.downsampled_scatter(x=t, y=ir, max_points=5000))``
+    """
+    import plotly.graph_objects as go
+
+    return downsample_plotly_trace(
+        go.Scatter(*args, **kwargs),
+        max_points=max_points,
+        method=method,
+    )
 
 
 def plot_matrix(
@@ -179,9 +392,9 @@ def plot_impulse_response_matrix(
     title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
-    fig: plt.Figure | None = None,
+    fig: Figure | None = None,
     **plot_kwargs: Any,
-) -> tuple[plt.Figure, np.ndarray, np.ndarray]:
+) -> tuple[Figure, np.ndarray, np.ndarray]:
     """Plot matrix of impulse responses in a subplot grid (out x in).
 
     Parameters
@@ -207,6 +420,8 @@ def plot_impulse_response_matrix(
     plot_handles : ndarray of Line2D
         Shape (n_out, n_in).
     """
+    from matplotlib import pyplot as plt
+
     ir = np.asarray(ir)
     if ir.ndim != 3:
         raise ValueError("ir must be 3-D (n_samples,n_out, n_in)")

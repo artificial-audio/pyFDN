@@ -7,7 +7,7 @@ Translation of fdnMatrixGallery.m from fdnToolbox.
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import NamedTuple, NoReturn, overload
 
 import numpy as np
 
@@ -44,7 +44,6 @@ _MATRIX_TYPES = [
     "parallel",
     "permutation",
     "diagonallySimilarToOrthogonal",
-    "diagonalConjugated",
     "tinyRotation",
     "Anderson",
 ]
@@ -58,6 +57,118 @@ _SYSTEM_TYPES = [
     "SchroederReverberator",
     "allpassInFDN",
 ]
+
+# Filter (FIR paraunitary) matrix types (return (N, N, L) np.ndarray).
+_FILTER_MATRIX_TYPES = [
+    "RandomDense",
+    "Velvet",
+    "FromElementals",
+]
+
+
+@overload
+def filter_matrix_gallery(
+    N: int,
+    matrix_type: str,
+    *,
+    num_stages: int = ...,
+    sparsity: float = ...,
+    stage_matrix_type: str = ...,
+) -> np.ndarray: ...
+
+
+@overload
+def filter_matrix_gallery(
+    N: int | None = ...,
+    matrix_type: None = ...,
+    *,
+    num_stages: int = ...,
+    sparsity: float = ...,
+    stage_matrix_type: str = ...,
+) -> list[str]: ...
+
+
+@overload
+def filter_matrix_gallery(
+    N: None = ...,
+    matrix_type: str = ...,
+    *,
+    num_stages: int = ...,
+    sparsity: float = ...,
+    stage_matrix_type: str = ...,
+) -> NoReturn: ...
+
+
+def filter_matrix_gallery(
+    N: int | None = None,
+    matrix_type: str | None = None,
+    *,
+    num_stages: int = 3,
+    sparsity: float = 3.0,
+    stage_matrix_type: str = "Hadamard",
+) -> np.ndarray | list[str]:
+    """Return an FIR (filter) feedback matrix of the requested type, or list all type names.
+
+    All types are paraunitary (lossless): ``A^T(z^{-1}) A(z) = I``. Used as
+    scattering feedback matrices in an FDN (Schlecht & Habets 2020).
+
+    Args:
+        N: Matrix size.  Ignored when ``matrix_type`` is ``None``.
+        matrix_type: One of ``"RandomDense"`` (dense cascaded paraunitary
+            matrix), ``"Velvet"`` (sparse velvet-noise feedback matrix), or
+            ``"FromElementals"`` (cascade of degree-one lossless factors,
+            polynomial degree ``N * num_stages``).  Pass ``None`` (or call
+            with no arguments) to get the list of all type names.
+        num_stages: Number of cascade stages (or degree factor for
+            ``"FromElementals"``).
+        sparsity: Sparsity of the ``"Velvet"`` type (ignored otherwise).
+        stage_matrix_type: Stage matrix for ``"RandomDense"`` and ``"Velvet"``:
+            ``"Hadamard"`` or ``"random"`` (random orthogonal; avoids the
+            structural double poles at z = ±1 of Hadamard stages).
+
+    Returns:
+        Feedback matrix of shape ``(N, N, L)`` in z^{-1} convention, or a list
+        of type-name strings.
+
+    Example::
+
+        filter_matrix_gallery()              # → list of type strings
+        filter_matrix_gallery(4, "Velvet", num_stages=3, sparsity=3)
+    """
+    if matrix_type is None:
+        return list(_FILTER_MATRIX_TYPES)
+
+    if N is None:
+        raise ValueError("N must be provided when matrix_type is specified")
+
+    if matrix_type == "RandomDense":
+        from .construct_cascaded_paraunitary_matrix import (
+            construct_cascaded_paraunitary_matrix,
+        )
+
+        return construct_cascaded_paraunitary_matrix(
+            N, num_stages, matrix_type=stage_matrix_type
+        )[0]
+
+    if matrix_type == "Velvet":
+        from .construct_cascaded_paraunitary_matrix import (
+            construct_cascaded_paraunitary_matrix,
+        )
+
+        return construct_cascaded_paraunitary_matrix(
+            N, num_stages, sparsity=sparsity, matrix_type=stage_matrix_type
+        )[0]
+
+    if matrix_type == "FromElementals":
+        from .construct_paraunitary_from_elementals import (
+            construct_paraunitary_from_elementals,
+        )
+
+        return construct_paraunitary_from_elementals(N, N * num_stages)[0]
+
+    raise ValueError(
+        f"Unknown matrix_type {matrix_type!r}. Supported: {_FILTER_MATRIX_TYPES}"
+    )
 
 
 def fdn_matrix_gallery(
@@ -114,10 +225,6 @@ def fdn_matrix_gallery(
     if matrix_type == "diagonallySimilarToOrthogonal":
         D = np.diag(np.random.randn(N))
         return np.linalg.solve(D, random_orthogonal(N)) @ D
-
-    if matrix_type == "diagonalConjugated":
-        D = np.diag(np.random.choice([-1.0, 1.0], N))
-        return D @ random_orthogonal(N) @ D
 
     if matrix_type == "tinyRotation":
         import torch

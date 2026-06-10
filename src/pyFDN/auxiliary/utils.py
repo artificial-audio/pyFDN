@@ -229,8 +229,8 @@ def pole_boundaries(
     H = np.zeros((nfft, N), dtype=complex)
     G = np.zeros((nfft, N))
     for it in range(N):
-        # freqz expects (b, a) as 1D arrays
-        H[:, it], w = freqz(b[it, :], a[it, :], nfft)
+        # scipy freqz returns (w, h) — note the reversed order vs MATLAB
+        w, H[:, it] = freqz(b[it, :], a[it, :], nfft)
         # group_delay returns (w, gd)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
