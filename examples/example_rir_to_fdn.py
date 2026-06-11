@@ -246,7 +246,7 @@ def _(
     ir_fdn = np.asarray(model_eq.get_time_response().squeeze())[:rir_len]
 
     print(f"GEQ target (dB): {target_level_db.round(1)}")
-    return (ir_fdn,)
+    return ir_fdn, model_eq
 
 
 @app.cell(hide_code=True)
@@ -258,8 +258,8 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # pyFDN.plot_flamo_graph(model_eq)
+def _(model_eq, pyFDN):
+    pyFDN.plot_flamo_graph(model_eq)
     return
 
 
