@@ -95,7 +95,7 @@ def _char_to_str(a: np.ndarray) -> str | list[str]:
 def _is_mat_struct(elem: Any) -> bool:
     if not _HAVE_SCIPY:
         return False
-    mat_struct_type = getattr(sio.matlab.mio5_params, "mat_struct", None)
+    mat_struct_type = getattr(sio.matlab, "mat_struct", None)
     return mat_struct_type is not None and isinstance(elem, mat_struct_type)
 
 

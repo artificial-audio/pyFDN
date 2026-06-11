@@ -89,6 +89,14 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["*.*"]
 
+# Pytest
+# ------
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:FigureCanvasAgg is non-interactive:UserWarning",
+]
+
 # Mypy
 # ----
 

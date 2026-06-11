@@ -465,7 +465,6 @@ def optimize_diagonal_similarity_rank_defect_scipy(
             "gtol": 1e-12,
             "eps": 1e-12,
             "maxls": 80,
-            "disp": True,
         },
     )
 
