@@ -35,6 +35,7 @@ def dss_to_flamo(
     shell: bool = True,
     dtype: Any = None,
     sos_filter: np.ndarray | None = None,
+    output_filter: np.ndarray | None = None,
     post_delay_module: Any = None,
 ) -> Any:
     """
@@ -70,6 +71,10 @@ def dss_to_flamo(
         If None, wrapper defaults are used.
     sos_filter : (n_sections, 6, N) array or None
         Optional SOS filter in the loop after delays.
+    output_filter : (n_sections, 6, num_out) array or None
+        Optional SOS filter cascade applied per output channel after the
+        output gain C (e.g. an output equalizer), matching the output
+        filters of the MATLAB ``dss2impz``.
     post_delay_module : FLAMO module or None
         Optional module to append after the delay in the recursion (e.g. a Schröder allpass core).
         Must have input/output size N. Loop becomes: delay -> post_delay_module -> A.
@@ -124,15 +129,18 @@ def dss_to_flamo(
         )
 
     feedback_loop = system.Recursion(fF=delay_chain, fB=gain_A)
-    fdn_branch = system.Series(
-        OrderedDict(
-            {
-                "input_gain": gain_B,
-                "feedback_loop": feedback_loop,
-                "output_gain": gain_C,
-            }
-        )
+    fdn_modules = OrderedDict(
+        {
+            "input_gain": gain_B,
+            "feedback_loop": feedback_loop,
+            "output_gain": gain_C,
+        }
     )
+    if output_filter is not None:
+        fdn_modules["output_filter"] = sos_filter_module(
+            output_filter, nfft, device=device, dtype=dtype
+        )
+    fdn_branch = system.Series(fdn_modules)
     core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
 
     if shell:

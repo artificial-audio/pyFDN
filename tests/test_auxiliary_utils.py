@@ -14,6 +14,7 @@ from pyFDN.auxiliary.utils import (
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
+    max_corr,
     pole_boundaries,
 )
 
@@ -197,3 +198,46 @@ def test_negpolyder_preserves_length_when_requested():
     a = np.array([1.0, -0.2])
     with pytest.raises(ValueError):
         negpolyder(b, a, dont_truncate=True)
+
+
+# ============================================================================
+# max_corr Tests
+# ============================================================================
+
+
+def test_max_corr_diagonal_and_symmetry():
+    rng = np.random.default_rng(0)
+    signals = rng.standard_normal((2, 2, 256))
+    M = max_corr(signals)
+    assert M.shape == (4, 4)
+    np.testing.assert_allclose(np.diag(M), np.ones(4), atol=1e-12)
+    np.testing.assert_allclose(M, M.T, atol=1e-12)
+
+
+def test_max_corr_shifted_negated_copy():
+    # a delayed, negated copy has maximum correlation -1 at the matching lag
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(50)
+    signals = np.zeros((1, 2, 80))
+    signals[0, 0, :50] = x
+    signals[0, 1, 10:60] = -x
+    M = max_corr(signals)
+    assert M[0, 1] == pytest.approx(-1.0)
+
+
+def test_max_corr_unfolds_column_major():
+    # signal k corresponds to entry (k % N1, k // N1), as in MATLAB maxCorr.m
+    signals = np.zeros((2, 2, 16))
+    signals[1, 0, 3] = 1.0  # column-major index 1
+    signals[0, 1, 7] = 1.0  # column-major index 2
+    M = max_corr(signals)
+    assert M[1, 2] == pytest.approx(1.0)
+    assert M[0, 3] == pytest.approx(0.0)
+
+
+def test_max_corr_zero_signal_yields_zero_row():
+    signals = np.zeros((1, 2, 32))
+    signals[0, 0, 0] = 1.0
+    M = max_corr(signals)
+    assert M[0, 1] == 0.0
+    assert M[1, 1] == 0.0

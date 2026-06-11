@@ -127,6 +127,7 @@ Thumbs.db
 *.pkl
 
 !examples/resources/colorless_FDN/*.mat
+!src/pyFDN/audio/*.wav
 
 # marimo temp files
 __marimo__/

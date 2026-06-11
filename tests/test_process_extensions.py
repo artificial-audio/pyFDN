@@ -172,3 +172,41 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     )
     ir_flamo = np.asarray(model.get_time_response().squeeze())[:ir_len]
     np.testing.assert_allclose(ir_td, ir_flamo, atol=1e-6)
+
+
+def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("flamo")
+    from scipy.signal import sosfilt
+
+    np.random.seed(3)
+    n = 4
+    fs = 48000
+    delays = np.array([101, 143, 165, 177])
+    A = pyFDN.random_orthogonal(n) * 0.6  # decays well within nfft (FLAMO is circular)
+    B = np.ones((n, 1))
+    C = np.ones((1, n))
+    D = np.zeros((1, 1))
+
+    eq_sos, _ = pyFDN.design_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
+    eq_sos = eq_sos / eq_sos[:, 3:4]  # a0 = 1
+
+    def build(output_filter):
+        return pyFDN.dss_to_flamo(
+            A,
+            B,
+            C,
+            D,
+            delays,
+            fs,
+            nfft=2**14,
+            output_filter=output_filter,
+            dtype=torch.float64,
+        )
+
+    ir_len = 4096
+    ir_plain = np.asarray(build(None).get_time_response().squeeze())[:ir_len]
+    ir_eq = np.asarray(build(eq_sos[:, :, np.newaxis]).get_time_response().squeeze())[
+        :ir_len
+    ]
+    np.testing.assert_allclose(ir_eq, sosfilt(eq_sos, ir_plain), atol=1e-8)

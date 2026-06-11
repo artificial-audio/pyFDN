@@ -5,8 +5,8 @@ to pyFDN (Python).  The goal is modernisation, not a 1-to-1 port: architecture h
 shifted to NumPy/SciPy primitives, FLAMO for the differentiable DSP graph, and
 marimo for interactive examples.
 
-**Environment:** `conda activate seb312` · Python 3.12  
-**Run tests:** `/opt/homebrew/anaconda3/envs/seb312/bin/python -m pytest tests/ --ignore=tests/test_marimo_examples_run.py`
+**Environment:** repo-local `.venv` (Python 3.11) — the former conda env `seb312` no longer exists  
+**Run tests:** `.venv/bin/python -m pytest tests/ --ignore=tests/test_marimo_examples_run.py`
 
 ---
 
@@ -127,6 +127,10 @@ Key functions mapped:
 | `poleBoundaries.m` | `auxiliary/utils.py::pole_boundaries` | ✅ bug-fixed 2026-06-10 (`freqz` return order) |
 | `skew.m` | `auxiliary/utils.py::skew` | ✅ |
 | `hertz2unit.m` / `rad2hertz.m` | `auxiliary/utils.py` | ✅ |
+| `loopTF.m` | `auxiliary/math.py::loop_tf` | ✅ 2026-06-11, z^1 convention (last slice = z^0) |
+| `adjugate.m` | `auxiliary/math.py::adjugate` | ✅ 2026-06-11, SVD identity (valid for singular matrices) |
+| `adjPoly.m` | `auxiliary/math.py::adj_poly` | ✅ 2026-06-11, FFT-based; supports `z^1` and `z^-1` |
+| `maxCorr.m` | `auxiliary/utils.py::max_corr` | ✅ 2026-06-11, column-major unfolding as in MATLAB |
 | `plotImpulseResponseMatrix.m` | `auxiliary/plot.py::plot_impulse_response_matrix` | ✅ |
 | `plotSystemMatrix.m` | `auxiliary/plot.py::plot_system_matrix` | ✅ |
 | `tinyRotationMatrix.m` | `auxiliary/tiny_rotation_matrix.py` | ✅ (torch-based) |
@@ -135,7 +139,6 @@ Key functions mapped:
 
 | MATLAB | Python target | Priority | Notes |
 |--------|--------------|---------|-------|
-| `loopTF.m` | `auxiliary/loop_tf.py` | 🔜 P2 | Check FLAMO frequency-response first |
 | `tfMatrix.m` | `auxiliary/math.py` (extend) | 🔜 P2 | Check FLAMO |
 | `firMatrix.m` | `auxiliary/math.py` (extend) | 🔜 P2 | Check FLAMO |
 | `poleQuality.m` | `auxiliary/poles.py` (extend) | 🔜 P2 | Audit FLAMO optimisation coverage |
@@ -143,11 +146,10 @@ Key functions mapped:
 | `toDiagonalSimilarCanonicalForm.m` | `auxiliary/poles.py` (extend) | 🔜 P2 | As above |
 | `realLogOfNormalMatrix.m` | `auxiliary/math.py` (extend) | 🔜 P2 | |
 | `lowRankApprox.m` | `auxiliary/math.py` (extend) | 🔜 P3 | |
-| `adjPoly.m` / `adjugate.m` | `auxiliary/math.py` (extend) | 🔜 P3 | |
 | `zFDNloop.m` / `zFDNloopSimple.m` | — | ⏭ FLAMO graph |
 | `zSOS.m` / `zFilter.m` / `zDelay.m` etc. | — | ⏭ FLAMO modules |
 | `processFDN.m` / `processTransposedFDN.m` | `process.py` | ✅ / ⏭ |
-| `decayFitNet2InitialLevel.m` | — | ⛔ Standalone Python package exists |
+| `decayFitNet2InitialLevel.m` | `auxiliary/acoustics.py::estimate_initial_level_bands` | ✅ 2026-06-11 — energy-based initial level per octave band (no DecayFitNet) |
 | `printMatLatex.m` / `printMatSyntax.m` | — | ⛔ skip |
 | `generalCharPolySym.m` / `mpoly2sym.m` | — | ⛔ symbolic, skip |
 
@@ -171,7 +173,7 @@ All 29 files superseded by FLAMO (`auxiliary/flamo.py`, `auxiliary/flamo_graph.p
 
 ---
 
-## Examples — 23 + 9 allpass done ✅
+## Examples — 25 + 9 allpass done ✅
 
 | Example | Covers |
 |---------|--------|
@@ -198,6 +200,8 @@ All 29 files superseded by FLAMO (`auxiliary/flamo.py`, `auxiliary/flamo_graph.p
 | `example_fdn_eigenvectors.py` | Mode shapes from left/right eigenvectors |
 | `example_pole_boundaries.py` | Frequency-dependent pole magnitude bounds |
 | `example_scattering_fdn.py` | FIR scattering matrices + echo density |
+| `example_decorrelation.py` | Adjugate of loop TF + max-correlation analysis |
+| `example_rir_to_fdn.py` | RIR → FDN: band RT/level estimation, GEQ absorption + output EQ |
 | `allpass_FDN/` (9 files) | All allpass FDN variants |
 
 **Remaining examples:** see migration log below.
@@ -227,9 +231,9 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
 | 5 | `example_poleBoundaries.m` | `examples/example_pole_boundaries.py` | ✅ | none (FIR absorption as SOS in the FLAMO loop: `dss_to_flamo(sos_filter=...)` + `flamo_to_pr`) |
 | 6 | `example_scatteringFDN.m` | `examples/example_scattering_fdn.py` | ✅ | `generate/construct_paraunitary_from_elementals.py`; FIR feedback matrix in `process_fdn`/`dss_to_impz` |
 | 7 | `example_paraunitaryFDN.m` | `examples/example_paraunitary_fdn.py` | ✅ | FIR feedback in `process_fdn`; polynomial-A in `dss_to_flamo` + `flamo_to_pr(num_poles=...)` |
-| 8 | `example_decorrelation.m` | `examples/example_decorrelation.py` | 🔜 | `auxiliary/math.py::adjugate`, `adj_poly`, `loop_tf`; `auxiliary/utils.py::max_corr` |
+| 8 | `example_decorrelation.m` | `examples/example_decorrelation.py` | ✅ | `auxiliary/math.py::adjugate`, `adj_poly`, `loop_tf`; `auxiliary/utils.py::max_corr` (all added 2026-06-11) |
 | 9 | `example_timeVaryingFDN.m` | `examples/example_time_varying_fdn.py` | 🔜 | `dsp/complex_oscillator_bank.py`, `dsp/time_varying_matrix.py`; `process_fdn` extensions (`absorption_filters`, `extra_matrix`) |
-| 10 | `example_RIR2FDN.m` | `examples/example_rir_to_fdn.py` | 🔜 | uses `estimate_rt_bands` instead of DecayFitNet (architecture decision); copy `s3_r4_o.wav` from fdnToolbox |
+| 10 | `example_RIR2FDN.m` | `examples/example_rir_to_fdn.py` | ✅ | `estimate_rt_bands` + new `estimate_initial_level_bands` instead of DecayFitNet; `s3_r4_o.wav` copied to `src/pyFDN/audio/` |
 
 **Shared infrastructure added 2026-06-10** (for examples 5–7, 9):
 
@@ -257,6 +261,28 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
 
 **Per-example notes** (translation decisions, deviations from MATLAB):
 
+- **example_decorrelation** — faithful translation. `loop_tf` keeps the MATLAB `z^1`
+  convention (descending powers, last slice = z^0; polynomial feedback matrices are
+  multiplied through by `z^{K-1}` exactly like `loopTF.m`). `adj_poly` works internally
+  in ascending order and supports both `z^1` and pyFDN's `z^-1` convention; verified by
+  the pointwise identity `adj(P)(z) P(z) = det(P(z)) I` to 1e-15. Heatmap labels use
+  MATLAB's column-major `ind2sub` ordering, matching `max_corr`'s signal unfolding.
+  Median correlation ≈ 0.14, IQR ≈ 0.045 with the velvet matrix (seed 5).
+- **example_rir_to_fdn** — DecayFitNet replaced by `estimate_rt_bands` (Schroeder
+  backward integration via pyroomacoustics) + new `estimate_initial_level_bands`
+  (band energy matched to an exponential decay model). The output GEQ is designed from
+  the band-wise dB *difference* between the target RIR and the unequalized FDN levels
+  (self-correcting; MATLAB sets absolute DecayFitNet levels instead) — so the MATLAB
+  geomean gain alignment is unnecessary. Edge attenuation only at the extrapolated
+  DC (−5 dB) and Nyquist (−30 dB) bands, not at the measured 8 kHz band (MATLAB also
+  drops 8 kHz by 5 dB). The output GEQ sits at the end of the FLAMO graph via the
+  `output_filter` parameter added to `dss_to_flamo` (SOS cascade after the output
+  gain, like MATLAB's `dss2impz` output filters; regression test against
+  `scipy.signal.sosfilt` in `tests/test_process_extensions.py`) — `design_geq`
+  output must be normalized to a0 = 1 first. Two FLAMO runs at nfft = 2^18
+  (unequalized reference for the EQ design, then the final model); the DSP graph is
+  rendered with `draw_flamo_graph`. RT match within 3.2% in all octave bands
+  (assert at 20% as in MATLAB); whole example ≈ 7 s.
 - **example_scattering_fdn** — all four matrix types run through the time-domain
   recursion (`process_fdn` with `FIRMatrixFilter`), unlike MATLAB which wraps them in
   `zFIR`. Mixing times printed per type; echo density overlaid on the IRs.
@@ -303,11 +329,10 @@ if a later `pip install` pulls pysoundfile back in, run
 
 ### P1 — implement next
 
-1. Finish the remaining-examples migration (see migration log above): #7 paraunitary
-   (in progress), #8 decorrelation, #9 time-varying, #10 RIR2FDN
+1. Finish the remaining-examples migration (see migration log above): #9 time-varying
+   is the only one left
 2. `dsp/complex_oscillator_bank.py` + `dsp/time_varying_matrix.py` — needed by example #9
-3. `auxiliary/math.py::adjugate` / `adj_poly` / `loop_tf` + `auxiliary/utils.py::max_corr` — needed by example #8
-4. `translate/dss_to_res.py` — modal excitation (pre-computed poles → residues, 2024 paper)
+3. `translate/dss_to_res.py` — modal excitation (pre-computed poles → residues, 2024 paper)
 
 ### P2 — after FLAMO audit
 

@@ -277,6 +277,72 @@ def estimate_rt_bands(
     return rt, f_centre
 
 
+def estimate_initial_level_bands(
+    ir: ArrayLike,
+    rt: ArrayLike,
+    fs: float,
+    fc: float = 1000.0,
+    start: float = -4.0,
+    n: int = 8,
+    filter_order: int = 8,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate the initial level of the exponential decay per octave band.
+
+    Companion to :func:`estimate_rt_bands` (same octave filterbank). Models
+    the squared band-filtered impulse response as ``L^2 * 10^(-6 t / T)`` and
+    matches the total band energy: ``E = L^2 * T * fs / (6 ln 10)``, hence
+    ``L = sqrt(6 ln(10) E / (T fs))``. This replaces the DecayFitNet
+    initial-level estimate used in the MATLAB ``example_RIR2FDN``.
+
+    Parameters
+    ----------
+    ir : array-like, 1-D
+        Impulse response, starting at the onset.
+    rt : array-like
+        RT60 in seconds per band, as returned by :func:`estimate_rt_bands`
+        with the same band parameters.
+    fs : float
+        Sampling rate in Hz.
+    fc, start, n, filter_order
+        Octave filterbank parameters, see :func:`estimate_rt_bands`.
+
+    Returns
+    -------
+    level : (n_bands,) ndarray
+        Initial level (linear amplitude) per band.
+    f_centre : (n_bands,) ndarray
+        Centre frequencies in Hz corresponding to each level.
+    """
+    try:
+        import pyroomacoustics as pra
+    except ImportError as exc:
+        raise ImportError(
+            "estimate_initial_level_bands requires pyroomacoustics "
+            "(pip install pyroomacoustics)"
+        ) from exc
+
+    from scipy.signal import sosfilt
+
+    ir = np.asarray(ir, dtype=float).ravel()
+    rt = np.asarray(rt, dtype=float).ravel()
+    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
+
+    valid = bands[:, 1] < fs / 2
+    bands = bands[valid]
+    f_centre = f_centre[valid]
+    if rt.size != len(f_centre):
+        raise ValueError("rt must have one entry per octave band")
+
+    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    level = np.zeros(len(f_centre))
+    for k, sos in enumerate(sos_bank):
+        ir_band = sosfilt(sos, ir)
+        energy = np.sum(ir_band**2)
+        level[k] = np.sqrt(6.0 * np.log(10.0) * energy / (rt[k] * fs))
+
+    return level, f_centre
+
+
 def one_pole_absorption(
     rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
 ) -> np.ndarray:

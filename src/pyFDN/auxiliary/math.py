@@ -321,6 +321,112 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
     return p
 
 
+def adjugate(A: np.ndarray) -> np.ndarray:
+    """Adjugate matrix, valid also for singular and complex matrices.
+
+    Uses the SVD identity ``adj(A) = det(U V^H) V adj(S) U^H`` (with
+    ``A = U S V^H``), which holds even if A and S are singular.
+
+    Translates ``adjugate.m`` from fdnToolbox.
+    """
+    A_mat = np.asarray(A)
+    if A_mat.ndim != 2 or A_mat.shape[0] != A_mat.shape[1]:
+        raise ValueError("adjugate expects a square matrix")
+    n = A_mat.shape[0]
+    if n < 2:
+        return np.ones((1, 1), dtype=A_mat.dtype)
+    U, s, Vh = np.linalg.svd(A_mat)
+    # adj of the diagonal singular-value matrix: adj_s[j] = prod_{i != j} s[i]
+    S0 = np.tile(s[:, None], (1, n))
+    np.fill_diagonal(S0, 1.0)
+    adj_s = np.prod(S0, axis=0)
+    det_uv = np.linalg.det(U @ Vh)
+    return det_uv * (Vh.conj().T * adj_s) @ U.conj().T
+
+
+def adj_poly(
+    polynomial_matrix: ArrayLike, var: str = "z^1", tol: float = -200.0
+) -> np.ndarray:
+    """Adjugate of a polynomial matrix via FFT evaluation.
+
+    Evaluates the matrix at ``N * L`` DFT points, takes the scalar
+    :func:`adjugate` at every bin, and transforms back (approach of Henrion,
+    Hromcik & Sebek 2000; translates ``adjPoly.m``).
+
+    Parameters
+    ----------
+    polynomial_matrix : array
+        Polynomial matrix of shape (N, N, L).
+    var : str
+        Coefficient convention along axis 2:
+        ``"z^1"`` — descending powers of z, last slice = z^0 (the
+        :func:`loop_tf` convention); ``"z^-1"`` — ascending powers of z^{-1},
+        first slice = z^0 (the pyFDN convention used by
+        :func:`det_polynomial`).
+    tol : float
+        Noise floor in dB (relative to each entry's maximum) used to trim the
+        result to its actual degree.
+
+    Returns
+    -------
+    adj : ndarray
+        Adjugate polynomial matrix (N, N, degree + 1) in the same convention
+        as the input.
+    """
+    P = np.asarray(polynomial_matrix)
+    if P.ndim != 3 or P.shape[0] != P.shape[1]:
+        raise ValueError("adj_poly expects a square polynomial matrix (N, N, L)")
+    if var not in ("z^1", "z^-1"):
+        raise ValueError("var must be 'z^1' or 'z^-1'")
+    N, _, L = P.shape
+    fft_size = N * L
+
+    # work in ascending-power order; flip back at the end for z^1
+    work = np.flip(P, axis=2) if var == "z^1" else P
+    freq = np.fft.fft(work, fft_size, axis=2)
+    freq_adj = np.empty((N, N, fft_size), dtype=complex)
+    for k in range(fft_size):
+        freq_adj[:, :, k] = adjugate(freq[:, :, k])
+    adj_complex = np.fft.ifft(freq_adj, axis=2)
+    adj: np.ndarray = adj_complex.real if np.isrealobj(P) else adj_complex
+
+    max_degree = 0
+    for i in range(N):
+        for j in range(N):
+            max_degree = max(max_degree, poly_degree(adj[i, j, :], tol=tol))
+    adj = adj[:, :, : max_degree + 1]
+
+    if var == "z^1":
+        adj = np.flip(adj, axis=2)
+    return adj
+
+
+def loop_tf(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
+    """Loop transfer function ``P(z) = diag(z^m) - A`` as a polynomial matrix.
+
+    Coefficients are stored in the ``z^1`` convention along axis 2
+    (descending powers of z, last slice = z^0). A polynomial feedback matrix
+    (N, N, K) in z^{-1} convention is placed at the low-power end, i.e. the
+    result is ``diag(z^m) - z^{K-1} A(z)`` (multiplied through by ``z^{K-1}``
+    to clear negative powers), matching ``loopTF.m``.
+    """
+    m = np.asarray(delays, dtype=int).ravel()
+    N = m.size
+    A_mat = np.asarray(A, dtype=float)
+    if A_mat.ndim not in (2, 3):
+        raise ValueError("A must be 2-D (static) or 3-D (polynomial)")
+    order = A_mat.shape[2] if A_mat.ndim == 3 else 1
+    P_len = max(int(m.max()), order)
+    P = np.zeros((N, N, P_len + 1))
+    if A_mat.ndim == 2:
+        P[:, :, -1] = -A_mat
+    else:
+        P[:, :, P_len + 1 - order :] = -A_mat
+    for i in range(N):
+        P[i, i, P_len - m[i]] = 1.0
+    return P
+
+
 def matrix_polyval(P: ArrayLike, z: complex) -> np.ndarray:
     """Evaluate a matrix polynomial ``P`` at the complex point ``z``."""
 
