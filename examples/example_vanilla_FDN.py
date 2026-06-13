@@ -1,3 +1,5 @@
+# gallery_category: Getting Started
+
 import marimo
 
 __generated_with = "0.23.9"
