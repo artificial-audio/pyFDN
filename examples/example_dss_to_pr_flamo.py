@@ -16,7 +16,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # FLAMO DSS→PR (Notebook)
+    # FLAMO→PR (Notebook)
 
     **In-depth math documentation** of the refinement fix, with an **SOS filter in the loop** and plotting.
 
