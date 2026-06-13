@@ -220,264 +220,352 @@ def flamo_nodes_flat(
     return out
 
 
-def draw_flamo_graph(
+# ---------------------------------------------------------------------------
+# Matplotlib renderer
+# ---------------------------------------------------------------------------
+
+# Layout constants (abstract units; figure is scaled at the end)
+_LEAF_H = 0.9  # leaf box height
+_GAP_X = 0.6  # horizontal wire length between series elements
+_GAP_Y = 0.5  # vertical gap between parallel branches / fF and fB
+_NODE_R = 0.13  # radius of sum (+) and pickoff nodes
+_PAD = 0.3  # padding inside recursion container
+_STUB = 0.35  # split/merge wire stub length in Parallel
+
+_WIRE = "0.25"
+_LOOP_EDGE = "#b05a4a"
+
+# Leaf box colors by module category: (facecolor, edgecolor)
+_BLOCK_COLORS = {
+    "transform": ("#efefef", "#7a7a7a"),  # FFT / iFFT
+    "gain": ("#dbe9f6", "#3d6d9e"),  # gains
+    "matrix": ("#e8e1f2", "#7b5ea7"),  # mixing / feedback matrices
+    "delay": ("#fdf1d6", "#c08a2d"),  # delays
+    "filter": ("#e1efe3", "#4f8a5e"),  # filters / EQs
+    "other": ("#f5f5f5", "#8c8c8c"),
+}
+
+
+def _block_category(mod_type: str) -> str:
+    t = mod_type.lower()
+    if "fft" in t:
+        return "transform"
+    if "delay" in t:
+        return "delay"
+    if any(k in t for k in ("filter", "biquad", "svf", "geq", "peq", "eq", "sos")):
+        return "filter"
+    if any(k in t for k in ("matrix", "scattering", "householder", "hadamard")):
+        return "matrix"
+    if "gain" in t:
+        return "gain"
+    return "other"
+
+
+def _leaf_label(node: dict[str, Any]) -> str:
+    mod = node.get("module")
+    mod_type = type(mod).__name__ if mod is not None else "?"
+    name = node.get("name", "")
+    if name and name != mod_type and not name.isdigit():
+        return f"{name}\n{mod_type}"
+    return mod_type
+
+
+def _measure(node: dict[str, Any]) -> tuple[float, float, float]:
+    """
+    Bottom-up size pass. Returns (w, h, ay) where ay is the distance from the
+    top of the bounding box to the signal-flow axis. Cached in node["_size"].
+    """
+    ntype = node.get("type", "Leaf")
+
+    if ntype == "Shell":
+        parts = []
+        if node.get("input_layer") is not None:
+            parts.append(node["input_layer"])
+        parts.extend(node.get("children") or [])
+        if node.get("output_layer") is not None:
+            parts.append(node["output_layer"])
+        node["_parts"] = parts
+        sizes = [_measure(ch) for ch in parts]
+        w = sum(s[0] for s in sizes) + _GAP_X * max(len(parts) - 1, 0)
+        ay = max((s[2] for s in sizes), default=_LEAF_H / 2)
+        below = max((s[1] - s[2] for s in sizes), default=_LEAF_H / 2)
+        size = (w, ay + below, ay)
+
+    elif ntype == "Series":
+        sizes = [_measure(ch) for ch in node.get("children") or []]
+        w = sum(s[0] for s in sizes) + _GAP_X * max(len(sizes) - 1, 0)
+        ay = max((s[2] for s in sizes), default=_LEAF_H / 2)
+        below = max((s[1] - s[2] for s in sizes), default=_LEAF_H / 2)
+        size = (w, ay + below, ay)
+
+    elif ntype == "Parallel":
+        sizes = [_measure(ch) for ch in node.get("children") or []]
+        w = max((s[0] for s in sizes), default=1.0) + 2 * (_STUB + _NODE_R * 2)
+        h = sum(s[1] for s in sizes) + _GAP_Y * max(len(sizes) - 1, 0)
+        size = (w, h, h / 2)
+
+    elif ntype == "Recursion":
+        wf, hf, ayf = _measure(node["fF"]) if node.get("fF") else (1.0, _LEAF_H, 0.45)
+        wb, hb, _ = _measure(node["fB"]) if node.get("fB") else (1.0, _LEAF_H, 0.45)
+        inner_w = max(wf, wb)
+        w = _PAD + 2 * _NODE_R + _GAP_X + inner_w + _GAP_X + 2 * _NODE_R + _PAD
+        h = _PAD + hf + _GAP_Y + hb + _PAD
+        size = (w, h, _PAD + ayf)
+
+    else:  # Leaf
+        label = _leaf_label(node)
+        wmax = max(len(line) for line in label.split("\n"))
+        size = (max(1.1, 0.115 * wmax + 0.35), _LEAF_H, _LEAF_H / 2)
+
+    node["_size"] = size
+    return size
+
+
+def plot_flamo_graph(
     model: Any,
     *,
     name: str = "flamo",
-    direction: str = "TB",
-    format: str = "png",
-    include_shell_io: bool = False,
-    engine: str = "dot",
+    ax: Any = None,
+    scale: float = 0.85,
+    fontsize: float = 9.0,
 ) -> Any:
     """
-    Draw a flowchart of the FLAMO model (top-to-bottom by default for compactness).
+    Draw the FLAMO model signal flow with matplotlib.
 
-    Series and Parallel are boxes containing their child modules.
-    Recursion is a box with forward path (fF) and feedback path (fB),
-    with a dashed edge from end of fF back to start of fB to show the loop.
-
-    Requires:
-      1. The Python package: pip install graphviz
-      2. The Graphviz system binaries (the pip package alone is not enough).
-         Install the native package too, e.g.:
-         - macOS: brew install graphviz
-         - Ubuntu/Debian: sudo apt-get install graphviz
-         - Windows: install from https://graphviz.org/download/ and add bin to PATH
+    Signal flows left to right; only the feedback path of a Recursion flows
+    right to left, drawn below the forward path with a loop back to a sum
+    node at the forward path's input.
 
     Parameters
     ----------
-    model : FLAMO model
+    model : FLAMO model (Shell, Series, Parallel, Recursion, or dsp module)
     name : str
-        Name for the graph / output file.
-    direction : str
-        Graph direction: "TB" (top-bottom, default), "LR" (left-to-right), etc.
-    format : str
-        Output format: "png", "svg", "pdf", etc.
-    include_shell_io : bool
-        If True, include Shell's input_layer and output_layer in the graph.
-    engine : str
-        Graphviz engine: "dot", "neato", etc.
+        Name for the root node.
+    ax : matplotlib Axes, optional
+        Draw into this axes; otherwise a new figure sized to the layout
+        is created.
+    scale : float
+        Inches per layout unit when creating a new figure.
+    fontsize : float
+        Base font size for leaf labels.
 
     Returns
     -------
-    graph : graphviz.Digraph
-        Call .render() or .view() to save/display.
+    ax : matplotlib Axes
     """
-    try:
-        import graphviz
-    except ImportError:
-        raise ImportError(
-            "draw_flamo_graph requires the Python package graphviz (pip install graphviz)."
-        ) from None
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch
 
-    try:
-        graphviz.Digraph().pipe(format="png")  # probe for dot executable
-    except Exception as e:
-        if "ExecutableNotFound" in type(e).__name__ or (
-            "executable" in str(e).lower() and "path" in str(e).lower()
-        ):
-            raise RuntimeError(
-                "Graphviz executables (e.g. dot) not found. "
-                "Install the system Graphviz package: "
-                "macOS: brew install graphviz; "
-                "Ubuntu/Debian: sudo apt-get install graphviz; "
-                "Windows: https://graphviz.org/download/"
-            ) from e
-        raise
+    root = flamo_model_to_nodes(model, name=name, include_shell_io=True)
+    total_w, total_h, root_ay = _measure(root)
 
-    root = flamo_model_to_nodes(model, name=name, include_shell_io=include_shell_io)
-    digraph = graphviz.Digraph(name=name, format=format, engine=engine)
-    # Default layout: TB (top-bottom) for compactness; edge labels small
-    digraph.attr(
-        rankdir=direction,
-        splines="polyline",
-        nodesep="0.15",
-        ranksep="0.2",
-        fontsize="8",
-        margin="0.1,0.05",
-        pad="0.2",
-    )
-    _node_id = [0]
+    if ax is None:
+        fig_w = (total_w + 2.0) * scale
+        fig_h = (total_h + 0.8) * scale
+        _, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-    def next_id() -> str:
-        _node_id[0] += 1
-        return f"n{_node_id[0]}"
+    Point = tuple[float, float]
+    Ports = tuple[Point, Point]
 
-    def add_node(
-        dg: graphviz.Digraph,
-        nid: str,
-        label: str,
-        shape: str = "box",
-        style: str = "",
+    # y grows downward in layout; flip the axis at the end.
+    def route(
+        pts: list[Point], *, arrow: bool = True, color: str = _WIRE, ls: str = "-"
     ) -> None:
-        attrs = {"label": label, "shape": shape, "fontsize": "8", "margin": "0.05,0.02"}
-        if style:
-            attrs["style"] = style
-        dg.node(nid, **attrs)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        if len(pts) > 2:
+            ax.plot(xs[:-1], ys[:-1], color=color, lw=1.2, ls=ls, zorder=1)
+        if arrow:
+            patch = FancyArrowPatch(
+                pts[-2],
+                pts[-1],
+                arrowstyle="-|>",
+                mutation_scale=11,
+                color=color,
+                lw=1.2,
+                linestyle=ls,
+                shrinkA=0,
+                shrinkB=0,
+                zorder=1,
+            )
+            ax.add_patch(patch)
+        else:
+            ax.plot(xs[-2:], ys[-2:], color=color, lw=1.2, ls=ls, zorder=1)
 
-    def edge_label_with_ch(label: str, ch: int | None) -> str:
-        if ch is not None:
-            return f"{label} [{ch}]" if label else f"[{ch}]"
-        return label
+    def sum_node(x: float, y: float, color: str = _WIRE) -> None:
+        ax.add_patch(
+            Circle(
+                (x, y), _NODE_R, facecolor="white", edgecolor=color, lw=1.2, zorder=3
+            )
+        )
+        ax.text(
+            x,
+            y,
+            "+",
+            ha="center",
+            va="center_baseline",
+            fontsize=fontsize,
+            color=color,
+            zorder=4,
+        )
 
-    def build_graph(
-        dg: graphviz.Digraph,
-        node: dict[str, Any],
-        parent_id: str | None,
-        edge_label: str = "",
-        parent_out_ch: int | None = None,
-    ) -> tuple[str, str, int | None]:
-        """Return (first_id, last_id, output_channels) of the added subgraph."""
+    def pickoff(x: float, y: float, color: str = _WIRE) -> None:
+        ax.add_patch(Circle((x, y), 0.045, facecolor=color, edgecolor=color, zorder=3))
+
+    def xpos(x_left: float, w_total: float, off: float, w_el: float, d: int) -> float:
+        """Left edge of an element at offset `off` from the input side."""
+        return x_left + off if d > 0 else x_left + w_total - off - w_el
+
+    def draw(node: dict[str, Any], x: float, y_axis: float, d: int) -> Ports:
+        """Draw node with left edge x and flow axis y_axis, direction d (+1/-1).
+        Returns (p_in, p_out) port coordinates."""
         ntype = node.get("type", "Leaf")
-        nname = node.get("name", "?")
-        out_ch = node.get("output_channels")
+        w, h, ay = node["_size"]
+        y_top = y_axis - ay
 
-        if ntype == "Shell":
-            cid = next_id()
-            with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(
-                    label=f"Shell: {nname}", style="rounded", margin="5", fontsize="8"
-                )
-                first_id = last_id = None
-                prev = None
-                prev_ch = None
-                il_node = node.get("input_layer")
-                if il_node is not None:
-                    first_id, prev, prev_ch = build_graph(sub, il_node, None, "", None)
-                for ch in node.get("children") or []:
-                    ch_first, ch_last, ch_out = build_graph(sub, ch, prev, "", prev_ch)
-                    if first_id is None:
-                        first_id = ch_first
-                    prev = ch_last
-                    prev_ch = ch_out
-                    last_id = ch_last
-                ol_node = node.get("output_layer")
-                if ol_node is not None:
-                    _, last_id, prev_ch = build_graph(sub, ol_node, prev, "", prev_ch)
-                if first_id is None:
-                    first_id = next_id()
-                    add_node(sub, first_id, "", shape="point")
-                    last_id = last_id or first_id
-                if last_id is None:
-                    last_id = first_id
-            if parent_id is not None:
-                dg.edge(
-                    parent_id,
-                    first_id,
-                    label=edge_label_with_ch(edge_label, parent_out_ch),
-                    fontsize="7",
-                )
-            return first_id, last_id, out_ch
-
-        if ntype == "Series":
-            cid = next_id()
-            with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(
-                    label=f"Series: {nname}", style="rounded", margin="5", fontsize="8"
-                )
-                first_id = last_id = None
-                prev = parent_id
-                prev_ch = parent_out_ch
-                for ch in node.get("children") or []:
-                    ch_first, ch_last, ch_out = build_graph(sub, ch, prev, "", prev_ch)
-                    if first_id is None:
-                        first_id = ch_first
-                    prev = ch_last
-                    prev_ch = ch_out
-                    last_id = ch_last
-                if first_id is None:
-                    first_id = next_id()
-                    add_node(sub, first_id, "", shape="point")
-                    if parent_id is not None:
-                        dg.edge(
-                            parent_id,
-                            first_id,
-                            label=edge_label_with_ch(edge_label, parent_out_ch),
-                            fontsize="7",
-                        )
-                if last_id is None:
-                    last_id = first_id
-            return first_id, last_id, out_ch
+        if ntype in ("Shell", "Series"):
+            children = (
+                node["_parts"] if ntype == "Shell" else node.get("children") or []
+            )
+            if not children:
+                p = ((x, y_axis), (x + w, y_axis))
+                return p if d > 0 else (p[1], p[0])
+            off = 0.0
+            ports = []
+            prev_out = None
+            for ch in children:
+                cw, _, _ = ch["_size"]
+                cx = xpos(x, w, off, cw, d)
+                p_in, p_out = draw(ch, cx, y_axis, d)
+                if prev_out is not None:
+                    route([prev_out, p_in])
+                ports.append((p_in, p_out))
+                prev_out = p_out
+                off += cw + _GAP_X
+            return ports[0][0], ports[-1][1]
 
         if ntype == "Parallel":
-            cid = next_id()
-            with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(
-                    label=f"Parallel: {nname}",
-                    style="rounded",
-                    margin="5",
-                    fontsize="8",
+            stub = _STUB + 2 * _NODE_R
+            x_in = x if d > 0 else x + w
+            x_merge = x + w - _NODE_R if d > 0 else x + _NODE_R
+            sum_node(x_merge, y_axis)
+            pickoff(x_in, y_axis)
+            cy = y_top
+            for ch in node.get("children") or []:
+                cw, chh, cay = ch["_size"]
+                cx = xpos(x, w, stub + (max(0.0, w - 2 * stub - cw)) / 2, cw, d)
+                p_in, p_out = draw(ch, cx, cy + cay, d)
+                route([(x_in, y_axis), (x_in, p_in[1]), p_in])
+                route(
+                    [
+                        p_out,
+                        (x_merge, p_out[1]),
+                        (x_merge, y_axis - _NODE_R * _sign(y_axis - p_out[1])),
+                    ]
                 )
-                merge_id = next_id()
-                add_node(sub, merge_id, "Σ", shape="circle")
-                for ch in node.get("children") or []:
-                    ch_first, ch_last, ch_out = build_graph(
-                        sub, ch, parent_id, ch.get("name", ""), parent_out_ch
-                    )
-                    sub.edge(
-                        ch_last,
-                        merge_id,
-                        label=edge_label_with_ch("", ch_out),
-                        fontsize="7",
-                    )
-            return merge_id, merge_id, out_ch
+                cy += chh + _GAP_Y
+            p = ((x_in, y_axis), (x_merge + _NODE_R * d, y_axis))
+            return p
 
         if ntype == "Recursion":
-            cid = next_id()
-            with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(
-                    label=f"Recursion: {nname}",
-                    style="rounded,dashed",
-                    margin="5",
-                    fontsize="8",
+            # dashed container
+            ax.add_patch(
+                FancyBboxPatch(
+                    (x, y_top),
+                    w,
+                    h,
+                    boxstyle="round,pad=0.06",
+                    facecolor="none",
+                    edgecolor=_LOOP_EDGE,
+                    lw=1.0,
+                    ls=(0, (4, 3)),
+                    zorder=0,
                 )
-                fF_node = node.get("fF")
-                fB_node = node.get("fB")
-                fF_first = fF_last = None
-                fF_out_ch = None
-                if fF_node is not None:
-                    fF_first, fF_last, fF_out_ch = build_graph(
-                        sub, fF_node, parent_id, edge_label, parent_out_ch
-                    )
-                if fB_node is not None:
-                    _, fB_last, _ = build_graph(
-                        sub, fB_node, fF_last or parent_id, "fB", fF_out_ch
-                    )
-                    if fF_first is not None:
-                        sub.edge(
-                            fB_last,
-                            fF_first,
-                            label=edge_label_with_ch("feedback", fF_out_ch),
-                            style="dashed",
-                            color="gray",
-                            fontsize="7",
-                        )
-                first_id = fF_first if fF_first is not None else next_id()
-                last_id = fF_last if fF_last is not None else first_id
-                if fF_first is None and parent_id is not None:
-                    add_node(sub, first_id, "", shape="point")
-                    dg.edge(
-                        parent_id,
-                        first_id,
-                        label=edge_label_with_ch(edge_label, parent_out_ch),
-                        fontsize="7",
-                    )
-            return first_id, last_id, out_ch
+            )
+            nname = node.get("name", "")
+            if nname and not nname.isdigit():
+                ax.text(
+                    x + 0.12,
+                    y_top + 0.06,
+                    nname,
+                    ha="left",
+                    va="top",
+                    fontsize=fontsize - 1.5,
+                    color=_LOOP_EDGE,
+                    style="italic",
+                    zorder=3,
+                )
+            fF, fB = node.get("fF"), node.get("fB")
+            if fF is None:  # placeholder; matches the _measure() default size
+                fF = {
+                    "type": "Leaf",
+                    "name": "fF",
+                    "module": None,
+                    "_size": (1.0, _LEAF_H, _LEAF_H / 2),
+                }
+            wf, hf, _ = fF["_size"]
+            wb, hb, _ = fB["_size"] if fB else (0, 0, 0)
+            inner_w = max(wf, wb)
+            x_sum = xpos(x, w, _PAD + _NODE_R, 0, d)
+            x_pick = xpos(x, w, w - _PAD - _NODE_R, 0, d)
+            sum_node(x_sum, y_axis, color=_LOOP_EDGE)
+            pickoff(x_pick, y_axis)
+            fx = xpos(x, w, _PAD + 2 * _NODE_R + _GAP_X + (inner_w - wf) / 2, wf, d)
+            f_in, f_out = draw(fF, fx, y_axis, d)
+            route([(x_sum + _NODE_R * d, y_axis), f_in])
+            route([f_out, (x_pick, y_axis)], arrow=False)
+            if fB is not None:
+                yb_axis = y_top + _PAD + hf + _GAP_Y + fB["_size"][2]
+                bx = xpos(x, w, _PAD + 2 * _NODE_R + _GAP_X + (inner_w - wb) / 2, wb, d)
+                b_in, b_out = draw(fB, bx, yb_axis, -d)
+                route([(x_pick, y_axis), (x_pick, b_in[1]), b_in], color=_LOOP_EDGE)
+                route(
+                    [b_out, (x_sum, b_out[1]), (x_sum, y_axis + _NODE_R)],
+                    color=_LOOP_EDGE,
+                )
+            return (x_sum - _NODE_R * d, y_axis), (x_pick, y_axis)
 
         # Leaf
-        nid = next_id()
         mod = node.get("module")
-        mod_type = type(mod).__name__ if mod is not None else "?"
-        label = f"{nname}\n({mod_type})"
-        add_node(dg, nid, label, shape="box")
-        if parent_id is not None:
-            dg.edge(
-                parent_id,
-                nid,
-                label=edge_label_with_ch(edge_label, parent_out_ch),
-                fontsize="7",
+        face, edge = _BLOCK_COLORS[_block_category(type(mod).__name__)]
+        ax.add_patch(
+            FancyBboxPatch(
+                (x, y_top),
+                w,
+                h,
+                boxstyle="round,pad=0.02",
+                facecolor=face,
+                edgecolor=edge,
+                lw=1.2,
+                zorder=2,
             )
-        return nid, nid, out_ch
+        )
+        ax.text(
+            x + w / 2,
+            y_axis,
+            _leaf_label(node),
+            ha="center",
+            va="center",
+            fontsize=fontsize,
+            zorder=3,
+            linespacing=1.3,
+        )
+        p = ((x, y_axis), (x + w, y_axis))
+        return p if d > 0 else (p[1], p[0])
 
-    build_graph(digraph, root, None, "", None)
-    return digraph
+    def _sign(v: float) -> float:
+        return 1.0 if v >= 0 else -1.0
+
+    x0 = 1.0
+    p_in, p_out = draw(root, x0, root_ay, +1)
+    # model input / output stubs
+    route([(x0 - 0.8, p_in[1]), p_in])
+    route([p_out, (p_out[0] + 0.8, p_out[1])])
+    ax.text(x0 - 0.85, p_in[1], "in", ha="right", va="center", fontsize=fontsize)
+    ax.text(p_out[0] + 0.85, p_out[1], "out", ha="left", va="center", fontsize=fontsize)
+
+    ax.set_xlim(x0 - 1.6, x0 + total_w + 1.6)
+    ax.set_ylim(total_h + 0.4, -0.4)  # inverted: layout y grows downward
+    ax.set_aspect("equal")
+    ax.axis("off")
+    return ax

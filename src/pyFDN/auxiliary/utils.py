@@ -34,6 +34,51 @@ def ensure_3d(matrix: ArrayLike) -> np.ndarray:
     raise ValueError("Expected a 2-D or 3-D array for polynomial matrices")
 
 
+def max_corr(signals: ArrayLike) -> np.ndarray:
+    """Pairwise maximum normalized cross-correlation of a MIMO signal matrix.
+
+    The (N1, N2, time) input is unfolded column-major into K = N1 * N2
+    signals (signal ``k`` is entry ``(k % N1, k // N1)``); entry (i, j) of
+    the result is the cross-correlation value of largest magnitude between
+    signals i and j over all lags, keeping its sign, normalized so that the
+    autocorrelation at zero lag is 1.
+
+    Translates ``maxCorr.m`` (Jon Fagerström) from fdnToolbox.
+
+    Parameters
+    ----------
+    signals : array
+        MIMO signal matrix of shape (N1, N2, time), e.g. an adjugate
+        polynomial matrix from :func:`pyFDN.adj_poly`.
+
+    Returns
+    -------
+    max_corr_matrix : ndarray
+        Symmetric (K, K) matrix of signed maximum correlations.
+    """
+    from scipy.signal import correlate
+
+    sig = np.asarray(signals, dtype=float)
+    if sig.ndim != 3:
+        raise ValueError("signals must be 3-D (N1, N2, time)")
+    n1, n2, length = sig.shape
+    num = n1 * n2
+    cols = sig.transpose(2, 0, 1).reshape(length, num, order="F")
+
+    energy = np.sum(cols**2, axis=0)
+    norm = np.sqrt(np.outer(energy, energy))
+    out = np.zeros((num, num))
+    for i in range(num):
+        for j in range(i, num):
+            if norm[i, j] == 0.0:
+                continue
+            cc = correlate(cols[:, i], cols[:, j], mode="full")
+            val = cc[np.argmax(np.abs(cc))] / norm[i, j]
+            out[i, j] = val
+            out[j, i] = val
+    return out
+
+
 def last_nonzero_indices(mat: np.ndarray) -> np.ndarray:
     """Return 1-based indices of the last non-zero element along axis 2."""
 
@@ -229,8 +274,8 @@ def pole_boundaries(
     H = np.zeros((nfft, N), dtype=complex)
     G = np.zeros((nfft, N))
     for it in range(N):
-        # freqz expects (b, a) as 1D arrays
-        H[:, it], w = freqz(b[it, :], a[it, :], nfft)
+        # scipy freqz returns (w, h) — note the reversed order vs MATLAB
+        w, H[:, it] = freqz(b[it, :], a[it, :], nfft)
         # group_delay returns (w, gd)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)

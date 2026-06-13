@@ -1,16 +1,23 @@
 """Top-level package for pyFDN."""
 
+from importlib import import_module
+
 __author__ = "Facundo Franchino"
 __version__ = "0.1.0"
 
 __all__ = [
     # dsp
     "FeedbackDelay",
+    "FIRMatrixFilter",
+    "SOSFilterBank",
     # acoustics
     "absorption_filters",
     "echo_density",
+    "estimate_initial_level_bands",
+    "estimate_rt_bands",
     "absorption_to_rt",
     "edc",
+    "first_order_absorption",
     "one_pole_absorption",
     "rt_to_gain_per_sample",
     "rt_to_slope",
@@ -21,20 +28,44 @@ __all__ = [
     "mgrpdelay",
     "ms_to_smp",
     # matrix generators
+    "allpass_in_fdn",
+    "anderson_matrix",
+    "complete_orthogonal",
     "construct_cascaded_paraunitary_matrix",
+    "construct_paraunitary_from_elementals",
     "construct_velvet_feedback_matrix",
+    "degree_one_lossless",
+    "fdn_matrix_gallery",
+    "fdn_system_gallery",
+    "filter_matrix_gallery",
+    "FDNSystem",
+    "householder_matrix",
     "is_almost_zero",
+    "nearest_orthogonal",
+    "nearest_sign_agnostic_orthogonal",
     "random_matrix_shift",
     "random_orthogonal",
+    "rotation_matrix_from_angles",
+    "schroeder_reverberator",
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
-    "vanilla_FDN",
+    # graphicEQ
+    "absorption_geq",
+    "bandpass_filter",
+    "design_geq",
+    "graphic_eq",
+    "probe_sos",
+    "shelving_filter",
     # polynomial and matrix maths
+    "adj_poly",
+    "adjugate",
     "det_polynomial",
     "general_char_poly",
     "interpolate_orthogonal",
     "is_orthogonal",
+    "is_unilossless",
+    "loop_tf",
     "matrix_convolution",
     "matrix_polyder",
     "matrix_polyval",
@@ -54,6 +85,7 @@ __all__ = [
     "is_bounding_curve",
     "last_nonzero_indices",
     "lin_to_db",
+    "max_corr",
     "sq_to_db",
     "mulaw_decode",
     "mulaw_encode",
@@ -76,13 +108,23 @@ __all__ = [
     # fdn processing
     "process_fdn",
     # plotting
+    "animate",
+    "plot_db_per_sample",
+    "plot_edc",
+    "plot_fdn_parameter",
+    "plot_impulse_response",
     "plot_impulse_response_matrix",
+    "plot_matrix",
+    "plot_matrix_grid",
     "plot_system_matrix",
     "plot_spectrogram",
+    "downsample_minmax",
+    "downsample_plotly_trace",
+    "downsampled_scatter",
     # FLAMO graph
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
-    "draw_flamo_graph",
+    "plot_flamo_graph",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -113,13 +155,14 @@ __all__ = [
 ]
 
 # acoustics and absorption
-# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
-from . import auxiliary
 from .auxiliary.acoustics import (
     absorption_filters,
     absorption_to_rt,
     echo_density,
     edc,
+    estimate_initial_level_bands,
+    estimate_rt_bands,
+    first_order_absorption,
     one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
@@ -138,17 +181,21 @@ from .auxiliary.allpass import (
 # delay utilities
 from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
 from .auxiliary.flamo_graph import (
-    draw_flamo_graph,
     flamo_model_to_nodes,
     flamo_nodes_flat,
+    plot_flamo_graph,
 )
 
 # polynomial and matrix maths
 from .auxiliary.math import (
+    adj_poly,
+    adjugate,
     det_polynomial,
     general_char_poly,
     interpolate_orthogonal,
     is_orthogonal,
+    is_unilossless,
+    loop_tf,
     matrix_convolution,
     matrix_polyder,
     matrix_polyval,
@@ -162,13 +209,26 @@ from .auxiliary.math import (
 
 # plotting
 from .auxiliary.plot import (
+    animate,
+    downsample_minmax,
+    downsample_plotly_trace,
+    downsampled_scatter,
+    plot_db_per_sample,
+    plot_edc,
+    plot_fdn_parameter,
+    plot_impulse_response,
     plot_impulse_response_matrix,
+    plot_matrix,
+    plot_matrix_grid,
     plot_spectrogram,
     plot_system_matrix,
 )
 
 # tiny rotation matrix
-from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
+from .auxiliary.tiny_rotation_matrix import (
+    rotation_matrix_from_angles,
+    tiny_rotation_matrix,
+)
 
 # general utilities
 from .auxiliary.utils import (
@@ -180,6 +240,7 @@ from .auxiliary.utils import (
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
+    max_corr,
     mulaw_decode,
     mulaw_encode,
     peak_normalize,
@@ -190,7 +251,9 @@ from .auxiliary.utils import (
 )
 
 # dsp components
+from .dsp.dfilt_matrix import FIRMatrixFilter
 from .dsp.feedback_delay import FeedbackDelay
+from .dsp.sos_filter_bank import SOSFilterBank
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -212,19 +275,43 @@ from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fd
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
     rand_admissible_homogeneous_allpass,
 )
+from .generate.allpass_in_fdn import allpass_in_fdn
+from .generate.anderson_matrix import anderson_matrix
+from .generate.complete_orthogonal import complete_orthogonal
 from .generate.construct_cascaded_paraunitary_matrix import (
     construct_cascaded_paraunitary_matrix,
 )
+from .generate.construct_paraunitary_from_elementals import (
+    construct_paraunitary_from_elementals,
+)
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
+from .generate.degree_one_lossless import degree_one_lossless
+from .generate.fdn_matrix_gallery import (
+    FDNSystem,
+    fdn_matrix_gallery,
+    fdn_system_gallery,
+    filter_matrix_gallery,
+)
+from .generate.householder_matrix import householder_matrix
 from .generate.is_almost_zero import is_almost_zero
+from .generate.nearest_orthogonal import nearest_orthogonal
+from .generate.nearest_sign_agnostic_orthogonal import nearest_sign_agnostic_orthogonal
 from .generate.random_matrix_shift import random_matrix_shift
 
 # matrix generators
 from .generate.random_orthogonal import random_orthogonal
+from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .generate.vanilla_FDN import vanilla_FDN
+from .graphicEQ import (
+    absorption_geq,
+    bandpass_filter,
+    design_geq,
+    graphic_eq,
+    probe_sos,
+    shelving_filter,
+)
 
 # fdn processing
 from .process import process_fdn
@@ -245,4 +332,5 @@ from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
 
-allpass = auxiliary.allpass
+# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
+allpass = import_module(".auxiliary.allpass", __name__)

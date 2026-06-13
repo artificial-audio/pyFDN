@@ -40,7 +40,7 @@ def one_pole_absorption_reference(loadmat):
     # Extract MATLAB coefficient results
     sos_matlab = ref["absorption"]
 
-    # Generate coefficients in Python (SOS format: shape (6, N))
+    # Generate coefficients in Python (SOS bank, shape (1, 6, N))
     sos_python = one_pole_absorption(RT_DC, RT_NY, delays, fs)
 
     # Generate impulse response via FLAMO integration (if available)
@@ -56,9 +56,7 @@ def one_pole_absorption_reference(loadmat):
         delays_torch = torch.tensor(delays, dtype=torch.float32)
         feedback_matrix_torch = torch.tensor(feedback_matrix, dtype=torch.float32)
 
-        absorption_coeff = torch.tensor(
-            sos_python[np.newaxis, ...], dtype=torch.float32
-        )
+        absorption_coeff = torch.tensor(sos_python, dtype=torch.float32)
 
         input_gain = dsp.Gain(size=(N, 1), nfft=nfft, device=device)
         input_gain.assign_value(torch.ones(N, 1))
@@ -149,8 +147,8 @@ def test_coefficients(one_pole_absorption_reference):
     b_matlab = sos_matlab["b"].flatten(order="F")
     a_matlab = sos_matlab["a"].flatten(order="F")
 
-    b_python = sos_python[0, :].flatten()
-    a_python = sos_python[3:5, :].flatten()
+    b_python = sos_python[0, 0, :].flatten()
+    a_python = sos_python[0, 3:5, :].flatten()
 
     # compare coefficients
     np.testing.assert_allclose(

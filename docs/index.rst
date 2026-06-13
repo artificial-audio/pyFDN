@@ -26,7 +26,7 @@ feedback matrices, designing loop filters, and inspecting pole locations.
       :link: examples_gallery
       :link-type: doc
 
-      Interactive Jupyter notebooks covering vanilla FDNs,
+      Interactive Marimo notebooks covering vanilla FDNs,
       absorption design, coupled rooms, and more.
 
    .. grid-item-card:: API Reference

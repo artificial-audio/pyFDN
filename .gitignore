@@ -127,6 +127,10 @@ Thumbs.db
 *.pkl
 
 !examples/resources/colorless_FDN/*.mat
+!src/pyFDN/audio/*.wav
+
+# marimo temp files
+__marimo__/
 
 # Profiling outputs
 profile_default/
@@ -134,3 +138,4 @@ profile_default/
 
 # Matlab
 *.m
+*.lock

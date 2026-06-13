@@ -742,6 +742,7 @@ def flamo_to_pr(
     svd_refine: bool = True,
     symmetrize: bool = True,
     verbose: bool = True,
+    num_poles: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """Poles/residues from a FLAMO transfer ``H(z) = C(z)P(z)^{-1}B(z) + D(z)``.
 

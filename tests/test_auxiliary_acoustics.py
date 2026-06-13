@@ -63,3 +63,39 @@ def test_absorption_to_rt_handles_single_channel():
     assert freq.ndim == 1
     assert rt.shape[1] == coeffs.shape[0]
     assert np.all(np.isfinite(rt))
+
+
+def test_estimate_initial_level_bands_synthetic_decay():
+    pytest.importorskip("pyroomacoustics")
+    from pyFDN.auxiliary.acoustics import (
+        estimate_initial_level_bands,
+        estimate_rt_bands,
+    )
+
+    fs = 48000
+    rt_true = 1.5
+    level_true = 0.3
+    rng = np.random.default_rng(0)
+    n = np.arange(2 * fs)
+    ir = rng.standard_normal(len(n)) * level_true * 10 ** (-3 * n / (rt_true * fs))
+
+    rt, f_centre = estimate_rt_bands(ir, fs)
+    level, f_centre_level = estimate_initial_level_bands(ir, rt, fs)
+
+    np.testing.assert_allclose(f_centre_level, f_centre)
+    np.testing.assert_allclose(rt, rt_true, rtol=0.1)
+    # white noise: each band holds the fraction of broadband energy given by
+    # its bandwidth, so the expected band level is level_true * sqrt(bw / (fs/2))
+    import pyroomacoustics as pra
+
+    bands, _ = pra.octave_bands(fc=1000, start=-4.0, n=8)
+    expected = level_true * np.sqrt((bands[:, 1] - bands[:, 0]) / (fs / 2))
+    np.testing.assert_allclose(level, expected, rtol=0.2)
+
+
+def test_estimate_initial_level_bands_rt_length_mismatch():
+    pytest.importorskip("pyroomacoustics")
+    from pyFDN.auxiliary.acoustics import estimate_initial_level_bands
+
+    with pytest.raises(ValueError):
+        estimate_initial_level_bands(np.random.randn(48000), np.ones(3), 48000)

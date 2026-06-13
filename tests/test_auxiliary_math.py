@@ -4,8 +4,11 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.math import (
+    adj_poly,
+    adjugate,
     det_polynomial,
     general_char_poly,
+    loop_tf,
     matrix_convolution,
     matrix_polyval,
     negpolyder,
@@ -198,3 +201,85 @@ def test_general_char_poly_polynomial_A_matches_scalar():
     p_poly = general_char_poly(delays, A_poly)
     min_len = min(len(p_scalar), len(p_poly))
     np.testing.assert_allclose(p_poly[:min_len], p_scalar[:min_len], atol=1e-8)
+
+
+# ============================================================================
+# Adjugate Tests
+# ============================================================================
+
+
+def test_adjugate_satisfies_cofactor_identity():
+    rng = np.random.default_rng(0)
+    A = rng.standard_normal((4, 4))
+    adj = adjugate(A)
+    np.testing.assert_allclose(adj @ A, np.linalg.det(A) * np.eye(4), atol=1e-12)
+    np.testing.assert_allclose(A @ adj, np.linalg.det(A) * np.eye(4), atol=1e-12)
+
+
+def test_adjugate_singular_matrix():
+    # rank-1 matrix: A @ adj(A) = det(A) I = 0, but adj(A) itself is nonzero
+    # only for n == 2; for n >= 3 all cofactors of a rank-1 matrix vanish
+    rng = np.random.default_rng(1)
+    A = np.outer(rng.standard_normal(3), rng.standard_normal(3))
+    adj = adjugate(A)
+    np.testing.assert_allclose(A @ adj, np.zeros((3, 3)), atol=1e-12)
+    np.testing.assert_allclose(adj, np.zeros((3, 3)), atol=1e-12)
+
+
+def test_adjugate_2x2_closed_form():
+    A = np.array([[1.0, 2.0], [3.0, 4.0]])
+    expected = np.array([[4.0, -2.0], [-3.0, 1.0]])
+    np.testing.assert_allclose(adjugate(A), expected, atol=1e-12)
+
+
+def test_adjugate_complex_matrix():
+    rng = np.random.default_rng(2)
+    A = rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3))
+    adj = adjugate(A)
+    np.testing.assert_allclose(adj @ A, np.linalg.det(A) * np.eye(3), atol=1e-12)
+
+
+# ============================================================================
+# Loop TF and adj_poly Tests
+# ============================================================================
+
+
+def test_loop_tf_static_matrix_structure():
+    delays = np.array([2, 3])
+    A = np.array([[0.1, 0.2], [0.3, 0.4]])
+    P = loop_tf(delays, A)
+    # P(z) = diag(z^m) - A in z^1 convention, last slice = z^0
+    assert P.shape == (2, 2, 4)
+    np.testing.assert_allclose(P[:, :, -1], -A)
+    assert P[0, 0, 3 - 2] == 1.0  # z^2 coefficient of entry (0, 0)
+    assert P[1, 1, 3 - 3] == 1.0  # z^3 coefficient of entry (1, 1)
+
+
+def test_adj_poly_z1_pointwise_identity():
+    # adj(P)(z) @ P(z) = det(P(z)) I at any evaluation point
+    rng = np.random.default_rng(3)
+    delays = np.array([3, 5, 4])
+    Q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+    P = loop_tf(delays, Q)
+    adj = adj_poly(P, "z^1")
+
+    for z in [0.95 * np.exp(1j * 0.7), 1.1 * np.exp(-1j * 2.1)]:
+        Pz = matrix_polyval(P, z)
+        adj_z = matrix_polyval(adj, z)
+        np.testing.assert_allclose(adj_z @ Pz, np.linalg.det(Pz) * np.eye(3), atol=1e-9)
+
+
+def test_adj_poly_zm1_pointwise_identity():
+    rng = np.random.default_rng(4)
+    B = rng.standard_normal((3, 3, 4))
+    adj = adj_poly(B, "z^-1")
+
+    zi = 1.0 / (0.9 * np.exp(1j * 1.3))
+    Bz = sum(B[:, :, k] * zi**k for k in range(B.shape[2]))
+    adj_z = sum(adj[:, :, k] * zi**k for k in range(adj.shape[2]))
+    np.testing.assert_allclose(adj_z @ Bz, np.linalg.det(Bz) * np.eye(3), atol=1e-9)
+
+
+def test_adj_poly_rejects_unknown_convention():
+    with pytest.raises(ValueError):
+        adj_poly(np.zeros((2, 2, 3)), "z^2")

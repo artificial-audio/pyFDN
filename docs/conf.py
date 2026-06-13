@@ -9,33 +9,12 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
+from example_gallery import generate_gallery  # noqa: E402
+
 import pyFDN  # noqa: E402
 
-# -- Symlink examples into docs so nbsphinx can find them --------------------
-# Use real dir + per-notebook symlinks to avoid nbsphinx image path issues (GH#49)
-_docs_dir = os.path.dirname(os.path.abspath(__file__))
-_examples_src = os.path.join(os.path.dirname(_docs_dir), "examples")
-_examples_dst = os.path.join(_docs_dir, "examples")
-if os.path.islink(_examples_dst):
-    os.unlink(_examples_dst)
-if not os.path.exists(_examples_dst):
-    os.makedirs(_examples_dst, exist_ok=True)
-for root, _dirs, files in os.walk(_examples_src):
-    rel = os.path.relpath(root, _examples_src)
-    if rel != ".":
-        dst_sub = os.path.join(_examples_dst, rel)
-        os.makedirs(dst_sub, exist_ok=True)
-    for f in files:
-        if f.endswith(".ipynb"):
-            src_file = os.path.join(root, f)
-            dst_file = (
-                os.path.join(_examples_dst, rel, f)
-                if rel != "."
-                else os.path.join(_examples_dst, f)
-            )
-            if os.path.exists(dst_file):
-                os.unlink(dst_file)
-            os.symlink(os.path.relpath(src_file, os.path.dirname(dst_file)), dst_file)
+# Keep the gallery in sync with every marimo notebook before Sphinx reads it.
+generate_gallery()
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"
@@ -52,10 +31,10 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    "nbsphinx",
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx_autodoc_typehints",
+    "sphinx_marimo",
 ]
 
 # Autodoc settings
@@ -67,23 +46,6 @@ autosummary_imported_members = True
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 
-# nbsphinx settings
-nbsphinx_execute = "auto"  # Execute notebooks that have no stored outputs
-nbsphinx_allow_errors = False
-nbsphinx_prolog = """
-{% set docname = env.doc2path(env.docname, base=None) %}
-
-.. only:: html
-
-    .. role:: raw-html(raw)
-        :format: html
-
-    .. note::
-
-        | This page was generated from a Jupyter notebook.
-        | :raw-html:`<a href="https://github.com/artificial-audio/pyFDN/blob/main/{{ docname }}"><img src="https://img.shields.io/badge/GitHub-view%20source-blue?logo=github" alt="View on GitHub"></a>`
-        | :raw-html:`<a href="{{ env.docname.split('/')[-1] }}.ipynb" download><img src="https://img.shields.io/badge/Download-notebook-orange?logo=jupyter" alt="Download notebook"></a>`
-"""
 
 # Intersphinx mapping
 intersphinx_mapping = {
@@ -97,7 +59,7 @@ intersphinx_mapping = {
 source_suffix = ".rst"
 master_doc = "index"
 language = "en"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # Pygments
 pygments_style = "friendly"
@@ -146,3 +108,91 @@ html_sidebars = {
 latex_documents = [
     (master_doc, "pyFDN.tex", "pyFDN Documentation", author, "manual"),
 ]
+# -- Marimo configuration -----------------------------------------------------
+marimo_notebook_dir = "../examples"
+marimo_default_height = "800px"
+marimo_default_width = "100%"
+marimo_click_to_load = "overlay"  # Use overlay mode for better performance
+marimo_load_button_text = "Load Interactive Notebook"
+
+# Build notebooks serially in-process. The export-mode override below patches the
+# builder in *this* process; joblib's parallel workers spawn fresh interpreters
+# that never run conf.py, so they'd silently fall back to the hardcoded html-wasm
+# export. Caching is disabled so the static export is deterministic across builds.
+marimo_parallel_build = False
+marimo_cache_notebooks = False
+
+
+# -- Marimo export mode override ----------------------------------------------
+# sphinx-marimo hardcodes ``marimo export html-wasm``, which ships each notebook
+# as a Pyodide/WebAssembly app that executes the Python *in the browser*. Our
+# examples import ``torch`` (via ``flamo``), and PyTorch has no Pyodide build, so
+# every torch-dependent cell fails at runtime with ``ModuleNotFoundError: No
+# module named 'torch'`` and the outputs never render.
+#
+# We override the builder's per-notebook export to use the static
+# ``marimo export html`` instead. That runs each notebook once with this build's
+# real interpreter (where torch/matplotlib are installed) and bakes the rendered
+# outputs (code, plots, audio) into a self-contained HTML file. The notebooks are
+# no longer live-interactive, but they render correctly everywhere — which is the
+# only option that works for the torch/flamo examples.
+#
+# This patch lives in conf.py (our repo), so the installed sphinx-marimo package
+# stays pristine and deployment (RTD / GitHub Actions) needs no vendored changes.
+def _patch_marimo_static_export():
+    import subprocess
+
+    try:
+        from sphinx_marimo import builder as _marimo_builder
+    except Exception as exc:  # pragma: no cover - extension not installed
+        print(f"[conf.py] sphinx-marimo not importable, skipping export patch: {exc}")
+        return
+
+    def _build_notebook_impl(self, notebook_path, output_dir):
+        """Static-HTML replacement for MarimoBuilder._build_notebook_impl."""
+        from pathlib import Path
+
+        notebook_root = Path(marimo_notebook_dir).resolve()
+        try:
+            relative_path = notebook_path.relative_to(self.source_dir)
+        except ValueError:
+            relative_path = notebook_path.relative_to(notebook_root)
+
+        output_name = str(relative_path).replace("/", "_").replace(".py", "")
+        output_path = output_dir / f"{output_name}.html"
+
+        # `html` (not `html-wasm`) executes the notebook server-side with the real
+        # venv and embeds the outputs. marimo returns a non-zero exit code when any
+        # cell raises during execution, but it still writes the HTML (with the error
+        # baked in), so we log a warning and keep going rather than aborting the
+        # whole docs build on one bad notebook.
+        proc = subprocess.run(
+            [
+                "marimo",
+                "export",
+                "html",
+                str(notebook_path),
+                "-o",
+                str(output_path),
+                "--force",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            print(
+                f"[conf.py] WARNING: '{relative_path}' had cell errors during static "
+                f"export (output still written):\n{proc.stderr.strip()}"
+            )
+
+        return {
+            "name": output_name,
+            "path": str(relative_path),
+            "output": f"notebooks/{output_name}.html",
+        }
+
+    _marimo_builder.MarimoBuilder._build_notebook_impl = _build_notebook_impl
+    print("[conf.py] Patched sphinx-marimo to export static HTML (marimo export html)")
+
+
+_patch_marimo_static_export()

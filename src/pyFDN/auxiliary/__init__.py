@@ -9,7 +9,7 @@ from .allpass import (
     series_allpass,
 )
 from .flamo import delay_module, gain_module, sos_filter_module
-from .flamo_graph import draw_flamo_graph, flamo_model_to_nodes, flamo_nodes_flat
+from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, plot_flamo_graph
 from .poles import reduce_conjugate_pairs
 from .utils import skew
 
@@ -26,6 +26,6 @@ __all__ = [
     "is_paraunitary",
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
-    "draw_flamo_graph",
+    "plot_flamo_graph",
     "reduce_conjugate_pairs",
 ]

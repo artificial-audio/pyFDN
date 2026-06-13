@@ -35,6 +35,7 @@ def dss_to_flamo(
     shell: bool = True,
     dtype: Any = None,
     sos_filter: np.ndarray | None = None,
+    output_filter: np.ndarray | None = None,
     post_delay_module: Any = None,
 ) -> Any:
     """
@@ -45,8 +46,9 @@ def dss_to_flamo(
 
     Parameters
     ----------
-    A : (N, N) array
-        Feedback matrix.
+    A : (N, N) or (N, N, L) array
+        Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
+        convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
     B : (N, num_in) array
         Input gain.
     C : (num_out, N) array
@@ -69,8 +71,12 @@ def dss_to_flamo(
         If None, wrapper defaults are used.
     sos_filter : (n_sections, 6, N) array or None
         Optional SOS filter in the loop after delays.
+    output_filter : (n_sections, 6, num_out) array or None
+        Optional SOS filter cascade applied per output channel after the
+        output gain C (e.g. an output equalizer), matching the output
+        filters of the MATLAB ``dss2impz``.
     post_delay_module : FLAMO module or None
-        Optional module to append after the delay in the recursion (e.g. a Schröder allpass core).
+        Optional module to append after the delay in the recursion (e.g. a Schroeder allpass core).
         Must have input/output size N. Loop becomes: delay -> post_delay_module -> A.
 
     Returns
@@ -84,7 +90,7 @@ def dss_to_flamo(
 
     import torch
 
-    from pyFDN.auxiliary.flamo import sos_filter_module
+    from pyFDN.auxiliary.flamo import fir_matrix_module, sos_filter_module
 
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -101,7 +107,10 @@ def dss_to_flamo(
     # Delays: convert samples to seconds for FLAMO
     lengths_sec = m / float(Fs)
     delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device, dtype=dtype)
-    gain_A = gain_module(A, nfft, device=device, dtype=dtype)
+    if A.ndim == 3:
+        gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
+    else:
+        gain_A = gain_module(A, nfft, device=device, dtype=dtype)
     gain_B = gain_module(B, nfft, device=device, dtype=dtype)
     gain_C = gain_module(C, nfft, device=device, dtype=dtype)
     gain_D = gain_module(D, nfft, device=device, dtype=dtype)
@@ -120,15 +129,18 @@ def dss_to_flamo(
         )
 
     feedback_loop = system.Recursion(fF=delay_chain, fB=gain_A)
-    fdn_branch = system.Series(
-        OrderedDict(
-            {
-                "input_gain": gain_B,
-                "feedback_loop": feedback_loop,
-                "output_gain": gain_C,
-            }
-        )
+    fdn_modules = OrderedDict(
+        {
+            "input_gain": gain_B,
+            "feedback_loop": feedback_loop,
+            "output_gain": gain_C,
+        }
     )
+    if output_filter is not None:
+        fdn_modules["output_filter"] = sos_filter_module(
+            output_filter, nfft, device=device, dtype=dtype
+        )
+    fdn_branch = system.Series(fdn_modules)
     core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
 
     if shell:

@@ -11,6 +11,7 @@ from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
 from pyFDN.auxiliary.utils import ensure_3d, lin_to_db
+from pyFDN.generate.is_almost_zero import is_almost_zero
 
 if TYPE_CHECKING:
     import torch
@@ -28,6 +29,49 @@ def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray
 def is_orthogonal(Q: np.ndarray, tol: float = 1e-10) -> bool:
     """Check if Q is orthogonal (Q.T @ Q ≈ I)."""
     return np.allclose(Q.T @ Q, np.eye(Q.shape[0]), atol=tol)
+
+
+def _is_diagonally_equivalent_to_orthogonal(
+    A: np.ndarray, tol: float = 1e-10
+) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray]:
+    """Find Q = E @ A @ D with diagonal E, D such that Q is orthogonal.
+
+    Implements the Berman–Parlett–Plemmons (1981) diagonal scaling approach via
+    a rank-1 SVD of the Hadamard quotient C = inv(A) / A^T.
+
+    Returns:
+        (is_doe, Q, D, E)
+    """
+    inv_A = np.linalg.inv(A)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        C = inv_A / A.T
+    # 0/0 entries are structurally zero in both numerator and denominator;
+    # for orthogonal (or diagonally similar to orthogonal) matrices the true
+    # limit is 1, so substituting 1 preserves the expected rank-1 structure.
+    C = np.where(np.isnan(C), 1.0, C)
+    U, s, Vh = np.linalg.svd(C)
+    d2 = U[:, 0] * np.sqrt(s[0])
+    e2 = Vh[0, :] * np.sqrt(s[0])
+    # normalise so d2 is non-negative (absorb signs into e2)
+    signs = np.sign(d2)
+    d2 = d2 * signs
+    e2 = e2 * signs
+    D = np.diag(np.sqrt(d2))
+    E = np.diag(np.sqrt(e2))
+    Q = E @ A @ D
+    return is_orthogonal(Q, tol=tol), Q, D, E
+
+
+def is_unilossless(A: np.ndarray, tol: float = 1e-10) -> bool:
+    """Test whether A is diagonally similar to an orthogonal matrix.
+
+    A is unilossless if there exists a diagonal D such that D^{-1} @ A @ D is
+    orthogonal, i.e. the diagonal scaling is a similarity transform (inv(D) == E).
+
+    Translates ``isDiagonallySimilarToOrthogonal.m`` from fdnToolbox.
+    """
+    is_doe, _Q, D, E = _is_diagonally_equivalent_to_orthogonal(A, tol=tol)
+    return is_doe and is_almost_zero(np.linalg.inv(D) - E, tol=tol)
 
 
 def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:
@@ -270,11 +314,117 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
             p_ind = int(delays[ind].sum())
             sub = A[np.ix_(ind, ind, np.arange(A.shape[2]))]
             dd = det_polynomial(sub)
+            # det(A_sub(z)) * z^{-sum(m_sub)}: coefficient dd[j] of z^{-j}
+            # lands at z^{-(p_ind + j)} (matches generalCharPoly.m polyphase branch)
             for j, c in enumerate(dd):
-                idx = p_ind - j
-                if 0 <= idx < p_len:
-                    p[idx] += ((-1) ** nn) * c
+                p[p_ind + j] += ((-1) ** nn) * c
     return p
+
+
+def adjugate(A: np.ndarray) -> np.ndarray:
+    """Adjugate matrix, valid also for singular and complex matrices.
+
+    Uses the SVD identity ``adj(A) = det(U V^H) V adj(S) U^H`` (with
+    ``A = U S V^H``), which holds even if A and S are singular.
+
+    Translates ``adjugate.m`` from fdnToolbox.
+    """
+    A_mat = np.asarray(A)
+    if A_mat.ndim != 2 or A_mat.shape[0] != A_mat.shape[1]:
+        raise ValueError("adjugate expects a square matrix")
+    n = A_mat.shape[0]
+    if n < 2:
+        return np.ones((1, 1), dtype=A_mat.dtype)
+    U, s, Vh = np.linalg.svd(A_mat)
+    # adj of the diagonal singular-value matrix: adj_s[j] = prod_{i != j} s[i]
+    S0 = np.tile(s[:, None], (1, n))
+    np.fill_diagonal(S0, 1.0)
+    adj_s = np.prod(S0, axis=0)
+    det_uv = np.linalg.det(U @ Vh)
+    return det_uv * (Vh.conj().T * adj_s) @ U.conj().T
+
+
+def adj_poly(
+    polynomial_matrix: ArrayLike, var: str = "z^1", tol: float = -200.0
+) -> np.ndarray:
+    """Adjugate of a polynomial matrix via FFT evaluation.
+
+    Evaluates the matrix at ``N * L`` DFT points, takes the scalar
+    :func:`adjugate` at every bin, and transforms back (approach of Henrion,
+    Hromcik & Sebek 2000; translates ``adjPoly.m``).
+
+    Parameters
+    ----------
+    polynomial_matrix : array
+        Polynomial matrix of shape (N, N, L).
+    var : str
+        Coefficient convention along axis 2:
+        ``"z^1"`` — descending powers of z, last slice = z^0 (the
+        :func:`loop_tf` convention); ``"z^-1"`` — ascending powers of z^{-1},
+        first slice = z^0 (the pyFDN convention used by
+        :func:`det_polynomial`).
+    tol : float
+        Noise floor in dB (relative to each entry's maximum) used to trim the
+        result to its actual degree.
+
+    Returns
+    -------
+    adj : ndarray
+        Adjugate polynomial matrix (N, N, degree + 1) in the same convention
+        as the input.
+    """
+    P = np.asarray(polynomial_matrix)
+    if P.ndim != 3 or P.shape[0] != P.shape[1]:
+        raise ValueError("adj_poly expects a square polynomial matrix (N, N, L)")
+    if var not in ("z^1", "z^-1"):
+        raise ValueError("var must be 'z^1' or 'z^-1'")
+    N, _, L = P.shape
+    fft_size = N * L
+
+    # work in ascending-power order; flip back at the end for z^1
+    work = np.flip(P, axis=2) if var == "z^1" else P
+    freq = np.fft.fft(work, fft_size, axis=2)
+    freq_adj = np.empty((N, N, fft_size), dtype=complex)
+    for k in range(fft_size):
+        freq_adj[:, :, k] = adjugate(freq[:, :, k])
+    adj_complex = np.fft.ifft(freq_adj, axis=2)
+    adj: np.ndarray = adj_complex.real if np.isrealobj(P) else adj_complex
+
+    max_degree = 0
+    for i in range(N):
+        for j in range(N):
+            max_degree = max(max_degree, poly_degree(adj[i, j, :], tol=tol))
+    adj = adj[:, :, : max_degree + 1]
+
+    if var == "z^1":
+        adj = np.flip(adj, axis=2)
+    return adj
+
+
+def loop_tf(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
+    """Loop transfer function ``P(z) = diag(z^m) - A`` as a polynomial matrix.
+
+    Coefficients are stored in the ``z^1`` convention along axis 2
+    (descending powers of z, last slice = z^0). A polynomial feedback matrix
+    (N, N, K) in z^{-1} convention is placed at the low-power end, i.e. the
+    result is ``diag(z^m) - z^{K-1} A(z)`` (multiplied through by ``z^{K-1}``
+    to clear negative powers), matching ``loopTF.m``.
+    """
+    m = np.asarray(delays, dtype=int).ravel()
+    N = m.size
+    A_mat = np.asarray(A, dtype=float)
+    if A_mat.ndim not in (2, 3):
+        raise ValueError("A must be 2-D (static) or 3-D (polynomial)")
+    order = A_mat.shape[2] if A_mat.ndim == 3 else 1
+    P_len = max(int(m.max()), order)
+    P = np.zeros((N, N, P_len + 1))
+    if A_mat.ndim == 2:
+        P[:, :, -1] = -A_mat
+    else:
+        P[:, :, P_len + 1 - order :] = -A_mat
+    for i in range(N):
+        P[i, i, P_len - m[i]] = 1.0
+    return P
 
 
 def matrix_polyval(P: ArrayLike, z: complex) -> np.ndarray:

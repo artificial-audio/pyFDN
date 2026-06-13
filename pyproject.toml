@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,40 +19,45 @@ maintainers = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
 requires-python = ">=3.10"
-license = {text = "MIT license"}
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "numpy",
-  'soundfile',
+  "soundfile",
   "scipy",
   "flamo>=0.2.13",
-  "flareverb"
+  "flareverb",
+  "pyroomacoustics",
 ]
 
 [project.optional-dependencies]
+examples = [
+    "marimo",  # the example notebooks are marimo apps
+    "matplotlib>=3.5.0",  # examples build matplotlib figures
+    "plotly>=5.0.0",  # examples build plotly figures
+]
 test = [
+    "marimo",  # deps to run the example notebooks under test
+    "matplotlib>=3.5.0",
+    "plotly>=5.0.0",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
 ]
 dev = [
-    # Include everything from [test]
-    "pytest>=7.0.0",  # testing
-    "pytest-cov>=4.0.0",  # coverage plugin for pytest
-    "coverage>=7.0.0",  # coverage tooling
-    # Plus additional dev tools
+    "pyFDN[test]",  # everything from [test] (and transitively [examples])
     "tox>=4.0.0",  # multi-environment testing
     "ruff>=0.1.0",  # linting
     "mypy>=1.0.0",  # type checking
     "twine>=4.0.0",  # packaging
     "wheel>=0.40.0",  # packaging
     "build>=0.10.0",  # packaging
-    "bump2version>=1.0.0",  # version management
+    "bump-my-version>=1.0.0",  # version management
     "watchdog>=3.0.0",  # development tools
     "pre-commit>=3.0.0",  # git hooks
 ]
@@ -62,6 +67,7 @@ docs = [
     "sphinx-autodoc-typehints>=1.0.0",
     "sphinx-design>=0.5.0",
     "sphinx-copybutton>=0.5.0",
+    "sphinx-marimo",
     "nbsphinx>=0.9.0",
     "ipykernel>=6.0.0",
     "pandoc>=2.0",
@@ -83,6 +89,14 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["*.*"]
 
+# Pytest
+# ------
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:FigureCanvasAgg is non-interactive:UserWarning",
+]
+
 # Mypy
 # ----
 
@@ -96,6 +110,16 @@ warn_unreachable = true
 warn_no_return = true
 # numpy stubs legitimately return Any for many ufunc/indexing operations
 disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+# Third-party packages without complete PEP 561 typing metadata
+module = [
+    "flamo.*",
+    "plotly.*",
+    "pyroomacoustics.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # Tests: relaxed — focus on source correctness, not test annotation coverage
@@ -165,3 +189,6 @@ disable_error_code = ["no-untyped-call", "no-untyped-def", "override", "arg-type
 module = "pyFDN.auxiliary.acoustics"
 disable_error_code = ["operator", "index", "arg-type"]
 
+# Configure the max output size in Marimo notebooks
+[tool.marimo.runtime]
+output_max_bytes = 80_000_000

@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import firwin2, freqz
+from scipy.signal import firwin2, sosfreqz
 from scipy.special import erfc
 
 from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
@@ -209,12 +209,147 @@ def echo_density(
     return float(t_abel), echo_dens
 
 
+def estimate_rt_bands(
+    ir: ArrayLike,
+    fs: float,
+    fc: float = 1000.0,
+    start: float = -4.0,
+    n: int = 8,
+    filter_order: int = 8,
+    decay_db: float = 30.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate RT60 in octave bands via Butterworth bandpass filtering.
+
+    Filters the impulse response into octave bands using
+    ``pyroomacoustics.bandpass_filterbank``, then estimates RT60 per band
+    using ``pyroomacoustics.measure_rt60`` (extrapolated from ``decay_db``).
+
+    Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
+    Bands whose upper edge exceeds ``fs/2`` are dropped.
+
+    Parameters
+    ----------
+    ir : array-like, 1-D
+        Impulse response.
+    fs : float
+        Sampling rate in Hz.
+    fc : float
+        Octave-band reference centre frequency in Hz (default 1000).
+    start : float
+        Octave offset of the lowest band relative to ``fc`` (default -4 → 62.5 Hz).
+    n : int
+        Number of octave bands (default 8).
+    filter_order : int
+        Butterworth filter order (default 8).
+    decay_db : float
+        Decay range in dB used for the linear fit (default 30, i.e. RT30→RT60).
+
+    Returns
+    -------
+    rt : (n_bands,) ndarray
+        Estimated RT60 in seconds per band.
+    f_centre : (n_bands,) ndarray
+        Centre frequencies in Hz corresponding to each RT value.
+    """
+    try:
+        import pyroomacoustics as pra
+    except ImportError as exc:
+        raise ImportError(
+            "estimate_rt_bands requires pyroomacoustics (pip install pyroomacoustics)"
+        ) from exc
+
+    from scipy.signal import sosfilt
+
+    ir = np.asarray(ir, dtype=float).ravel()
+    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
+
+    # drop bands whose upper edge is at or above Nyquist
+    valid = bands[:, 1] < fs / 2
+    bands = bands[valid]
+    f_centre = f_centre[valid]
+
+    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    rt = np.zeros(len(f_centre))
+    for k, sos in enumerate(sos_bank):
+        ir_band = sosfilt(sos, ir)
+        rt[k] = pra.measure_rt60(ir_band, fs=fs, decay_db=decay_db)
+
+    return rt, f_centre
+
+
+def estimate_initial_level_bands(
+    ir: ArrayLike,
+    rt: ArrayLike,
+    fs: float,
+    fc: float = 1000.0,
+    start: float = -4.0,
+    n: int = 8,
+    filter_order: int = 8,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate the initial level of the exponential decay per octave band.
+
+    Companion to :func:`estimate_rt_bands` (same octave filterbank). Models
+    the squared band-filtered impulse response as ``L^2 * 10^(-6 t / T)`` and
+    matches the total band energy: ``E = L^2 * T * fs / (6 ln 10)``, hence
+    ``L = sqrt(6 ln(10) E / (T fs))``. This replaces the DecayFitNet
+    initial-level estimate used in the MATLAB ``example_RIR2FDN``.
+
+    Parameters
+    ----------
+    ir : array-like, 1-D
+        Impulse response, starting at the onset.
+    rt : array-like
+        RT60 in seconds per band, as returned by :func:`estimate_rt_bands`
+        with the same band parameters.
+    fs : float
+        Sampling rate in Hz.
+    fc, start, n, filter_order
+        Octave filterbank parameters, see :func:`estimate_rt_bands`.
+
+    Returns
+    -------
+    level : (n_bands,) ndarray
+        Initial level (linear amplitude) per band.
+    f_centre : (n_bands,) ndarray
+        Centre frequencies in Hz corresponding to each level.
+    """
+    try:
+        import pyroomacoustics as pra
+    except ImportError as exc:
+        raise ImportError(
+            "estimate_initial_level_bands requires pyroomacoustics "
+            "(pip install pyroomacoustics)"
+        ) from exc
+
+    from scipy.signal import sosfilt
+
+    ir = np.asarray(ir, dtype=float).ravel()
+    rt = np.asarray(rt, dtype=float).ravel()
+    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
+
+    valid = bands[:, 1] < fs / 2
+    bands = bands[valid]
+    f_centre = f_centre[valid]
+    if rt.size != len(f_centre):
+        raise ValueError("rt must have one entry per octave band")
+
+    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    level = np.zeros(len(f_centre))
+    for k, sos in enumerate(sos_bank):
+        ir_band = sosfilt(sos, ir)
+        energy = np.sum(ir_band**2)
+        level[k] = np.sqrt(6.0 * np.log(10.0) * energy / (rt[k] * fs))
+
+    return level, f_centre
+
+
 def one_pole_absorption(
     rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
 ) -> np.ndarray:
     """Design one-pole absorption filters according to specified reverb time.
 
-    Returns SOS format: shape (6, N) with [b0, b1, b2, a0, a1, a2] per channel.
+    Returns a one-section per-channel SOS bank of shape ``(1, 6, N)`` (the
+    canonical SOS bank layout; section rows are ``[b0, b1, b2, a0, a1, a2]``).
     """
     delays_arr = np.asarray(delays, dtype=float)
 
@@ -232,32 +367,97 @@ def one_pole_absorption(
     b0 = (1.0 - a1) * h_ny
 
     num_filters = h_dc.size
-    sos = np.zeros((6, num_filters))
-    sos[0, :] = b0  # b0
-    sos[3, :] = 1.0  # a0
-    sos[4, :] = a1  # a1
+    sos = np.zeros((1, 6, num_filters))
+    sos[0, 0, :] = b0  # b0
+    sos[0, 3, :] = 1.0  # a0
+    sos[0, 4, :] = a1  # a1
 
     return sos
 
 
-def sos_gain_per_sample_curves(
-    sos_6n: np.ndarray,
+def first_order_absorption(
+    rt_dc: float,
+    rt_ny: float,
     delays: ArrayLike,
-    nfft: int = 512,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Magnitude response (gain per sample vs angle) for SOS filters in (6, N) format.
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """Design first-order shelving absorption filters according to specified reverb time.
 
-    Evaluates :math:`|H(e^{j\\omega})|` at nfft angles from 0 to :math:`2\\pi` for each
-    channel, then scales by delay length so that the result is gain per sample: for
-    channel j with delay m_j, the curve is :math:`|H|^{1/m_j}`, so that after m_j
-    samples the effective gain is :math:`|H|`. Useful for plotting absorption/gain
-    curves (e.g. on a pole plot).
+    Each delay line gets a first-order shelving filter whose gain matches the
+    target decay (rt_dc at DC, rt_ny at Nyquist) for its delay length, with the
+    shelf transition at crossover_frequency.
+
+    Reference: Jot, J. M., "Proportional parametric equalizers - Application to
+    digital reverberation and environmental audio processing", AES 2015.
 
     Parameters
     ----------
-    sos_6n : (6, N) array
-        SOS coefficients with rows [b0, b1, b2, a0, a1, a2] per column (channel).
-        Same format as :func:`one_pole_absorption` returns.
+    rt_dc : float
+        Reverberation time in seconds at DC.
+    rt_ny : float
+        Reverberation time in seconds at Nyquist.
+    delays : array-like
+        Delay lengths in samples, one per channel.
+    fs : float
+        Sampling rate in Hz.
+    crossover_frequency : float, optional
+        Shelf crossover frequency in Hz. Defaults to fs/8, the midpoint of the
+        warped (bilinear) frequency axis. Values above fs/5 are clamped to fs/5
+        since a too high crossover leads to an unstable filter (fs/4 is the limit).
+
+    Returns
+    -------
+    np.ndarray
+        One-section per-channel SOS bank of shape ``(1, 6, N)`` (the canonical
+        SOS bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``
+        (b2 = a2 = 0 for these first-order filters).
+    """
+    delays_arr = np.asarray(delays, dtype=float)
+
+    h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
+    h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
+
+    if crossover_frequency is None:
+        crossover_frequency = fs / 8.0
+    crossover_frequency = min(crossover_frequency, fs / 5.0)
+    omega = crossover_frequency / fs * 2.0 * np.pi
+
+    t = np.tan(omega)
+    sqrt_k = np.sqrt(h_dc / h_ny)
+
+    b0 = (t * sqrt_k + 1.0) * h_ny
+    b1 = (t * sqrt_k - 1.0) * h_ny
+    a0 = t / sqrt_k + 1.0
+    a1 = t / sqrt_k - 1.0
+
+    sos = np.zeros((1, 6, delays_arr.size))
+    sos[0, 0, :] = b0 / a0
+    sos[0, 1, :] = b1 / a0
+    sos[0, 3, :] = 1.0
+    sos[0, 4, :] = a1 / a0
+    return sos
+
+
+def sos_gain_per_sample_curves(
+    sos: np.ndarray,
+    delays: ArrayLike,
+    nfft: int = 512,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Magnitude response (gain per sample vs angle) for a per-channel SOS bank.
+
+    Evaluates :math:`|H(e^{j\\omega})|` at ``nfft`` angles from 0 to :math:`\\pi`
+    (Nyquist) for each channel's SOS cascade, then scales by delay length so that
+    the result is gain per sample: for channel j with delay m_j, the curve is
+    :math:`|H|^{1/m_j}`, so that after m_j samples the effective gain is
+    :math:`|H|`. Useful for plotting absorption/gain curves (e.g. on a pole plot).
+
+    Parameters
+    ----------
+    sos : (n_sections, 6, N) array
+        Per-channel SOS bank; section rows are ``[b0, b1, b2, a0, a1, a2]``. Same
+        format as :func:`one_pole_absorption` / :func:`first_order_absorption`
+        return.
     delays : (N,) array-like
         Delay lengths in samples, one per channel. Used to scale gain to per-sample.
     nfft : int
@@ -266,24 +466,22 @@ def sos_gain_per_sample_curves(
     Returns
     -------
     angles : (nfft,) array
-        Angles in rad/sample, 0 to 2*pi.
+        Angles in rad/sample, 0 to pi.
     magnitude : (nfft, N) array
         Gain per sample (linear), i.e. :math:`|H(e^{j\\omega})|^{1/m}` per channel.
     """
-    sos_6n = np.asarray(sos_6n, dtype=np.float64)
+    sos = np.asarray(sos, dtype=np.float64)
     delays_arr = np.asarray(delays, dtype=np.float64).ravel()
-    if sos_6n.shape[0] != 6:
-        raise ValueError("sos_6n must have shape (6, N)")
-    N = sos_6n.shape[1]
+    if sos.ndim != 3 or sos.shape[1] != 6:
+        raise ValueError("sos must have shape (n_sections, 6, N)")
+    N = sos.shape[2]
     if delays_arr.shape[0] != N:
-        raise ValueError("delays must have length N (number of channels in sos_6n)")
+        raise ValueError("delays must have length N (number of channels in sos)")
     if np.any(delays_arr < 1):
         raise ValueError("delays must be >= 1")
     magnitude = np.zeros((nfft, N), dtype=np.float64)
+    angles = np.zeros(nfft, dtype=np.float64)
     for ch in range(N):
-        b = sos_6n[0:3, ch]
-        a = sos_6n[3:6, ch]
-        angles, h = freqz(b, a, worN=nfft)
-        mag = np.abs(h)
-        magnitude[:, ch] = np.power(mag, 1.0 / delays_arr[ch])
+        angles, h = sosfreqz(sos[:, :, ch], worN=nfft)
+        magnitude[:, ch] = np.power(np.abs(h), 1.0 / delays_arr[ch])
     return angles, magnitude
