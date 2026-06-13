@@ -152,12 +152,29 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
     assert forwarded[4] is build.D
     assert captured["kwargs"]["attenuation_sos"] is build.filters
     assert build.post_eq is not None
-    np.testing.assert_array_equal(
-        captured["kwargs"]["post_eq_sos"], build.post_eq[:, :, 0]
-    )
+    # The full (possibly multichannel) post EQ bank is forwarded unchanged.
+    assert captured["kwargs"]["post_eq_sos"] is build.post_eq
     assert captured["kwargs"]["fs"] == build.fs
     assert captured["kwargs"]["nfft"] == 1024
     assert captured["kwargs"]["title"] == "FDN"
+
+
+def test_plot_FDN_build_renders_multichannel_post_eq():
+    import pyFDN
+
+    build = pyFDN.fdn_build_gallery(
+        4,
+        num_outputs=3,
+        rt60=2.0,
+        rt60_nyquist=0.5,
+        post_eq_db_dc=[0.0, -3.0, -6.0],
+        post_eq_db_nyquist=-6.0,
+        rng=0,
+    )
+    fig = pyFDN.plot_FDN_build(build)
+
+    eq_traces = [t for t in fig.data if t.name and t.name.startswith("out ")]
+    assert len(eq_traces) == 3
 
 
 def test_plot_matrix_block_boundaries_draws_dividing_lines():

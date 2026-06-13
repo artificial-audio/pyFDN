@@ -669,8 +669,9 @@ def plot_fdn_parameter(
         Per-delay-line SOS attenuation bank, same layout as
         :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
     post_eq_sos : array-like, optional
-        Post EQ as a single SOS cascade in scipy format, shape
-        ``(n_sections, 6)`` (or ``(6,)`` for one section).
+        Post EQ as an SOS cascade in scipy format, shape ``(n_sections, 6)``
+        (or ``(6,)`` for one section) for a single output, or
+        ``(n_sections, 6, K)`` to draw one magnitude curve per output channel.
     fs : float, optional
         Sample rate in Hz. If given, the filter responses are plotted over a
         logarithmic frequency axis in Hz; otherwise over rad/sample.
@@ -784,26 +785,38 @@ def plot_fdn_parameter(
     if has_post_eq:
         sos_eq = np.asarray(post_eq_sos, dtype=float)
         if sos_eq.ndim == 1:
-            sos_eq = sos_eq.reshape(1, -1)
-        if sos_eq.ndim != 2 or sos_eq.shape[1] != 6:
-            raise ValueError("post_eq_sos must have shape (n_sections, 6)")
-        w, h = sosfreqz(sos_eq, worN=nfft)
-        mag_db = 20.0 * np.log10(np.abs(h) + np.finfo(float).tiny)
-        x = _frequency_axis(w)
-        if fs is not None:
-            x, mag_db = x[1:], mag_db[1:]
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=mag_db,
-                mode="lines",
-                line={"color": "black", "width": 1.5},
-                showlegend=False,
-                name="post EQ",
-            ),
-            row=next_row,
-            col=1,
-        )
+            sos_eq = sos_eq.reshape(1, 6, 1)
+        elif sos_eq.ndim == 2:
+            sos_eq = sos_eq[:, :, None]
+        if sos_eq.ndim != 3 or sos_eq.shape[1] != 6:
+            raise ValueError(
+                "post_eq_sos must have shape (n_sections, 6) or (n_sections, 6, K)"
+            )
+        n_out = sos_eq.shape[2]
+        if n_out == 1:
+            eq_colors = ["black"]
+        else:
+            import plotly.colors as pc
+
+            eq_colors = pc.sample_colorscale("Plasma", np.linspace(0.0, 0.9, n_out))
+        for k in range(n_out):
+            w, h = sosfreqz(sos_eq[:, :, k], worN=nfft)
+            mag_db = 20.0 * np.log10(np.abs(h) + np.finfo(float).tiny)
+            x = _frequency_axis(w)
+            if fs is not None:
+                x, mag_db = x[1:], mag_db[1:]
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=mag_db,
+                    mode="lines",
+                    line={"color": eq_colors[k], "width": 1.5},
+                    showlegend=n_out > 1,
+                    name=f"out {k}" if n_out > 1 else "post EQ",
+                ),
+                row=next_row,
+                col=1,
+            )
         _style_frequency_xaxis(next_row)
 
     fig.update_layout(
@@ -827,16 +840,9 @@ def plot_FDN_build(
 ) -> Any:
     """Plot the parameters stored in an :class:`pyFDN.FDNBuild`.
 
-    This is a convenience wrapper around :func:`plot_fdn_parameter`.
+    This is a convenience wrapper around :func:`plot_fdn_parameter`. A
+    multichannel ``build.post_eq`` is rendered as one curve per output channel.
     """
-    post_eq_sos = build.post_eq
-    if post_eq_sos is not None:
-        post_eq_sos = np.asarray(post_eq_sos)
-        if post_eq_sos.ndim == 3:
-            if post_eq_sos.shape[2] != 1:
-                raise ValueError("plot_FDN_build supports post EQ for one output")
-            post_eq_sos = post_eq_sos[:, :, 0]
-
     return plot_fdn_parameter(
         build.delays,
         build.A,
@@ -844,7 +850,7 @@ def plot_FDN_build(
         build.C,
         build.D,
         attenuation_sos=build.filters,
-        post_eq_sos=post_eq_sos,
+        post_eq_sos=build.post_eq,
         fs=build.fs,
         nfft=nfft,
         zmin=zmin,

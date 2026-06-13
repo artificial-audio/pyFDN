@@ -61,14 +61,16 @@ def _(np, pyFDN):
     np.random.seed(1)
     delays = np.array([13, 19, 23])
     build = pyFDN.fdn_build_gallery(
-        build_type="vanillaBroadband",
         delays=delays,
         io_type="ones",
         direct_gain=0.0,
-        gain_per_sample=0.98,
+        rt60=None,
         rng=1,
     )
-    A, b, c, d, delays = build.A, build.B, build.C, build.D, build.delays
+    # Bake delay-proportional broadband decay into the lossless feedback matrix.
+    delays = build.delays
+    A = np.diag(0.98**delays) @ build.A
+    b, c, d = build.B, build.C, build.D
     num_delays = delays.size
     return A, b, c, d, delays, num_delays
 

@@ -197,31 +197,53 @@ def _(mo):
 
 @app.cell
 def _(pyFDN):
-    build_types = pyFDN.fdn_build_gallery()
-    builds = {}
-    for _type in build_types:
-        _kwargs = {}
-        if _type == "vanillaFirstOrder":
-            _kwargs = {"post_eq_rt60": 1.5, "post_eq_rt60_nyquist": 0.5}
-        builds[_type] = pyFDN.fdn_build_gallery(8, _type, rng=0, **_kwargs)
-    return build_types, builds
+    builds = {
+        "lossless": pyFDN.fdn_build_gallery(8, rt60=None, rng=0),
+        "first-order absorption": pyFDN.fdn_build_gallery(
+            8, rt60=2.0, rt60_nyquist=0.5, rng=0
+        ),
+        "with post EQ": pyFDN.fdn_build_gallery(
+            8,
+            rt60=2.0,
+            rt60_nyquist=0.5,
+            post_eq_db_dc=0.0,
+            post_eq_db_nyquist=-6.0,
+            rng=0,
+        ),
+        "multichannel post EQ": pyFDN.fdn_build_gallery(
+            8,
+            num_outputs=3,
+            rt60=2.0,
+            rt60_nyquist=0.5,
+            post_eq_db_dc=[0.0, -3.0, -6.0],
+            post_eq_db_nyquist=-6.0,
+            rng=0,
+        ),
+    }
+    return (builds,)
 
 
 @app.cell
-def _(build_types, builds, mo):
+def _(builds, mo):
     mo.ui.table(
         [
             {
-                "Type": _type,
-                "Delay lines": builds[_type].delays.size,
-                "Delay range": (
-                    f"{builds[_type].delays.min()}–{builds[_type].delays.max()}"
-                ),
-                "Filters": "yes" if builds[_type].filters is not None else "no",
-                "Post EQ": "yes" if builds[_type].post_eq is not None else "no",
+                "Build": _name,
+                "Delay lines": _b.delays.size,
+                "Delay range": f"{_b.delays.min()}–{_b.delays.max()}",
+                "Filters": "yes" if _b.filters is not None else "no",
+                "Post EQ outputs": 0 if _b.post_eq is None else _b.post_eq.shape[2],
             }
-            for _type in build_types
+            for _name, _b in builds.items()
         ]
+    )
+    return
+
+
+@app.cell
+def _(builds, pyFDN):
+    pyFDN.plot_FDN_build(
+        builds["multichannel post EQ"], title="FDN build with per-output post EQ"
     )
     return
 

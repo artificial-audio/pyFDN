@@ -48,13 +48,13 @@ def _():
 
     build = pyFDN.fdn_build_gallery(
         4,
-        "vanilla",
         fs=fs,
         delay_range=(50, 101),
         num_inputs=3,
         num_outputs=2,
         io_type="identity",
         direct_gain=None,
+        rt60=None,
         rng=5,
     )
     A, B, C, D, delays = (

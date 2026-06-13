@@ -37,14 +37,15 @@ def _(np, pyFDN):
 
     delays = np.array([41, 53, 67, 79], dtype=int)
     build = pyFDN.fdn_build_gallery(
-        build_type="vanilla",
         delays=delays,
         io_type="identity",
         direct_gain=1.0,
-        feedback_gain=0.65,
+        rt60=None,
         rng=11,
     )
-    A, b, c, d, delays = build.A, build.B, build.C, build.D, build.delays
+    # Uniform feedback attenuation for a stable, decaying system to analyse.
+    A = 0.65 * build.A
+    b, c, d, delays = build.B, build.C, build.D, build.delays
     return A, b, c, d, delays
 
 

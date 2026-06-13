@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import NamedTuple, NoReturn, overload
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .householder_matrix import householder_matrix
 from .random_orthogonal import random_orthogonal
@@ -29,11 +30,11 @@ class FDNSystem(NamedTuple):
 class FDNBuild:
     """Complete FDN parameters returned by :func:`fdn_build_gallery`.
 
-    ``filters`` is either ``None`` or a per-delay SOS bank with shape
-    ``(num_sections, 6, N)`` suitable for ``dss_to_flamo(..., sos_filter=...)``.
-    ``post_eq`` is an optional per-output SOS bank with shape
-    ``(num_sections, 6, num_outputs)`` suitable for the ``output_filter``
-    argument of :func:`pyFDN.dss_to_flamo`.
+    ``filters`` is either ``None`` (lossless) or a per-delay first-order
+    absorption SOS bank with shape ``(num_sections, 6, N)`` suitable for
+    ``dss_to_flamo(..., sos_filter=...)``. ``post_eq`` is an optional per-output
+    SOS bank with shape ``(num_sections, 6, num_outputs)`` suitable for the
+    ``output_filter`` argument of :func:`pyFDN.dss_to_flamo`.
     """
 
     A: np.ndarray
@@ -78,15 +79,6 @@ _SYSTEM_TYPES = [
     "homogeneousAllpass",
     "SchroederReverberator",
     "allpassInFDN",
-]
-
-# Complete, ready-to-render FDN builds (return FDNBuild).
-_BUILD_TYPES = [
-    "vanilla",
-    "vanillaBroadband",
-    "vanillaFirstOrder",
-    "roomSmall",
-    "roomLarge",
 ]
 
 # Filter (FIR paraunitary) matrix types (return (N, N, L) np.ndarray).
@@ -151,96 +143,46 @@ def _build_io_matrices(
     return B, C, D
 
 
-def _constant_decay_filters(delays: np.ndarray, rt60: float, fs: float) -> np.ndarray:
-    from ..auxiliary.acoustics import first_order_absorption
-
-    return first_order_absorption(rt60, rt60, delays, fs)
-
-
 def _build_post_eq(
     num_outputs: int,
-    delays: np.ndarray,
     fs: float,
-    rt60_dc: float | None,
-    rt60_nyquist: float | None,
-    delay: float | None,
+    db_dc: ArrayLike | None,
+    db_nyquist: ArrayLike | None,
+    crossover_frequency: float | None,
 ) -> np.ndarray | None:
-    if rt60_dc is None:
-        if rt60_nyquist is not None or delay is not None:
-            raise ValueError("post_eq_rt60 must be provided when configuring post EQ")
+    """Per-output first-order shelving post EQ from dB gains, or ``None``."""
+    if db_dc is None and db_nyquist is None:
+        if crossover_frequency is not None:
+            raise ValueError(
+                "post_eq_db_dc or post_eq_db_nyquist must be set to configure post EQ"
+            )
         return None
-    if rt60_dc <= 0 or (rt60_nyquist is not None and rt60_nyquist <= 0):
-        raise ValueError("post EQ reverberation times must be positive")
+    if db_dc is None:
+        db_dc = db_nyquist
+    if db_nyquist is None:
+        db_nyquist = db_dc
+    assert db_dc is not None and db_nyquist is not None
 
-    from ..auxiliary.acoustics import first_order_absorption
+    def _per_output(value: ArrayLike, name: str) -> np.ndarray:
+        arr = np.asarray(value, dtype=float).ravel()
+        if arr.size == 1:
+            arr = np.full(num_outputs, arr.item())
+        if arr.size != num_outputs:
+            raise ValueError(f"{name} must be scalar or length num_outputs")
+        return arr
 
-    post_eq_delay = float(np.mean(delays)) if delay is None else float(delay)
-    if post_eq_delay <= 0:
-        raise ValueError("post_eq_delay must be positive")
-    rt60_nyquist = rt60_dc if rt60_nyquist is None else rt60_nyquist
-    return first_order_absorption(
-        rt60_dc,
-        rt60_nyquist,
-        np.full(num_outputs, post_eq_delay),
+    from ..auxiliary.acoustics import first_order_shelving_eq
+
+    return first_order_shelving_eq(
+        _per_output(db_dc, "post_eq_db_dc"),
+        _per_output(db_nyquist, "post_eq_db_nyquist"),
         fs,
+        crossover_frequency,
     )
-
-
-@overload
-def fdn_build_gallery(
-    N: int | None = ...,
-    build_type: None = ...,
-    *,
-    fs: float = ...,
-    delays: np.ndarray | None = ...,
-    delay_range: tuple[int, int] = ...,
-    sort_delays: bool = ...,
-    num_inputs: int = ...,
-    num_outputs: int = ...,
-    io_type: str = ...,
-    input_scale: float = ...,
-    output_scale: float = ...,
-    direct_gain: float | None = ...,
-    rt60: float = ...,
-    rt60_nyquist: float = ...,
-    gain_per_sample: float | None = ...,
-    feedback_gain: float = ...,
-    post_eq_rt60: float | None = ...,
-    post_eq_rt60_nyquist: float | None = ...,
-    post_eq_delay: float | None = ...,
-    rng: np.random.Generator | int | None = ...,
-) -> list[str]: ...
-
-
-@overload
-def fdn_build_gallery(
-    N: int | None = ...,
-    build_type: str = ...,
-    *,
-    fs: float = ...,
-    delays: np.ndarray | None = ...,
-    delay_range: tuple[int, int] = ...,
-    sort_delays: bool = ...,
-    num_inputs: int = ...,
-    num_outputs: int = ...,
-    io_type: str = ...,
-    input_scale: float = ...,
-    output_scale: float = ...,
-    direct_gain: float | None = ...,
-    rt60: float = ...,
-    rt60_nyquist: float = ...,
-    gain_per_sample: float | None = ...,
-    feedback_gain: float = ...,
-    post_eq_rt60: float | None = ...,
-    post_eq_rt60_nyquist: float | None = ...,
-    post_eq_delay: float | None = ...,
-    rng: np.random.Generator | int | None = ...,
-) -> FDNBuild: ...
 
 
 def fdn_build_gallery(
     N: int | None = None,
-    build_type: str | None = None,
     *,
     fs: float = 48_000.0,
     delays: np.ndarray | None = None,
@@ -252,35 +194,29 @@ def fdn_build_gallery(
     input_scale: float = 1.0,
     output_scale: float = 1.0,
     direct_gain: float | None = 0.0,
-    rt60: float = 2.0,
-    rt60_nyquist: float = 0.5,
-    gain_per_sample: float | None = None,
-    feedback_gain: float = 1.0,
-    post_eq_rt60: float | None = None,
-    post_eq_rt60_nyquist: float | None = None,
-    post_eq_delay: float | None = None,
+    rt60: float | None = 2.0,
+    rt60_nyquist: float | None = None,
+    rt_crossover_frequency: float | None = None,
+    post_eq_db_dc: ArrayLike | None = None,
+    post_eq_db_nyquist: ArrayLike | None = None,
+    post_eq_crossover: float | None = None,
     rng: np.random.Generator | int | None = None,
-) -> FDNBuild | list[str]:
-    """Return a complete FDN build or list the available preset types.
+) -> FDNBuild:
+    """Build a complete FDN from a delay range, a reverberation time, and an EQ.
 
-    The vanilla presets share configurable delays and I/O matrices:
+    The feedback matrix ``A`` is a random orthogonal matrix. In-loop decay is
+    realised as per-delay first-order shelving absorption filters matching
+    ``rt60`` at DC and ``rt60_nyquist`` at Nyquist; pass ``rt60=None`` for a
+    lossless FDN (``filters=None``). An
+    optional per-output first-order shelving post EQ is specified directly in
+    decibels at DC and Nyquist.
 
-    - ``"vanilla"`` uses an orthogonal feedback matrix without decay filters.
-    - ``"vanillaBroadband"`` puts delay-proportional broadband decay in ``A``.
-    - ``"vanillaFirstOrder"`` keeps ``A`` orthogonal and returns first-order
-      absorption filters for the requested DC and Nyquist reverberation times.
-    - ``"roomSmall"`` and ``"roomLarge"`` use short and long random delay
-      ranges respectively. Their size is configurable and they include
-      broadband absorption filters.
-
-    Random presets use a local :class:`numpy.random.Generator`; passing an
-    integer or generator makes the build reproducible without mutating NumPy's
-    global random state. The default presets are deterministic.
+    Delays and I/O matrices use a local :class:`numpy.random.Generator`; passing
+    an integer or generator makes the build reproducible without mutating
+    NumPy's global random state.
 
     Args:
-        N: Number of delay lines. Inferred from ``delays`` when possible and
-            defaults to six for room presets.
-        build_type: Preset name, or ``None`` to list available names.
+        N: Number of delay lines. Inferred from ``delays`` when given.
         fs: Sample rate in Hz.
         delays: Optional explicit delay lengths in samples.
         delay_range: Half-open random delay range when ``delays`` is omitted.
@@ -292,68 +228,27 @@ def fdn_build_gallery(
         input_scale: Scalar applied to ``B``.
         output_scale: Scalar applied to ``C``.
         direct_gain: Constant direct gain, or ``None`` for random ``D``.
-        rt60: Broadband or DC reverberation time in seconds.
-        rt60_nyquist: Nyquist reverberation time for first-order absorption.
-        gain_per_sample: Optional explicit broadband gain, overriding ``rt60``.
-        feedback_gain: Scalar applied to the orthogonal feedback matrix.
-        post_eq_rt60: Optional post-EQ reverberation time at DC. Providing it
-            enables a first-order output filter.
-        post_eq_rt60_nyquist: Optional post-EQ reverberation time at Nyquist.
-            Defaults to ``post_eq_rt60`` for a flat output gain.
-        post_eq_delay: Effective delay used to turn post-EQ reverberation times
-            into filter gains. Defaults to the mean FDN delay.
+        rt60: Reverberation time in seconds at DC, or ``None`` for a lossless
+            FDN with no in-loop absorption filters.
+        rt60_nyquist: Reverberation time in seconds at Nyquist. Defaults to
+            ``rt60`` (frequency-flat decay).
+        rt_crossover_frequency: Shelf crossover for the absorption filters in Hz.
+        post_eq_db_dc: Post-EQ gain in dB at DC, scalar or length ``num_outputs``.
+            Setting either post-EQ argument enables a per-output output filter.
+        post_eq_db_nyquist: Post-EQ gain in dB at Nyquist, scalar or length
+            ``num_outputs``. Defaults to ``post_eq_db_dc`` (flat gain).
+        post_eq_crossover: Shelf crossover for the post EQ in Hz.
         rng: Local NumPy generator or integer seed.
 
     Returns:
-        A complete :class:`FDNBuild`, or the list of preset names.
+        A complete :class:`FDNBuild`.
     """
-    if build_type is None:
-        return list(_BUILD_TYPES)
-    if build_type not in _BUILD_TYPES:
-        raise ValueError(
-            f"Unknown build_type {build_type!r}. Supported: {_BUILD_TYPES}"
-        )
     if fs <= 0:
         raise ValueError("fs must be positive")
-    if rt60 <= 0 or rt60_nyquist <= 0:
-        raise ValueError("reverberation times must be positive")
-
-    room_presets = {
-        "roomSmall": ((400, 800), 0.525, 5),
-        "roomLarge": ((1100, 2600), 4.2, 6),
-    }
-    if build_type in room_presets:
-        room_delay_range, preset_rt60, default_seed = room_presets[build_type]
-        if delays is not None:
-            raise ValueError(f"{build_type} generates its delay lengths")
-        N = 6 if N is None else N
-        if N < 1:
-            raise ValueError("N must be positive")
-        local_rng = _build_rng(rng, default_seed)
-        delays_array = local_rng.integers(*room_delay_range, size=N)
-        if sort_delays:
-            delays_array = np.sort(delays_array)
-        A = _random_orthogonal(N, local_rng)
-        B, C, D = _build_io_matrices(
-            N,
-            num_inputs,
-            num_outputs,
-            io_type,
-            input_scale,
-            output_scale,
-            direct_gain,
-            local_rng,
-        )
-        room_filters = _constant_decay_filters(delays_array, preset_rt60, fs)
-        post_eq = _build_post_eq(
-            num_outputs,
-            delays_array,
-            fs,
-            post_eq_rt60,
-            post_eq_rt60_nyquist,
-            post_eq_delay,
-        )
-        return FDNBuild(A, B, C, D, delays_array, float(fs), room_filters, post_eq)
+    if rt60 is not None and rt60 <= 0:
+        raise ValueError("rt60 must be positive")
+    if rt60_nyquist is not None and rt60_nyquist <= 0:
+        raise ValueError("rt60_nyquist must be positive")
 
     if delays is not None:
         delays_array = np.asarray(delays, dtype=int).ravel()
@@ -361,22 +256,24 @@ def fdn_build_gallery(
             N = delays_array.size
         elif delays_array.size != N:
             raise ValueError("delays must contain exactly N values")
+        local_rng = _build_rng(rng, 0)
     else:
         if N is None:
-            raise ValueError("N must be provided for vanilla builds")
+            raise ValueError("N must be provided when delays is omitted")
         low, high = delay_range
         if low < 1 or high <= low:
             raise ValueError("delay_range must satisfy 1 <= low < high")
         local_rng = _build_rng(rng, 0)
         delays_array = local_rng.integers(low, high, size=N)
 
+    if N < 1:
+        raise ValueError("N must be positive")
     if sort_delays:
         delays_array = np.sort(delays_array)
-
     if np.any(delays_array < 1):
         raise ValueError("all delays must be positive")
-    local_rng = _build_rng(rng, 0) if delays is not None else local_rng
-    A = feedback_gain * _random_orthogonal(N, local_rng)
+
+    A = _random_orthogonal(N, local_rng)
     B, C, D = _build_io_matrices(
         N,
         num_inputs,
@@ -389,26 +286,16 @@ def fdn_build_gallery(
     )
 
     filters: np.ndarray | None = None
-    if build_type == "vanillaBroadband":
-        if gain_per_sample is None:
-            from ..auxiliary.acoustics import rt_to_gain_per_sample
-
-            gain_per_sample = rt_to_gain_per_sample(rt60, fs)
-        if not 0 < gain_per_sample <= 1:
-            raise ValueError("gain_per_sample must be in (0, 1]")
-        A = np.diag(gain_per_sample**delays_array) @ A
-    elif build_type == "vanillaFirstOrder":
+    if rt60 is not None:
         from ..auxiliary.acoustics import first_order_absorption
 
-        filters = first_order_absorption(rt60, rt60_nyquist, delays_array, float(fs))
+        rt_ny = rt60 if rt60_nyquist is None else rt60_nyquist
+        filters = first_order_absorption(
+            rt60, rt_ny, delays_array, float(fs), rt_crossover_frequency
+        )
 
     post_eq = _build_post_eq(
-        num_outputs,
-        delays_array,
-        fs,
-        post_eq_rt60,
-        post_eq_rt60_nyquist,
-        post_eq_delay,
+        num_outputs, float(fs), post_eq_db_dc, post_eq_db_nyquist, post_eq_crossover
     )
     return FDNBuild(A, B, C, D, delays_array, float(fs), filters, post_eq)
 

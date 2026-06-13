@@ -40,5 +40,5 @@ def test_flamo_model_to_fdn_parameters_from_dss_model():
     np.testing.assert_allclose(parameters.C, C)
     np.testing.assert_allclose(parameters.D, D)
     np.testing.assert_allclose(parameters.attenuation_sos, attenuation)
-    np.testing.assert_allclose(parameters.post_eq_sos, post_eq[:, :, 0])
+    np.testing.assert_allclose(parameters.post_eq_sos, post_eq)
     assert parameters.fs == 48_000

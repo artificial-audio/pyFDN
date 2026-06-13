@@ -120,11 +120,11 @@ def _(est_rt, fs, np, pyFDN):
     num_delays = 16
     build = pyFDN.fdn_build_gallery(
         num_delays,
-        "vanilla",
         fs=fs,
         delay_range=(500, 3500),
         io_type="ones",
         direct_gain=0.0,
+        rt60=None,
         rng=5,
     )
     delays = build.delays

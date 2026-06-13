@@ -364,9 +364,7 @@ def flamo_model_to_fdn_parameters(model: Any) -> FlamoFDNParameters:
     if len(post_eq_matches) == 1:
         post_eq_value = _module_value(post_eq_matches[0]["module"])
         if post_eq_value.ndim == 3 and post_eq_value.shape[1] == 6:
-            first_output = post_eq_value[:, :, 0]
-            if np.allclose(post_eq_value, first_output[:, :, None]):
-                post_eq_sos = np.asarray(first_output, dtype=float)
+            post_eq_sos = np.asarray(post_eq_value, dtype=float)
 
     fs_value = getattr(delay_module, "fs", None)
     fs = float(fs_value) if fs_value is not None else None

@@ -232,11 +232,11 @@ def _(np, pyFDN, torch):
     Fs = 48000.0
     delays = np.array([531, 673, 798, 977], dtype=int)
     build = pyFDN.fdn_build_gallery(
-        build_type="vanilla",
         fs=Fs,
         delays=delays,
         io_type="identity",
         direct_gain=0.0,
+        rt60=None,
         rng=7,
     )
 

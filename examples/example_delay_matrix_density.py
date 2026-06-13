@@ -18,7 +18,7 @@ def _(mo):
 
     This example compares three FDN topologies and their **echo density** (Abel & Huang 2006):
 
-    1. **Vanilla FDN** — Build a complete broadband-decay preset with `pyFDN.fdn_build_gallery` and render it with `pyFDN.dss_to_flamo`.
+    1. **Vanilla FDN** — Build a complete FDN with `pyFDN.fdn_build_gallery`, bake in broadband decay, and render it with `pyFDN.dss_to_flamo`.
     2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
     3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
 
@@ -88,18 +88,19 @@ def _(mo):
 
 
 @app.cell
-def _(fs, gain_per_sample, nfft, pyFDN, total_delay):
+def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
     build = pyFDN.fdn_build_gallery(
-        build_type="vanillaBroadband",
         fs=fs,
         delays=total_delay,
         io_type="ones",
         direct_gain=1.0,
-        gain_per_sample=gain_per_sample,
+        rt60=None,
         rng=42,
     )
+    # Bake delay-proportional broadband decay into the lossless feedback matrix.
+    A = np.diag(gain_per_sample**build.delays) @ build.A
     model = pyFDN.dss_to_flamo(
-        build.A,
+        A,
         build.B,
         build.C,
         build.D,

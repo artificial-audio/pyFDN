@@ -417,6 +417,24 @@ def first_order_absorption(
 
     h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
     h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
+    return _first_order_shelf(h_dc, h_ny, fs, crossover_frequency)
+
+
+def _first_order_shelf(
+    h_dc: np.ndarray,
+    h_ny: np.ndarray,
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """First-order shelving SOS bank from target linear gains at DC and Nyquist.
+
+    Shared core of :func:`first_order_absorption` and
+    :func:`first_order_shelving_eq`. ``h_dc`` and ``h_ny`` are linear-magnitude
+    gains (one per channel); returns a one-section per-channel SOS bank of shape
+    ``(1, 6, N)``.
+    """
+    h_dc = np.asarray(h_dc, dtype=float)
+    h_ny = np.asarray(h_ny, dtype=float)
 
     if crossover_frequency is None:
         crossover_frequency = fs / 8.0
@@ -431,12 +449,51 @@ def first_order_absorption(
     a0 = t / sqrt_k + 1.0
     a1 = t / sqrt_k - 1.0
 
-    sos = np.zeros((1, 6, delays_arr.size))
+    sos = np.zeros((1, 6, h_dc.size))
     sos[0, 0, :] = b0 / a0
     sos[0, 1, :] = b1 / a0
     sos[0, 3, :] = 1.0
     sos[0, 4, :] = a1 / a0
     return sos
+
+
+def first_order_shelving_eq(
+    db_dc: ArrayLike,
+    db_nyquist: ArrayLike,
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """Design first-order shelving EQ filters from gains in dB at DC and Nyquist.
+
+    Unlike :func:`first_order_absorption` (whose gains are derived from a
+    reverberation time and a delay length), the shelf endpoints are specified
+    directly as decibel gains. Useful as a per-output tone correction (post EQ).
+
+    Parameters
+    ----------
+    db_dc : array-like
+        Gain in dB at DC, scalar or one value per channel.
+    db_nyquist : array-like
+        Gain in dB at Nyquist, scalar or one value per channel. Broadcast
+        against ``db_dc`` to a common number of channels.
+    fs : float
+        Sampling rate in Hz.
+    crossover_frequency : float, optional
+        Shelf crossover frequency in Hz. Defaults to fs/8; clamped to fs/5.
+
+    Returns
+    -------
+    np.ndarray
+        One-section per-channel SOS bank of shape ``(1, 6, N)`` (canonical SOS
+        bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``.
+    """
+    db_dc_arr, db_ny_arr = np.broadcast_arrays(
+        np.asarray(db_dc, dtype=float).ravel(),
+        np.asarray(db_nyquist, dtype=float).ravel(),
+    )
+    return _first_order_shelf(
+        db_to_lin(db_dc_arr), db_to_lin(db_ny_arr), fs, crossover_frequency
+    )
 
 
 def sos_gain_per_sample_curves(

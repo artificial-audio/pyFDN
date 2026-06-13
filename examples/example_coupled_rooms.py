@@ -67,8 +67,12 @@ def _(pyFDN, torch):
 
     N1 = 6
     N2 = 6
-    small_room = pyFDN.fdn_build_gallery(N1, "roomSmall", fs=fs, io_type="ones", rng=5)
-    large_room = pyFDN.fdn_build_gallery(N2, "roomLarge", fs=fs, io_type="ones", rng=6)
+    small_room = pyFDN.fdn_build_gallery(
+        N1, fs=fs, delay_range=(400, 800), rt60=0.525, io_type="ones", rng=5
+    )
+    large_room = pyFDN.fdn_build_gallery(
+        N2, fs=fs, delay_range=(1100, 2600), rt60=4.2, io_type="ones", rng=6
+    )
     N = N1 + N2
     ix1 = slice(0, N1)  # indices for room 1
     ix2 = slice(N1, N)  # indices for room 2
@@ -119,8 +123,8 @@ def _(mo):
     mo.md(r"""
     ## Feedback matrix
 
-    Couple the orthogonal feedback matrices supplied by the `roomSmall` and
-    `roomLarge` gallery builds.
+    Couple the orthogonal feedback matrices of the small-room and large-room
+    gallery builds.
     """)
     return
 
@@ -231,7 +235,7 @@ def _(N, device, dsp, large_room, nfft, np, small_room, torch):
         size=(N,), nfft=nfft, requires_grad=False, device=device
     )
     attenuation.assign_value(attenuation_values)
-    print("Using roomSmall and roomLarge gallery absorption")
+    print("Using small-room and large-room gallery absorption")
     return (attenuation,)
 
 

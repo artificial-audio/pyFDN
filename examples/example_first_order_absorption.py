@@ -54,11 +54,11 @@ def _(np, pyFDN):
     rt_dc = 2.0  # T60 at DC (seconds)
     rt_ny = 0.5  # T60 at Nyquist (seconds)
     build = pyFDN.fdn_build_gallery(
-        build_type="vanilla",
         fs=fs,
         delays=delays,
         io_type="ones",
         direct_gain=1.0,
+        rt60=None,
         rng=1,
     )
     feedback_matrix = build.A

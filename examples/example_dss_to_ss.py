@@ -40,14 +40,16 @@ def _():
 
     m = np.array([13, 19, 23])
     build = pyFDN.fdn_build_gallery(
-        build_type="vanillaBroadband",
         delays=m,
         io_type="random",
         direct_gain=None,
-        gain_per_sample=0.9,
+        rt60=None,
         rng=1,
     )
-    A, b, c, d, m = build.A, build.B, build.C, build.D, build.delays
+    # Bake delay-proportional broadband decay into the lossless feedback matrix.
+    m = build.delays
+    A = np.diag(0.9**m) @ build.A
+    b, c, d = build.B, build.C, build.D
 
     # Convert delay state-space to single state-space system
     aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)

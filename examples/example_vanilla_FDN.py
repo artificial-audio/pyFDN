@@ -60,12 +60,13 @@ def _(mo):
 def _(fs, n, pyFDN):
     build = pyFDN.fdn_build_gallery(
         n,
-        "vanillaFirstOrder",
         fs=fs,
         io_type="ones",
         direct_gain=1.0,
         rt60=2.0,
         rt60_nyquist=0.5,
+        post_eq_db_dc=0.0,
+        post_eq_db_nyquist=-6.0,
         rng=42,
     )
     model = pyFDN.dss_to_flamo(

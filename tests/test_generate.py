@@ -271,37 +271,33 @@ def test_fdn_matrix_gallery_unknown_type_raises():
 # ---------------------------------------------------------------------------
 
 
-def test_fdn_build_gallery_returns_type_list():
-    assert fdn_build_gallery() == [
-        "vanilla",
-        "vanillaBroadband",
-        "vanillaFirstOrder",
-        "roomSmall",
-        "roomLarge",
-    ]
-
-
-def test_fdn_build_gallery_vanilla_is_complete_and_reproducible():
-    first = fdn_build_gallery(4, "vanilla", rng=12)
-    second = fdn_build_gallery(4, "vanilla", rng=12)
+def test_fdn_build_gallery_is_complete_and_reproducible():
+    first = fdn_build_gallery(4, rng=12)
+    second = fdn_build_gallery(4, rng=12)
 
     assert first.A.shape == (4, 4)
     assert first.B.shape == (4, 1)
     assert first.C.shape == (1, 4)
     assert first.D.shape == (1, 1)
     assert first.delays.shape == (4,)
-    assert first.filters is None
-    assert first.post_eq is None
     np.testing.assert_allclose(first.A, second.A)
     np.testing.assert_array_equal(first.delays, second.delays)
-    np.testing.assert_allclose(first.A @ first.A.T, np.eye(4), atol=1e-12)
+
+
+def test_fdn_build_gallery_lossless_has_no_filters():
+    build = fdn_build_gallery(4, rt60=None, rng=12)
+
+    assert build.filters is None
+    assert build.post_eq is None
+    # The feedback matrix is orthogonal (lossless).
+    np.testing.assert_allclose(build.A @ build.A.T, np.eye(4), atol=1e-12)
 
 
 def test_fdn_build_gallery_does_not_mutate_global_rng():
     np.random.seed(123)
     expected = np.random.random(3)
     np.random.seed(123)
-    fdn_build_gallery(4, "vanilla", rng=12)
+    fdn_build_gallery(4, rng=12)
     actual = np.random.random(3)
     np.testing.assert_allclose(actual, expected)
 
@@ -309,12 +305,12 @@ def test_fdn_build_gallery_does_not_mutate_global_rng():
 def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
     delays = np.array([41, 53, 67, 79])
     build = fdn_build_gallery(
-        build_type="vanilla",
         delays=delays,
         num_inputs=3,
         num_outputs=2,
         io_type="identity",
         direct_gain=1.0,
+        rt60=None,
         rng=4,
     )
 
@@ -324,66 +320,57 @@ def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
     np.testing.assert_equal(build.D, 1.0)
 
 
-def test_fdn_build_gallery_decay_options():
+def test_fdn_build_gallery_first_order_absorption_keeps_A_lossless():
     delays = np.array([101, 149, 211])
-    broadband = fdn_build_gallery(
-        build_type="vanillaBroadband",
-        delays=delays,
-        gain_per_sample=0.99,
-        rng=7,
-    )
-    filtered = fdn_build_gallery(
-        build_type="vanillaFirstOrder",
-        delays=delays,
-        rt60=2.0,
-        rt60_nyquist=0.5,
-        rng=7,
-    )
-
-    assert np.max(np.abs(np.linalg.eigvals(broadband.A))) < 1
-    assert filtered.filters is not None
-    assert filtered.filters.shape == (1, 6, 3)
-    np.testing.assert_allclose(filtered.A @ filtered.A.T, np.eye(3), atol=1e-12)
-
-
-def test_fdn_build_gallery_optional_post_eq():
-    build = fdn_build_gallery(
-        4,
-        "vanillaFirstOrder",
-        num_outputs=2,
-        post_eq_rt60=1.5,
-        post_eq_rt60_nyquist=0.4,
-        post_eq_delay=200,
-        rng=7,
-    )
+    build = fdn_build_gallery(delays=delays, rt60=2.0, rt60_nyquist=0.5, rng=7)
 
     assert build.filters is not None
-    assert build.post_eq is not None
-    assert build.post_eq.shape == (1, 6, 2)
+    assert build.filters.shape == (1, 6, 3)
+    np.testing.assert_allclose(build.A @ build.A.T, np.eye(3), atol=1e-12)
 
 
-def test_fdn_build_gallery_room_presets():
-    small = fdn_build_gallery(4, "roomSmall", rng=2)
-    large = fdn_build_gallery(9, "roomLarge", rng=3)
+def test_fdn_build_gallery_rt60_nyquist_defaults_to_rt60():
+    delays = np.array([101, 149, 211])
+    default_ny = fdn_build_gallery(delays=delays, rt60=2.0, rng=7)
+    explicit_flat = fdn_build_gallery(delays=delays, rt60=2.0, rt60_nyquist=2.0, rng=7)
 
-    assert small.A.shape == (4, 4)
-    assert large.A.shape == (9, 9)
-    assert small.filters is not None and large.filters is not None
-    assert small.filters.shape == (1, 6, 4)
-    assert large.filters.shape == (1, 6, 9)
-    assert np.all((400 <= small.delays) & (small.delays < 800))
-    assert np.all((1100 <= large.delays) & (large.delays < 2600))
+    np.testing.assert_allclose(default_ny.filters, explicit_flat.filters)
+
+
+def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
+    from pyFDN.auxiliary.acoustics import first_order_shelving_eq
+
+    scalar = fdn_build_gallery(
+        4, num_outputs=2, rt60=None, post_eq_db_dc=0.0, post_eq_db_nyquist=-6.0, rng=7
+    )
+    assert scalar.post_eq is not None
+    assert scalar.post_eq.shape == (1, 6, 2)
+    # scalar dB values broadcast to identical per-output sections
+    np.testing.assert_allclose(scalar.post_eq[:, :, 0], scalar.post_eq[:, :, 1])
+
+    per_channel = fdn_build_gallery(
+        4,
+        num_outputs=3,
+        rt60=None,
+        post_eq_db_dc=[0.0, -3.0, -6.0],
+        post_eq_db_nyquist=-6.0,
+        rng=7,
+    )
+    assert per_channel.post_eq is not None
+    assert per_channel.post_eq.shape == (1, 6, 3)
+    expected = first_order_shelving_eq([0.0, -3.0, -6.0], -6.0, per_channel.fs)
+    np.testing.assert_allclose(per_channel.post_eq, expected)
 
 
 def test_fdn_build_gallery_rejects_invalid_configuration():
-    with pytest.raises(ValueError, match="Unknown build_type"):
-        fdn_build_gallery(4, "unknown")
     with pytest.raises(ValueError, match="N must be provided"):
-        fdn_build_gallery(build_type="vanilla")
-    with pytest.raises(ValueError, match="generates its delay lengths"):
-        fdn_build_gallery(build_type="roomSmall", delays=np.array([1, 2]))
-    with pytest.raises(ValueError, match="post_eq_rt60"):
-        fdn_build_gallery(4, "vanilla", post_eq_delay=100)
+        fdn_build_gallery()
+    with pytest.raises(ValueError, match="rt60 must be positive"):
+        fdn_build_gallery(4, rt60=-1.0)
+    with pytest.raises(ValueError, match="delays must contain exactly N values"):
+        fdn_build_gallery(3, delays=np.array([1, 2]))
+    with pytest.raises(ValueError, match="scalar or length num_outputs"):
+        fdn_build_gallery(4, num_outputs=2, post_eq_db_dc=[0.0, -3.0, -6.0])
 
 
 # ---------------------------------------------------------------------------

@@ -66,11 +66,11 @@ def _(np, pyFDN):
 
     build = pyFDN.fdn_build_gallery(
         8,
-        "vanilla",
         fs=fs,
         delay_range=(100, 401),
         io_type="identity",
         direct_gain=None,
+        rt60=None,
         rng=3,
     )
     delays = build.delays

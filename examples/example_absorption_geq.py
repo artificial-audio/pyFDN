@@ -63,13 +63,13 @@ def _(np, pyFDN):
 
     build = pyFDN.fdn_build_gallery(
         num_delays,
-        "vanilla",
         fs=fs,
         delay_range=(500, 2001),
         sort_delays=True,
         io_type="ones",
         input_scale=1 / num_delays,
         direct_gain=0.0,
+        rt60=None,
         rng=5,
     )
     delays = build.delays

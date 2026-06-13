@@ -62,17 +62,18 @@ def _(mo):
 def _(fs, np, pyFDN):
     delays = pyFDN.ms_to_smp(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
     build = pyFDN.fdn_build_gallery(
-        build_type="vanillaBroadband",
         fs=fs,
         delays=delays,
         io_type="normalized",
         direct_gain=0.0,
-        rt60=2.0,
+        rt60=None,
         rng=0,
     )
-    A, B, C, D = build.A, build.B, build.C, build.D
-    delays = build.delays
+    # Bake delay-proportional broadband decay into the lossless feedback matrix.
     g = pyFDN.rt_to_gain_per_sample(2.0, fs)
+    delays = build.delays
+    A = np.diag(g**delays) @ build.A
+    B, C, D = build.B, build.C, build.D
 
     print(f"Delays: {delays} samples, gain per sample: {g:.6f}")
     return A, B, C, D, delays

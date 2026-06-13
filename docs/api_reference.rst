@@ -35,6 +35,7 @@ Acoustics & Absorption
 
    pyFDN.absorption_filters
    pyFDN.first_order_absorption
+   pyFDN.first_order_shelving_eq
    pyFDN.one_pole_absorption
    pyFDN.echo_density
    pyFDN.edc
