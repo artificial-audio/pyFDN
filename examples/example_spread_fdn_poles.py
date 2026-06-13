@@ -66,9 +66,9 @@ def _(np, pyFDN):
     fs = 48000
     types = ["Proportional", "Spread"]
 
-    rt60 = 1.0  # seconds
-    ir_len = int(rt60 * fs)
-    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt60, fs)
+    rt = 1.0  # seconds
+    ir_len = int(rt * fs)
+    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt, fs)
 
     num_delays = 8
     delays = np.random.randint(100, 301, num_delays)
@@ -92,7 +92,7 @@ def _(np, pyFDN):
         input_gain,
         ir_len,
         output_gain,
-        rt60,
+        rt,
         types,
     )
 
@@ -175,7 +175,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, np, poles, pyFDN, rt60, types):
+def _(fs, go, np, poles, pyFDN, rt, types):
     fig_poles = go.Figure()
     for _type in types:
         _pol = poles[_type]
@@ -193,7 +193,7 @@ def _(fs, go, np, poles, pyFDN, rt60, types):
         xaxis={"title": "Pole angle (rad)"},
         yaxis={"title": "Pole T60 (s)"},
         template="plotly_white",
-        yaxis_range=[0, rt60 * 1.5],
+        yaxis_range=[0, rt * 1.5],
         height=420,
     )
     fig_poles.show()

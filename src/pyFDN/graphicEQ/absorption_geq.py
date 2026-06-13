@@ -23,7 +23,7 @@ def absorption_geq(
     """Design per-delay GEQ absorption filters matching target reverberation times.
 
     Each delay line gets its own cascade of biquad sections whose combined
-    attenuation per round trip matches the desired RT60 at each frequency band.
+    attenuation per round trip matches the desired RT at each frequency band.
 
     Args:
         rt: Target reverberation time in seconds at 10 frequency bands,

@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -25,12 +25,15 @@ def _(mo):
     - Uses `pyFDN.dss_to_ss` to get the equivalent state-space matrices `(A, b, c, d)`.
     - Computes the impulse response both via `scipy.signal` (from the state-space) and via `pyFDN.dss2impz` (from the delay state-space).
     - Plots both (mu-law encoded) and asserts they match within tolerance.
+    - Plots the FDN parameters (feedback matrix, delays, I/O vectors, magnitude response) with `pyFDN.plot_FDN_build`.
     """)
     return
 
 
 @app.cell
 def _():
+    import dataclasses
+
     import numpy as np
     from scipy.signal import dimpulse, dlti, ss2tf
 
@@ -38,20 +41,19 @@ def _():
 
     np.random.seed(1)
     # Impulse response length for comparison
-    impulse_response_length = 100
+    impulse_response_length = 1000
 
     m = np.array([13, 19, 23])
     build = pyFDN.fdn_build_gallery(
         delays=m,
         io_type="random",
         direct_gain=None,
-        rt60=None,
+        rt=0.02,
         rng=1,
     )
-    # Bake delay-proportional broadband decay into the lossless feedback matrix.
-    m = build.delays
-    A = np.diag(0.9**m) @ build.A
-    b, c, d = build.B, build.C, build.D
+    # Bake attenuation into A matrix for easier comparison.
+    build = dataclasses.replace(build, A=np.diag(build.filters[0, 0, :]) @ build.A)
+    A, b, c, d = build.A, build.B, build.C, build.D
 
     # Convert delay state-space to single state-space system
     aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)
@@ -73,6 +75,37 @@ def _():
         ir_delay_state_space,
         labels=["State space", "Delay state space"],
     )
+    return aa, bb, build, cc, dd, pyFDN
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## FDN parameter overview
+    """)
+    return
+
+
+@app.cell
+def _(build, pyFDN):
+    pyFDN.plot_FDN_build(build, title="FDN parameters")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Equivalent state-space system
+
+    The single state-space matrices `(A, b, c, d)` returned by `pyFDN.dss_to_ss`,
+    expanding the delay lines into unit-delay states.
+    """)
+    return
+
+
+@app.cell
+def _(aa, bb, cc, dd, pyFDN):
+    pyFDN.plot_system_matrix(aa, bb, cc, dd, title="State-space system")
     return
 
 

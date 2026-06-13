@@ -18,6 +18,7 @@ CATEGORY_ORDER = (
     "Absorption & Filters",
     "Translation Examples",
     "Allpass FDN Examples",
+    "Special FDNs",
     "FDN Design & Analysis",
 )
 

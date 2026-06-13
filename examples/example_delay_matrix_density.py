@@ -47,7 +47,7 @@ def _(mo):
     mo.md(r"""
     ## Parameters
 
-    Set RNG seed, sampling rate, number of delay lines **N**, broadband RT60,
+    Set RNG seed, sampling rate, number of delay lines **N**, broadband RT,
     and base delays plus extra **delays_in** / **delays_out** for the
     delay+matrix+delay chain.
     """)
@@ -61,8 +61,8 @@ def _(np, pyFDN):
     fs = 48000
     nfft = 2**18
     N = 8
-    rt60 = 3.0
-    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt60, fs)
+    rt = 3.0
+    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt, fs)
     delays = rng.integers(1000, 5000, size=N).astype(np.int64)
     delays_in = rng.integers(0, 200, size=N).astype(np.int64)
     delays_out = rng.integers(0, 200, size=N).astype(np.int64)
@@ -96,7 +96,7 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
         delays=total_delay,
         io_type="ones",
         direct_gain=1.0,
-        rt60=None,
+        rt=None,
         rng=42,
     )
     # Bake delay-proportional broadband decay into the lossless feedback matrix.

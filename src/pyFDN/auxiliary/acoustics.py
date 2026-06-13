@@ -1,4 +1,4 @@
-"""Acoustics and RT60 related functions."""
+"""Acoustics and RT related functions."""
 
 from __future__ import annotations
 
@@ -218,10 +218,10 @@ def estimate_rt_bands(
     filter_order: int = 8,
     decay_db: float = 30.0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Estimate RT60 in octave bands via Butterworth bandpass filtering.
+    """Estimate RT in octave bands via Butterworth bandpass filtering.
 
     Filters the impulse response into octave bands using
-    ``pyroomacoustics.bandpass_filterbank``, then estimates RT60 per band
+    ``pyroomacoustics.bandpass_filterbank``, then estimates RT per band
     using ``pyroomacoustics.measure_rt60`` (extrapolated from ``decay_db``).
 
     Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
@@ -242,12 +242,13 @@ def estimate_rt_bands(
     filter_order : int
         Butterworth filter order (default 8).
     decay_db : float
-        Decay range in dB used for the linear fit (default 30, i.e. RT30→RT60).
+        Decay range in dB used for the linear fit. The default 30 dB fit is
+        extrapolated to a 60 dB reverberation time.
 
     Returns
     -------
     rt : (n_bands,) ndarray
-        Estimated RT60 in seconds per band.
+        Estimated RT in seconds per band.
     f_centre : (n_bands,) ndarray
         Centre frequencies in Hz corresponding to each RT value.
     """
@@ -299,7 +300,7 @@ def estimate_initial_level_bands(
     ir : array-like, 1-D
         Impulse response, starting at the onset.
     rt : array-like
-        RT60 in seconds per band, as returned by :func:`estimate_rt_bands`
+        RT in seconds per band, as returned by :func:`estimate_rt_bands`
         with the same band parameters.
     fs : float
         Sampling rate in Hz.

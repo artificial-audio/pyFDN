@@ -66,7 +66,7 @@ def _(np, pyFDN):
         delays=delays,
         io_type="ones",
         direct_gain=0.0,
-        rt60=None,
+        rt=None,
         rng=1,
     )
     # Bake delay-proportional broadband decay into the lossless feedback matrix.

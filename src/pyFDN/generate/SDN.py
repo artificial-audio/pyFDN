@@ -52,20 +52,20 @@ def _dist(p, q):
 def _cuboid_walls(Lx, Ly, Lz):
     """
     Return list of 6 walls as plane coeffs (a,b,c,d) for ax+by+cz+d=0.
-    Order and planes must match Geometry.Cuboid.setWallPosition():
-    - floor:  (0,0,0), (Lx,0,0), (0,0,Lz)  -> y=0
-    - ceiling: (0,Ly,0), (0,Ly,Lz), (Lx,Ly,0) -> y=Ly
+    The room uses a right-handed, z-up coordinate system:
+    - floor:  z=0
+    - ceiling: z=Lz
     - left:   x=0,  right: x=Lx
-    - front:  (0,0,Lz), (0,Ly,Lz), (Lx,Ly,Lz) -> z=Lz
-    - back:   (0,0,0), (0,Ly,0), (Lx,Ly,0) -> z=0
+    - front:  y=Ly
+    - back:   y=0
     """
     return [
-        (0, 1, 0, 0),  # floor:  y=0
-        (0, 1, 0, -Ly),  # ceiling: y=Ly  (y - Ly = 0)
+        (0, 0, 1, 0),  # floor:   z=0
+        (0, 0, 1, -Lz),  # ceiling: z=Lz
         (1, 0, 0, 0),  # left:   x=0
         (-1, 0, 0, Lx),  # right:  x=Lx
-        (0, 0, -1, Lz),  # front:  z=Lz
-        (0, 0, 1, 0),  # back:   z=0
+        (0, -1, 0, Ly),  # front:  y=Ly
+        (0, 1, 0, 0),  # back:   y=0
     ]
 
 
@@ -488,7 +488,7 @@ class SDN:
                 scene={
                     "xaxis": {"title": "x (m)", "range": [0, Lx]},
                     "yaxis": {"title": "y (m)", "range": [0, Ly]},
-                    "zaxis": {"title": "z (m)", "range": [0, Lz]},
+                    "zaxis": {"title": "z (m, up)", "range": [0, Lz]},
                     "aspectmode": "data",
                 },
                 template="plotly_white",

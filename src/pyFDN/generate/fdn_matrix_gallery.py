@@ -192,9 +192,9 @@ def fdn_build_gallery(
     input_scale: float = 1.0,
     output_scale: float = 1.0,
     direct_gain: float | None = 0.0,
-    rt60: float | None = 2.0,
-    rt60_nyquist: float | None = None,
-    rt_crossover_frequency: float | None = None,
+    rt: float | None = 2.0,
+    rt_nyquist: float | None = None,
+    rt_crossover: float | None = None,
     post_eq_db_dc: ArrayLike | None = None,
     post_eq_db_nyquist: ArrayLike | None = None,
     post_eq_crossover: float | None = None,
@@ -204,7 +204,7 @@ def fdn_build_gallery(
 
     The feedback matrix ``A`` is a random orthogonal matrix. In-loop decay is
     realised as per-delay first-order shelving absorption filters matching
-    ``rt60`` at DC and ``rt60_nyquist`` at Nyquist; pass ``rt60=None`` for a
+    ``rt`` at DC and ``rt_nyquist`` at Nyquist; pass ``rt=None`` for a
     lossless FDN (``filters=None``). An
     optional per-output first-order shelving post EQ is specified directly in
     decibels at DC and Nyquist.
@@ -226,11 +226,11 @@ def fdn_build_gallery(
         input_scale: Scalar applied to ``B``.
         output_scale: Scalar applied to ``C``.
         direct_gain: Constant direct gain, or ``None`` for random ``D``.
-        rt60: Reverberation time in seconds at DC, or ``None`` for a lossless
+        rt: Reverberation time in seconds at DC, or ``None`` for a lossless
             FDN with no in-loop absorption filters.
-        rt60_nyquist: Reverberation time in seconds at Nyquist. Defaults to
-            ``rt60`` (frequency-flat decay).
-        rt_crossover_frequency: Shelf crossover for the absorption filters in Hz.
+        rt_nyquist: Reverberation time in seconds at Nyquist. Defaults to
+            ``rt`` (frequency-flat decay).
+        rt_crossover: Shelf crossover for the absorption filters in Hz.
         post_eq_db_dc: Post-EQ gain in dB at DC, scalar or length ``num_outputs``.
             Setting either post-EQ argument enables a per-output output filter.
         post_eq_db_nyquist: Post-EQ gain in dB at Nyquist, scalar or length
@@ -243,10 +243,10 @@ def fdn_build_gallery(
     """
     if fs <= 0:
         raise ValueError("fs must be positive")
-    if rt60 is not None and rt60 <= 0:
-        raise ValueError("rt60 must be positive")
-    if rt60_nyquist is not None and rt60_nyquist <= 0:
-        raise ValueError("rt60_nyquist must be positive")
+    if rt is not None and rt <= 0:
+        raise ValueError("rt must be positive")
+    if rt_nyquist is not None and rt_nyquist <= 0:
+        raise ValueError("rt_nyquist must be positive")
 
     if delays is not None:
         delays_array = np.asarray(delays, dtype=int).ravel()
@@ -284,12 +284,12 @@ def fdn_build_gallery(
     )
 
     filters: np.ndarray | None = None
-    if rt60 is not None:
+    if rt is not None:
         from ..auxiliary.acoustics import first_order_absorption
 
-        rt_ny = rt60 if rt60_nyquist is None else rt60_nyquist
+        rt_ny = rt if rt_nyquist is None else rt_nyquist
         filters = first_order_absorption(
-            rt60, rt_ny, delays_array, float(fs), rt_crossover_frequency
+            rt, rt_ny, delays_array, float(fs), rt_crossover
         )
 
     post_eq = _build_post_eq(

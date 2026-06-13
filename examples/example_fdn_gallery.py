@@ -200,14 +200,14 @@ def _(mo):
 @app.cell
 def _(pyFDN):
     builds = {
-        "lossless": pyFDN.fdn_build_gallery(8, rt60=None, rng=0),
+        "lossless": pyFDN.fdn_build_gallery(8, rt=None, rng=0),
         "first-order absorption": pyFDN.fdn_build_gallery(
-            8, rt60=2.0, rt60_nyquist=0.5, rng=0
+            8, rt=2.0, rt_nyquist=0.5, rng=0
         ),
         "with post EQ": pyFDN.fdn_build_gallery(
             8,
-            rt60=2.0,
-            rt60_nyquist=0.5,
+            rt=2.0,
+            rt_nyquist=0.5,
             post_eq_db_dc=0.0,
             post_eq_db_nyquist=-6.0,
             rng=0,
@@ -215,8 +215,8 @@ def _(pyFDN):
         "multichannel post EQ": pyFDN.fdn_build_gallery(
             8,
             num_outputs=3,
-            rt60=2.0,
-            rt60_nyquist=0.5,
+            rt=2.0,
+            rt_nyquist=0.5,
             post_eq_db_dc=[0.0, -3.0, -6.0],
             post_eq_db_nyquist=-6.0,
             rng=0,

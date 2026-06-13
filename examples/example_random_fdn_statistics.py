@@ -72,7 +72,7 @@ def _(np, pyFDN):
         delay_range=(100, 401),
         io_type="identity",
         direct_gain=None,
-        rt60=None,
+        rt=None,
         rng=3,
     )
     delays = build.delays

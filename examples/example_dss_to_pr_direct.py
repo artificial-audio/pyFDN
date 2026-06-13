@@ -42,7 +42,7 @@ def _(np, pyFDN):
         delays=delays,
         io_type="identity",
         direct_gain=1.0,
-        rt60=None,
+        rt=None,
         rng=11,
     )
     # Uniform feedback attenuation for a stable, decaying system to analyse.

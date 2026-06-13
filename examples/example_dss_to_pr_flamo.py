@@ -238,7 +238,7 @@ def _(np, pyFDN, torch):
         delays=delays,
         io_type="identity",
         direct_gain=0.0,
-        rt60=None,
+        rt=None,
         rng=7,
     )
 

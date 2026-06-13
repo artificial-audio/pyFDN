@@ -53,7 +53,7 @@ def _(mo):
     mo.md(r"""
     ## Parameters
 
-    All settings share the same homogeneous decay (RT60 = 2 s), so the only
+    All settings share the same homogeneous decay (RT = 2 s), so the only
     differences are mode count and reflection density.
     """)
     return
@@ -64,8 +64,8 @@ def _(np, pyFDN):
     np.random.seed(2)
     fs = 48000
     ir_len = 2 * fs
-    rt60 = 2.0  # seconds
-    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt60, fs)
+    rt = 2.0  # seconds
+    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt, fs)
 
     sizes = [4, 8, 16]  # FDN size: small, medium, large
     delay_scales = [300, 1000, 3000]  # delays: short, medium, long

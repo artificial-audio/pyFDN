@@ -717,14 +717,14 @@ def plot_fdn_parameter(
         [{}, {}],
         [{}, {}],
     ]
-    subplot_titles = ["delays [samples]", "A", "b", "c", "d"]
+    subplot_titles = ["", "A", "b", "c", "d"]
     if has_attenuation:
         specs.append([{"colspan": 2}, None])
-        subplot_titles.append("attenuation [dB/sample]")
+        subplot_titles.append("")
         row_px.append(190.0)
     if has_post_eq:
         specs.append([{"colspan": 2}, None])
-        subplot_titles.append("post EQ [dB]")
+        subplot_titles.append("")
         row_px.append(190.0)
     total_px = float(sum(row_px))
 
@@ -752,6 +752,7 @@ def plot_fdn_parameter(
         col=1,
     )
     fig.update_xaxes(matches="x2", showticklabels=False, row=1, col=1)
+    fig.update_yaxes(title_text="Delays [samples]", row=1, col=1)
 
     # The A, b, c, d heatmaps are lifted from the system matrix plot.
     matrix_fig = plot_system_matrix(A, b, c, d, zmin=zmin, zmax=zmax)
@@ -780,6 +781,7 @@ def plot_fdn_parameter(
         ):
             fig.add_trace(trace, row=next_row, col=1)
         _style_frequency_xaxis(next_row)
+        fig.update_yaxes(title_text="Attenuation [dB/sample]", row=next_row, col=1)
         next_row += 1
 
     if has_post_eq:
@@ -818,6 +820,7 @@ def plot_fdn_parameter(
                 col=1,
             )
         _style_frequency_xaxis(next_row)
+        fig.update_yaxes(title_text="Post EQ [dB]", row=next_row, col=1)
 
     fig.update_layout(
         title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,

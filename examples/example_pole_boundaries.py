@@ -196,7 +196,7 @@ def _(f_bounds, fs, go, max_curve, min_curve, np, poles, pyFDN):
     fig.update_layout(
         title="Pole T60 and frequency-dependent boundaries",
         xaxis={"title": "Frequency (Hz)"},
-        yaxis={"title": "Pole RT60 (s)"},
+        yaxis={"title": "Pole RT (s)"},
         template="plotly_white",
         height=460,
     )

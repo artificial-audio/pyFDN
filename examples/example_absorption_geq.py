@@ -71,7 +71,7 @@ def _(np, pyFDN):
         io_type="ones",
         input_scale=1 / num_delays,
         direct_gain=0.0,
-        rt60=None,
+        rt=None,
         rng=5,
     )
     delays = build.delays
@@ -212,9 +212,9 @@ def _(fs, mo, np, rir):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## RT60 estimate vs target
+    ## RT estimate vs target
 
-    Estimate RT60 in octave bands (63–8000 Hz) by Butterworth bandpass filtering
+    Estimate RT in octave bands (63–8000 Hz) by Butterworth bandpass filtering
     and compare with the design target.
     """)
     return
@@ -244,9 +244,9 @@ def _(fs, go, pyFDN, rir, target_rt):
         )
     )
     fig_rt.update_layout(
-        title="RT60: estimated vs target",
+        title="RT: estimated vs target",
         xaxis={"title": "Frequency (Hz)", "type": "log"},
-        yaxis={"title": "RT60 (s)"},
+        yaxis={"title": "RT (s)"},
         yaxis_range=[0, None],
         template="plotly_white",
         height=380,

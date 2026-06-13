@@ -285,7 +285,7 @@ def test_fdn_build_gallery_is_complete_and_reproducible():
 
 
 def test_fdn_build_gallery_lossless_has_no_filters():
-    build = fdn_build_gallery(4, rt60=None, rng=12)
+    build = fdn_build_gallery(4, rt=None, rng=12)
 
     assert build.filters is None
     assert build.post_eq is None
@@ -310,7 +310,7 @@ def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
         num_outputs=2,
         io_type="identity",
         direct_gain=1.0,
-        rt60=None,
+        rt=None,
         rng=4,
     )
 
@@ -322,26 +322,43 @@ def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
 
 def test_fdn_build_gallery_first_order_absorption_keeps_A_lossless():
     delays = np.array([101, 149, 211])
-    build = fdn_build_gallery(delays=delays, rt60=2.0, rt60_nyquist=0.5, rng=7)
+    build = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=0.5, rng=7)
 
     assert build.filters is not None
     assert build.filters.shape == (1, 6, 3)
     np.testing.assert_allclose(build.A @ build.A.T, np.eye(3), atol=1e-12)
 
 
-def test_fdn_build_gallery_rt60_nyquist_defaults_to_rt60():
+def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
     delays = np.array([101, 149, 211])
-    default_ny = fdn_build_gallery(delays=delays, rt60=2.0, rng=7)
-    explicit_flat = fdn_build_gallery(delays=delays, rt60=2.0, rt60_nyquist=2.0, rng=7)
+    default_ny = fdn_build_gallery(delays=delays, rt=2.0, rng=7)
+    explicit_flat = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=2.0, rng=7)
 
     np.testing.assert_allclose(default_ny.filters, explicit_flat.filters)
+
+
+def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
+    captured = {}
+
+    def fake_absorption(rt, rt_nyquist, delays, fs, crossover):
+        captured["crossover"] = crossover
+        return np.ones((1, 6, len(delays)))
+
+    monkeypatch.setattr(
+        "pyFDN.auxiliary.acoustics.first_order_absorption", fake_absorption
+    )
+
+    build = fdn_build_gallery(3, rt_crossover=750.0, rng=7)
+
+    assert captured["crossover"] == 750.0
+    assert build.filters is not None
 
 
 def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
     from pyFDN.auxiliary.acoustics import first_order_shelving_eq
 
     scalar = fdn_build_gallery(
-        4, num_outputs=2, rt60=None, post_eq_db_dc=0.0, post_eq_db_nyquist=-6.0, rng=7
+        4, num_outputs=2, rt=None, post_eq_db_dc=0.0, post_eq_db_nyquist=-6.0, rng=7
     )
     assert scalar.post_eq is not None
     assert scalar.post_eq.shape == (1, 6, 2)
@@ -351,7 +368,7 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
     per_channel = fdn_build_gallery(
         4,
         num_outputs=3,
-        rt60=None,
+        rt=None,
         post_eq_db_dc=[0.0, -3.0, -6.0],
         post_eq_db_nyquist=-6.0,
         rng=7,
@@ -365,8 +382,8 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
 def test_fdn_build_gallery_rejects_invalid_configuration():
     with pytest.raises(ValueError, match="N must be provided"):
         fdn_build_gallery()
-    with pytest.raises(ValueError, match="rt60 must be positive"):
-        fdn_build_gallery(4, rt60=-1.0)
+    with pytest.raises(ValueError, match="rt must be positive"):
+        fdn_build_gallery(4, rt=-1.0)
     with pytest.raises(ValueError, match="delays must contain exactly N values"):
         fdn_build_gallery(3, delays=np.array([1, 2]))
     with pytest.raises(ValueError, match="scalar or length num_outputs"):

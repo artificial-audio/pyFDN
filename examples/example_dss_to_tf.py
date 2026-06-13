@@ -56,7 +56,7 @@ def _():
         num_outputs=2,
         io_type="identity",
         direct_gain=None,
-        rt60=None,
+        rt=None,
         rng=5,
     )
     A, B, C, D, delays = (

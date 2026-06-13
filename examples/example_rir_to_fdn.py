@@ -21,7 +21,7 @@ def _(mo):
     Estimates the frequency-dependent decay of a measured room impulse
     response and designs an FDN to match it:
 
-    1. Estimate RT60 and initial level in octave bands from the RIR.
+    1. Estimate RT and initial level in octave bands from the RIR.
     2. Design per-delay-line GEQ absorption filters matching the decay.
     3. Design an output GEQ matching the initial spectral level.
     4. Compare the FDN impulse response with the target RIR.
@@ -87,7 +87,7 @@ def _(mo):
     mo.md(r"""
     ## Estimate decay parameters
 
-    RT60 and initial level per octave band (63 Hz – 8 kHz).
+    RT and initial level per octave band (63 Hz – 8 kHz).
     """)
     return
 
@@ -98,7 +98,7 @@ def _(fs, pyFDN, rir):
     est_level, _ = pyFDN.estimate_initial_level_bands(rir, est_rt, fs)
 
     print(f"Bands (Hz):  {f_centre}")
-    print(f"RT60 (s):    {est_rt.round(2)}")
+    print(f"RT (s):    {est_rt.round(2)}")
     print(f"Level (dB):  {pyFDN.lin_to_db(est_level).round(1)}")
     return est_level, est_rt, f_centre
 
@@ -108,7 +108,7 @@ def _(mo):
     mo.md(r"""
     ## Define FDN and absorption filters
 
-    A 16-delay FDN with a random orthogonal feedback matrix.  The target RT60
+    A 16-delay FDN with a random orthogonal feedback matrix.  The target RT
     at the 10 GEQ design bands (DC, 63 Hz … 8 kHz, Nyquist) extends the octave
     band estimates, shortening the lowest and the two highest bands (air and
     boundary absorption shortens the decay at the spectral edges).
@@ -126,7 +126,7 @@ def _(est_rt, fs, np, pyFDN):
         delay_range=(500, 3500),
         io_type="ones",
         direct_gain=0.0,
-        rt60=None,
+        rt=None,
         rng=5,
     )
     delays = build.delays

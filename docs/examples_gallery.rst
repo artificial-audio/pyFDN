@@ -26,14 +26,10 @@ Absorption & Filters
    :widths: 35 65
    :header-rows: 0
 
-   * - `Absorption filters example <_static/marimo/notebooks/example_absorption_filters.html>`_
-     - This example designs frequency-dependent absorption filters for an FDN (Feedback Delay Network) reverb. Each filter approximates a target RT (reverberation time) curve over frequency for a given delay line.
    * - `Absorption GEQ in an FDN <_static/marimo/notebooks/example_absorption_geq.html>`_
      - Demonstrates ``pyFDN.absorption_geq``: frequency-dependent absorption designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
    * - `Converting a room impulse response into an FDN <_static/marimo/notebooks/example_rir_to_fdn.html>`_
      - Estimates the frequency-dependent decay of a measured room impulse response and designs an FDN to match it:
-   * - `First-order absorption FDN (FLAMO integration) <_static/marimo/notebooks/example_first_order_absorption.html>`_
-     - This example builds an FDN with first-order shelving absorption filters (designed with pyFDN) and runs it in FLAMO for the impulse response.
 
 Translation Examples
 --------------------
@@ -50,8 +46,6 @@ Translation Examples
      - Uses ``dss_to_pr_direct`` (numeric DSS-only path) with modes ``eig``, ``roots``, and ``polyeig``. Compares time-domain IR from ``dss_to_impz`` with modal reconstruction from each mode.
    * - `FLAMO DSS→PR (Notebook) <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
      - In-depth math documentation of the refinement fix, with an SOS filter in the loop and plotting.
-   * - `Scattering Delay Network (SDN) Demo <_static/marimo/notebooks/example_sdn_coefficients.html>`_
-     - This example uses the Scattering Delay Network (SDN) to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a FLAMO model to render the impulse response.
 
 Allpass FDN Examples
 --------------------
@@ -79,6 +73,18 @@ Allpass FDN Examples
    * - `Schroeder's Series Allpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
      - Example for Schroeder's series (cascade) allpass: a cascade of first-order allpass sections realized as an FDN with diagonal feedback matrix. SISO.
 
+Special FDNs
+------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 0
+
+   * - `Coupled Rooms FDN Example <_static/marimo/notebooks/example_coupled_rooms.html>`_
+     - This example models two acoustically coupled rooms with a Feedback Delay Network (FDN): one small room with a short reverberation time (RT), one large room with a long RT. Each room is an independent FDN with frequency-dependent RT (first-order shelving absorption) and its own output EQ.
+   * - `Scattering Delay Network (SDN) Demo <_static/marimo/notebooks/example_sdn.html>`_
+     - This example uses the Scattering Delay Network (SDN) to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a FLAMO model to render the impulse response.
+
 FDN Design & Analysis
 ---------------------
 
@@ -88,8 +94,6 @@ FDN Design & Analysis
 
    * - `Colorless FDN <_static/marimo/notebooks/example_colorless_FDN.html>`_
      - FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in "Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.
-   * - `Coupled Rooms FDN Example <_static/marimo/notebooks/example_coupled_rooms.html>`_
-     - This example models two acoustically coupled rooms with a Feedback Delay Network (FDN): one room with shorter reverb time (RT), one with longer RT.
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
      - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
    * - `Denser Reverberation with Delay Feedback Matrix <_static/marimo/notebooks/example_delay_matrix_density.html>`_
