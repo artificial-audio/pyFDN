@@ -66,12 +66,18 @@ def _(np, pyFDN):
     fs = 48000
     ir_len = fs // 2
 
-    num_delays = 8
-    delays = np.random.randint(100, 401, num_delays)
-    input_gain = np.eye(num_delays, 1)
-    output_gain = np.eye(1, num_delays)
-    direct = np.random.randn(1, 1)
-    feedback_matrix = pyFDN.random_orthogonal(num_delays)
+    build = pyFDN.fdn_build_gallery(
+        8,
+        fs=fs,
+        delay_range=(100, 401),
+        io_type="identity",
+        direct_gain=None,
+        rt60=None,
+        rng=3,
+    )
+    delays = build.delays
+    feedback_matrix = build.A
+    input_gain, output_gain, direct = build.B, build.C, build.D
 
     print(f"Delays: {delays} (sum = {delays.sum()})")
     return (

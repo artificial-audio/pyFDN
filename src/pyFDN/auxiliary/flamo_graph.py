@@ -8,7 +8,25 @@ with the feedback path drawn so the loop is visible (e.g. fB below fF).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
+
+
+@dataclass(frozen=True)
+class FlamoFDNParameters:
+    """FDN values extracted from named modules in a FLAMO graph."""
+
+    delays: np.ndarray
+    A: np.ndarray
+    B: np.ndarray
+    C: np.ndarray
+    D: np.ndarray
+    attenuation_sos: np.ndarray | None
+    post_eq_sos: np.ndarray | None
+    fs: float | None
+
 
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
 
@@ -218,6 +236,148 @@ def flamo_nodes_flat(
                 subpath = f"{path}/{key}"
                 out.extend(flamo_nodes_flat(child, path=subpath))
     return out
+
+
+def _module_value(module: Any) -> np.ndarray:
+    param = getattr(module, "param", None)
+    if param is None:
+        raise ValueError(f"{type(module).__name__} has no parameter tensor")
+    mapper = getattr(module, "map", None)
+    value = mapper(param) if callable(mapper) else param
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
+
+
+def _delay_samples(module: Any) -> np.ndarray:
+    getter = getattr(module, "get_delays", None)
+    param = getattr(module, "param", None)
+    if callable(getter) and param is not None:
+        value = getter()(param)
+    else:
+        mapper = getattr(module, "map", None)
+        value = mapper(param) if callable(mapper) else param
+        to_samples = getattr(module, "s2sample", None)
+        if callable(to_samples):
+            value = to_samples(value)
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    samples = np.asarray(value.numpy() if hasattr(value, "numpy") else value)
+    return np.asarray(np.round(samples), dtype=int).ravel()
+
+
+def _gain_to_sos(gain: np.ndarray) -> np.ndarray:
+    gain = np.asarray(gain, dtype=float).ravel()
+    sos = np.zeros((1, 6, gain.size))
+    sos[0, 0, :] = gain
+    sos[0, 3, :] = 1.0
+    return sos
+
+
+def flamo_model_to_fdn_parameters(model: Any) -> FlamoFDNParameters:
+    """Extract plottable FDN parameters from a named FLAMO model graph.
+
+    The graph must contain leaves named ``input_gain`` and ``output_gain``, plus
+    either ``mixing_matrix`` or the standard recursion feedback leaf ``fB``.
+    The delay can be named ``delay`` or be the graph's only delay module.
+    Optional attenuation, output-filter, and direct-path leaves are included
+    when present.
+    """
+    root = flamo_model_to_nodes(model)
+    leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
+
+    def _named(name: str) -> list[dict[str, Any]]:
+        return [node for node in leaves if node["name"] == name]
+
+    def _one_of(*names: str) -> Any:
+        matches: list[dict[str, Any]] = []
+        for name in names:
+            matches = _named(name)
+            if matches:
+                break
+        if len(matches) != 1:
+            raise ValueError(
+                f"FLAMO graph must contain exactly one of {names!r}; "
+                f"found {len(matches)}"
+            )
+        return matches[0]["module"]
+
+    delay_matches = _named("delay")
+    if not delay_matches:
+        delay_matches = [
+            node for node in leaves if "delay" in type(node["module"]).__name__.lower()
+        ]
+    if len(delay_matches) != 1:
+        raise ValueError(
+            "FLAMO graph must contain exactly one delay leaf; "
+            f"found {len(delay_matches)}"
+        )
+    delay_module = delay_matches[0]["module"]
+    delays = _delay_samples(delay_module)
+
+    feedback_matches = _named("mixing_matrix")
+    if not feedback_matches:
+        feedback_matches = [
+            node for node in _named("fB") if node["path"].endswith("/feedback_loop/fB")
+        ] or _named("fB")
+    if len(feedback_matches) != 1:
+        raise ValueError(
+            "FLAMO graph must contain exactly one feedback matrix leaf; "
+            f"found {len(feedback_matches)}"
+        )
+
+    A = np.asarray(_module_value(feedback_matches[0]["module"]), dtype=float)
+    B = np.asarray(_module_value(_one_of("input_gain")), dtype=float)
+    C = np.asarray(_module_value(_one_of("output_gain")), dtype=float)
+    if A.ndim != 2:
+        raise ValueError("feedback matrix must be a constant two-dimensional matrix")
+
+    direct_matches = _named("direct_gain")
+    if not direct_matches:
+        direct_matches = [
+            node
+            for node in _named("brB")
+            if node["path"] in {"root/brB", "root/core/brB"}
+        ]
+    D = (
+        np.asarray(_module_value(direct_matches[0]["module"]), dtype=float)
+        if len(direct_matches) == 1
+        else np.zeros((C.shape[0], B.shape[1]))
+    )
+
+    attenuation_sos = None
+    attenuation_matches = _named("attenuation") or _named("filter")
+    if len(attenuation_matches) == 1:
+        attenuation_module = attenuation_matches[0]["module"]
+        attenuation_value = _module_value(attenuation_module)
+        if attenuation_value.ndim == 1:
+            attenuation_sos = _gain_to_sos(attenuation_value)
+        elif attenuation_value.ndim == 3 and attenuation_value.shape[1] == 6:
+            attenuation_sos = np.asarray(attenuation_value, dtype=float)
+
+    post_eq_sos = None
+    post_eq_matches = _named("output_filter")
+    if len(post_eq_matches) == 1:
+        post_eq_value = _module_value(post_eq_matches[0]["module"])
+        if post_eq_value.ndim == 3 and post_eq_value.shape[1] == 6:
+            post_eq_sos = np.asarray(post_eq_value, dtype=float)
+
+    fs_value = getattr(delay_module, "fs", None)
+    fs = float(fs_value) if fs_value is not None else None
+    return FlamoFDNParameters(
+        delays=delays,
+        A=A,
+        B=B,
+        C=C,
+        D=D,
+        attenuation_sos=attenuation_sos,
+        post_eq_sos=post_eq_sos,
+        fs=fs,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ def _(mo):
 
     This example uses the **Scattering Delay Network (SDN)** to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a **FLAMO** model to render the impulse response.
 
-    **Pipeline:** SDN (room, source/receiver, wall filters) → `sdn.compute()` → `sdn.sdn_to_flamo(nfft)` → FLAMO model → `get_time_response()` → IR.
+    **Pipeline:** SDN (room, source/receiver, wall filters) → `sdn.compute()` → `sdn.sdn_to_flamo(nfft)` → FLAMO model → `pyFDN.flamo_time_response()` → NumPy IR.
 
     Original code of SDN: Enzo de Sena, Orchisama Das
     Python Translation: Sebastian J. Schlecht, Friday, 20. February 2026
@@ -126,17 +126,17 @@ def _(mo):
     mo.md(r"""
     ## FLAMO model and impulse response
 
-    Convert the SDN result into a FLAMO model (feedback delays, feedback matrix, absorption filters). Then obtain the impulse response via `get_time_response()`.
+    Convert the SDN result into a FLAMO model (feedback delays, feedback matrix, absorption filters). Then obtain the impulse response as a NumPy array via `pyFDN.flamo_time_response()`.
     """)
     return
 
 
 @app.cell
-def _(np, sdn):
+def _(pyFDN, sdn):
     nfft = 2**17
     model, sdn_result = sdn.sdn_to_flamo(nfft=nfft)
 
-    ir = np.asarray(model.get_time_response().squeeze())
+    ir = pyFDN.flamo_time_response(model).squeeze()
     return (ir,)
 
 

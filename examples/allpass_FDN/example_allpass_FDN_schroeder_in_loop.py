@@ -94,7 +94,7 @@ def _(Fs, nfft, np, pyFDN):
     model_sch = pyFDN.dss_to_flamo(
         A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft
     )
-    ir_sch = model_sch.get_time_response()
+    ir_sch = pyFDN.flamo_time_response(model_sch)
     return A_sch, B_sch, C_sch, D_sch, N, delays_sch, ir_sch
 
 
@@ -145,7 +145,7 @@ def _(Fs, N, nfft, np, pyFDN):
     model_fdn = pyFDN.dss_to_flamo(
         feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos
     )
-    ir_fdn = model_fdn.get_time_response().squeeze()
+    ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
     print(ir_fdn.shape)
     print(delays_fdn)
     print(sos.shape)
@@ -213,7 +213,7 @@ def _(
         sos_filter=sos,
         post_delay_module=schroeder_core,
     )
-    ir_fdn_ap = model_fdn_ap.get_time_response().squeeze()
+    ir_fdn_ap = pyFDN.flamo_time_response(model_fdn_ap).squeeze()
 
     pyFDN.plot_flamo_graph(model_fdn_ap)
     return (ir_fdn_ap,)

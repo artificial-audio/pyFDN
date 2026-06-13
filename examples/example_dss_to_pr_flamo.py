@@ -232,32 +232,35 @@ def _():
 def _(np, pyFDN, torch):
     # Build a small stable FDN in DSS form with an SOS (first-order absorption) in the loop
     Fs = 48000.0
-    n = 4
     delays = np.array([531, 673, 798, 977], dtype=int)
-    A = pyFDN.random_orthogonal(n)
-    B = np.eye(n, 1)
-    C = np.eye(1, n)
-    D = np.zeros((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        fs=Fs,
+        delays=delays,
+        io_type="identity",
+        direct_gain=0.0,
+        rt60=None,
+        rng=7,
+    )
 
     # First-order absorption in the loop: canonical (1, 6, N) SOS bank.
     rt_dc, rt_ny = 0.5, 0.1  # reverb time at DC and Nyquist (seconds)
-    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays, Fs)
+    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, build.delays, Fs)
 
-    # DSS -> FLAMO with SOS in the loop (delay -> filter -> A). shell=True for get_time_response().
+    # DSS -> FLAMO with SOS in the loop (delay -> filter -> A).
     nfft = 2**16
     model = pyFDN.dss_to_flamo(
-        A=A,
-        B=B,
-        C=C,
-        D=D,
-        m=delays,
+        A=build.A,
+        B=build.B,
+        C=build.C,
+        D=build.D,
+        m=build.delays,
         Fs=Fs,
         nfft=nfft,
         shell=True,
         sos_filter=sos,
         dtype=torch.float64,
     )
-    return Fs, delays, model, sos
+    return Fs, build.delays, model, sos
 
 
 @app.cell
@@ -291,7 +294,7 @@ def _(
     sos,
 ):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
-    ir_flamo = model.get_time_response(fs=int(Fs)).squeeze()
+    ir_flamo = pyFDN.flamo_time_response(model, fs=int(Fs)).squeeze()
     if ir_flamo.ndim > 1:
         ir_flamo = ir_flamo[:, 0, 0]
     ir_flamo = np.asarray(ir_flamo, dtype=np.float64)

@@ -48,15 +48,24 @@ def _():
     fs = 48000
     impulse_response_length = fs // 100
 
-    # Define FDN
-    N = 4
-    num_input = 3
-    num_output = 2
-    B = np.eye(N, num_input)
-    C = np.eye(num_output, N)
-    D = np.random.randn(num_output, num_input)
-    delays = np.random.randint(50, 101, size=N)
-    A = pyFDN.random_orthogonal(N)
+    build = pyFDN.fdn_build_gallery(
+        4,
+        fs=fs,
+        delay_range=(50, 101),
+        num_inputs=3,
+        num_outputs=2,
+        io_type="identity",
+        direct_gain=None,
+        rt60=None,
+        rng=5,
+    )
+    A, B, C, D, delays = (
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        build.delays,
+    )
     return A, B, C, D, delays, impulse_response_length, pyFDN
 
 

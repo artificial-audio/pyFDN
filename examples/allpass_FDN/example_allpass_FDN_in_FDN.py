@@ -148,6 +148,7 @@ def _(
     nfft,
     np,
     output_delays,
+    pyFDN,
     system,
 ):
     # Input gain 1→N, output gain N→2 (stereo: normalize rows for equal energy)
@@ -188,8 +189,7 @@ def _(
         output_layer=dsp.iFFT(nfft),
     )
 
-    ir = model.get_time_response()
-    ir_stereo = np.asarray(ir).squeeze()
+    ir_stereo = pyFDN.flamo_time_response(model).squeeze()
     if ir_stereo.ndim == 3:
         ir_stereo = ir_stereo[0]
     return ir_stereo, model

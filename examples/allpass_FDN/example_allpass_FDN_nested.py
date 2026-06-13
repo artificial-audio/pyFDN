@@ -31,7 +31,6 @@ def _(mo):
 
 @app.cell
 def _():
-    # TODO: add a dsp diagram of the nested allpass FDN to the intro
     return
 
 

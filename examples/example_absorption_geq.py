@@ -63,12 +63,20 @@ def _(np, pyFDN):
     num_delays = 8
     rir_len = 3 * fs  # 3 seconds
 
-    # TODO: replace with vanilla FDN parameter
-    delays = np.sort(np.random.randint(500, 2001, size=num_delays))
-    feedback_matrix = pyFDN.random_orthogonal(num_delays)
-    B_in = np.ones((num_delays, 1)) / num_delays
-    C_out = np.ones((1, num_delays))
-    D_dir = np.zeros((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        num_delays,
+        fs=fs,
+        delay_range=(500, 2001),
+        sort_delays=True,
+        io_type="ones",
+        input_scale=1 / num_delays,
+        direct_gain=0.0,
+        rt60=None,
+        rng=5,
+    )
+    delays = build.delays
+    feedback_matrix = build.A
+    B_in, C_out, D_dir = build.B, build.C, build.D
 
     # Target RT at the 10 GEQ bands (seconds)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
@@ -159,7 +167,7 @@ def _(
         sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
     )
-    rir = np.asarray(model.get_time_response().squeeze())[:rir_len]
+    rir = pyFDN.flamo_time_response(model).squeeze()[:rir_len]
     rir /= np.max(np.abs(rir)) + 1e-300
     print(f"RIR computed: {rir_len} samples, peak at sample {np.argmax(np.abs(rir))}")
     return model, rir

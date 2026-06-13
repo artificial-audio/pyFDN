@@ -698,7 +698,6 @@ def _dss_to_res_flamo(
     zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
     residues = torch.where(torch.isfinite(residues), residues, zero)
     direct_term = decomposition.direct_probe.probe(1.0 + 0j)
-    # direct_term = 0.0 + 0.0j # TODO: fix later by removing this whole direct term
 
     return (
         _to_numpy(residues),

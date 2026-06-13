@@ -41,6 +41,9 @@ INTENTIONALLY_UNDOCUMENTED = {
     "sqrtm_psd",
     # misc internal helper
     "is_almost_zero",
+    # low-level FLAMO graph/recursion manipulation (advanced / plumbing)
+    "flamo_delay_feedback_matrix",
+    "swap_flamo_recursion_paths",
     # submodule aliases (namespaced access, not standalone functions)
     "allpass",
     "allpass_completion",

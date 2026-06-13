@@ -52,16 +52,22 @@ def _(np, pyFDN):
     np.random.seed(1)
 
     fs = 48000
-    n = 8
     delays = np.array([797.0, 839.0, 1051.0, 1409.0, 1693.0, 1867.0, 2243.0, 2657.0])
     rt_dc = 2.0  # T60 at DC (seconds)
     rt_ny = 0.5  # T60 at Nyquist (seconds)
-    feedback_matrix = pyFDN.random_orthogonal(n)
-    B = np.ones((n, 1))
-    C = np.ones((1, n))
-    D = np.ones((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        fs=fs,
+        delays=delays,
+        io_type="ones",
+        direct_gain=1.0,
+        rt60=None,
+        rng=1,
+    )
+    feedback_matrix = build.A
+    B, C, D = build.B, build.C, build.D
+    delays = build.delays
 
-    print(f"N={n}, fs={fs}, RT60 DC={rt_dc}s Nyquist={rt_ny}s")
+    print(f"N={delays.size}, fs={fs}, RT60 DC={rt_dc}s Nyquist={rt_ny}s")
     return B, C, D, delays, feedback_matrix, fs, rt_dc, rt_ny
 
 
@@ -141,8 +147,8 @@ def _(mo):
 
 
 @app.cell
-def _(model):
-    ir_python = model.get_time_response().flatten()
+def _(model, pyFDN):
+    ir_python = pyFDN.flamo_time_response(model).flatten()
     return (ir_python,)
 
 

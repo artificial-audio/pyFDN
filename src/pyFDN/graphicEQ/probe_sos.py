@@ -3,8 +3,6 @@
 Translation of probeSOS.m from fdnToolbox.
 """
 
-# TODO: check whether this resampling step is used anywhere.
-
 from __future__ import annotations
 
 import numpy as np

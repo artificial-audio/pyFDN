@@ -20,7 +20,7 @@ def _(mo):
 
     FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in *"Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.*
 
-    Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss2impz`. Modal decomposition (residue histogram) is omitted; pyFDN does not yet provide `dss2pr` (TODO).
+    Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
 
     - Original script in Matlab: Gloria Dal Santo, Wed, 18. Oct 2023
     - Python translation: Sebastian J. Schlecht, 2026-02-18

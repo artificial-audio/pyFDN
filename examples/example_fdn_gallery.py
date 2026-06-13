@@ -189,6 +189,72 @@ def _(mo):
     mo.md(r"""
     ---
 
+    # Complete FDN Build Gallery
+
+    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback,
+    input/output/direct matrices, delays, sample rate, and optional loop filters.
+    """)
+    return
+
+
+@app.cell
+def _(pyFDN):
+    builds = {
+        "lossless": pyFDN.fdn_build_gallery(8, rt60=None, rng=0),
+        "first-order absorption": pyFDN.fdn_build_gallery(
+            8, rt60=2.0, rt60_nyquist=0.5, rng=0
+        ),
+        "with post EQ": pyFDN.fdn_build_gallery(
+            8,
+            rt60=2.0,
+            rt60_nyquist=0.5,
+            post_eq_db_dc=0.0,
+            post_eq_db_nyquist=-6.0,
+            rng=0,
+        ),
+        "multichannel post EQ": pyFDN.fdn_build_gallery(
+            8,
+            num_outputs=3,
+            rt60=2.0,
+            rt60_nyquist=0.5,
+            post_eq_db_dc=[0.0, -3.0, -6.0],
+            post_eq_db_nyquist=-6.0,
+            rng=0,
+        ),
+    }
+    return (builds,)
+
+
+@app.cell
+def _(builds, mo):
+    mo.ui.table(
+        [
+            {
+                "Build": _name,
+                "Delay lines": _b.delays.size,
+                "Delay range": f"{_b.delays.min()}–{_b.delays.max()}",
+                "Filters": "yes" if _b.filters is not None else "no",
+                "Post EQ outputs": 0 if _b.post_eq is None else _b.post_eq.shape[2],
+            }
+            for _name, _b in builds.items()
+        ]
+    )
+    return
+
+
+@app.cell
+def _(builds, pyFDN):
+    pyFDN.plot_FDN_build(
+        builds["multichannel post EQ"], title="FDN build with per-output post EQ"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ---
+
     # FDN System Gallery
 
     Overview of full FDN system types available in `pyFDN.fdn_system_gallery`.

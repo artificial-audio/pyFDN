@@ -28,14 +28,11 @@ def _(mo):
 
 @app.cell
 def _():
-    from importlib.resources import files
-
     import numpy as np
-    import soundfile as sf
 
     import pyFDN
 
-    return files, np, pyFDN, sf
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -47,11 +44,8 @@ def _(mo):
 
 
 @app.cell
-def _(files, mo, sf):
-    path = files("pyFDN.audio") / "synth_dry.wav"
-    with path.open("rb") as f:
-        dry, fs = sf.read(f, dtype="float64")
-    dry = dry[:, 0] if dry.ndim > 1 else dry
+def _(mo, pyFDN):
+    dry, fs = pyFDN.load_audio("synth_dry.wav")
 
     print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry) / fs:.2f} s)")
     mo.vstack([mo.audio(dry, fs)])
@@ -68,18 +62,20 @@ def _(mo):
 
 @app.cell
 def _(fs, np, pyFDN):
-    N = 8
     delays = pyFDN.ms_to_smp(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
-    rt60 = 2.0  # reverberation time in seconds
-
-    U = pyFDN.random_orthogonal(N)  # N×N orthogonal mixing matrix
-    g = pyFDN.rt_to_gain_per_sample(rt60, fs)  # broadband gain per sample for RT60
-    G = np.diag(g**delays)  # delay-proportional attenuation
-    A = G @ U  # feedback matrix: decay × mixing
-
-    B = np.ones((N, 1)) / np.sqrt(N)  # N×1 input gain
-    C = np.ones((1, N)) / np.sqrt(N)  # 1×N output gain
-    D = np.zeros((1, 1))  # no direct path
+    build = pyFDN.fdn_build_gallery(
+        fs=fs,
+        delays=delays,
+        io_type="normalized",
+        direct_gain=0.0,
+        rt60=None,
+        rng=0,
+    )
+    # Bake delay-proportional broadband decay into the lossless feedback matrix.
+    g = pyFDN.rt_to_gain_per_sample(2.0, fs)
+    delays = build.delays
+    A = np.diag(g**delays) @ build.A
+    B, C, D = build.B, build.C, build.D
 
     print(f"Delays: {delays} samples, gain per sample: {g:.6f}")
     return A, B, C, D, delays

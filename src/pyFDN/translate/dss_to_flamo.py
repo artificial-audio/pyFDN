@@ -64,7 +64,8 @@ def dss_to_flamo(
     device : torch device or None
         Device; default is cuda if available else cpu.
     shell : bool
-        If True (default), wrap the core in a Shell with FFT/iFFT for get_time_response().
+        If True (default), wrap the core in a Shell with FFT/iFFT. Use
+        :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
         If False, return only the core (e.g. for use as post_delay_module in another dss_to_flamo).
     dtype : torch.dtype or None
         Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
@@ -82,7 +83,8 @@ def dss_to_flamo(
     Returns
     -------
     model : flamo.processor.system.Shell or core
-        If shell=True, FLAMO Shell (use model.get_time_response() for IR).
+        If shell=True, FLAMO Shell. Use :func:`pyFDN.flamo_time_response` for
+        a NumPy impulse response.
         If shell=False, the core module (same I/O as B.shape[1] / C.shape[0]).
     """
     if not _HAS_FLAMO:

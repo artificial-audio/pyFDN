@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.acoustics import one_pole_absorption
+from pyFDN.auxiliary.flamo import flamo_time_response
 
 
 @pytest.fixture(scope="module")
@@ -128,7 +129,7 @@ def one_pole_absorption_reference(loadmat):
         #     impulse[0, 0, 0] = 1.0
         #     ir_python = model(impulse).squeeze().cpu().numpy()
 
-        ir_python = model.get_time_response().flatten()
+        ir_python = flamo_time_response(model).flatten()
 
     return {
         "sos_matlab": sos_matlab,

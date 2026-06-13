@@ -43,7 +43,9 @@ Matrix Generators
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
+   pyFDN.fdn_build_gallery
    pyFDN.FDNSystem
+   pyFDN.FDNBuild
 
 Allpass FDN
 -----------
@@ -82,6 +84,7 @@ Acoustics & Absorption
 
    pyFDN.absorption_filters
    pyFDN.first_order_absorption
+   pyFDN.first_order_shelving_eq
    pyFDN.one_pole_absorption
    pyFDN.sos_gain_per_sample_curves
    pyFDN.echo_density
@@ -128,6 +131,7 @@ Delay Utilities
    pyFDN.matrix_delay_approximation
    pyFDN.mgrpdelay
    pyFDN.ms_to_smp
+   pyFDN.flamo_time_response
 
 Polynomial & Matrix Maths
 --------------------------
@@ -175,6 +179,7 @@ General Utilities
    pyFDN.mulaw_decode
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
+   pyFDN.load_audio
    pyFDN.pole_boundaries
    pyFDN.skew
 
@@ -207,6 +212,7 @@ FDN Processing
    :nosignatures:
 
    pyFDN.process_fdn
+   pyFDN.flamo_process
 
 Plotting
 --------
@@ -219,6 +225,7 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
+   pyFDN.plot_FDN_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
@@ -239,3 +246,5 @@ FLAMO Graph
    pyFDN.plot_flamo_graph
    pyFDN.flamo_model_to_nodes
    pyFDN.flamo_nodes_flat
+   pyFDN.flamo_model_to_fdn_parameters
+   pyFDN.FlamoFDNParameters

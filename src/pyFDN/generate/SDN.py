@@ -49,7 +49,7 @@ def _dist(p, q):
     return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2)
 
 
-def _cuboid_walls(Lx, Ly, Lz):  # TODO: fix naming of the walls, see also visualization
+def _cuboid_walls(Lx, Ly, Lz):
     """
     Return list of 6 walls as plane coeffs (a,b,c,d) for ax+by+cz+d=0.
     Order and planes must match Geometry.Cuboid.setWallPosition():

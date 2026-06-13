@@ -166,7 +166,7 @@ def test_process_fdn_absorption_matches_flamo() -> None:
         sos_filter=sos,
         dtype=torch.float64,
     )
-    ir_flamo = np.asarray(model.get_time_response().squeeze())[:ir_len]
+    ir_flamo = pyFDN.flamo_time_response(model).squeeze()[:ir_len]
     np.testing.assert_allclose(ir_td, ir_flamo, atol=1e-6)
 
 
@@ -201,8 +201,8 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
         )
 
     ir_len = 4096
-    ir_plain = np.asarray(build(None).get_time_response().squeeze())[:ir_len]
-    ir_eq = np.asarray(build(eq_sos[:, :, np.newaxis]).get_time_response().squeeze())[
+    ir_plain = pyFDN.flamo_time_response(build(None)).squeeze()[:ir_len]
+    ir_eq = pyFDN.flamo_time_response(build(eq_sos[:, :, np.newaxis])).squeeze()[
         :ir_len
     ]
     np.testing.assert_allclose(ir_eq, sosfilt(eq_sos, ir_plain), atol=1e-8)

@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -26,24 +26,28 @@ def _(mo):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
 
     import pyFDN
 
-    return np, plt, pyFDN
+    return np, pyFDN
 
 
 @app.cell
 def _(np, pyFDN):
     np.random.seed(11)
 
-    n = 4
     delays = np.array([41, 53, 67, 79], dtype=int)
-    A = 0.65 * pyFDN.random_orthogonal(n)
-    b = np.eye(n, 1)
-    c = np.eye(1, n)
-    d = np.ones((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        delays=delays,
+        io_type="identity",
+        direct_gain=1.0,
+        rt60=None,
+        rng=11,
+    )
+    # Uniform feedback attenuation for a stable, decaying system to analyse.
+    A = 0.65 * build.A
+    b, c, d, delays = build.B, build.C, build.D, build.delays
     return A, b, c, d, delays
 
 

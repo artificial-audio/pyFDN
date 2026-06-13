@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -63,13 +63,18 @@ def _(mo):
 
 
 @app.cell
-def _(torch):
+def _(pyFDN, torch):
     fs = 48000
     nfft = 2**17
 
-    # Delay lines per room (defines the split; change only here to resize rooms)
     N1 = 6
     N2 = 6
+    small_room = pyFDN.fdn_build_gallery(
+        N1, fs=fs, delay_range=(400, 800), rt60=0.525, io_type="ones", rng=5
+    )
+    large_room = pyFDN.fdn_build_gallery(
+        N2, fs=fs, delay_range=(1100, 2600), rt60=4.2, io_type="ones", rng=6
+    )
     N = N1 + N2
     ix1 = slice(0, N1)  # indices for room 1
     ix2 = slice(N1, N)  # indices for room 2
@@ -79,7 +84,19 @@ def _(torch):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print(f"Device: {device}, FDN: {N} delay lines (room 1: {N1}, room 2: {N2})")
-    return N, N1, N2, device, fs, ix1, ix2, nfft, num_input, num_output
+    return (
+        N,
+        N1,
+        device,
+        fs,
+        ix1,
+        ix2,
+        large_room,
+        nfft,
+        num_input,
+        num_output,
+        small_room,
+    )
 
 
 @app.cell(hide_code=True)
@@ -87,23 +104,20 @@ def _(mo):
     mo.md(r"""
     ## Delay lines
 
-    Per-room delay lengths (samples); same seed as reference MATLAB.
+    Random short and long room delays from the gallery presets.
     """)
     return
 
 
 @app.cell
-def _(torch):
-    # Per-room delay lengths (samples); lengths must match N1 and N2
-    delays_room1 = torch.tensor([411, 736, 403, 760, 544, 606], dtype=torch.float32)
-    delays_room2 = torch.tensor(
-        [2532, 2037, 1593, 1375, 1161, 2477], dtype=torch.float32
-    )
+def _(large_room, small_room, torch):
+    delays_room1 = torch.as_tensor(small_room.delays, dtype=torch.float32)
+    delays_room2 = torch.as_tensor(large_room.delays, dtype=torch.float32)
     delay_lengths = torch.cat([delays_room1, delays_room2])
 
     print(f"Room 1 delays: {delays_room1.tolist()} samples")
     print(f"Room 2 delays: {delays_room2.tolist()} samples")
-    return (delay_lengths,)
+    return delay_lengths, delays_room1, delays_room2
 
 
 @app.cell(hide_code=True)
@@ -111,16 +125,17 @@ def _(mo):
     mo.md(r"""
     ## Feedback matrix
 
-    Coupled orthogonal matrix from `tiny_rotation_matrix` per room and a coupling parameter.
+    Couple the orthogonal feedback matrices of the small-room and large-room
+    gallery builds.
     """)
     return
 
 
 @app.cell
-def _(N, N1, N2, ix1, ix2, pyFDN, torch):
+def _(N, ix1, ix2, large_room, pyFDN, small_room, torch):
     coupling = 0.3
-    A1 = pyFDN.tiny_rotation_matrix(N1, 12).float()
-    A2 = pyFDN.tiny_rotation_matrix(N2, 12).float()
+    A1 = torch.as_tensor(small_room.A, dtype=torch.float32)
+    A2 = torch.as_tensor(large_room.A, dtype=torch.float32)
     A1_sqrt = pyFDN.matrix_sqrt(A1)
     A2_sqrt = pyFDN.matrix_sqrt(A2)
 
@@ -145,13 +160,27 @@ def _(mo):
 
 
 @app.cell
-def _(N, device, dsp, ix1, ix2, nfft, num_input, num_output, torch):
+def _(
+    N,
+    device,
+    dsp,
+    ix1,
+    ix2,
+    large_room,
+    nfft,
+    num_input,
+    num_output,
+    small_room,
+    torch,
+):
     # Source in room 1 only
     input_gain = dsp.Gain(
         size=(N, num_input), nfft=nfft, requires_grad=False, device=device
     )
     input_gain_values = torch.zeros(N, num_input)
-    input_gain_values[ix1, :] = 1.0
+    input_gain_values[ix1, :] = torch.as_tensor(
+        small_room.B, dtype=input_gain_values.dtype
+    )
     input_gain.assign_value(input_gain_values)
 
     # One receiver per room (out 1 = room 1, out 2 = room 2)
@@ -159,8 +188,12 @@ def _(N, device, dsp, ix1, ix2, nfft, num_input, num_output, torch):
         size=(num_output, N), nfft=nfft, requires_grad=False, device=device
     )
     output_gain_values = torch.zeros(num_output, N)
-    output_gain_values[0, ix1] = 1.0
-    output_gain_values[1, ix2] = 1.0
+    output_gain_values[0, ix1] = torch.as_tensor(
+        small_room.C[0], dtype=output_gain_values.dtype
+    )
+    output_gain_values[1, ix2] = torch.as_tensor(
+        large_room.C[0], dtype=output_gain_values.dtype
+    )
     output_gain.assign_value(output_gain_values)
     return input_gain, output_gain
 
@@ -189,26 +222,22 @@ def _(N, delay_lengths, device, dsp, feedback_matrix, nfft):
 
 
 @app.cell
-def _(N, delay_lengths, device, dsp, fs, ix1, ix2, nfft, pyFDN, torch):
-    # Per-room RT (1 kHz band); frequency-independent attenuation
-    short_rt = torch.tensor(
-        [0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175]
-    )
-    long_rt = torch.tensor([4.0, 4.0, 4.4, 4.6, 4.2, 3.0, 2.2, 1.6, 1.4, 1.4])
-    short_rt_1khz = short_rt[4].item()
-    long_rt_1khz = long_rt[4].item()
+def _(N, device, dsp, large_room, nfft, np, small_room, torch):
+    def _dc_gain(filters):
+        numerator = np.prod(np.sum(filters[:, :3, :], axis=1), axis=0)
+        denominator = np.prod(np.sum(filters[:, 3:, :], axis=1), axis=0)
+        return numerator / denominator
 
-    attenuation_values = torch.zeros(N)
-    g_short = pyFDN.rt_to_gain_per_sample(short_rt_1khz, fs)
-    g_long = pyFDN.rt_to_gain_per_sample(long_rt_1khz, fs)
-    attenuation_values[ix1] = g_short ** delay_lengths[ix1]
-    attenuation_values[ix2] = g_long ** delay_lengths[ix2]
+    attenuation_values = torch.as_tensor(
+        np.concatenate([_dc_gain(small_room.filters), _dc_gain(large_room.filters)]),
+        dtype=torch.float32,
+    )
 
     attenuation = dsp.parallelGain(
         size=(N,), nfft=nfft, requires_grad=False, device=device
     )
     attenuation.assign_value(attenuation_values)
-    print(f"Room 1 RT (1 kHz): {short_rt_1khz:.2f} s, Room 2: {long_rt_1khz:.2f} s")
+    print("Using small-room and large-room gallery absorption")
     return (attenuation,)
 
 
@@ -253,8 +282,8 @@ def _(mo):
 
 
 @app.cell
-def _(fs, model, np):
-    ir = np.asarray(model.get_time_response().squeeze())
+def _(fs, model, pyFDN):
+    ir = pyFDN.flamo_time_response(model).squeeze()
     print(f"IR shape: {ir.shape}, duration: {ir.shape[0] / fs:.2f} s")
     return (ir,)
 
@@ -269,38 +298,54 @@ def _(mo):
 
 @app.cell
 def _(fs, ir, pyFDN):
-    pyFDN.plot_impulse_response(
+    fig_ir = pyFDN.plot_impulse_response(
         ir[:, 0],
         ir[:, 1],
         fs=fs,
         labels=["Room 1 (source)", "Room 2"],
         title="Coupled Rooms Impulse Response",
     )
-    return
+    return (fig_ir,)
 
 
 @app.cell
-def _(N1, feedback_matrix, fs, ir, mo, pyFDN):
-    _fig_matrix = pyFDN.plot_matrix(
-        feedback_matrix.numpy(),
-        title="Feedback matrix",
-        block_boundaries=[N1],
+def _(
+    fig_ir,
+    fs,
+    ir,
+    mo,
+    model,
+    pyFDN,
+):
+    parameters = pyFDN.flamo_model_to_fdn_parameters(model)
+
+    fig_parameters = pyFDN.plot_fdn_parameter(
+        parameters.delays,
+        parameters.A,
+        parameters.B,
+        parameters.C,
+        parameters.D,
+        attenuation_sos=parameters.attenuation_sos,
+        post_eq_sos=parameters.post_eq_sos,
+        fs=parameters.fs or fs,
+        title="Coupled Rooms FDN Parameters",
     )
-    _fig_edc = pyFDN.plot_edc(
+
+    fig_edc = pyFDN.plot_edc(
         ir[:, 0],
         ir[:, 1],
         fs=fs,
         labels=["Room 1", "Room 2"],
         title="Energy decay curves",
     )
-    _fig_edc.update_xaxes(range=[0, min(2, len(ir) / fs)])
-    _fig_edc.update_yaxes(range=[-40, 15])
-    _fig_matrix.show()
-    _fig_edc.show()
+    fig_edc.update_xaxes(range=[0, min(2, len(ir) / fs)])
+    fig_edc.update_yaxes(range=[-40, 15])
 
-    # add play widget
     mo.vstack(
         [
+            fig_ir,
+            fig_parameters,
+            fig_edc,
             mo.md("Room 1 RIR:"),
             mo.audio(ir[:, 0], rate=fs),
             mo.md("Room 2 RIR:"),
