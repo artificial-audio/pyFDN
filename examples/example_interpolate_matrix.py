@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -31,7 +31,6 @@ def _():
     import math
 
     import numpy as np
-    import plotly.graph_objects as go
     import plotly.io as pio
 
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
@@ -39,7 +38,7 @@ def _():
 
     import pyFDN
 
-    return go, hadamard, math, np, pyFDN
+    return hadamard, math, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -83,26 +82,16 @@ def _(mo):
 
 
 @app.cell
-def _(C, T):
-    # Plotly Express: one call, slider + play (animation_frame = axis to slice)
-    import plotly.express as px
-
-    zmin = -1
-    zmax = 1
-    _fig = px.imshow(
-        C,
-        animation_frame=2,
-        origin="upper",
-        range_color=(zmin, zmax),
-        color_continuous_scale="RdBu",
-        color_continuous_midpoint=0,
-        labels={"animation_frame": "t"},
+def _(C, T, pyFDN):
+    # animate one plot_matrix heatmap per time step (slider + play built in).
+    _fig = pyFDN.animate(
+        lambda M: pyFDN.plot_matrix(M, zmin=-1, zmax=1),
+        [C[:, :, k] for k in range(C.shape[2])],
+        labels=T,
+        label_prefix="t = ",
+        label_format=".2f",
     )
-    _fig.update_layout(height=420)
-    _fig.layout.sliders[0].currentvalue = {"prefix": "t = ", "visible": True}
-    for k, step in enumerate(_fig.layout.sliders[0].steps):
-        step["label"] = f"{T[k]:.2f}"
-    # Optional: label slider with T values
+    _fig.update_layout(height=420, width=420)
     _fig.show()
     return
 
@@ -118,7 +107,7 @@ def _(mo):
 
 
 @app.cell
-def _(C, N, T, go, np, num_t, pyFDN):
+def _(C, N, T, np, num_t, pyFDN):
     ir_len = 2000
     delays = np.array([101, 163, 197, 241], dtype=np.int64)
     g = 0.999
@@ -136,26 +125,11 @@ def _(C, N, T, go, np, num_t, pyFDN):
         )  # feedback matrix with gain per delay
         ir = np.asarray(ir).squeeze().ravel()
         irs.append(ir)
-    _fig = go.Figure()
-    for i, (ir, label) in enumerate(zip(irs, labels, strict=False)):
-        _fig.add_trace(
-            go.Scatter(
-                y=pyFDN.mulaw_encode(ir) + 2 * i,
-                mode="lines",
-                name=label,
-                line={"width": 1.5},
-            )
-        )
-    _fig.update_layout(
+    pyFDN.plot_impulse_response(
+        *irs,
+        labels=labels,
         title="FDN impulse response for three interpolated feedback matrices",
-        xaxis_title="Time [samples]",
-        yaxis_title="Amplitude [μ-law]",
-        legend_title="Interpolation",
-        hovermode="x unified",
-        template="plotly_white",
-        height=400,
     )
-    _fig.show()
     return
 
 

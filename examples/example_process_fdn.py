@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -28,13 +28,12 @@ def _(mo):
 def _():
     from importlib.resources import files
 
-    import matplotlib.pyplot as plt
     import numpy as np
     import soundfile as sf
 
     import pyFDN
 
-    return files, np, plt, pyFDN, sf
+    return files, np, pyFDN, sf
 
 
 @app.cell(hide_code=True)
@@ -111,24 +110,15 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, delays, fs, np, plt, pyFDN):
+def _(A, B, C, D, delays, fs, pyFDN):
     ir = pyFDN.dss_to_impz(4 * fs, delays, A, B, C, D)[:, 0, 0]
-    t = np.arange(len(ir)) / fs
+    pyFDN.plot_impulse_response(ir, fs=fs)
+    return (ir,)
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 5))
 
-    axes[0].plot(t, pyFDN.mulaw_encode(ir), lw=0.5)
-    axes[0].set_xlabel("Time (s)")
-    axes[0].set_ylabel("Amplitude (μ-law)")
-    axes[0].set_title("Impulse Response")
-
-    axes[1].plot(t, pyFDN.edc(ir))
-    axes[1].set_xlabel("Time (s)")
-    axes[1].set_ylabel("EDC (dB)")
-    axes[1].set_title("Energy Decay Curve")
-
-    plt.tight_layout()
-    plt.show()
+@app.cell
+def _(fs, ir, pyFDN):
+    pyFDN.plot_edc(ir, fs=fs)
     return
 
 

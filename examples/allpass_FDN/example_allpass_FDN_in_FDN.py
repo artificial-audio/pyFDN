@@ -36,7 +36,6 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import plotly.io as pio
 
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
@@ -58,7 +57,6 @@ def _():
         delay_module,
         dsp,
         gain_module,
-        go,
         nfft,
         np,
         pyFDN,
@@ -117,10 +115,10 @@ def _(Fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     input_delays = delay_module(input_delay_sec, nfft, Fs=Fs)
     output_delays = delay_module(output_delay_sec, nfft, Fs=Fs)
 
-    # Attenuation: one-pole absorption (SOS shape must be (n_sections, 6, n_channels))
+    # Attenuation: first-order absorption (SOS shape must be (n_sections, 6, n_channels))
     main_delay_smp = np.round(main_delay_sec * Fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
-    sos = pyFDN.one_pole_absorption(rt_dc, rt_ny, main_delay_smp, fs=Fs)
+    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, main_delay_smp, fs=Fs)
     sos = sos[np.newaxis, :, :]  # (1, 6, N)
     attenuation = sos_filter_module(sos, nfft)
     return attenuation, input_delays, main_delays, output_delays
@@ -219,28 +217,16 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, go, ir_stereo, mo, np, pyFDN):
-    t = np.arange(ir_stereo.shape[0]) / Fs
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 0]), mode="lines", name="L")
-    )
-    fig.add_trace(
-        go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 1]), mode="lines", name="R")
-    )
-    fig.update_layout(
-        xaxis_title="Time [s]",
-        yaxis_title="Amplitude [mu-law]",
+def _(Fs, ir_stereo, mo, pyFDN):
+    fig = pyFDN.plot_impulse_response(
+        ir_stereo[:, 0],
+        ir_stereo[:, 1],
+        fs=Fs,
+        labels=["L", "R"],
         title="Allpass FDN in FDN — stereo IR",
-        height=300,
-        margin={"t": 50, "b": 50, "l": 60, "r": 40},
-        # xaxis=dict(range=[0, 0.2]),
-        showlegend=True,
     )
-    fig.show()
 
-    mo.vstack([mo.audio(ir_stereo.T, Fs)])
+    mo.vstack([fig, mo.audio(ir_stereo.T, Fs)])
     return
 
 

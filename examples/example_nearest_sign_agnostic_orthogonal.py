@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -41,14 +41,12 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import plotly.io as pio
-    from plotly.subplots import make_subplots
 
     import pyFDN
 
     pio.renderers.default = "sphinx_gallery"
-    return go, make_subplots, np, pyFDN
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -116,7 +114,7 @@ def _(mo):
 
 
 @app.cell
-def _(A_original, B, N, classic, go, make_subplots, np, pyFDN, sign_agnostic):
+def _(A_original, B, classic, np, pyFDN, sign_agnostic):
     def align_signs(M, ref):
         M = M * np.sign(np.sum(M * ref, axis=1, keepdims=True))  # rows
         M = M * np.sign(np.sum(M * ref, axis=0, keepdims=True))  # cols
@@ -145,45 +143,17 @@ def _(A_original, B, N, classic, go, make_subplots, np, pyFDN, sign_agnostic):
         "|Nearest orthogonal aligned|",
     ]
 
-    fig = make_subplots(rows=3, cols=2, subplot_titles=titles)
-    tick_vals = list(range(N))
-    for idx, (mat, _title) in enumerate(zip(matrices, titles, strict=True)):
-        row, col = divmod(idx, 2)
-        row, col = row + 1, col + 1
-        fig.add_trace(
-            go.Heatmap(
-                z=mat,
-                colorscale="RdBu",
-                zmid=0,
-                zmin=-1,
-                zmax=1,
-                showscale=(idx == 5),
-            ),
-            row=row,
-            col=col,
-        )
-        fig.update_xaxes(
-            tickvals=tick_vals, ticktext=[str(i) for i in tick_vals], row=row, col=col
-        )
-        fig.update_yaxes(
-            tickvals=tick_vals,
-            ticktext=[str(i) for i in tick_vals],
-            autorange="reversed",
-            row=row,
-            col=col,
-        )
-
-    fig.update_layout(
+    fig = pyFDN.plot_matrix_grid(
+        matrices,
+        titles=titles,
+        ncols=2,
+        zmin=-1,
+        zmax=1,
+        show_ticks=True,
         title="Sign-agnostic vs. classic nearest orthogonal",
         height=1000,
-        template="plotly_white",
     )
     fig.show()
-    return
-
-
-@app.cell
-def _():
     return
 
 

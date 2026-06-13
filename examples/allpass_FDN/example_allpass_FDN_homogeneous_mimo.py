@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -118,7 +118,7 @@ def _(mo):
 def _(A, B, C, D, Fs, delays, pyFDN):
     ir_len = Fs  # 2 seconds
     impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)
-    return impulse_response, ir_len
+    return (impulse_response,)
 
 
 @app.cell(hide_code=True)
@@ -132,20 +132,20 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, mo, np):
-    import matplotlib.pyplot as plt
-
+def _(Fs, impulse_response, mo, pyFDN):
     ir_channel = impulse_response[:, 2, 1]
-    t = np.arange(ir_len) / Fs
-    _fig, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(t, ir_channel, color="tab:blue")
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Amplitude")
-    ax.set_title("Homogeneous allpass FDN — impulse response (time domain)")
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.show()
+    _fig = pyFDN.plot_impulse_response(
+        ir_channel,
+        fs=Fs,
+        title="Homogeneous allpass FDN — impulse response (time domain)",
+    )
+    _fig.show()
     mo.vstack([mo.audio(ir_channel, Fs)])
+    return
+
+
+@app.cell
+def _():
     return
 
 

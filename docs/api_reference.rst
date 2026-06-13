@@ -35,6 +35,7 @@ Acoustics & Absorption
    :nosignatures:
 
    pyFDN.absorption_filters
+   pyFDN.first_order_absorption
    pyFDN.one_pole_absorption
    pyFDN.echo_density
    pyFDN.edc
@@ -131,6 +132,9 @@ Plotting
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.plot_db_per_sample
+   pyFDN.plot_fdn_parameter
+   pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
    pyFDN.plot_system_matrix
 

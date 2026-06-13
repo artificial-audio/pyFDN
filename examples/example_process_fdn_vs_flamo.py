@@ -217,35 +217,14 @@ def _(mo):
 
 
 @app.cell
-def _(go, ir_flamo, ir_td, np, pyFDN):
-    fig_ir = go.Figure()
+def _(ir_flamo, ir_td, np, pyFDN):
     t_axis = np.arange(len(ir_td))
-    fig_ir.add_trace(
-        go.Scatter(
-            x=t_axis,
-            y=pyFDN.mulaw_encode(ir_td),
-            mode="lines",
-            name="process_fdn (time domain)",
-            line={"width": 1.0},
-        )
-    )
-    fig_ir.add_trace(
-        go.Scatter(
-            x=t_axis,
-            y=pyFDN.mulaw_encode(ir_flamo),
-            mode="lines",
-            name="FLAMO (frequency domain)",
-            line={"width": 1.0, "dash": "dash"},
-        )
-    )
-    fig_ir.update_layout(
+    pyFDN.plot_impulse_response(
+        ir_td,
+        ir_flamo,
+        labels=["process_fdn (time domain)", "FLAMO (frequency domain)"],
         title="Impulse response: process_fdn vs FLAMO",
-        xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Amplitude (mu-law)"},
-        template="plotly_white",
-        height=400,
     )
-    fig_ir.show()
     return (t_axis,)
 
 

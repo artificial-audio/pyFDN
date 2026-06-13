@@ -65,23 +65,13 @@ def _(A, b, c, d, delays, np, pyFDN):
 
 
 @app.cell
-def _(ir_modals, ir_time, modes, plt, pyFDN):
-    plt.figure(figsize=(10, 4))
-    plt.plot(pyFDN.mulaw_encode(ir_time), label="IR from dss_to_impz", linewidth=1.2)
-    for _mode in modes:
-        plt.plot(
-            pyFDN.mulaw_encode(ir_modals[_mode]),
-            "--",
-            label=f"IR from {_mode}",
-            linewidth=1.2,
-        )
-    plt.title("DSS time response vs modal reconstruction")
-    plt.xlabel("Time [samples]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+def _(ir_modals, ir_time, modes, pyFDN):
+    pyFDN.plot_impulse_response(
+        ir_time,
+        *(ir_modals[_mode] for _mode in modes),
+        labels=["IR from dss_to_impz"] + [f"IR from {_mode}" for _mode in modes],
+        title="DSS time response vs modal reconstruction",
+    )
     return
 
 

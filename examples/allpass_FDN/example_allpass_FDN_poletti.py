@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -24,12 +24,6 @@ def _(mo):
 
     — Original MATLAB: Sebastian J. Schlecht, 26 Dec 2020
     """)
-    return
-
-
-@app.cell
-def _():
-    # TODO: add a dsp diagram of the poletti allpass FDN to the intro
     return
 
 
@@ -204,7 +198,7 @@ def _(mo):
 def _(Fs, impulse_response, mo, pyFDN):
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
-    _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2), clim=(-200, -100))
+    _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2))
     _fig.show()
 
     mo.vstack([mo.audio(channel_ir, Fs)])

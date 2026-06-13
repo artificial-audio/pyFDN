@@ -316,46 +316,17 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
     _, echo_delay_matrix = pyFDN.echo_density(ir_dm, n=1024, fs=fs)
     _, echo_swapped = pyFDN.echo_density(ir_sw, n=1024, fs=fs)
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=t,
-            y=pyFDN.mulaw_encode(ir_v) + 4,
-            mode="lines",
-            name="Vanilla FDN",
-            line={"width": 0.5},
-            opacity=0.8,
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=t,
-            y=pyFDN.mulaw_encode(ir_dm) + 2,
-            mode="lines",
-            name="Delay+matrix+delay in feedback",
-            line={"width": 0.5},
-            opacity=0.8,
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=t,
-            y=pyFDN.mulaw_encode(ir_sw),
-            mode="lines",
-            name="Swapped feedforward/feedback",
-            line={"width": 0.5},
-            opacity=0.8,
-        )
-    )
-    fig.update_layout(
+    fig = pyFDN.plot_impulse_response(
+        ir_v,
+        ir_dm,
+        ir_sw,
+        fs=fs,
+        labels=[
+            "Vanilla FDN",
+            "Delay+matrix+delay in feedback",
+            "Swapped feedforward/feedback",
+        ],
         title="Delay feedback matrix density",
-        xaxis_title="Time [s]",
-        yaxis_title="Amplitude [μ-law]",
-        xaxis={"range": [0, 0.8], "showgrid": True, "gridwidth": 1, "griddash": "dot"},
-        yaxis={"showgrid": True, "gridwidth": 1, "griddash": "dot"},
-        legend={"yanchor": "top", "y": 0.99, "xanchor": "right", "x": 0.99},
-        height=500,
-        margin={"l": 60, "r": 40, "t": 50, "b": 50},
     )
 
     fig2 = go.Figure()

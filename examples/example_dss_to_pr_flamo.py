@@ -228,7 +228,7 @@ def _():
 
 @app.cell
 def _(np, pyFDN, torch):
-    # Build a small stable FDN in DSS form with an SOS (one-pole absorption) in the loop
+    # Build a small stable FDN in DSS form with an SOS (first-order absorption) in the loop
     Fs = 48000.0
     n = 4
     delays = np.array([531, 673, 798, 977], dtype=int)
@@ -237,9 +237,9 @@ def _(np, pyFDN, torch):
     C = np.eye(1, n)
     D = np.zeros((1, 1))
 
-    # One-pole absorption in the loop: (6, N) -> (1, 6, N) for dss_to_flamo
+    # First-order absorption in the loop: (6, N) -> (1, 6, N) for dss_to_flamo
     rt_dc, rt_ny = 0.5, 0.1  # reverb time at DC and Nyquist (seconds)
-    sos_6n = pyFDN.one_pole_absorption(rt_dc, rt_ny, delays, Fs)
+    sos_6n = pyFDN.first_order_absorption(rt_dc, rt_ny, delays, Fs)
     sos_loop = np.asarray(sos_6n)[np.newaxis, :, :]  # (1, 6, N)
 
     # DSS -> FLAMO with SOS in the loop (delay -> filter -> A). shell=True for get_time_response().
@@ -328,24 +328,15 @@ def _(
     plt.tight_layout()
     ax1 = plt.gca()
 
-    # Plot FLAMO vs modal IR (mu-law for visibility)
-    plt.figure(figsize=(10, 4))
-    plt.plot(pyFDN.mulaw_encode(ir_ref), label="IR from FLAMO", linewidth=1.2)
-    plt.plot(
-        pyFDN.mulaw_encode(ir_modal),
-        "--",
-        label="IR from poles/residues",
-        linewidth=1.2,
+    # Plot FLAMO vs modal IR
+    _fig_ir = pyFDN.plot_impulse_response(
+        ir_ref,
+        ir_modal,
+        labels=["IR from FLAMO", "IR from poles/residues"],
+        title="FLAMO time response vs modal reconstruction",
     )
-    plt.title("FLAMO time response vs modal reconstruction")
-    plt.xlabel("Time [samples]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    ax2 = plt.gca()
 
-    mo.vstack([ax1, ax2])
+    mo.vstack([ax1, _fig_ir])
     return
 
 

@@ -5,7 +5,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption, rt_to_slope, slope_to_rt
+from pyFDN.auxiliary.acoustics import (
+    first_order_absorption,
+    one_pole_absorption,
+    rt_to_slope,
+    slope_to_rt,
+)
 from pyFDN.auxiliary.delay import ms_to_smp
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
 from pyFDN.auxiliary.utils import (
@@ -81,6 +86,32 @@ def test_one_pole_absorption_shapes_are_correct():
     sos = one_pole_absorption(1.2, 0.8, delays, 44100.0)
     assert sos.shape == (6, delays.size)
     assert np.all(sos[3, :] == 1.0)
+
+
+def test_first_order_absorption_matches_rt_targets():
+    fs = 48000.0
+    rt_dc, rt_ny = 1.2, 0.8
+    delays = np.array([100.0, 130.0, 250.0])
+    sos = first_order_absorption(rt_dc, rt_ny, delays, fs, crossover_frequency=4000.0)
+
+    assert sos.shape == (6, delays.size)
+    assert np.all(sos[3, :] == 1.0)
+    assert np.all(sos[[2, 5], :] == 0.0)  # first-order: b2 = a2 = 0
+    assert np.all(np.abs(sos[4, :]) < 1.0)  # stable pole
+
+    # gain at DC (z=1) and Nyquist (z=-1) must match the target decay per delay
+    h_dc = (sos[0] + sos[1]) / (sos[3] + sos[4])
+    h_ny = (sos[0] - sos[1]) / (sos[3] - sos[4])
+    np.testing.assert_allclose(h_dc, 10 ** (delays * (-60.0 / (rt_dc * fs)) / 20.0))
+    np.testing.assert_allclose(h_ny, 10 ** (delays * (-60.0 / (rt_ny * fs)) / 20.0))
+
+
+def test_first_order_absorption_clamps_high_crossover():
+    fs = 48000.0
+    delays = np.array([100.0, 130.0])
+    clamped = first_order_absorption(1.0, 0.5, delays, fs, crossover_frequency=fs / 3)
+    limit = first_order_absorption(1.0, 0.5, delays, fs, crossover_frequency=fs / 5)
+    np.testing.assert_allclose(clamped, limit)
 
 
 # ============================================================================

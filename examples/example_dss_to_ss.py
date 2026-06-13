@@ -29,7 +29,6 @@ def _(mo):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
     from scipy.signal import dimpulse, dlti, ss2tf
 
@@ -60,18 +59,14 @@ def _():
     ir_delay_state_space = pyFDN.dss_to_impz(impulse_response_length, m, A, b, c, d)
     ir_delay_state_space = np.asarray(ir_delay_state_space).squeeze()
 
-    # Plot both (mu-law encoded; delay-state-space shifted for visibility)
-    plt.figure()
-    plt.plot(pyFDN.mulaw_encode(ir_state_space), label="State space")
-    plt.plot(pyFDN.mulaw_encode(ir_delay_state_space) + 2, label="Delay state space")
-    plt.xlabel("Time [samples]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-
     # Sanity check: both implementations match
     assert pyFDN.is_almost_zero(ir_state_space - ir_delay_state_space, tol=0.001)
+
+    pyFDN.plot_impulse_response(
+        ir_state_space,
+        ir_delay_state_space,
+        labels=["State space", "Delay state space"],
+    )
     return
 
 

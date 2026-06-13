@@ -35,14 +35,13 @@ def _(mo):
 def _():
     from collections import OrderedDict
 
-    import matplotlib.pyplot as plt
     import numpy as np
     import torch
     from flamo.processor import dsp, system
 
     import pyFDN
 
-    return OrderedDict, dsp, np, plt, pyFDN, system, torch
+    return OrderedDict, dsp, np, pyFDN, system, torch
 
 
 @app.cell
@@ -267,59 +266,35 @@ def _(mo):
 
 
 @app.cell
-def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
-    plt.figure(figsize=(15, 5))
-
-    # Plot 1: Impulse responses
-    ax1 = plt.subplot(1, 3, 1)
-    samples = np.arange(len(ir))
-    ax1.plot(
-        samples,
-        pyFDN.mulaw_encode(ir[:, 0], 1),
-        label="Room 1 (source)",
-        alpha=0.7,
-        linewidth=0.5,
+def _(fs, ir, pyFDN):
+    pyFDN.plot_impulse_response(
+        ir[:, 0],
+        ir[:, 1],
+        fs=fs,
+        labels=["Room 1 (source)", "Room 2"],
+        title="Coupled Rooms Impulse Response",
     )
-    ax1.plot(
-        samples,
-        pyFDN.mulaw_encode(ir[:, 1], 1) - 2,
-        label="Room 2",
-        alpha=0.7,
-        linewidth=0.5,
+    return
+
+
+@app.cell
+def _(N1, feedback_matrix, fs, ir, mo, pyFDN):
+    _fig_matrix = pyFDN.plot_matrix(
+        feedback_matrix.numpy(),
+        title="Feedback matrix",
+        block_boundaries=[N1],
     )
-    ax1.set_xlabel("Time [samples]")
-    ax1.set_ylabel("Amplitude [mu-law]")
-    ax1.set_title("Coupled Rooms Impulse Response")
-    ax1.legend()
-
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xlim((0, len(ir)))
-
-    # Plot 2: Feedback matrix
-    ax2 = plt.subplot(1, 3, 2)
-    im = ax2.imshow(feedback_matrix.numpy(), cmap="RdBu_r", vmin=-1, vmax=1)
-    plt.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
-    ax2.set_title("Feedback Matrix")
-    ax2.axhline(y=N1 - 0.5, color="black", linewidth=1, linestyle="--", alpha=0.5)
-    ax2.axvline(x=N1 - 0.5, color="black", linewidth=1, linestyle="--", alpha=0.5)
-
-    # Plot 3: Energy decay curves
-    ax3 = plt.subplot(1, 3, 3)
-    t = np.arange(len(ir)) / fs
-    edc_db = pyFDN.sq_to_db(pyFDN.edc(ir))
-    ax3.plot(t, edc_db[:, 0], label="Room 1", alpha=0.8)
-    ax3.plot(t, edc_db[:, 1], label="Room 2", alpha=0.8)
-
-    ax3.set_xlabel("Time [s]")
-    ax3.set_ylabel("Energy [dB]")
-    ax3.set_title("Energy Decay Curves")
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    ax3.set_xlim((0, min(2, len(ir) / fs)))
-    ax3.set_ylim((-40, 15))
-
-    plt.tight_layout()
-    plt.show()
+    _fig_edc = pyFDN.plot_edc(
+        ir[:, 0],
+        ir[:, 1],
+        fs=fs,
+        labels=["Room 1", "Room 2"],
+        title="Energy decay curves",
+    )
+    _fig_edc.update_xaxes(range=[0, min(2, len(ir) / fs)])
+    _fig_edc.update_yaxes(range=[-40, 15])
+    _fig_matrix.show()
+    _fig_edc.show()
 
     # add play widget
     mo.vstack(

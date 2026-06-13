@@ -104,7 +104,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos_6n = pyFDN.one_pole_absorption(0.3, 0.1, delays, fs)  # (6, N)
+    sos_6n = pyFDN.first_order_absorption(0.3, 0.1, delays, fs)  # (6, N)
     x = np.random.randn(200, n)
 
     # block-wise filtering with persistent state matches one-shot sosfilt
@@ -152,7 +152,7 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.one_pole_absorption(0.15, 0.05, delays, fs)  # (6, N)
+    sos = pyFDN.first_order_absorption(0.15, 0.05, delays, fs)  # (6, N)
 
     ir_len = 4096
     impulse = np.zeros(ir_len)

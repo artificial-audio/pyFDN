@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -19,9 +19,9 @@ def _(mo):
     Schroeder allpass filters can be placed **behind the delays** in the FDN loop to increase echo density. The rendering is done with **FLAMO** (gain and delay modules).
 
     Steps:
-    1. Build a **MIMO parallel Schröder allpass** (block-diagonal).
+    1. Build a **MIMO parallel Schroeder allpass** (block-diagonal).
     2. Build a **vanilla FDN (SISO)**.
-    3. Place the **Schröder allpass behind the delays** of the FDN and render.
+    3. Place the **Schroeder allpass behind the delays** of the FDN and render.
 
     > Reference: Väänänen, R., Välimäki, V., Huopaniemi, J. & Karjalainen, M. Efficient and Parametric Reverberator for Room Acoustics Modeling. 200–203 (1997).
 
@@ -42,7 +42,6 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import plotly.io as pio
 
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
@@ -51,16 +50,16 @@ def _():
 
     np.random.seed(6)
     Fs = 48000
-    nfft = 2**17
-    return Fs, go, nfft, np, pyFDN
+    nfft = 2**16
+    return Fs, nfft, np, pyFDN
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 1. MIMO parallel Schröder allpass
+    ## 1. MIMO parallel Schroeder allpass
 
-    Build N parallel SISO Schröder allpasses (block-diagonal DSS), convert to FLAMO with **dss_to_flamo**, render and play.
+    Build N parallel SISO Schroeder allpasses (block-diagonal DSS), convert to FLAMO with **dss_to_flamo**, render and play.
     """)
     return
 
@@ -106,23 +105,15 @@ def _(A_sch, B_sch, C_sch, D_sch, delays_sch, ir_sch, pyFDN):
 
 
 @app.cell
-def _(Fs, go, ir_sch, mo, np, pyFDN):
+def _(Fs, ir_sch, mo, np, pyFDN):
     ir_sch_channel = ir_sch[0, :, 1].squeeze()
-    _t = np.arange(len(ir_sch_channel)) / Fs
-    _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_sch_channel), mode="lines"))
-    _fig.update_layout(
-        xaxis_title="Time [s]",
-        yaxis_title="Amplitude [mu-law]",
-        title="MIMO parallel Schröder allpass — impulse response (in0→out0)",
-        height=300,
-        margin={"t": 50, "b": 50, "l": 60, "r": 40},
-        showlegend=False,
-        xaxis={"range": [0, 0.1]},
+    _fig = pyFDN.plot_impulse_response(
+        ir_sch_channel,
+        fs=Fs,
+        title="MIMO parallel Schroeder allpass — impulse response (in0→out0)",
     )
-    _fig.show()
 
-    mo.vstack([mo.audio(np.asarray(ir_sch_channel), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_sch_channel), Fs)])
     return
 
 
@@ -147,7 +138,7 @@ def _(Fs, N, nfft, np, pyFDN):
 
     rt_dc = 2.0
     rt_ny = 0.7
-    sos = pyFDN.one_pole_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)[np.newaxis, :]
+    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)[np.newaxis, :]
 
     model_fdn = pyFDN.dss_to_flamo(
         feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos
@@ -160,30 +151,23 @@ def _(Fs, N, nfft, np, pyFDN):
 
 
 @app.cell
-def _(Fs, go, ir_fdn, mo, np, pyFDN):
-    _t = np.arange(len(ir_fdn)) / Fs
-    _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn), mode="lines"))
-    _fig.update_layout(
-        xaxis_title="Time [s]",
-        yaxis_title="Amplitude [mu-law]",
+def _(Fs, ir_fdn, mo, np, pyFDN):
+    _fig = pyFDN.plot_impulse_response(
+        ir_fdn,
+        fs=Fs,
         title="Vanilla FDN (SISO) — impulse response",
-        height=300,
-        margin={"t": 50, "b": 50, "l": 60, "r": 40},
-        showlegend=False,
     )
-    _fig.show()
 
-    mo.vstack([mo.audio(np.asarray(ir_fdn), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn), Fs)])
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 3. FDN with Schröder allpass behind the delays
+    ## 3. FDN with Schroeder allpass behind the delays
 
-    Reuse the two models above: take the **vanilla FDN** (feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn) and the **MIMO Schröder allpass** (A_sch, B_sch, C_sch, D_sch, delays_sch). Build the Schröder as a core with **dss_to_flamo(..., shell=False)** and pass it as **post_delay_module** to append it to the FDN's forward path (after the FDN delays).
+    Reuse the two models above: take the **vanilla FDN** (feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn) and the **MIMO Schroeder allpass** (A_sch, B_sch, C_sch, D_sch, delays_sch). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it as **post_delay_module** to append it to the FDN's forward path (after the FDN delays).
     """)
     return
 
@@ -205,7 +189,7 @@ def _(
     pyFDN,
     sos,
 ):
-    # Schröder core (4-in, 4-out) from section 1; append to FDN forward path
+    # Schroeder core (4-in, 4-out) from section 1; append to FDN forward path
     schroeder_core = pyFDN.dss_to_flamo(
         A_sch,
         B_sch,
@@ -228,46 +212,20 @@ def _(
         post_delay_module=schroeder_core,
     )
     ir_fdn_ap = model_fdn_ap.get_time_response().squeeze()
-    return ir_fdn_ap, model_fdn_ap
 
-
-@app.cell
-def _(Fs, go, ir_fdn_ap, mo, np, pyFDN):
-    _t = np.arange(len(ir_fdn_ap)) / Fs
-    _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn_ap), mode="lines"))
-    _fig.update_layout(
-        xaxis_title="Time [s]",
-        yaxis_title="Amplitude [mu-law]",
-        title="FDN with Schröder allpass behind delays — impulse response",
-        height=300,
-        margin={"t": 50, "b": 50, "l": 60, "r": 40},
-        showlegend=False,
-    )
-    _fig.show()
-
-    mo.vstack([mo.audio(np.asarray(ir_fdn_ap), Fs)])
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Visualize the resulting signal flow
-    """)
-    return
-
-
-@app.cell
-def _(model_fdn_ap, pyFDN):
-    # List all nodes with paths
-    root = pyFDN.flamo_model_to_nodes(model_fdn_ap)
-    flat = pyFDN.flamo_nodes_flat(root)
-    for n in flat:
-        print(n["path"], n["type"], n["name"])
-
-    # Draw flowchart
     pyFDN.plot_flamo_graph(model_fdn_ap)
+    return (ir_fdn_ap,)
+
+
+@app.cell
+def _(Fs, ir_fdn_ap, mo, np, pyFDN):
+    _fig = pyFDN.plot_impulse_response(
+        ir_fdn_ap,
+        fs=Fs,
+        title="FDN with Schroeder allpass behind delays — impulse response",
+    )
+
+    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn_ap), Fs)])
     return
 
 

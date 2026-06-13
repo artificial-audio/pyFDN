@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -25,14 +25,13 @@ def _(mo):
 def _():
     from collections import OrderedDict
 
-    import matplotlib.pyplot as plt
     import numpy as np
     import torch
     from flamo.processor import dsp, system
 
     import pyFDN
 
-    return OrderedDict, dsp, np, plt, pyFDN, system, torch
+    return OrderedDict, dsp, np, pyFDN, system, torch
 
 
 @app.cell(hide_code=True)
@@ -111,22 +110,18 @@ def _(mo):
 
 
 @app.cell
-def _(fs, ir_altered, ir_original, mo, np, plt, pyFDN):
-    t = np.arange(len(ir_original)) / fs
-    plt.figure(figsize=(10, 3))
-    plt.plot(t, pyFDN.mulaw_encode(ir_original), alpha=0.8, lw=0.6, label="Original")
-    plt.plot(t, pyFDN.mulaw_encode(ir_altered), alpha=0.8, lw=0.6, label="Altered")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Amplitude (μ-law)")
-    plt.title("Vanilla FDN impulse response")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.xlim([0, 2])
-    plt.tight_layout()
-    plt.show()
+def _(fs, ir_altered, ir_original, mo, np, pyFDN):
+    _fig = pyFDN.plot_impulse_response(
+        ir_original,
+        ir_altered,
+        fs=fs,
+        labels=["Original", "Altered"],
+        title="Vanilla FDN impulse response",
+    )
 
     mo.vstack(
         [
+            _fig,
             mo.md("Original:"),
             mo.audio(np.asanyarray(ir_original), fs),
             mo.md("Altered:"),

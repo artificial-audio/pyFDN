@@ -136,16 +136,12 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np, pyFDN):
-    import matplotlib.pyplot as plt
-
-    plt.plot(
-        np.arange(ir_len) / Fs,
-        pyFDN.mulaw_encode(impulse_response),
+def _(Fs, impulse_response, pyFDN):
+    pyFDN.plot_impulse_response(
+        impulse_response,
+        fs=Fs,
+        title="Nested allpass FDN — impulse response",
     )
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.show()
     return
 
 

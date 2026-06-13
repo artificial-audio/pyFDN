@@ -131,16 +131,12 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np, pyFDN):
-    import matplotlib.pyplot as plt
-
-    plt.plot(
-        np.arange(ir_len) / Fs,
-        pyFDN.mulaw_encode(impulse_response),
+def _(Fs, impulse_response, pyFDN):
+    pyFDN.plot_impulse_response(
+        impulse_response,
+        fs=Fs,
+        title="Schroeder series allpass — impulse response",
     )
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.show()
     return
 
 
@@ -156,7 +152,7 @@ def _(mo):
 def _(Fs, impulse_response, mo, np, pyFDN):
     channel_ir = np.asarray(impulse_response).squeeze()
     _fig = pyFDN.plot_spectrogram(
-        channel_ir, Fs, title="Schroeder series allpass — spectrogram", clim=(-170, -70)
+        channel_ir, Fs, title="Schroeder series allpass — spectrogram"
     )
     _fig.show()
 

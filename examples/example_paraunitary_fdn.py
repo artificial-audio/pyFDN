@@ -194,31 +194,14 @@ def _(mo):
 
 
 @app.cell
-def _(difference, go, ir_modal, ir_time, np, pyFDN):
-    fig_ir = go.Figure()
-    t_axis = np.arange(len(ir_time))
-    for _sig, _name, _offset in [
-        (difference, "Difference", 0.0),
-        (ir_time, "Time domain", -2.0),
-        (ir_modal, "Poles/residues", -4.0),
-    ]:
-        fig_ir.add_trace(
-            go.Scatter(
-                x=t_axis,
-                y=pyFDN.mulaw_encode(_sig) + _offset,
-                mode="lines",
-                name=_name,
-                line={"width": 0.7},
-            )
-        )
-    fig_ir.update_layout(
+def _(difference, ir_modal, ir_time, pyFDN):
+    pyFDN.plot_impulse_response(
+        difference,
+        ir_time,
+        ir_modal,
+        labels=["Difference", "Time domain", "Poles/residues"],
         title="Impulse response: time-domain recursion vs modal synthesis",
-        xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Amplitude (mu) (offset for display)"},
-        template="plotly_white",
-        height=420,
     )
-    fig_ir.show()
     return
 
 

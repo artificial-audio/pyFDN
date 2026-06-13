@@ -30,14 +30,13 @@ def _(mo):
 def _():
     from pathlib import Path
 
-    import matplotlib.pyplot as plt
     import numpy as np
     from scipy.io import loadmat
     from scipy.linalg import expm
 
     import pyFDN
 
-    return Path, expm, loadmat, np, plt, pyFDN
+    return Path, expm, loadmat, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -66,9 +65,46 @@ def _(Path, pyFDN):
         Path.cwd() / "examples" / "resources" / "colorless_FDN",  # from project root
     ]
     param_dir = next((p for p in _param_candidates if p.is_dir()), _param_candidates[0])
-    delay_set = 1
-    N = 16
-    return N, delay_set, fs, g, ir_len, param_dir
+    return fs, g, ir_len, param_dir
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Choose parameter file
+
+    Pick the FDN size $N$ and delay set; the matching `param_init_*` file provides the random initialization.
+    """)
+    return
+
+
+@app.cell
+def _(mo, param_dir):
+    import re
+
+    _pairs = sorted(
+        {
+            (int(match.group(1)), int(match.group(2)))
+            for p in param_dir.glob("param_N*_d*.mat")
+            if (match := re.fullmatch(r"param_N(\d+)_d(\d+)\.mat", p.name))
+        }
+    ) or [(16, 1)]
+    _options = {f"N = {n}, delay set {d}": (n, d) for n, d in _pairs}
+    _default = "N = 16, delay set 1"
+    param_choice = mo.ui.dropdown(
+        options=_options,
+        value=_default if _default in _options else next(iter(_options)),
+        label="Parameter file",
+    )
+    mo.vstack([param_choice])
+    return (param_choice,)
+
+
+@app.cell
+def _(param_choice):
+    N, delay_set = param_choice.value
+    print(f"Selected: N={N}, delay set {delay_set}")
+    return N, delay_set
 
 
 @app.cell(hide_code=True)
@@ -111,7 +147,7 @@ def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
     _Gamma = np.diag(g**m)
     Ag = A @ _Gamma
     ir_optim = pyFDN.dss_to_impz(ir_len, m, Ag, B, C, D).squeeze()
-    return (ir_optim,)
+    return A, B, C, D, ir_optim, m
 
 
 @app.cell(hide_code=True)
@@ -129,7 +165,43 @@ def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
     _Gamma = np.diag(g**m_i)
     Ag_i = A_i @ _Gamma
     ir_init = pyFDN.dss_to_impz(ir_len, m_i, Ag_i, B_i, C_i, D_i).squeeze()
-    return (ir_init,)
+    return A_i, B_i, C_i, D_i, ir_init, m_i
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## FDN parameter overview
+
+    `pyFDN.plot_fdn_parameter` shows the system matrix blocks $A$, $b$, $c$, $d$ as heatmaps and the delays as bars aligned with the columns of the feedback matrix. The optimization changes $A$, $b$, $c$ (the lossless part, before the homogeneous attenuation $\Gamma = \mathrm{diag}(g^m)$ is applied); the delays stay fixed.
+    """)
+    return
+
+
+@app.cell
+def _(A_i, B_i, C_i, D_i, m_i, pyFDN):
+    pyFDN.plot_fdn_parameter(
+        m_i,
+        A_i,
+        B_i,
+        C_i,
+        D_i,
+        title="Random Initialization",
+    )
+    return
+
+
+@app.cell
+def _(A, B, C, D, m, pyFDN):
+    pyFDN.plot_fdn_parameter(
+        m,
+        A,
+        B,
+        C,
+        D,
+        title="Optimized",
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -141,22 +213,13 @@ def _(mo):
 
 
 @app.cell
-def _(fs, ir_init, ir_len, ir_optim, mo, np, plt, pyFDN):
-    t = np.arange(ir_len) / fs
-    plt.figure(figsize=(10, 3))
-    plt.plot(t, pyFDN.mulaw_encode(ir_optim), alpha=0.8, lw=0.6, label="Optimized")
-    plt.plot(
-        t, pyFDN.mulaw_encode(ir_init), alpha=0.8, lw=0.6, label="Random Initialization"
+def _(fs, ir_init, ir_optim, mo, np, pyFDN):
+    plot = pyFDN.plot_impulse_response(
+        ir_optim,
+        ir_init,
+        fs=fs,
+        labels=["Optimized", "Random Initialization"],
     )
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude [mu-law]")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-
-    fig = plt.gca()
-
-    plot = mo.vstack([fig])
 
     audio_blocks = mo.vstack(
         [

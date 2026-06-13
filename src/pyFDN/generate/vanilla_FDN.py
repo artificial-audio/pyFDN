@@ -1,4 +1,4 @@
-"""Build a vanilla FDN (delays + feedback matrix + one-pole absorption) using FLAMO."""
+"""Build a vanilla FDN (delays + feedback matrix + first-order absorption) using FLAMO."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from flamo.processor import dsp, system
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption
+from pyFDN.auxiliary.acoustics import first_order_absorption
 from pyFDN.generate.random_orthogonal import random_orthogonal
 
 if TYPE_CHECKING:
@@ -29,11 +29,11 @@ def vanilla_FDN(
     delay_min: int = 400,
     delay_max: int = 1200,
 ) -> Any:
-    """Build a vanilla FDN (delays + feedback matrix + one-pole absorption) in FLAMO.
+    """Build a vanilla FDN (delays + feedback matrix + first-order absorption) in FLAMO.
 
     Delay lengths are drawn uniformly at random in [delay_min, delay_max) per channel.
-    Uses a random orthogonal feedback matrix and one-pole absorption per delay
-    (rt_dc at DC, rt_ny at Nyquist).
+    Uses a random orthogonal feedback matrix and first-order shelving absorption per
+    delay (rt_dc at DC, rt_ny at Nyquist).
 
     Parameters
     ----------
@@ -90,7 +90,7 @@ def vanilla_FDN(
     )
     mixing_matrix.assign_value(feedback_torch)
 
-    sos = one_pole_absorption(rt_dc, rt_ny, delays_arr, fs=float(fs))
+    sos = first_order_absorption(rt_dc, rt_ny, delays_arr, fs=float(fs))
     absorption_coeff = torch.tensor(
         sos[np.newaxis, ...], dtype=torch.float32, device=device
     )

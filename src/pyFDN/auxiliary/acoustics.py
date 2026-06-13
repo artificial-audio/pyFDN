@@ -374,6 +374,69 @@ def one_pole_absorption(
     return sos
 
 
+def first_order_absorption(
+    rt_dc: float,
+    rt_ny: float,
+    delays: ArrayLike,
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """Design first-order shelving absorption filters according to specified reverb time.
+
+    Each delay line gets a first-order shelving filter whose gain matches the
+    target decay (rt_dc at DC, rt_ny at Nyquist) for its delay length, with the
+    shelf transition at crossover_frequency.
+
+    Reference: Jot, J. M., "Proportional parametric equalizers - Application to
+    digital reverberation and environmental audio processing", AES 2015.
+
+    Parameters
+    ----------
+    rt_dc : float
+        Reverberation time in seconds at DC.
+    rt_ny : float
+        Reverberation time in seconds at Nyquist.
+    delays : array-like
+        Delay lengths in samples, one per channel.
+    fs : float
+        Sampling rate in Hz.
+    crossover_frequency : float, optional
+        Shelf crossover frequency in Hz. Defaults to fs/8, the midpoint of the
+        warped (bilinear) frequency axis. Values above fs/5 are clamped to fs/5
+        since a too high crossover leads to an unstable filter (fs/4 is the limit).
+
+    Returns
+    -------
+    np.ndarray
+        SOS format: shape (6, N) with rows [b0, b1, b2, a0, a1, a2] per channel
+        (b2 = a2 = 0 for these first-order filters).
+    """
+    delays_arr = np.asarray(delays, dtype=float)
+
+    h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
+    h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
+
+    if crossover_frequency is None:
+        crossover_frequency = fs / 8.0
+    crossover_frequency = min(crossover_frequency, fs / 5.0)
+    omega = crossover_frequency / fs * 2.0 * np.pi
+
+    t = np.tan(omega)
+    sqrt_k = np.sqrt(h_dc / h_ny)
+
+    b0 = (t * sqrt_k + 1.0) * h_ny
+    b1 = (t * sqrt_k - 1.0) * h_ny
+    a0 = t / sqrt_k + 1.0
+    a1 = t / sqrt_k - 1.0
+
+    sos = np.zeros((6, delays_arr.size))
+    sos[0, :] = b0 / a0
+    sos[1, :] = b1 / a0
+    sos[3, :] = 1.0
+    sos[4, :] = a1 / a0
+    return sos
+
+
 def sos_gain_per_sample_curves(
     sos_6n: np.ndarray,
     delays: ArrayLike,

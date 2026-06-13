@@ -17,6 +17,7 @@ __all__ = [
     "estimate_rt_bands",
     "absorption_to_rt",
     "edc",
+    "first_order_absorption",
     "one_pole_absorption",
     "rt_to_gain_per_sample",
     "rt_to_slope",
@@ -109,8 +110,14 @@ __all__ = [
     # fdn processing
     "process_fdn",
     # plotting
+    "animate",
+    "plot_db_per_sample",
+    "plot_edc",
+    "plot_fdn_parameter",
+    "plot_impulse_response",
     "plot_impulse_response_matrix",
     "plot_matrix",
+    "plot_matrix_grid",
     "plot_system_matrix",
     "plot_spectrogram",
     "downsample_minmax",
@@ -157,6 +164,7 @@ from .auxiliary.acoustics import (
     edc,
     estimate_initial_level_bands,
     estimate_rt_bands,
+    first_order_absorption,
     one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
@@ -203,11 +211,17 @@ from .auxiliary.math import (
 
 # plotting
 from .auxiliary.plot import (
+    animate,
     downsample_minmax,
     downsample_plotly_trace,
     downsampled_scatter,
+    plot_db_per_sample,
+    plot_edc,
+    plot_fdn_parameter,
+    plot_impulse_response,
     plot_impulse_response_matrix,
     plot_matrix,
+    plot_matrix_grid,
     plot_spectrogram,
     plot_system_matrix,
 )

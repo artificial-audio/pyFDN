@@ -29,8 +29,8 @@ Absorption & Filters
 
    * - `Absorption Filters <_static/marimo/notebooks/example_absorption_filters.html>`_
      - Design frequency-dependent absorption filters for realistic room acoustics.
-   * - `One-Pole Absorption <_static/marimo/notebooks/example_one_pole_absorption.html>`_
-     - One-pole filter design targeting specific RT60 values at DC and Nyquist.
+   * - `First-Order Absorption <_static/marimo/notebooks/example_first_order_absorption.html>`_
+     - First-order shelving filter design targeting specific RT60 values at DC and Nyquist.
 
 Advanced Topics
 ----------------

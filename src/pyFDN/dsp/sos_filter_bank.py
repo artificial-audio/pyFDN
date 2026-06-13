@@ -19,7 +19,7 @@ class SOSFilterBank:
     sos : array
         Per-channel SOS coefficients (N = ``num_channels``), in one of:
 
-        - (6, N): one section per channel (``one_pole_absorption`` convention);
+        - (6, N): one section per channel (``first_order_absorption`` convention);
         - (n_sections, 6, N): section cascade per channel;
         - (N, n_sections, 6): scipy ``sosfilt`` convention per channel.
     num_channels : int

@@ -76,7 +76,7 @@ def dss_to_flamo(
         output gain C (e.g. an output equalizer), matching the output
         filters of the MATLAB ``dss2impz``.
     post_delay_module : FLAMO module or None
-        Optional module to append after the delay in the recursion (e.g. a Schröder allpass core).
+        Optional module to append after the delay in the recursion (e.g. a Schroeder allpass core).
         Must have input/output size N. Loop becomes: delay -> post_delay_module -> A.
 
     Returns
