@@ -9,7 +9,12 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
+from example_gallery import generate_gallery  # noqa: E402
+
 import pyFDN  # noqa: E402
+
+# Keep the gallery in sync with every marimo notebook before Sphinx reads it.
+generate_gallery()
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"

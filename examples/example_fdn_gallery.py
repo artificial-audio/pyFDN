@@ -1,3 +1,5 @@
+# gallery_category: FDN Design & Analysis
+
 import marimo
 
 __generated_with = "0.23.6"
