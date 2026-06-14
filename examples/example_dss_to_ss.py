@@ -57,9 +57,8 @@ def _():
 
     # Convert delay state-space to single state-space system
     aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)
-    # Via state-space (scipy): transfer function then impulse
-    num, den = ss2tf(aa, bb, cc, dd)
-    system = dlti(num, den)
+    # Via state-space (scipy)
+    system = dlti(aa, bb, cc, dd, dt=1.0)
     _, ir_state_space = dimpulse(system, n=impulse_response_length)
     ir_state_space = np.squeeze(ir_state_space)
 
