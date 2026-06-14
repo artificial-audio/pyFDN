@@ -8,6 +8,8 @@ values assigned.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 try:
@@ -356,3 +358,140 @@ def sos_filter_module(
     )
     filt.assign_value(torch.as_tensor(sos_pad, dtype=torch_dtype, device=dev))
     return filt
+
+
+def assemble_fdn_core(
+    *,
+    input_gain: Any,
+    feedback: Any,
+    delays: Any,
+    output_gain: Any,
+    direct: Any = None,
+    loop_filter: Any = None,
+    output_filter: Any = None,
+    post_delay_module: Any = None,
+) -> Any:
+    """
+    Wire pre-built FLAMO modules into an FDN core (no FFT/iFFT wrapping).
+
+    Single source of truth for the FDN signal flow, shared by the render path
+    (:func:`pyFDN.dss_to_flamo`) and the training builder
+    (:func:`pyFDN.train.build_trainable_fdn`). All arguments are already-built
+    FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
+    topology stay identical across both callers (and match the names
+    :func:`pyFDN.flamo_model_to_fdn_parameters` looks for).
+
+    Signal flow::
+
+        input_gain -> [recursion: delay -> (loop_filter) -> (post_delay_module); fB = feedback]
+                   -> output_gain -> (output_filter)
+
+    with the direct path ``direct`` summed in parallel when provided.
+
+    Parameters
+    ----------
+    input_gain, output_gain : FLAMO modules
+        Input gain ``B`` (named ``input_gain``) and output gain ``C`` (named
+        ``output_gain``).
+    feedback : FLAMO module
+        Feedback matrix placed on the recursion feedback branch (``fB``); a
+        plain ``Gain``/``Filter`` (render) or a parametrized ``Matrix``
+        (training).
+    delays : FLAMO module
+        Delay module on the recursion forward branch (named ``delay``).
+    direct : FLAMO module or None
+        Direct path ``D``. When ``None`` the core is the plain feedforward
+        ``Series`` (no ``Parallel`` wrapper) -- this keeps ``core.feedback_loop``
+        reachable for losses such as ``sparsity_loss``. When provided the core
+        is ``Parallel(brA=fdn_branch, brB=direct)``.
+    loop_filter : FLAMO module or None
+        Optional in-loop filter after the delays (named ``filter``).
+    output_filter : FLAMO module or None
+        Optional per-output filter after the output gain (named
+        ``output_filter``).
+    post_delay_module : FLAMO module or None
+        Optional module appended after the delay in the recursion.
+
+    Returns
+    -------
+    core : flamo.processor.system.Series or Parallel
+        The FDN core, ready for :func:`wrap_fdn_shell`.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("assemble_fdn_core requires flamo (pip install flamo)")
+    from collections import OrderedDict
+
+    from flamo.processor import system
+
+    if loop_filter is not None:
+        delay_chain = system.Series(
+            OrderedDict({"delay": delays, "filter": loop_filter})
+        )
+    else:
+        delay_chain = delays
+
+    if post_delay_module is not None:
+        delay_chain = system.Series(
+            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
+        )
+
+    feedback_loop = system.Recursion(fF=delay_chain, fB=feedback)
+    fdn_modules = OrderedDict(
+        {
+            "input_gain": input_gain,
+            "feedback_loop": feedback_loop,
+            "output_gain": output_gain,
+        }
+    )
+    if output_filter is not None:
+        fdn_modules["output_filter"] = output_filter
+    fdn_branch = system.Series(fdn_modules)
+
+    if direct is not None:
+        return system.Parallel(brA=fdn_branch, brB=direct, sum_output=True)
+    return fdn_branch
+
+
+def wrap_fdn_shell(
+    core: Any, *, nfft: int, dtype: Any = None, output: str = "time"
+) -> Any:
+    """
+    Wrap an FDN core in a FLAMO ``Shell`` with an FFT input layer.
+
+    Parameters
+    ----------
+    core : FLAMO module
+        FDN core, e.g. from :func:`assemble_fdn_core`.
+    nfft : int
+        FFT size.
+    dtype : torch.dtype or None
+        Dtype for the FFT/iFFT layers; defaults to float32.
+    output : str
+        Output-domain layer:
+
+        * ``"time"`` -- ``iFFT`` time response (the render default, matching
+          :func:`pyFDN.dss_to_flamo`).
+        * ``"magnitude"`` -- ``|.|`` of the frequency response, for
+          magnitude-domain losses (e.g. colorless training).
+
+    Returns
+    -------
+    flamo.processor.system.Shell
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("wrap_fdn_shell requires flamo (pip install flamo)")
+    import torch
+    from flamo.processor import dsp, system
+
+    torch_dtype = torch.float32 if dtype is None else dtype
+    if output == "time":
+        output_layer = dsp.iFFT(nfft, dtype=torch_dtype)
+    elif output == "magnitude":
+        output_layer = dsp.Transform(transform=torch.abs, dtype=torch_dtype)
+    else:
+        raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
+    return system.Shell(
+        core=core,
+        input_layer=dsp.FFT(nfft, dtype=torch_dtype),
+        output_layer=output_layer,
+    )

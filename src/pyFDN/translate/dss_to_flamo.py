@@ -7,7 +7,6 @@ Optionally place an allpass (or other) filter behind the delays in the loop.
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
 try:
-    from flamo.processor import dsp, system
+    import flamo.processor  # noqa: F401
 
     _HAS_FLAMO = True
 except ImportError:
@@ -95,7 +94,12 @@ def dss_to_flamo(
 
     import torch
 
-    from pyFDN.auxiliary.flamo import fir_matrix_module, sos_filter_module
+    from pyFDN.auxiliary.flamo import (
+        assemble_fdn_core,
+        fir_matrix_module,
+        sos_filter_module,
+        wrap_fdn_shell,
+    )
 
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -119,42 +123,32 @@ def dss_to_flamo(
     gain_B = gain_module(B, nfft, device=device, dtype=dtype)
     gain_C = gain_module(C, nfft, device=device, dtype=dtype)
     gain_D = gain_module(D, nfft, device=device, dtype=dtype)
-
-    if sos_filter is not None:
-        filter_module = sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
-        delay_chain = system.Series(
-            OrderedDict({"delay": delays, "filter": filter_module})
-        )
-    else:
-        delay_chain = delays
-
-    if post_delay_module is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
-        )
-
-    feedback_loop = system.Recursion(fF=delay_chain, fB=gain_A)
-    fdn_modules = OrderedDict(
-        {
-            "input_gain": gain_B,
-            "feedback_loop": feedback_loop,
-            "output_gain": gain_C,
-        }
+    loop_filter = (
+        sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
+        if sos_filter is not None
+        else None
     )
-    if output_filter is not None:
-        fdn_modules["output_filter"] = sos_filter_module(
-            output_filter, nfft, device=device, dtype=dtype
-        )
-    fdn_branch = system.Series(fdn_modules)
-    core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
+    out_filter = (
+        sos_filter_module(output_filter, nfft, device=device, dtype=dtype)
+        if output_filter is not None
+        else None
+    )
+
+    # Wiring is delegated to the shared assembler so the render path here and the
+    # training builder (pyFDN.train) stay byte-for-byte identical in topology.
+    core = assemble_fdn_core(
+        input_gain=gain_B,
+        feedback=gain_A,
+        delays=delays,
+        output_gain=gain_C,
+        direct=gain_D,
+        loop_filter=loop_filter,
+        output_filter=out_filter,
+        post_delay_module=post_delay_module,
+    )
 
     if shell:
-        torch_dtype = torch.float32 if dtype is None else dtype
-        return system.Shell(
-            core=core,
-            input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-            output_layer=dsp.iFFT(nfft, dtype=torch_dtype),
-        )
+        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
     return core
 
 
