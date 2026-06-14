@@ -44,6 +44,7 @@ Matrix Generators
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
    pyFDN.fdn_build_gallery
+   pyFDN.sample_delay_lengths
    pyFDN.FDNSystem
    pyFDN.FDNBuild
 
@@ -195,6 +196,7 @@ State-Space Translators
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
+   pyFDN.build_to_flamo
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
    pyFDN.flamo_extract_pr_decomposition

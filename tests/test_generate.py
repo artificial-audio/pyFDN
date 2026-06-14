@@ -22,6 +22,7 @@ from pyFDN.generate.nearest_sign_agnostic_orthogonal import (
 )
 from pyFDN.generate.random_matrix_shift import random_matrix_shift
 from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
 from pyFDN.generate.shift_matrix import shift_matrix
 from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
 
@@ -414,3 +415,49 @@ def test_anderson_matrix_custom_block():
 def test_anderson_matrix_invalid_k_raises():
     with pytest.raises(ValueError, match="divisible"):
         anderson_matrix(9, K=4)
+
+
+# sample_delay_lengths
+
+
+@pytest.mark.parametrize("distribution", ["uniform", "lognormal", "geometric"])
+def test_delay_lengths_within_range_and_reproducible(distribution):
+    delays_a = sample_delay_lengths(8, (400, 1200), distribution=distribution, rng=7)
+    delays_b = sample_delay_lengths(8, (400, 1200), distribution=distribution, rng=7)
+
+    assert delays_a.shape == (8,)
+    assert delays_a.dtype.kind == "i"
+    assert np.all(delays_a >= 400) and np.all(delays_a <= 1200)
+    np.testing.assert_array_equal(delays_a, delays_b)
+
+
+@pytest.mark.parametrize("distribution", ["uniform", "lognormal", "geometric"])
+def test_delay_lengths_coprime_are_pairwise_coprime(distribution):
+    delays = sample_delay_lengths(
+        12, (400, 4000), distribution=distribution, coprime=True, rng=3
+    )
+    assert delays.size == np.unique(delays).size
+    for i in range(delays.size):
+        for j in range(i + 1, delays.size):
+            assert np.gcd(int(delays[i]), int(delays[j])) == 1
+
+
+def test_delay_lengths_sort_is_ascending():
+    delays = sample_delay_lengths(16, (400, 4000), distribution="geometric", sort=True, rng=1)
+    np.testing.assert_array_equal(delays, np.sort(delays))
+
+
+def test_delay_lengths_does_not_mutate_global_rng():
+    state = np.random.get_state()
+    sample_delay_lengths(8, rng=7)
+    np.testing.assert_array_equal(np.random.get_state()[1], state[1])
+
+
+def test_delay_lengths_invalid_distribution_raises():
+    with pytest.raises(ValueError, match="distribution"):
+        sample_delay_lengths(8, distribution="poisson")
+
+
+def test_delay_lengths_invalid_range_raises():
+    with pytest.raises(ValueError, match="delay_range"):
+        sample_delay_lengths(8, (1000, 400))

@@ -54,6 +54,7 @@ __all__ = [
     "random_matrix_shift",
     "random_orthogonal",
     "rotation_matrix_from_angles",
+    "sample_delay_lengths",
     "schroeder_reverberator",
     "shift_matrix",
     "shift_matrix_distribute",
@@ -101,6 +102,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
     "dss_to_pr",
@@ -325,6 +327,7 @@ from .generate.random_matrix_shift import random_matrix_shift
 
 # matrix generators
 from .generate.random_orthogonal import random_orthogonal
+from .generate.sample_delay_lengths import sample_delay_lengths
 from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
@@ -342,7 +345,7 @@ from .graphicEQ import (
 from .process import process_fdn
 
 # state-space translators
-from .translate.dss_to_flamo import dss_to_flamo
+from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss

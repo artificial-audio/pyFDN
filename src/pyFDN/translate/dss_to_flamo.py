@@ -8,11 +8,14 @@ Optionally place an allpass (or other) filter behind the delays in the loop.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pyFDN.auxiliary.flamo import delay_module, gain_module
+
+if TYPE_CHECKING:
+    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
 try:
     from flamo.processor import dsp, system
@@ -153,3 +156,66 @@ def dss_to_flamo(
             output_layer=dsp.iFFT(nfft, dtype=torch_dtype),
         )
     return core
+
+
+def build_to_flamo(
+    build: FDNBuild,
+    nfft: int = 2**16,
+    device: Any = None,
+    *,
+    shell: bool = True,
+    dtype: Any = None,
+    post_delay_module: Any = None,
+) -> Any:
+    """
+    Build a FLAMO model from a complete :class:`FDNBuild` config.
+
+    Thin wrapper over :func:`dss_to_flamo` that unpacks an
+    :class:`~pyFDN.generate.fdn_matrix_gallery.FDNBuild` (as returned by
+    :func:`pyFDN.fdn_build_gallery`) into its state-space arguments, mapping the
+    in-loop absorption ``build.filters`` to ``sos_filter`` and the per-output
+    ``build.post_eq`` to ``output_filter``.
+
+    Parameters
+    ----------
+    build : FDNBuild
+        Complete FDN parameters (``A``, ``B``, ``C``, ``D``, ``delays``,
+        ``fs``, optional ``filters`` and ``post_eq``), e.g. from
+        :func:`pyFDN.fdn_build_gallery`.
+    nfft : int
+        FFT size for FLAMO (default 2**16).
+    device : torch device or None
+        Device; default is cuda if available else cpu.
+    shell : bool
+        If True (default), wrap the core in a Shell with FFT/iFFT. Use
+        :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
+        If False, return only the core.
+    dtype : torch.dtype or None
+        Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
+        If None, wrapper defaults are used.
+    post_delay_module : FLAMO module or None
+        Optional module to append after the delay in the recursion (e.g. a
+        Schroeder allpass core). Must have input/output size N. Loop becomes:
+        delay -> post_delay_module -> A.
+
+    Returns
+    -------
+    model : flamo.processor.system.Shell or core
+        If shell=True, a FLAMO Shell. Use :func:`pyFDN.flamo_time_response` for
+        a NumPy impulse response. If shell=False, the core module.
+    """
+    return dss_to_flamo(
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        build.delays,
+        build.fs,
+        nfft=nfft,
+        device=device,
+        shell=shell,
+        dtype=dtype,
+        sos_filter=build.filters,
+        output_filter=build.post_eq,
+        post_delay_module=post_delay_module,
+    )
