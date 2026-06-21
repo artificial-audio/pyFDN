@@ -39,15 +39,15 @@ def _(mo):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
     import scipy.linalg as la
-    import matplotlib.pyplot as plt
-    import plotly.graph_objects as go
+
+    import pyFDN
     from pyFDN.auxiliary.acoustics import one_pole_absorption
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
     from pyFDN.generate.random_orthogonal import random_orthogonal
     from pyFDN.process import process_fdn
-    import pyFDN
 
     return (
         TimeVaryingMatrix,
@@ -74,10 +74,10 @@ def _(mo, np, pyFDN):
     np.random.seed(1)
 
     # init source signal
-    mode = 'melody'
+    mode = "melody"
     _output = None
 
-    if mode == 'sine':
+    if mode == "sine":
         fs = 48000
         time = np.linspace(0, 4, 4 * fs)[:, None]
 
@@ -87,12 +87,12 @@ def _(mo, np, pyFDN):
         # Concatenate columns horizontally
         synth = np.hstack((synth1, synth2))
 
-    elif mode == 'melody':
+    elif mode == "melody":
         synth, fs = pyFDN.load_audio("synth_dry.wav")
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))
-        time = ((samples / fs) * 1000 * 1000)
+        time = (samples / fs) * 1000 * 1000
 
         _output = mo.vstack([mo.audio(synth, fs)])
 
@@ -111,7 +111,7 @@ def _(mo):
 @app.cell
 def _(la, mode, np, random_orthogonal):
     N = 8
-    num_input = 1 if mode == 'melody' else 2
+    num_input = 1 if mode == "melody" else 2
     num_output = 2
 
     input_gain = la.orth(np.random.randn(N, num_input))
@@ -119,7 +119,7 @@ def _(la, mode, np, random_orthogonal):
     random_matrix = np.random.randn(num_output, N)
     output_gain = la.orth(random_matrix.T).T
 
-    direct = np.zeros((num_output,num_input))
+    direct = np.zeros((num_output, num_input))
     delays = np.random.randint(750, 2001, size=N)[None, :]
 
     feedback_matrix = random_orthogonal(N)
@@ -135,12 +135,15 @@ def _(mo):
 
 
 @app.cell
-def _(delays, fs, one_pole_absorption):
-    RT_DC = 4 # seconds
-    RT_NY = 1 # seconds
+def _(N, delays, fs, one_pole_absorption, pyFDN):
+    RT_DC = 4  # seconds
+    RT_NY = 1  # seconds
 
     coeffs = one_pole_absorption(RT_DC, RT_NY, delays, fs)
-    return (coeffs,)
+
+    # Constract the absorption
+    absorption = pyFDN.SOSFilterBank(coeffs, N)
+    return (absorption,)
 
 
 @app.cell(hide_code=True)
@@ -155,7 +158,7 @@ def _(mo):
 def _(
     N,
     TimeVaryingMatrix,
-    coeffs,
+    absorption,
     delays,
     direct,
     feedback_matrix,
@@ -165,22 +168,22 @@ def _(
     process_fdn,
     synth,
 ):
-    matrix_types = ['no_variation', 'slow_variation','fast_variation']
+    matrix_types = ["no_variation", "slow_variation", "fast_variation"]
 
     reverbed_synth = {}
 
     for matrix_type in matrix_types:
-        if matrix_type == 'no_variation':
+        if matrix_type == "no_variation":
             modulation_frequency = 0  # hz
             modulation_amplitude = 0.0
             spread = 0
 
-        elif matrix_type == 'slow_variation':
+        elif matrix_type == "slow_variation":
             modulation_frequency = 1  # hz
             modulation_amplitude = 0.9
             spread = 0.3
 
-        elif matrix_type == 'fast_variation':
+        elif matrix_type == "fast_variation":
             modulation_frequency = 10  # hz
             modulation_amplitude = 0.1
             spread = 0.7
@@ -196,7 +199,7 @@ def _(
             input_gain,
             output_gain,
             direct,
-            absorption_filters=coeffs,
+            absorption=absorption,
             extra_matrix=tv_matrix,
         )
     return matrix_types, reverbed_synth
@@ -214,18 +217,13 @@ def _(mo):
 def _(matrix_types, plt, reverbed_synth, time):
     plt.figure(figsize=(10, 6))
     plt.title("Time-Varying FDN Output")
-    plt.grid(True, linestyle='--', alpha=0.6) 
+    plt.grid(True, linestyle="--", alpha=0.6)
 
     # Plot each matrix type with distinct styles
     for it, name in enumerate(matrix_types):
-        plt.plot(
-            time, 
-            reverbed_synth[name][:, 0] + it * 1.5,
-            label=name,
-            linewidth=1.5
-        )
+        plt.plot(time, reverbed_synth[name][:, 0] + it * 1.5, label=name, linewidth=1.5)
 
-    plt.legend(loc='upper right', title="Matrix Types")
+    plt.legend(loc="upper right", title="Matrix Types")
     plt.xlabel("Time [seconds]")
     plt.ylabel("Amplitude")
     plt.tight_layout()
@@ -244,13 +242,14 @@ def _(mo):
 
 @app.cell
 def _(fs, matrix_types, mo, reverbed_synth):
-    mo.vstack([
-        mo.vstack([
-            mo.md(f"**{name}**"),
-            mo.audio(src=reverbed_synth[name].T, rate=fs)
-        ])
-        for name in matrix_types
-    ])
+    mo.vstack(
+        [
+            mo.vstack(
+                [mo.md(f"**{name}**"), mo.audio(src=reverbed_synth[name].T, rate=fs)]
+            )
+            for name in matrix_types
+        ]
+    )
     return
 
 

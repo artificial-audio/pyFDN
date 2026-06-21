@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -113,6 +113,9 @@ def _(delays, fs, go, np, num_delays, pyFDN, target_rt):
     sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
 
+    # constract the SOSFilter
+    absorption = pyFDN.SOSFilterBank(sos_absorption, len(delays))
+
     fig_mag = go.Figure()
     for _i in range(num_delays):
         _, _H_bands, _W_bands = pyFDN.probe_sos(
@@ -140,7 +143,7 @@ def _(delays, fs, go, np, num_delays, pyFDN, target_rt):
         height=400,
     )
     fig_mag.show()
-    return (sos_absorption,)
+    return absorption, sos_absorption
 
 
 @app.cell(hide_code=True)
@@ -160,6 +163,7 @@ def _(mo):
 
 @app.cell
 def _(
+    absorption,
     delays,
     direct,
     feedback_matrix,
@@ -181,7 +185,7 @@ def _(
         input_gain,
         output_gain,
         direct,
-        absorption_filters=sos_absorption,
+        absorption=absorption,
     )
 
     model = pyFDN.dss_to_flamo(

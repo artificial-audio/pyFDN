@@ -150,10 +150,13 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     # short RTs so the IR decays well within nfft (FLAMO is circular)
     sos = pyFDN.first_order_absorption(0.15, 0.05, delays, fs)  # (1, 6, N)
 
+    # constract the SOSFilter
+    absorption = pyFDN.SOSFilterBank(sos=sos, num_channels=n)
+
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_fdn(impulse, delays, A, B, C, D, absorption_filters=sos)
+    ir_td = pyFDN.process_fdn(impulse, delays, A, B, C, D, absorption=absorption)
 
     model = pyFDN.dss_to_flamo(
         A,
