@@ -1,8 +1,8 @@
 """
 Time Varying matrix generator for FDN feedback matrices.
 
-This module provides a Python implementation of a time-varying matrix generator 
-for Feedback Delay Network (FDN) feedback matrices. 
+This module provides a Python implementation of a time-varying matrix generator
+for Feedback Delay Network (FDN) feedback matrices.
 Translation of the MATLAB implementation `timeVaryingMatrix.m` from fdnToolbox.
 
 Original MATLAB code: (c) Sebastian Jiro Schlecht, 2019
@@ -10,6 +10,7 @@ Python translation: Alma Hova, 2026
 """
 
 import numpy as np
+
 from pyFDN.auxiliary.tiny_rotation_matrix import rotation_matrix_from_angles
 
 
@@ -17,8 +18,8 @@ class TimeVaryingMatrix:
     """
     Time Varying Matrix for Feedback Delay Networks (FDNs).
 
-    This class generates a time-varying matrix for FDN feedback matrices. The 
-    matrix varies over time based on sinusoidal modulation, with parameters 
+    This class generates a time-varying matrix for FDN feedback matrices. The
+    matrix varies over time based on sinusoidal modulation, with parameters
     controlling the speed, amplitude, and randomness of the variation.
 
     Parameters
@@ -41,11 +42,11 @@ class TimeVaryingMatrix:
         cycles_per_second: float,
         amplitude: float,
         fs: float,
-            spread: float
+        spread: float,
     ) -> None:
         """
         Initialize the TimeVaryingMatrix object.
-        
+
         Attributes
         ----------
         N : int
@@ -78,7 +79,7 @@ class TimeVaryingMatrix:
 
         self.N = N
         self.cycles_per_second = cycles_per_second
-        self.amplitude = amplitude                      
+        self.amplitude = amplitude
         self.fs = fs
         self.spread = spread
 
@@ -90,21 +91,18 @@ class TimeVaryingMatrix:
 
         # Calculate a unique modulation frequency for each pair using the spread factor
         self.frequency = self.cycles_per_second * (
-            1 
-            + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
+            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
         )
 
         # Modulation Amplitude
         self.angle_amplitude = self.amplitude * (
-            1
-            + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
+            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
         )
-        
+
         # Global time tracker index, initialized to 0
         self.sample_index = 0
 
-
-    def filter(self, x_in: np.ndarray) -> np.ndarray: 
+    def filter(self, x_in: np.ndarray) -> np.ndarray:
         """
         Applies a time-varying orthogonal transformation to the input signal.
 
@@ -114,7 +112,7 @@ class TimeVaryingMatrix:
         Parameters
         ----------
         x_in : ndarray
-            Input signal of shape (length, N), where `length` is the number of 
+            Input signal of shape (length, N), where `length` is the number of
             samples and `N` is the number of channels.
 
         Returns
@@ -131,18 +129,13 @@ class TimeVaryingMatrix:
 
         # Loop through every single audio sample instance in the block
         for n in range(length):
-
             # Calculate the absolute time 't' in seconds from the start of processing
             t = (self.sample_index + n) / self.fs
 
-            # Compute the rotation angle for each 2D plane at time instance 't' 
+            # Compute the rotation angle for each 2D plane at time instance 't'
             # using independent sinusoidal oscillators
-            angles = (
-                self.angle_amplitude
-                * np.sin(
-                    2 * np.pi * self.frequency * t
-                    + self.phase
-                )
+            angles = self.angle_amplitude * np.sin(
+                2 * np.pi * self.frequency * t + self.phase
             )
 
             # generate the combined N x N real orthogonal feedback matrix Q(n) for this sample
@@ -150,8 +143,8 @@ class TimeVaryingMatrix:
                 angles,
                 n=self.N,
             )
-            
-            # Matrix-vector multiplication: Apply the orthogonal transformation matrix Q 
+
+            # Matrix-vector multiplication: Apply the orthogonal transformation matrix Q
             # to the multi-channel input sample vector at index [n]
             out[n] = Q @ x_in[n]
 
