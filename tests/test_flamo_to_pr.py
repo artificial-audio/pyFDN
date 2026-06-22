@@ -31,8 +31,15 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
     # Build the model in float64 so flamo_to_pr matches dss_to_pr's
     # (now-default) machine-precision behavior.
     model = dss_to_flamo(
-        A=a, B=b, C=c, D=d, m=delays, Fs=1.0, nfft=1024,
-        shell=False, dtype=torch.float64,
+        A=a,
+        B=b,
+        C=c,
+        D=d,
+        m=delays,
+        Fs=1.0,
+        nfft=1024,
+        shell=False,
+        dtype=torch.float64,
     )
 
     with warnings.catch_warnings():
@@ -41,7 +48,15 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
             model, verbose=False
         )
         res_wrap, pol_wrap, direct_wrap, pair_wrap, _ = dss_to_pr(
-            delays, a, b, c, d, mode="eai", Fs=1.0, nfft=1024, verbose=False,
+            delays,
+            a,
+            b,
+            c,
+            d,
+            mode="eai",
+            Fs=1.0,
+            nfft=1024,
+            verbose=False,
         )
 
     assert pol_model.size == pol_wrap.size
@@ -77,20 +92,30 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
 
     # Same genuine biquad lowpass (a2 != 0) on every delay line, as (1, 6, N).
     bq_b, bq_a = butter(2, 0.4)  # [b0, b1, b2], [a0, a1, a2]
-    sos_loop = np.tile(
-        np.concatenate([bq_b, bq_a])[:, None], (1, n)
-    )[np.newaxis, :, :]
+    sos_loop = np.tile(np.concatenate([bq_b, bq_a])[:, None], (1, n))[np.newaxis, :, :]
 
     model = dss_to_flamo(
-        A=a, B=b, C=c, D=d, m=delays, Fs=Fs, nfft=nfft,
-        shell=True, sos_filter=sos_loop, dtype=torch.float64,
+        A=a,
+        B=b,
+        C=c,
+        D=d,
+        m=delays,
+        Fs=Fs,
+        nfft=nfft,
+        shell=True,
+        sos_filter=sos_loop,
+        dtype=torch.float64,
     )
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         residues, poles, direct, is_pair, _ = flamo_to_pr(
-            model, reject_unstable_poles=True, maximum_iterations=300,
-            quality_threshold=1e-10, refinement_tol=1e-12, verbose=False,
+            model,
+            reject_unstable_poles=True,
+            maximum_iterations=300,
+            quality_threshold=1e-10,
+            refinement_tol=1e-12,
+            verbose=False,
         )
 
     # Pole count includes the biquad's 2 poles per line (a2 != 0), not just the

@@ -41,7 +41,6 @@ def _(mo):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
     import scipy.linalg as la
 
@@ -56,7 +55,6 @@ def _():
         la,
         np,
         one_pole_absorption,
-        plt,
         process_fdn,
         pyFDN,
         random_orthogonal,
@@ -72,22 +70,34 @@ def _(mo):
 
 
 @app.cell
-def _(mo, np, pyFDN):
+def _(mo):
+    sound_selection = mo.ui.dropdown(
+        options=["sine", "melody"],
+        value="melody",
+        label="Sound",
+    )
+    mo.output.replace(sound_selection)
+    return (sound_selection,)
+
+
+@app.cell
+def _(mo, np, pyFDN, sound_selection):
     np.random.seed(1)
 
     # init source signal
-    mode = "melody"
-    _output = None
+    mode = sound_selection.value
 
     if mode == "sine":
         fs = 48000
-        time = np.linspace(0, 4, 4 * fs)[:, None]
+        duration = 4
+        time = np.linspace(0, duration, duration * fs)[:, None]
 
         synth1 = 0.5 * np.sin(time * 440 * 2 * np.pi)
         synth2 = 0.5 * np.sin(time * 660 * 2 * np.pi)
 
         # Concatenate columns horizontally
-        synth = np.hstack((synth1, synth2))
+        synth = synth1 + synth2
+        synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
         synth, fs = pyFDN.load_audio("synth_dry.wav")
@@ -96,10 +106,9 @@ def _(mo, np, pyFDN):
         samples = np.arange(len(synth))
         time = (samples / fs) * 1000 * 1000
 
-        _output = mo.vstack([mo.audio(synth, fs)])
-
-    _output
-    return fs, mode, synth, time
+    _audio_src = synth.T if synth.ndim == 2 else synth
+    mo.vstack([mo.audio(_audio_src, fs)])
+    return fs, synth
 
 
 @app.cell(hide_code=True)
@@ -111,9 +120,9 @@ def _(mo):
 
 
 @app.cell
-def _(la, mode, np, random_orthogonal):
+def _(la, np, random_orthogonal):
     N = 8
-    num_input = 1 if mode == "melody" else 2
+    num_input = 1
     num_output = 2
 
     input_gain = la.orth(np.random.randn(N, num_input))
@@ -181,13 +190,13 @@ def _(
             spread = 0
 
         elif matrix_type == "slow_variation":
-            modulation_frequency = 1  # hz
-            modulation_amplitude = 0.9
+            modulation_frequency = 1.0  # hz
+            modulation_amplitude = 3.0
             spread = 0.3
 
         elif matrix_type == "fast_variation":
             modulation_frequency = 10  # hz
-            modulation_amplitude = 0.1
+            modulation_amplitude = 1.1
             spread = 0.7
 
         tv_matrix = TimeVaryingMatrix(
@@ -216,21 +225,21 @@ def _(mo):
 
 
 @app.cell
-def _(matrix_types, plt, reverbed_synth, time):
-    plt.figure(figsize=(10, 6))
-    plt.title("Time-Varying FDN Output")
-    plt.grid(True, linestyle="--", alpha=0.6)
-
-    # Plot each matrix type with distinct styles
-    for it, name in enumerate(matrix_types):
-        plt.plot(time, reverbed_synth[name][:, 0] + it * 1.5, label=name, linewidth=1.5)
-
-    plt.legend(loc="upper right", title="Matrix Types")
-    plt.xlabel("Time [seconds]")
-    plt.ylabel("Amplitude")
-    plt.tight_layout()
-
-    plt.show()
+def _(fs, matrix_types, mo, pyFDN, reverbed_synth):
+    mo.vstack(
+        [
+            pyFDN.plot_spectrogram(
+                reverbed_synth[name][:, 0],
+                fs,
+                nperseg=2048 * 8,
+                noverlap=2048 * 1,
+                title=f"{name} — spectrogram",
+                colorscale="Magma",
+                height=350,
+            )
+            for name in matrix_types
+        ]
+    )
     return
 
 

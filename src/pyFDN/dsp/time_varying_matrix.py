@@ -11,8 +11,6 @@ Python translation: Alma Hova, 2026
 
 import numpy as np
 
-from pyFDN.auxiliary.tiny_rotation_matrix import rotation_matrix_from_angles
-
 
 class TimeVaryingMatrix:
     """
@@ -106,8 +104,10 @@ class TimeVaryingMatrix:
         """
         Applies a time-varying orthogonal transformation to the input signal.
 
-        For each time step, a matrix Q(n) is constructed from the current
-        modulation state and applied to the signal.
+        Each adjacent channel pair is rotated by a sinusoidally modulated
+        angle. The operation is equivalent to constructing the block-diagonal
+        rotation matrix from ``rotation_matrix_from_angles`` at every sample,
+        but applies the 2-D rotations directly to the whole input block.
 
         Parameters
         ----------
@@ -120,35 +120,25 @@ class TimeVaryingMatrix:
         out : ndarray
             Output signal of the same shape as `x_in`.
         """
+        x = np.asarray(x_in)
+        if x.ndim != 2 or x.shape[1] != self.N:
+            raise ValueError(f"x_in must have shape (length, {self.N})")
 
-        # Get the number of audio samples in the incoming block
-        length = x_in.shape[0]
+        length = x.shape[0]
+        sample_indices = self.sample_index + np.arange(length)
+        time = sample_indices[:, np.newaxis] / self.fs
+        angles = self.angle_amplitude * np.sin(
+            2 * np.pi * self.frequency * time + self.phase
+        )
+        cos = np.cos(angles)
+        sin = np.sin(angles)
 
-        # Output array matching the size of the input
-        out = np.empty_like(x_in)
+        x_pairs = x.reshape(length, self.num_pairs, 2)
+        out = np.empty(x.shape, dtype=np.result_type(x, self.angle_amplitude, float))
+        out_pairs = out.reshape(length, self.num_pairs, 2)
+        out_pairs[..., 0] = cos * x_pairs[..., 0] - sin * x_pairs[..., 1]
+        out_pairs[..., 1] = sin * x_pairs[..., 0] + cos * x_pairs[..., 1]
 
-        # Loop through every single audio sample instance in the block
-        for n in range(length):
-            # Calculate the absolute time 't' in seconds from the start of processing
-            t = (self.sample_index + n) / self.fs
-
-            # Compute the rotation angle for each 2D plane at time instance 't'
-            # using independent sinusoidal oscillators
-            angles = self.angle_amplitude * np.sin(
-                2 * np.pi * self.frequency * t + self.phase
-            )
-
-            # generate the combined N x N real orthogonal feedback matrix Q(n) for this sample
-            Q = rotation_matrix_from_angles(
-                angles,
-                n=self.N,
-            )
-
-            # Matrix-vector multiplication: Apply the orthogonal transformation matrix Q
-            # to the multi-channel input sample vector at index [n]
-            out[n] = Q @ x_in[n]
-
-        # Accumulate the total processed sample length
         self.sample_index += length
 
         return out

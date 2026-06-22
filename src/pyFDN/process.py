@@ -66,7 +66,6 @@ def process_fdn(
     delays_arr = np.asarray(delays, dtype=int).reshape(-1)
     if np.any(delays_arr <= 0):
         raise ValueError("Delays must be positive integers")
-    n = delays_arr.size
 
     if A_mat.ndim == 3:
         feedback_filter: FIRMatrixFilter | None = FIRMatrixFilter(A_mat)
