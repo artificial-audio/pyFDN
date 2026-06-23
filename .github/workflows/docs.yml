@@ -61,12 +61,17 @@ jobs:
         working-directory: docs
         run: make html
 
-      # Save built docs as an artifact for later deployment
+      # Save built docs as an artifact for later deployment.
+      # Only needed to hand off to the deploy-docs job, which runs on
+      # push/workflow_dispatch to main — so skip the upload on PRs, and keep
+      # retention short since it only has to survive the same workflow run.
       - name: Upload built docs artifact
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: docs-html
           path: docs/_build/html
+          retention-days: 1
 
   deploy-docs:
     runs-on: ubuntu-latest
