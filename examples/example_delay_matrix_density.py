@@ -198,7 +198,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
 
     fig2 = go.Figure()
     fig2.add_trace(
-        go.Scatter(
+        pyFDN.downsampled_scatter(
             x=t,
             y=echo_vanilla,
             mode="lines",
@@ -208,7 +208,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         )
     )
     fig2.add_trace(
-        go.Scatter(
+        pyFDN.downsampled_scatter(
             x=t,
             y=echo_delay_matrix,
             mode="lines",
@@ -218,7 +218,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         )
     )
     fig2.add_trace(
-        go.Scatter(
+        pyFDN.downsampled_scatter(
             x=t,
             y=echo_swapped,
             mode="lines",
