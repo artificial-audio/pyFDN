@@ -20,7 +20,7 @@ def process_fdn(
     C: ArrayLike,
     D: ArrayLike,
     *,
-    absorption_filters: ArrayLike | None = None,
+    absorption: SOSFilterBank | None = None,
     extra_matrix: Any | None = None,
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
@@ -40,7 +40,7 @@ def process_fdn(
         z^{-1} convention.
     B, C, D : array
         Static input, output, and direct gains.
-    absorption_filters : array, optional
+    absorption : object, optional
         Per-delay-line SOS filters; see :class:`pyFDN.dsp.SOSFilterBank` for
         accepted shapes. Applied to the delay outputs inside the loop.
     extra_matrix : object, optional
@@ -66,7 +66,6 @@ def process_fdn(
     delays_arr = np.asarray(delays, dtype=int).reshape(-1)
     if np.any(delays_arr <= 0):
         raise ValueError("Delays must be positive integers")
-    n = delays_arr.size
 
     if A_mat.ndim == 3:
         feedback_filter: FIRMatrixFilter | None = FIRMatrixFilter(A_mat)
@@ -74,11 +73,6 @@ def process_fdn(
         feedback_filter = None
     else:
         raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
-
-    if absorption_filters is not None:
-        absorption: SOSFilterBank | None = SOSFilterBank(absorption_filters, n)
-    else:
-        absorption = None
 
     max_block_size = min(int(2**12), int(np.min(delays_arr)))
     delay_bank = FeedbackDelay(delays_arr, max_block_size)

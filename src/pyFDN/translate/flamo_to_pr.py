@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import warnings
 from collections import OrderedDict
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,7 +16,6 @@ import numpy as np
 import torch
 
 from pyFDN.auxiliary.poles import reduce_conjugate_pairs
-
 
 # ───────────────────────────────────────────────────────────────────────────
 # Small infrastructure helpers
@@ -83,10 +83,10 @@ def _rcond_torch(mat: torch.Tensor) -> float:
 # ───────────────────────────────────────────────────────────────────────────
 
 
-def _make_log_det_derivative_w(recursion: Any):
+def _make_log_det_derivative_w(recursion: Any) -> Callable[[complex], torch.Tensor]:
     """Build (d/dw) log det P(w) once using grad; uses recursion.probe_recursion_w(w)."""
 
-    def d_log_det_w(w):
+    def d_log_det_w(w: complex) -> torch.Tensor:
         w_var = _as_torch_complex_scalar(w, model=recursion)
         w_var = w_var.detach().clone().requires_grad_(True)
         P_w = recursion.probe_recursion_w(w_var)
@@ -97,14 +97,18 @@ def _make_log_det_derivative_w(recursion: Any):
     return d_log_det_w
 
 
-def _make_P_and_dP_dz(recursion: Any):
+def _make_P_and_dP_dz(
+    recursion: Any,
+) -> Callable[[complex], tuple[torch.Tensor, torch.Tensor]]:
     """Build (P(z), dP/dz(z)) once using JVP; uses recursion.probe_recursion(z)."""
 
-    def get_P_and_dP_dz(z):
+    def get_P_and_dP_dz(z: complex) -> tuple[torch.Tensor, torch.Tensor]:
         z_var = _as_torch_complex_scalar(z, model=recursion)
         dz = torch.ones_like(z_var)
         P, dP_dz = torch.autograd.functional.jvp(
-            recursion.probe_recursion, (z_var,), (dz,)
+            recursion.probe_recursion,
+            (z_var,),
+            (dz,),  # type: ignore[no-untyped-call]
         )
         return P.detach(), dP_dz.detach()
 
@@ -166,7 +170,7 @@ def _series_slice_to_subgraph(series: Any, start: int, end: int) -> Any | None:
     if n == 1:
         return series[start]
     try:
-        from flamo.processor import system as flamo_system  # type: ignore
+        from flamo.processor import system as flamo_system
     except Exception as exc:
         raise RuntimeError(
             "FLAMO system.Series is required for multi-module subgraphs."
@@ -238,7 +242,7 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     return np.asarray(np.round(out), dtype=int)
 
 
-def _iter_leaf_modules(node: Any):
+def _iter_leaf_modules(node: Any) -> Iterator[Any]:
     """Yield the leaf modules of a FLAMO subgraph, descending into Series-like
     containers. Non-iterable modules (Gain, Delay, SOSFilter, …) are leaves."""
     try:
@@ -322,7 +326,7 @@ class _FDNLoopFlamo:
 
     recursion: Any
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         rec = self.recursion
         z0 = _as_torch_complex_scalar(1.0 + 0j, model=rec)
         p0 = rec.probe_recursion(z0)
@@ -811,9 +815,7 @@ def flamo_to_pr(
             raise ValueError(f"num_poles must be a positive integer, got {num_poles}.")
         n_poles = int(num_poles)
         if verbose:
-            print(
-                f"Overriding detected pole count: num_poles={n_poles}"
-            )
+            print(f"Overriding detected pole count: num_poles={n_poles}")
 
     # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
     # in the loop the poles spread inward (off the unit circle) and plain
@@ -877,9 +879,7 @@ def flamo_to_pr(
         sym_tol = max(float(quality_threshold) * 1000.0, 1e-9)
         poles_np = _conjugate_symmetrize(poles_np, tol=sym_tol)
 
-    poles, is_conjugate, non_paired = reduce_conjugate_pairs(
-        poles_np, verbose=verbose
-    )
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(

@@ -43,9 +43,7 @@ def test_dss_to_pr_eig_mode_reconstructs_ir():
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_pair, _ = dss_to_pr(
-        delays, a, b, c, d, mode="eig"
-    )
+    residues, poles, direct, is_pair, _ = dss_to_pr(delays, a, b, c, d, mode="eig")
 
     ir_len = 512
     ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
@@ -62,7 +60,12 @@ def test_dss_to_pr_roots_mode_reconstructs_ir():
     d = np.zeros((1, 1))
 
     residues, poles, direct, is_conj, _ = dss_to_pr(
-        delays, a, b, c, d, mode="roots",
+        delays,
+        a,
+        b,
+        c,
+        d,
+        mode="roots",
     )
 
     ir_len = 512
@@ -83,9 +86,7 @@ def test_dss_to_pr_roots_mode_meta_shape():
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_pair, meta = dss_to_pr(
-        delays, a, b, c, d, mode="roots"
-    )
+    residues, poles, direct, is_pair, meta = dss_to_pr(delays, a, b, c, d, mode="roots")
 
     assert residues.ndim == 3
     assert poles.ndim == 1
@@ -114,7 +115,15 @@ def test_dss_to_pr_eai_matches_roots():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         res_new, pol_new, direct_new, pair_new, _ = dss_to_pr(
-            delays, a, b, c, d, mode="eai", Fs=1.0, nfft=1024, verbose=False,
+            delays,
+            a,
+            b,
+            c,
+            d,
+            mode="eai",
+            Fs=1.0,
+            nfft=1024,
+            verbose=False,
         )
 
     # Same pole-set cardinality (after conjugate-pair reduction).
@@ -150,7 +159,12 @@ def test_dss_to_pr_residue_lstsq_match():
     ir_len = 4 * int(np.sum(delays))
     ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
     residues, poles, direct, is_conj, _ = dss_to_pr(
-        delays, a, b, c, d, mode="eig",
+        delays,
+        a,
+        b,
+        c,
+        d,
+        mode="eig",
     )
     ir_modal = pr_to_impz(residues, poles, direct, is_conj, ir_len)[:, 0, 0]
     residues_from_ir, _, _ = impz_to_res(ir_time, poles, is_conj)

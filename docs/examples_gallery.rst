@@ -118,6 +118,8 @@ FDN Design & Analysis
      - Statistics of the modal decomposition of a random FDN. The pole angles are almost equidistributed on the unit circle, while the residue magnitudes are spread across a large range.
    * - `Scattering feedback matrices <_static/marimo/notebooks/example_scattering_fdn.html>`_
      - Demonstration of different types of scattering (FIR paraunitary) feedback matrices from ``filter_matrix_gallery``:
+   * - `Time Varying FDN <_static/marimo/notebooks/example_time_varying_fdn.html>`_
+     - Open the rendered marimo notebook.
    * - `Time-domain FDN vs FLAMO with GEQ absorption <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
      - The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
 
