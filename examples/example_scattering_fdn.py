@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -143,14 +143,14 @@ def _(mo):
 
 
 @app.cell
-def _(echo_densities, fs, go, irs, np):
+def _(echo_densities, fs, go, irs, np, pyFDN):
     fig = go.Figure()
     colors = ["#636efa", "#ef553b", "#00cc96", "#ab63fa"]
     t_axis = np.arange(len(next(iter(irs.values())))) / fs
     for _i, _name in enumerate(irs):
         _offset = 2.0 * (_i + 1)
         fig.add_trace(
-            go.Scatter(
+            pyFDN.downsampled_scatter(
                 x=t_axis,
                 y=irs[_name] + _offset,
                 mode="lines",
@@ -160,7 +160,7 @@ def _(echo_densities, fs, go, irs, np):
             )
         )
         fig.add_trace(
-            go.Scatter(
+            pyFDN.downsampled_scatter(
                 x=t_axis,
                 y=echo_densities[_name] + _offset,
                 mode="lines",

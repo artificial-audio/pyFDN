@@ -306,13 +306,13 @@ def _(mo):
 
 @app.cell
 def _(fs, pyFDN, rir):
-    pyFDN.plot_spectrogram(rir, fs, title="Target RIR").show()
+    pyFDN.plot_spectrogram(rir, fs, title="Target RIR")
     return
 
 
 @app.cell
 def _(fs, ir_fdn, pyFDN):
-    pyFDN.plot_spectrogram(ir_fdn, fs, title="FDN impulse response").show()
+    pyFDN.plot_spectrogram(ir_fdn, fs, title="FDN impulse response")
     return
 
 

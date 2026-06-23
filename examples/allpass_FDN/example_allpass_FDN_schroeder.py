@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -155,9 +155,8 @@ def _(Fs, impulse_response, mo, np, pyFDN):
     _fig = pyFDN.plot_spectrogram(
         channel_ir, Fs, title="Schroeder series allpass — spectrogram"
     )
-    _fig.show()
 
-    mo.vstack([mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
     return
 
 

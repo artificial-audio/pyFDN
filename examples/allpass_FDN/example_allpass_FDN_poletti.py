@@ -201,9 +201,8 @@ def _(Fs, impulse_response, mo, pyFDN):
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
     _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2))
-    _fig.show()
 
-    mo.vstack([mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
     return
 
 
