@@ -1132,7 +1132,7 @@ def plot_spectrogram(
     height: int = 500,
     colorscale: str = "Viridis",
 ) -> Any:
-    """Plot spectrogram of a 1-D signal as a Plotly heatmap.
+    """Plot spectrogram of a 1-D signal as a Matplotlib image.
 
     Uses the same default parameters as the Poletti example: Blackman window,
     1024-point segments, 75% overlap, log y-axis, dB magnitude.
@@ -1163,13 +1163,13 @@ def plot_spectrogram(
     height : int
         Figure height in pixels.
     colorscale : str
-        Plotly colorscale name. Default "Viridis".
+        Colormap name (lowercased to a Matplotlib colormap). Default "Viridis".
 
     Returns
     -------
-    fig : plotly.graph_objects.Figure
+    fig : matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
+    from matplotlib.figure import Figure
     from scipy.signal import spectrogram
 
     ir = np.asarray(ir, dtype=float).ravel()
@@ -1185,8 +1185,8 @@ def plot_spectrogram(
         ymin = 100.0
     if ymax is None:
         ymax = fs / 2.0
-    # For log y-axis, avoid f=0 and trim to [ymin, ymax] so range is applied correctly
-    ymin = max(ymin, 1.0)  # log scale requires positive values
+    # Log y-axis needs strictly positive frequencies; trim to [ymin, ymax].
+    ymin = max(ymin, 1.0)
     mask = (f >= ymin) & (f <= ymax)
     f_plot = f[mask]
     Sxx_plot = Sxx_db[mask, :]
@@ -1196,31 +1196,29 @@ def plot_spectrogram(
         xmin = float(t[0])
     if xmax is None:
         xmax = float(t[-1])
-    xlim = (xmin, xmax)
 
-    heatmap_kw = {
-        "x": t,
-        "y": f_plot,
-        "z": Sxx_plot,
-        "colorscale": colorscale,
-        "colorbar": {"title": "dB"},
-        "zauto": dynamic_range is None,
-    }
-    if dynamic_range is not None:
-        zmax = float(np.max(Sxx_plot))
-        heatmap_kw["zmin"] = zmax - float(dynamic_range)
-        heatmap_kw["zmax"] = zmax
+    # Render with Matplotlib (Agg backend): marimo embeds the result as a single
+    # compressed PNG. A Plotly heatmap instead embeds every (freq, time) cell as
+    # base64 data, which bloats the exported HTML by several MB per spectrogram.
+    cmap = colorscale.lower()
+    vmax = float(np.max(Sxx_plot)) if Sxx_plot.size else 0.0
+    vmin = vmax - float(dynamic_range) if dynamic_range is not None else None
 
-    fig = go.Figure(data=go.Heatmap(**heatmap_kw))
-    fig.update_layout(
-        title=title,
-        xaxis_title=xlabel,
-        yaxis_title=ylabel,
-        xaxis={"range": [xmin, xmax]},
-        yaxis={"type": "log", "range": [np.log10(ymin), np.log10(ymax)]},
-        height=height,
-        template="plotly_white",
+    dpi = 100
+    fig = Figure(figsize=(8.0, height / dpi), dpi=dpi)
+    ax = fig.add_subplot(111)
+    mesh = ax.pcolormesh(
+        t, f_plot, Sxx_plot, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto"
     )
+    ax.set_yscale("log")
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(xmin, xmax)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    fig.colorbar(mesh, ax=ax, label="dB")
+    fig.tight_layout()
     return fig
 
 

@@ -160,9 +160,8 @@ def _(Fs, impulse_response, mo, np, pyFDN):
     _fig = pyFDN.plot_spectrogram(
         channel_ir, Fs, title="Nested allpass FDN — spectrogram"
     )
-    _fig.show()
 
-    mo.vstack([mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
     return
 
 

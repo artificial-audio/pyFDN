@@ -199,7 +199,7 @@ def _(mo):
 def _(fs, pyFDN, rir):
     pyFDN.plot_spectrogram(
         rir, fs, title="FDN impulse response — time-frequency energy"
-    ).show()
+    )
     return
 
 
