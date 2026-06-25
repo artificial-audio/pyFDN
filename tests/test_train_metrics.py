@@ -114,7 +114,6 @@ def test_trainable_defaults():
 
 def test_output_domain_per_mode():
     assert output_domain("colorless") == "magnitude"
-    assert output_domain("match_magnitude") == "magnitude"
     assert output_domain("match_spectrogram") == "time"
     assert output_domain("match_mel_spectrogram") == "time"
 

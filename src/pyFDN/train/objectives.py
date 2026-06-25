@@ -2,19 +2,28 @@
 optional target data) to the ``(input, target)`` tensor pair, loss criteria, and
 the model output domain to measure in.
 
-The mode alone fixes the loss and the output domain. Every matching mode takes
-its ``target`` as a single time-domain impulse response; ``match_magnitude``
-converts it to one-sided ``|H|`` (``|rfft|``) internally, so the user never has
-to pre-transform the reference.
+The mode alone fixes the loss and the output domain. The matching modes take
+their ``target`` as a single time-domain impulse response and compare it in the
+time domain, so the user never has to pre-transform the reference.
 
 ==========================  ====================================  ============
 mode                        loss                                  target
 ==========================  ====================================  ============
 ``"colorless"``             magnitude MSE vs a flat response      none
-``"match_magnitude"``       magnitude MSE vs ``|H|``              impulse resp.
 ``"match_spectrogram"``     multi-resolution STFT (``mss``)       impulse resp.
 ``"match_mel_spectrogram"`` mel multi-resolution STFT             impulse resp.
 ==========================  ====================================  ============
+
+``colorless`` uses flamo's ``mse_loss``, which sums the model's outputs before
+the MSE, so the target is a single flat magnitude curve. It is therefore a
+**SISO** objective: colorlessness is a property of the FDN core (feedback matrix
++ delays), not of the input/output gains, so multiple ``B``/``C`` columns add no
+flatness the core does not already provide and the objective cannot distinguish
+them (what a multichannel reverb actually wants from extra channels is
+*decorrelation*, a different objective). Build with a single input and output
+for ``colorless``. (Matching an arbitrary target *magnitude* bin-for-bin is
+ill-posed for a reverb's spiky modal spectrum and is deliberately not offered;
+match a real IR with the spectrogram modes instead.)
 
 Every mode also adds a feedback-matrix sparsity penalty
 (:func:`colorless_sparsity_loss`, weight ``sparsity_alpha``, default 0.2; 0
@@ -33,13 +42,13 @@ imports without torch.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal
 
 import numpy as np
 
 Objective = Literal[
     "colorless",
-    "match_magnitude",
     "match_spectrogram",
     "match_mel_spectrogram",
 ]
@@ -47,12 +56,11 @@ Objective = Literal[
 # (criterion, alpha, requires_model) tuples for the trainer's register_criterion.
 Criterion = tuple[Any, float, bool]
 
-# mode -> output domain the model is measured in ("time" or "magnitude"). Every
-# mode but "colorless" fits a time-domain impulse-response target, converted to
-# this domain inside _input_target (a magnitude mode takes |rfft| of the target).
+# mode -> output domain the model is measured in ("time" or "magnitude").
+# "colorless" fits a flat magnitude target; the matching modes fit a time-domain
+# impulse-response target directly.
 _MODES: dict[str, str] = {
     "colorless": "magnitude",
-    "match_magnitude": "magnitude",
     "match_spectrogram": "time",
     "match_mel_spectrogram": "time",
 }
@@ -137,8 +145,15 @@ def build_objective(
     needs_target = mode in _NEEDS_TARGET
     if needs_target and target is None:
         raise ValueError(f"mode {mode!r} requires target=")
+    if domain == "magnitude" and n_out != 1:
+        warnings.warn(
+            f"{mode!r} is a SISO magnitude objective but the model has "
+            f"n_out={n_out} outputs; their magnitudes are summed into one and "
+            "fit together. Build with a single output for a well-posed fit.",
+            stacklevel=3,
+        )
     inp, tgt = _input_target(
-        domain, target, nfft, n_in, n_out, device, dtype, flat=not needs_target
+        target, nfft, n_in, n_out, device, dtype, flat=not needs_target
     )
     if criteria is not None:
         return inp, tgt, criteria, domain
@@ -152,7 +167,6 @@ def build_objective(
 
 
 def _input_target(
-    domain: str,
     target: Any,
     nfft: int,
     n_in: int,
@@ -170,13 +184,9 @@ def _input_target(
     impulse[:, 0, :] = 1.0
 
     if flat:
-        # colorless: a flat one-sided magnitude target (|H| == 1 at every bin).
-        tgt = torch.ones((1, nfft // 2 + 1, n_out), device=device, dtype=dtype)
+        tgt = torch.ones((1, nfft // 2 + 1, 1), device=device, dtype=dtype)
         return impulse, tgt
 
-    # The target is always a time-domain impulse response. Shape it to
-    # (nfft, n_out) -- zero-padded/truncated to the model FFT length, a
-    # single-channel response broadcast across outputs.
     arr = np.asarray(target, dtype=np.float64)
     if arr.ndim == 1:
         arr = arr[:, None]
@@ -186,17 +196,13 @@ def _input_target(
     length = min(arr.shape[0], nfft)
     ir[:length, :] = arr[:length, :]
 
-    # Convert to the model's output domain: one-sided |H| for the magnitude
-    # modes (matching flamo's norm="backward" rfft), the time response otherwise.
-    buf = np.abs(np.fft.rfft(ir, n=nfft, axis=0)) if domain == "magnitude" else ir
-
-    return impulse, torch.as_tensor(buf[None], device=device, dtype=dtype)
+    return impulse, torch.as_tensor(ir[None], device=device, dtype=dtype)
 
 
 def _primary_loss(
     mode: str, nfft: int, mss_nfft: tuple[int, ...], fs: float, device: Any
 ) -> Any:
-    if mode in ("colorless", "match_magnitude"):
+    if mode == "colorless":
         from flamo.optimize.loss import mse_loss
 
         return mse_loss(nfft=nfft, device=device)
@@ -205,6 +211,6 @@ def _primary_loss(
 
         return mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)
     elif mode == "match_mel_spectrogram":
-        from flamo.optimize.loss import mel_mss_loss  # match_mel_spectrogram
+        from flamo.optimize.loss import mel_mss_loss  
 
         return mel_mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)

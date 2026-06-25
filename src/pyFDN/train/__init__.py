@@ -3,8 +3,8 @@
 1. **build** a trainable flamo model from a config (:func:`build_fdn`, or
    :func:`trainable_from_build` from an existing :class:`~pyFDN.FDNBuild`).
 2. **train** the model toward a *mode* (:func:`train_fdn`) -- ``colorless``,
-   ``match_magnitude``, ``match_spectrogram`` or ``match_mel_spectrogram``,
-   with optional ``target`` data.
+   ``match_spectrogram`` or ``match_mel_spectrogram``, with optional ``target``
+   data.
 3. **extract** an :class:`~pyFDN.FDNBuild` back out
    (:func:`pyFDN.extract_build`), plus metadata
    (:class:`TrainLog`).
@@ -28,13 +28,13 @@ from .metrics import (
 from .objectives import Objective
 
 __all__ = [
-    # 1. build
+    # build
     "build_fdn",
     "trainable_from_build",
     "with_decay",
     "Trainable",
     "MatrixParam",
-    # 2. train
+    # train
     "train_fdn",
     "Objective",
     "TrainLog",

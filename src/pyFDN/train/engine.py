@@ -2,7 +2,7 @@
 
 :func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` (or
 :func:`pyFDN.trainable_from_build`) toward a training *mode* (``colorless`` /
-``match_magnitude`` / ``match_spectrogram`` / ``match_mel_spectrogram``),
+``match_spectrogram`` / ``match_mel_spectrogram``),
 **in place**, and returns a :class:`TrainLog`. Fitting one FDN is a pure
 optimization on a single ``(input, target)`` pair, so it runs
 :class:`pyFDN.train._trainer.EagerTrainer` (a direct gradient loop) rather than a
@@ -75,12 +75,13 @@ def train_fdn(
         A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_build``.
         ``dtype`` should match the model's (default float32 on both).
     mode : str
-        ``"colorless"``, ``"match_magnitude"``, ``"match_spectrogram"`` or
-        ``"match_mel_spectrogram"``.
+        ``"colorless"``, ``"match_spectrogram"`` or ``"match_mel_spectrogram"``.
+        ``"colorless"`` is a SISO objective (build the model with one input and
+        one output): colorlessness lives in the FDN core, so extra ``B``/``C``
+        channels add nothing the magnitude loss can use.
     target : np.ndarray, optional
-        Reference impulse response the mode fits to -- a time-domain IR for every
-        matching mode (``match_magnitude`` converts it to one-sided ``|H|``
-        internally). Unused for ``colorless``; required otherwise.
+        Reference impulse response the matching modes fit to -- a time-domain IR.
+        Unused for ``colorless``; required otherwise.
     criteria : list of (criterion, alpha, requires_model), optional
         Override the default loss list (primary loss + sparsity) with your own
         flamo criteria.
@@ -111,8 +112,8 @@ def train_fdn(
     Notes
     -----
     Setting the output layer is a deliberate, visible mutation: after a
-    ``colorless``/``match_magnitude`` run the model emits ``|H|``; after the
-    spectrogram modes it emits a time response.
+    ``colorless`` run the model emits ``|H|``; after the spectrogram modes it
+    emits a time response.
     """
     import torch
 
