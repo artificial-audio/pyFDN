@@ -51,6 +51,7 @@ def train_fdn(
     sparsity_alpha: float = 0.2,
     mss_nfft: tuple[int, ...] = (256, 512, 1024),
     max_steps: int = 2000,
+    min_steps: int = 50,
     lr: float = 1e-3,
     optimizer: str = "adam",
     patience: int = 10,
@@ -95,6 +96,10 @@ def train_fdn(
         Multi-resolution STFT window sizes for the spectrogram modes.
     max_steps, lr, patience : optimization settings (max gradient steps, learning
         rate, plateau patience in steps).
+    min_steps : int
+        Warmup before plateau early stopping is allowed (default 100), so a
+        slow/flat start does not stop the run before the optimizer finds a basin.
+        Set to 0 to allow stopping from the first step.
     optimizer : str
         ``"adam"`` (default) or ``"lbfgs"``; L-BFGS suits the deterministic match
         modes, Adam suits all of them.
@@ -156,6 +161,7 @@ def train_fdn(
         lr=lr,
         optimizer=optimizer,
         patience=patience,
+        min_steps=min_steps,
         tol=tol,
         device=dev,
         log=log,

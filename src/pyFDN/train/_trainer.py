@@ -49,6 +49,10 @@ class _EagerTrainer:
         Relative-improvement threshold for plateau early stop. Default 1e-6.
     patience : int
         Consecutive non-improving steps before stopping. Default 10.
+    min_steps : int
+        Warmup: early stopping is suppressed until this many steps have run, so a
+        slow/flat start (before the optimizer settles into a basin) does not trip
+        the plateau gate. Default 0 (early stopping allowed from the first step).
     log : bool
         Show the progress bar and print timing / plateau messages. Default True.
     train_dir : str, optional
@@ -69,6 +73,7 @@ class _EagerTrainer:
         step_factor: float = 0.1,
         tol: float = 1e-6,
         patience: int = 10,
+        min_steps: int = 0,
         log: bool = True,
         train_dir: str | None = None,
         save_checkpoints: bool = False,
@@ -82,6 +87,7 @@ class _EagerTrainer:
         self.lr = lr
         self.tol = tol
         self.patience = patience
+        self.min_steps = min_steps
         self.log = log
         self.train_dir = train_dir
         self.save_checkpoints = save_checkpoints
@@ -190,18 +196,25 @@ class _EagerTrainer:
                 self.save_model(step)
 
             # plateau early stopping on relative improvement of the total loss
-            rel_improvement = (
-                (best_loss - total) / (abs(best_loss) + 1e-12)
-                if math.isfinite(best_loss)
-                else float("inf")
-            )
+            if not math.isfinite(total):
+                # a non-finite loss (diverged to inf/nan) is not progress -- count
+                # it toward the plateau so a dead run stops instead of burning
+                # every step.
+                improved = False
+            elif math.isfinite(best_loss):
+                improved = (best_loss - total) / (abs(best_loss) + 1e-12) > self.tol
+            else:
+                # first finite loss after the inf init -- genuine improvement.
+                improved = True
             if total < best_loss:
                 best_loss = total
-            if rel_improvement > self.tol:
+            if improved:
                 counter = 0
             else:
                 counter += 1
-                if counter >= self.patience:
+                # Suppress early stopping during warmup so a slow/flat start does
+                # not trip the gate before the optimizer settles into a basin.
+                if counter >= self.patience and (step + 1) >= self.min_steps:
                     if self.log:
                         print(f"Plateau reached at step {step}.")
                     break
