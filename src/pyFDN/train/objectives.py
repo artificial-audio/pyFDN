@@ -85,8 +85,14 @@ def colorless_sparsity_loss() -> Any:
     from pyFDN.auxiliary.flamo_graph import feedback_matrix_module
 
     class _ColorlessSparsity(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self._module: Any = None
+
         def forward(self, y_pred: Any, y_target: Any, model: Any) -> Any:
-            module = feedback_matrix_module(model)
+            if self._module is None:
+                self._module = feedback_matrix_module(model)
+            module = self._module
             a = module.map(module.param)
             n = a.shape[-1]
             root_n = float(np.sqrt(n))
