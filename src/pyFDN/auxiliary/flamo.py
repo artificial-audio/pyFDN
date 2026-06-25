@@ -589,6 +589,26 @@ def assemble_fdn_core(
     return fdn_branch
 
 
+def output_layer(output: str, nfft: int, dtype: Any = None) -> Any:
+    """Build the FLAMO output layer for an output domain.
+
+    ``"time"`` -> ``iFFT`` (time response); ``"magnitude"`` -> ``|.|`` of the
+    frequency response. The single source of truth for the ``output``-string ->
+    layer mapping, shared by :func:`wrap_fdn_shell` (build time) and the training
+    output-domain swap (:func:`pyFDN.train_fdn`) so the two cannot disagree.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("output_layer requires flamo (pip install flamo)")
+    import torch
+
+    torch_dtype = torch.float32 if dtype is None else dtype
+    if output == "time":
+        return dsp.iFFT(nfft, dtype=torch_dtype)
+    if output == "magnitude":
+        return dsp.Transform(transform=torch.abs, dtype=torch_dtype)
+    raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
+
+
 def wrap_fdn_shell(
     core: Any, *, nfft: int, dtype: Any = None, output: str = "time"
 ) -> Any:
@@ -621,14 +641,8 @@ def wrap_fdn_shell(
     from flamo.processor import dsp, system
 
     torch_dtype = torch.float32 if dtype is None else dtype
-    if output == "time":
-        output_layer = dsp.iFFT(nfft, dtype=torch_dtype)
-    elif output == "magnitude":
-        output_layer = dsp.Transform(transform=torch.abs, dtype=torch_dtype)
-    else:
-        raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
     return system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-        output_layer=output_layer,
+        output_layer=output_layer(output, nfft, torch_dtype),
     )

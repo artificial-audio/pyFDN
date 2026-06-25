@@ -48,11 +48,20 @@ def _():
 
     import pyFDN
 
-    return np, pyFDN
+    def flatness(magnitude):
+        # Spectral flatness (geometric/arithmetic mean of power, DC excluded);
+        # 1.0 is perfectly flat. Inlined here so the example needs no metrics API.
+        power = np.abs(magnitude).ravel()[1:] ** 2
+        power = power[power > 0]
+        if power.size == 0:
+            return 0.0
+        return float(np.exp(np.mean(np.log(power))) / np.mean(power))
+
+    return flatness, np, pyFDN
 
 
 @app.cell
-def _(np, pyFDN):
+def _(flatness, np, pyFDN):
     fs = 48000
     nfft = 2**12
 
@@ -80,8 +89,8 @@ def _(np, pyFDN):
     opt_build = pyFDN.extract_build(model)
 
     print(
-        f"spectral flatness  init {pyFDN.flatness_from_magnitude(mag_init):.4f}"
-        f"   colorless {pyFDN.flatness_from_magnitude(mag_opt):.4f}"
+        f"spectral flatness  init {flatness(mag_init):.4f}"
+        f"   colorless {flatness(mag_opt):.4f}"
     )
     return fs, init_build, log, mag_init, mag_opt, nfft, opt_build
 
@@ -95,7 +104,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, log, mag_init, mag_opt, mo, nfft, np, pyFDN):
+def _(flatness, fs, log, mag_init, mag_opt, mo, nfft, np, pyFDN):
     import matplotlib.pyplot as plt
 
     _freqs = np.fft.rfftfreq(nfft, 1.0 / fs)
@@ -104,12 +113,12 @@ def _(fs, log, mag_init, mag_opt, mo, nfft, np, pyFDN):
         _freqs,
         pyFDN.lin_to_db(mag_init),
         alpha=0.5,
-        label=f"init ({pyFDN.flatness_from_magnitude(mag_init):.3f})",
+        label=f"init ({flatness(mag_init):.3f})",
     )
     _axes[0].plot(
         _freqs,
         pyFDN.lin_to_db(mag_opt),
-        label=f"colorless ({pyFDN.flatness_from_magnitude(mag_opt):.3f})",
+        label=f"colorless ({flatness(mag_opt):.3f})",
     )
     _axes[0].set(
         xlabel="frequency [Hz]",

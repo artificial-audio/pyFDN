@@ -1,18 +1,9 @@
 """Build a trainable flamo FDN model from a config.
 
-``build_fdn`` turns a small config (delays/N, decay, what is trainable) into a
-flamo ``Shell`` -- a real model you can render, inspect (:func:`pyFDN.flamo_time_response`,
-:func:`pyFDN.plot_flamo_graph`), train, and extract. It does **not** require an
-:class:`~pyFDN.FDNBuild`; ``trainable_from_build`` is the optional adapter for
-when you already have one (e.g. from :func:`pyFDN.fdn_build_gallery` or a
-decomposition).
-
-The default topology matches the render path (:func:`pyFDN.dss_to_flamo`): an
-orthogonal ``Matrix`` feedback, fixed integer delays with frozen first-order
-absorption realizing ``rt`` (2 s by default; ``rt=None`` is lossless), trainable
-input/output gains, and a direct path that **always exists** (zero by default).
-Wiring goes through the shared :func:`pyFDN.auxiliary.flamo.assemble_fdn_core`,
-so train and render topologies cannot drift.
+:func:`build_fdn` turns a config (delays/N, decay, what is trainable) into a
+trainable flamo ``Shell`` you can render, train, and extract.
+:func:`trainable_from_build` does the same starting from an existing
+:class:`~pyFDN.FDNBuild`.
 """
 
 from __future__ import annotations
@@ -26,21 +17,14 @@ import numpy as np
 if TYPE_CHECKING:
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
-# Feedback-matrix parametrization (flamo ``dsp.Matrix`` map). "orthogonal" keeps
-# the matrix on SO(N) during training (the colorless choice); "random" trains it
-# unconstrained.
+# Feedback-matrix parametrization: "orthogonal" keeps the matrix on SO(N) during
+# training (the colorless choice); "random" trains it unconstrained.
 MatrixParam = Literal["orthogonal", "random"]
 
 
 @dataclass(frozen=True)
 class Trainable:
-    """Which FDN parameter groups receive gradients during training.
-
-    A property of the *model* (step 1), not the objective: each flag maps 1:1
-    onto the ``requires_grad`` of the corresponding flamo module. Delays are
-    always fixed integers (trainable/fractional delays are out of scope), so
-    there is deliberately no ``delays`` flag.
-    """
+    """Which FDN parameter groups are trained. Delays are always fixed."""
 
     feedback: bool = True
     input_gain: bool = True
@@ -76,18 +60,15 @@ def build_fdn(
     N : int, optional
         Number of delay lines when ``delays`` is omitted.
     rt : float, (rt_dc, rt_nyquist), or None
-        Reverberation time in seconds, realized as frozen in-loop first-order
-        absorption. ``None`` builds a lossless FDN (the colorless prototype).
+        Reverberation time in seconds. ``None`` builds a lossless FDN.
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
     feedback : np.ndarray, optional
         Initial ``(N, N)`` feedback matrix; defaults to a random SO(N) matrix.
     input_gain, output_gain : np.ndarray, optional
-        ``B`` (``(N, n_in)``) and ``C`` (``(n_out, N)``); default column/row of
-        ones (SIMO/MISO).
+        ``B`` (``(N, n_in)``) and ``C`` (``(n_out, N)``); default ones / sqrt(N).
     direct : float or np.ndarray
-        Direct path ``D``; a scalar fills ``(n_out, n_in)``. The module always
-        exists (trainable via ``Trainable(direct=True)``).
+        Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
         Trainable parameter groups (default :class:`Trainable`).
     fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
@@ -97,7 +78,6 @@ def build_fdn(
     Returns
     -------
     flamo.processor.system.Shell
-        A trainable model (time output by default, so it renders immediately).
     """
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
     from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
@@ -178,12 +158,6 @@ def trainable_from_build(
 ) -> Any:
     """Build a trainable flamo ``Shell`` initialized from an ``FDNBuild``.
 
-    The single place that turns FDN parameters into a trainable model;
-    :func:`build_fdn` constructs an ``FDNBuild`` from its config and delegates
-    here. The direct path is always present (from ``build.D``, or zeros), so the
-    core is a ``Parallel`` -- colorless training therefore uses pyFDN's own
-    sparsity loss (:func:`pyFDN.train.objectives.colorless_sparsity_loss`).
-
     Parameters
     ----------
     build : FDNBuild
@@ -196,9 +170,8 @@ def trainable_from_build(
     nfft : int
         FFT size.
     output : str
-        ``"time"`` (iFFT) or ``"magnitude"`` output layer. ``train_fdn`` resets
-        this to match the objective, so the build-time choice only affects direct
-        inspection of the returned model.
+        ``"time"`` or ``"magnitude"`` output layer (``train_fdn`` sets this to
+        match the mode).
     device, dtype : optional
         Torch device / dtype (default cpu-or-cuda / float32).
 
@@ -288,12 +261,11 @@ def with_decay(
     *,
     rt_crossover: float | None = None,
 ) -> FDNBuild:
-    """Return a copy of ``build`` with homogeneous decay realized analytically.
+    """Return a copy of ``build`` with homogeneous decay matching ``rt``.
 
     Sets per-delay first-order absorption (:func:`pyFDN.first_order_absorption`)
-    matching ``rt`` (a single value, or ``(rt_dc, rt_nyquist)``). Homogeneous
-    decay is a similarity transform that does not change colouration, so this is
-    the natural way to add decay to a colorless-optimized lossless build.
+    for ``rt`` (a single value, or ``(rt_dc, rt_nyquist)``). Decay does not change
+    colouration, so this is the natural way to add a tail to a colorless build.
     """
     from pyFDN.auxiliary.acoustics import first_order_absorption
 

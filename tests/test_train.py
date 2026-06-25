@@ -11,7 +11,6 @@ from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     Trainable,
     build_fdn,
-    flatness_from_magnitude,
     train_fdn,
     trainable_from_build,
     with_decay,
@@ -19,6 +18,15 @@ from pyFDN.train import (  # noqa: E402
 
 # Tiny / CPU / fast optimization settings.
 _FAST = {"lr": 3e-3, "device": "cpu"}
+
+
+def _flatness(magnitude):
+    """Spectral flatness (geometric/arithmetic mean of power, DC excluded)."""
+    power = np.abs(magnitude).ravel()[1:] ** 2
+    power = power[power > 0]
+    if power.size == 0:
+        return 0.0
+    return float(np.exp(np.mean(np.log(power))) / np.mean(power))
 
 
 def _magnitude(model, nfft, n_in=1):
@@ -118,14 +126,14 @@ def test_colorless_improves_and_preserves_structure():
     init_twin = trainable_from_build(
         pyFDN.extract_build(model), nfft=nfft, output="magnitude", device="cpu"
     )
-    init = flatness_from_magnitude(_magnitude(init_twin, nfft))
+    init = _flatness(_magnitude(init_twin, nfft))
     delays0 = pyFDN.extract_build(model).delays
 
     log = train_fdn(model, "colorless", max_steps=200, rng=0, **_FAST)
 
     assert log.train_loss[-1] < log.train_loss[0]
     # the model now emits |H| (output-domain swap) -> flatter than init
-    assert flatness_from_magnitude(_magnitude(model, nfft)) > init
+    assert _flatness(_magnitude(model, nfft)) > init
     out = pyFDN.extract_build(model)
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     np.testing.assert_array_equal(out.delays, delays0)  # delays frozen
@@ -141,7 +149,7 @@ def test_train_is_reproducible():
     np.testing.assert_allclose(run().train_loss, run().train_loss, rtol=1e-6)
 
 
-def test_match_spectrogram_runs_and_scores():
+def test_match_spectrogram_runs_and_renders():
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
     target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
@@ -165,7 +173,8 @@ def test_match_spectrogram_runs_and_scores():
             fs=48000,
         )
     ).reshape(-1)
-    assert np.isfinite(pyFDN.mr_stft_distance(out_ir, target_ir))
+    # the trained model extracts and renders to a finite IR
+    assert out_ir.size > 0 and np.all(np.isfinite(out_ir))
 
 
 def test_match_mode_requires_target():

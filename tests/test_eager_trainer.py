@@ -115,8 +115,8 @@ def test_save_checkpoints_requires_train_dir():
 
 
 def test_active_eager_trainer_has_parity_api():
-    # Whatever EagerTrainer resolves to (flamo's or vendored), the surface pyFDN
-    # relies on must be present and behave the same.
+    # The public EagerTrainer alias must expose the constructor/optimize() surface
+    # pyFDN relies on (it is always the vendored copy).
     opt = EagerTrainer(_Linear(), max_steps=5, lr=0.1, log=False)
     opt.register_criterion(nn.MSELoss(), 1)
     history = opt.optimize(torch.ones(1, 3), torch.tensor([[1.0, 2.0, 3.0]]))

@@ -229,12 +229,6 @@ Training
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
-   pyFDN.spectral_flatness
-   pyFDN.flatness_from_magnitude
-   pyFDN.octave_colouration
-   pyFDN.edc_l1
-   pyFDN.mr_stft_distance
-   pyFDN.magnitude_response
 
 Plotting
 --------

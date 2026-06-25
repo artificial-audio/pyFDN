@@ -1,21 +1,9 @@
-"""A lightweight single-system optimizer for fitting one FDN.
+"""Lightweight optimizer that fits one FDN to a fixed ``(input, target)`` pair.
 
-``EagerTrainer`` fits a single differentiable system from one fixed
-``(input, target)`` tensor pair by running gradient descent directly -- no
-``Dataset``/``DataLoader``/``expand``/``split``/``shuffle``/batch machinery.
-Fitting one LTI system (e.g. an FDN) is a pure optimization problem: there is no
-held-out data and nothing to generalize to, so the dataset stack flamo's
-``Trainer`` carries is pure overhead here.
-
-This module prefers an upstream ``flamo.optimize.trainer.EagerTrainer`` when the
-installed flamo provides one, and otherwise falls back to the vendored
-``_EagerTrainer`` below. The vendored copy is adapted from flamo (MIT, (c) 2024
-Gloria Dal Santo, Gian Marco De Bortoli, Sebastian Jiro Schlecht) and trimmed to
-pyFDN's needs (no ``masked_mse_loss`` warning -- pyFDN registers only
-deterministic criteria), so it has no flamo dependency of its own.
-
-torch is imported lazily inside the methods so this module imports without torch,
-keeping ``import pyFDN`` torch-free.
+``EagerTrainer`` runs gradient descent directly (no ``Dataset``/``DataLoader``).
+Adapted from flamo (MIT, (c) 2024 Gloria Dal Santo, Gian Marco De Bortoli,
+Sebastian Jiro Schlecht); pyFDN keeps its own copy so :func:`pyFDN.train_fdn` owns
+the constructor / ``optimize()`` contract. torch is imported lazily in the methods.
 """
 
 from __future__ import annotations
@@ -29,9 +17,8 @@ from typing import Any
 class _EagerTrainer:
     """Fit one differentiable system on a fixed ``(input, target)`` pair.
 
-    Criteria are registered exactly as in flamo's ``Trainer`` via
-    :meth:`register_criterion`, so existing flamo loss functions (and the
-    ``requires_model`` flag) transfer unchanged.
+    Losses are added with :meth:`register_criterion` (flamo loss functions and the
+    ``requires_model`` flag work unchanged).
 
     Parameters
     ----------
@@ -50,9 +37,8 @@ class _EagerTrainer:
     patience : int
         Consecutive non-improving steps before stopping. Default 10.
     min_steps : int
-        Warmup: early stopping is suppressed until this many steps have run, so a
-        slow/flat start (before the optimizer settles into a basin) does not trip
-        the plateau gate. Default 0 (early stopping allowed from the first step).
+        Warmup: early stopping is suppressed until this many steps have run.
+        Default 0.
     log : bool
         Show the progress bar and print timing / plateau messages. Default True.
     train_dir : str, optional
@@ -135,7 +121,7 @@ class _EagerTrainer:
         """Weighted sum of registered criteria; optionally log each into ``log_dict``."""
         loss = 0
         for alpha, criterion, requires_model in zip(
-            self.alpha, self.criterion, self.requires_model
+            self.alpha, self.criterion, self.requires_model, strict=True
         ):
             if requires_model:
                 temp = criterion(estimations, targets, self.net)
@@ -154,6 +140,12 @@ class _EagerTrainer:
         """
         import torch
         from tqdm import trange
+
+        if self.n_loss == 0:
+            raise ValueError(
+                "no loss criteria registered (did you pass an empty criteria= "
+                "list?); register at least one criterion before optimizing."
+            )
 
         input = self.move_to_device(input)
         target = self.move_to_device(target)
@@ -236,7 +228,7 @@ class _EagerTrainer:
         )
 
 
-try:  # prefer an upstream EagerTrainer when the installed flamo ships one
-    from flamo.optimize.trainer import EagerTrainer
-except ImportError:  # distributed flamo without it -> use the vendored copy
-    EagerTrainer = _EagerTrainer
+# The public name. pyFDN always uses its own copy: train_fdn relies on this exact
+# constructor/optimize() contract, so a same-named upstream class is intentionally
+# not picked up by name (see module docstring).
+EagerTrainer = _EagerTrainer

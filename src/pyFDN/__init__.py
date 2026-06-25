@@ -125,12 +125,6 @@ __all__ = [
     "Trainable",
     "train_fdn",
     "TrainLog",
-    "spectral_flatness",
-    "flatness_from_magnitude",
-    "octave_colouration",
-    "edc_l1",
-    "mr_stft_distance",
-    "magnitude_response",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -356,17 +350,11 @@ from .graphicEQ import (
 # fdn processing
 from .process import process_fdn
 
-# training (torch/flamo are imported lazily inside these, so this stays torch-free)
+# training (torch/flamo are imported lazily inside these)
 from .train import (
     Trainable,
     TrainLog,
     build_fdn,
-    edc_l1,
-    flatness_from_magnitude,
-    magnitude_response,
-    mr_stft_distance,
-    octave_colouration,
-    spectral_flatness,
     train_fdn,
     trainable_from_build,
     with_decay,

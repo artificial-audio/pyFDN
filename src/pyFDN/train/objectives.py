@@ -1,13 +1,5 @@
-"""Objective setup for :func:`pyFDN.train_fdn`: map a training *mode* (plus
-optional target data) to the ``(input, target)`` tensor pair, loss criteria, and
-the model output domain to measure in.
-
-The mode alone fixes the loss and the output domain. The matching modes take
-their ``target`` as a time-domain impulse response and compare it in the time
-domain, so the user never has to pre-transform the reference. A 3-D target
-(``(n_samples, n_out, n_in)``) fits the full MIMO transfer matrix: each input is
-excited on its own batch row, so the model's batched output is ``H[out, in]``
-and the loss compares it per input-output path.
+"""Map a training *mode* (and optional target) to the ``(input, target)``
+tensors, loss criteria, and output domain that :func:`pyFDN.train_fdn` uses.
 
 ==========================  ====================================  ============
 mode                        loss                                  target
@@ -17,30 +9,11 @@ mode                        loss                                  target
 ``"match_mel_spectrogram"`` mel multi-resolution STFT             impulse resp.
 ==========================  ====================================  ============
 
-``colorless`` uses flamo's ``mse_loss``, which sums the model's outputs before
-the MSE, so the target is a single flat magnitude curve. It is therefore a
-**SISO** objective: colorlessness is a property of the FDN core (feedback matrix
-+ delays), not of the input/output gains, so multiple ``B``/``C`` columns add no
-flatness the core does not already provide and the objective cannot distinguish
-them (what a multichannel reverb actually wants from extra channels is
-*decorrelation*, a different objective). Build with a single input and output
-for ``colorless``. (Matching an arbitrary target *magnitude* bin-for-bin is
-ill-posed for a reverb's spiky modal spectrum and is deliberately not offered;
-match a real IR with the spectrogram modes instead.)
-
-Every mode also adds a feedback-matrix sparsity penalty
-(:func:`colorless_sparsity_loss`, weight ``sparsity_alpha``, default 0.2; 0
-disables it) that biases the mixing matrix toward dense, colorless mixing -- it
-only bites when the feedback matrix is trainable.
-
-A single fixed ``(input, target)`` pair fully specifies the fit -- one LTI system
-is a pure optimization problem, with no held-out data -- so this builds raw
-tensors for :class:`pyFDN.train._trainer.EagerTrainer` rather than a flamo
-``Dataset``.
-
-flamo/torch are imported lazily inside :func:`build_objective`,
-:func:`_input_target` and :func:`colorless_sparsity_loss`, so this module
-imports without torch.
+``colorless`` is single-input/single-output (its loss sums the model's outputs).
+The matching modes take a time-domain IR target; a 3-D ``(n_samples, n_out,
+n_in)`` target fits a full MIMO system. Every mode also adds a feedback-matrix
+sparsity penalty (weight ``sparsity_alpha``) that only acts when the feedback
+matrix is trainable.
 """
 
 from __future__ import annotations
@@ -82,20 +55,11 @@ def output_domain(mode: str) -> str:
 
 
 def colorless_sparsity_loss() -> Any:
-    """A flamo-compatible sparsity penalty on the FDN feedback matrix.
+    """Sparsity penalty on the FDN feedback matrix (the colorless penalty of
+    *Optimizing Tiny Colorless FDNs*, Dal Santo et al.).
 
-    Same role and formula as flamo's ``sparsity_loss`` (the colorless penalty of
-    *Optimizing Tiny Colorless FDNs*, Dal Santo et al.), but it locates the
-    feedback matrix through pyFDN's graph walk
-    (:func:`pyFDN.auxiliary.flamo_graph.feedback_matrix_module`), which resolves
-    it for both a plain ``Series`` core and a ``Parallel`` core (the FDN summed
-    with an always-present direct path). flamo's own ``sparsity_loss`` hard-codes
-    attribute paths that assume a ``.mixing_matrix`` on the Parallel branch, so
-    it raises once the direct path is always present.
-
-    ``A = map(param)`` is computed **in-graph** so gradients flow. The returned
-    ``nn.Module`` has the ``(y_pred, y_target, model)`` signature flamo's
-    ``Trainer`` uses for ``requires_model=True`` criteria.
+    Returns an ``nn.Module`` with the ``(y_pred, y_target, model)`` signature used
+    for ``requires_model=True`` criteria.
     """
     import torch.nn as nn
 
@@ -135,10 +99,8 @@ def build_objective(
 ) -> tuple[Any, Any, list[Criterion], str]:
     """Return ``(input, target, criteria, output_domain)`` for a training ``mode``.
 
-    Maps the mode to the ``(input, target)`` tensor pair (with ``target`` shaped
-    appropriately) and the full criteria list -- the mode's primary loss plus the
-    sparsity regularizer -- unless a caller-supplied ``criteria`` override
-    replaces it. flamo/torch are imported here so the module stays torch-free.
+    Uses the mode's default criteria (primary loss + sparsity) unless ``criteria``
+    overrides them.
     """
     if mode not in _MODES:
         raise ValueError(
@@ -181,10 +143,8 @@ def _input_target(
 ) -> tuple[Any, Any]:
     """The fixed ``(input, target)`` tensors a mode fits.
 
-    Single-impulse excitation (batch 1) for SISO/SIMO; for a MIMO target (a 3-D
-    ``(n_samples, n_out, n_in)`` IR matrix) the inputs are
-    excited one-per-batch-row so the model's batched output is the full transfer
-    matrix ``H[out, in]`` and the loss compares it per input-output path.
+    Single-impulse excitation for SISO/SIMO; a 3-D ``(n_samples, n_out, n_in)``
+    target excites each input on its own batch row to fit the full MIMO matrix.
     """
     import torch
 
@@ -242,6 +202,6 @@ def _primary_loss(
 
         return mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)
     elif mode == "match_mel_spectrogram":
-        from flamo.optimize.loss import mel_mss_loss  
+        from flamo.optimize.loss import mel_mss_loss
 
         return mel_mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)
