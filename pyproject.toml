@@ -30,7 +30,7 @@ dependencies = [
   "numpy",
   "soundfile",
   "scipy",
-  "flamo>=0.2.13",
+  "flamo>=0.2.14",
   "flareverb",
   "pyroomacoustics",
 ]

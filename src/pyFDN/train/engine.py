@@ -95,9 +95,9 @@ def train_fdn(
     """
     import torch
 
-    from pyFDN.auxiliary.flamo import output_layer
+    from flamo.optimize.trainer import EagerTrainer
 
-    from ._trainer import EagerTrainer
+    from pyFDN.auxiliary.flamo import output_layer
 
     dev = "cpu" if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
