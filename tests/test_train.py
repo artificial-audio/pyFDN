@@ -250,6 +250,118 @@ def test_mimo_target_wrong_shape_raises():
         train_fdn(model, "match_spectrogram", target=bad, max_steps=2, **_FAST)
 
 
+# --- trainable in-loop filter (prebuilt module) ----------------------------
+
+
+def _svf(N, nfft, *, n_sections=1, filter_type=None, requires_grad=True):
+    from flamo.processor import dsp
+
+    return dsp.parallelSVF(
+        size=(N,),
+        n_sections=n_sections,
+        filter_type=filter_type,
+        nfft=nfft,
+        fs=48000,
+        requires_grad=requires_grad,
+    )
+
+
+def test_loop_filter_module_is_wired_and_keeps_requires_grad():
+    nfft = 2**10
+    svf = _svf(4, nfft, requires_grad=True)
+    model = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+    # the exact module is placed in the in-loop "filter" slot, grad preserved
+    assert _leaf(model, "filter") is svf
+    assert svf.param.requires_grad is True
+
+
+def test_loop_filter_wrong_channel_count_raises():
+    nfft = 2**10
+    svf = _svf(3, nfft)  # 3 channels, model has 4 delay lines
+    with pytest.raises(ValueError, match="loop_filter"):
+        build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+
+
+def test_loop_filter_wrong_nfft_raises():
+    svf = _svf(4, 256)  # nfft 256 != build nfft 1024
+    with pytest.raises(ValueError, match="nfft"):
+        build_fdn(N=4, rt=None, nfft=2**10, loop_filter=svf, device="cpu", rng=0)
+
+
+def test_rt_and_loop_filter_together_warns_rt_ignored():
+    nfft = 2**10
+    svf = _svf(4, nfft)
+    with pytest.warns(UserWarning, match="ignored"):
+        build_fdn(N=4, rt=2.0, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+
+
+def test_loop_filter_with_rt_none_does_not_warn():
+    import warnings
+
+    nfft = 2**10
+    svf = _svf(4, nfft)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+
+
+def test_extract_svf_loop_filter_roundtrips_to_sos():
+    from pyFDN.auxiliary.flamo import flamo_freq_response
+
+    nfft = 2**11
+    svf = _svf(4, nfft, n_sections=2, filter_type="lowpass")
+    model = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+
+    b = pyFDN.extract_build(model)
+    assert b.filters is not None and b.filters.shape == (2, 6, 4)
+
+    # rebuilding from the baked SOS reproduces the SVF-FDN's frequency response
+    twin = pyFDN.build_to_flamo(b, nfft=nfft, device="cpu")
+    h_svf = np.abs(np.asarray(flamo_freq_response(model, fs=48000)).reshape(-1))
+    h_sos = np.abs(np.asarray(flamo_freq_response(twin, fs=48000)).reshape(-1))
+    np.testing.assert_allclose(h_sos, h_svf, rtol=1e-3, atol=1e-4)
+
+
+def test_extract_postponed_filter_type_raises():
+    from flamo.processor import dsp
+
+    nfft = 2**10
+    geq = dsp.parallelGEQ(size=(4,), nfft=nfft, fs=48000, requires_grad=True)
+    model = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=geq, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="biquad-cascade"):
+        pyFDN.extract_build(model)
+
+
+def test_match_spectrogram_trains_loop_filter():
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.1, nfft=nfft, device="cpu", rng=7)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+
+    svf = _svf(4, nfft, n_sections=2, filter_type="lowpass")
+    fresh = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=11)
+    log = train_fdn(
+        fresh,
+        "match_spectrogram",
+        target=target_ir,
+        mss_nfft=(256, 512),
+        max_steps=5,
+        rng=0,
+        **_FAST,
+    )
+    # gradients reach the trainable filter and the objective is computable
+    # (multi-step loop stability is the caller's responsibility, by design)
+    assert svf.param.grad is not None
+    assert np.isfinite(log.train_loss[0])
+
+
+def test_colorless_with_trainable_loop_filter_warns():
+    nfft = 2**10
+    svf = _svf(4, nfft, filter_type="lowpass")
+    model = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+    with pytest.warns(UserWarning, match="colorless"):
+        train_fdn(model, "colorless", max_steps=2, rng=0, **_FAST)
+
+
 # --- analytic decay (the exact RT path) ------------------------------------
 
 

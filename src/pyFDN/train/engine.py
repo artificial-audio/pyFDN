@@ -8,6 +8,7 @@ returns a :class:`TrainLog`. Read the result back with :func:`pyFDN.extract_buil
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -104,6 +105,14 @@ def train_fdn(
     nfft = int(model.get_inputLayer().nfft)
     n_in, n_out, fs = _model_info(model)
 
+    if mode == "colorless" and _loop_filter_is_trainable(model):
+        warnings.warn(
+            "colorless does not constrain decay, so a trainable in-loop filter "
+            "is unconstrained and may drift toward a lossless/unstable loop; use "
+            "match_spectrogram / match_mel_spectrogram to fit a target's decay.",
+            stacklevel=2,
+        )
+
     inp, tgt, criteria, output_domain = build_objective(
         mode,
         target=target,
@@ -149,6 +158,22 @@ def train_fdn(
         loss_log={k: [float(x) for x in v] for k, v in history.items() if k != "total"},
         steps_run=steps_run,
         stopped_early=steps_run < max_steps,
+    )
+
+
+def _loop_filter_is_trainable(model: Any) -> bool:
+    """True if the model's in-loop filter leaf has any ``requires_grad`` param."""
+    from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
+
+    leaves = [
+        n for n in flamo_nodes_flat(flamo_model_to_nodes(model)) if n["type"] == "Leaf"
+    ]
+    modules = [n["module"] for n in leaves if n["name"] in ("filter", "attenuation")]
+    return any(
+        getattr(p, "requires_grad", False)
+        for m in modules
+        if hasattr(m, "parameters")
+        for p in m.parameters()
     )
 
 

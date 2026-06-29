@@ -266,6 +266,59 @@ def _gain_to_sos(gain: np.ndarray) -> np.ndarray:
     return sos
 
 
+def _svf_to_sos(module: Any) -> np.ndarray:
+    """Bake a flamo ``parallelSVF`` into an ``(n_sections, 6, N)`` SOS bank.
+
+    Each SVF section is a biquad whose coefficients are flamo's closed form of
+    the mapped parameters ``(f, R, mLP, mBP, mHP) = map_param2svf(param)``. The
+    section is normalized so ``a0 == 1`` (the SOS convention; ``H = B/A`` is
+    unchanged), giving a bank the render path consumes like any other.
+    """
+
+    def _np(t: Any) -> np.ndarray:
+        if hasattr(t, "detach"):
+            t = t.detach()
+        if hasattr(t, "cpu"):
+            t = t.cpu()
+        return np.asarray(t.numpy() if hasattr(t, "numpy") else t, dtype=float)
+
+    f, r, m_lp, m_bp, m_hp = (_np(t) for t in module.map_param2svf(module.param))
+    # broadcast a scalar R (lowshelf/highshelf) up to (n_sections, N)
+    f, r, m_lp, m_bp, m_hp = np.broadcast_arrays(f, r, m_lp, m_bp, m_hp)
+    sos = np.empty((*f.shape, 6), dtype=float)
+    sos[..., 0] = f**2 * m_lp + f * m_bp + m_hp
+    sos[..., 1] = 2.0 * f**2 * m_lp - 2.0 * m_hp
+    sos[..., 2] = f**2 * m_lp - f * m_bp + m_hp
+    sos[..., 3] = f**2 + 2.0 * r * f + 1.0
+    sos[..., 4] = 2.0 * f**2 - 2.0
+    sos[..., 5] = f**2 - 2.0 * r * f + 1.0
+    # (n_sections, N, 6) -> (n_sections, 6, N)
+    return np.ascontiguousarray(np.moveaxis(sos, -1, 1))
+
+
+def _attenuation_to_sos(module: Any) -> np.ndarray:
+    """In-loop filter module -> ``(n_sections, 6, N)`` SOS for ``FDNBuild.filters``.
+
+    Biquad-cascade IIR filters are baked to SOS: ``parallelSVF`` via its closed
+    form, ``parallelSOSFilter`` (and a plain broadband gain) via its value. Other
+    types -- graphic/parametric EQs and FIR -- have no SOS extractor yet and
+    raise rather than silently dropping the trained filter.
+    """
+    type_name = type(module).__name__
+    if "SVF" in type_name:
+        return _svf_to_sos(module)
+    value = _module_value(module)
+    if value.ndim == 1:
+        return _gain_to_sos(value)
+    if value.ndim == 3 and value.shape[1] == 6:
+        return np.asarray(value, dtype=float)
+    raise ValueError(
+        f"cannot extract in-loop filter of type {type_name!r} to "
+        "FDNBuild.filters; only biquad-cascade IIR filters (parallelSVF, "
+        "parallelSOSFilter) are supported"
+    )
+
+
 def _feedback_leaf_module(leaves: list[dict[str, Any]]) -> Any:
     """The single feedback-matrix leaf module from a flat leaf list.
 
@@ -369,12 +422,7 @@ def extract_build(model: Any) -> FDNBuild:
     attenuation_sos = None
     attenuation_matches = _named("attenuation") or _named("filter")
     if len(attenuation_matches) == 1:
-        attenuation_module = attenuation_matches[0]["module"]
-        attenuation_value = _module_value(attenuation_module)
-        if attenuation_value.ndim == 1:
-            attenuation_sos = _gain_to_sos(attenuation_value)
-        elif attenuation_value.ndim == 3 and attenuation_value.shape[1] == 6:
-            attenuation_sos = np.asarray(attenuation_value, dtype=float)
+        attenuation_sos = _attenuation_to_sos(attenuation_matches[0]["module"])
 
     post_eq_sos = None
     post_eq_matches = _named("output_filter")
