@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 from numpy.typing import ArrayLike
+from scipy.fft import irfft, next_fast_len, rfft
 
 from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 from pyFDN.dsp.feedback_delay import FeedbackDelay
@@ -172,6 +173,56 @@ class MatrixFIR(TimeOperator):
 
     def reset(self) -> None:
         self._filt = FIRMatrixFilter(self._coeffs)
+
+
+class MatrixConvolver(TimeOperator):
+    """Matrix of FIR filters via streaming overlap-save FFT convolution.
+
+    The FFT counterpart of :class:`MatrixFIR`: same ``(n_out, n_in, n_taps)``
+    coefficient layout, but built for **long** impulse responses (e.g. room
+    RIRs) where time-domain ``lfilter`` would be prohibitively slow. State
+    persists across :meth:`process` calls, so it works both whole-signal and
+    block-by-block -- including as the feedback path of a :class:`Recursion`
+    (the loudspeaker -> microphone room coupling of a reverberation enhancement
+    system). Output equals the linear convolution to numerical precision.
+    """
+
+    def __init__(self, coeffs: ArrayLike) -> None:
+        c = np.asarray(coeffs, dtype=float)
+        if c.ndim != 3:
+            raise ValueError("coeffs must have shape (n_out, n_in, n_taps)")
+        self.out_channels, self.in_channels, self._taps = c.shape
+        # FFT of the filters along the tap axis, laid out (taps, out, in) for the
+        # per-call einsum; cached per FFT length so a fixed block size pays once.
+        self._coeffs_t = np.transpose(c, (2, 0, 1))
+        self._overlap = max(self._taps - 1, 0)
+        self._hist = np.zeros((self._overlap, self.in_channels), dtype=float)
+        self._filter_fft: dict[int, np.ndarray] = {}
+
+    def _filters(self, nfft: int) -> np.ndarray:
+        cached = self._filter_fft.get(nfft)
+        if cached is None:
+            cached = rfft(self._coeffs_t, n=nfft, axis=0)  # (nfreq, out, in)
+            self._filter_fft[nfft] = cached
+        return cached
+
+    def process(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"MatrixConvolver expects {self.in_channels} channels")
+        num_samples = x.shape[0]
+        overlap = self._overlap
+        ext = np.concatenate([self._hist, x], axis=0)  # (overlap + T, in)
+        if overlap:
+            self._hist = ext[-overlap:].copy()
+        nfft = next_fast_len(ext.shape[0] + self._taps - 1)
+        spectrum = rfft(ext, n=nfft, axis=0)  # (nfreq, in)
+        mixed = np.einsum("foi,fi->fo", self._filters(nfft), spectrum)  # (nfreq, out)
+        full = irfft(mixed, n=nfft, axis=0)  # (nfft, out)
+        return full[overlap : overlap + num_samples]
+
+    def reset(self) -> None:
+        self._hist[:] = 0.0
 
 
 class TimeVaryingMatrix(TimeOperator):

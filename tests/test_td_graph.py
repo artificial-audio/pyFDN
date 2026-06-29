@@ -168,6 +168,81 @@ def test_time_varying_matrix_modulates_response():
     assert np.max(np.abs(ir_static - ir_varying)) > 1e-3
 
 
+def test_matrix_convolver_matches_convolution():
+    """MatrixConvolver equals the linear matrix convolution, whole and streamed."""
+    rng = np.random.default_rng(0)
+    n_out, n_in, taps, length = 3, 2, 17, 400
+    coeffs = rng.standard_normal((n_out, n_in, taps))
+    x = rng.standard_normal((length, n_in))
+
+    reference = np.zeros((length, n_out))
+    for i in range(n_out):
+        for j in range(n_in):
+            reference[:, i] += np.convolve(x[:, j], coeffs[i, j])[:length]
+
+    whole = td.MatrixConvolver(coeffs).process(x)
+    np.testing.assert_allclose(whole, reference, atol=1e-10, rtol=0)
+
+    # Block-by-block streaming must reproduce the whole-signal result.
+    conv = td.MatrixConvolver(coeffs)
+    streamed = np.concatenate(
+        [conv.process(x[s : s + 33]) for s in range(0, length, 33)], axis=0
+    )
+    np.testing.assert_allclose(streamed, reference, atol=1e-10, rtol=0)
+
+    # Same coefficients, same result as the lfilter-based MatrixFIR.
+    np.testing.assert_allclose(
+        whole, td.MatrixFIR(coeffs).process(x), atol=1e-10, rtol=0
+    )
+
+
+def test_recursion_with_convolver_feedback():
+    """Recursion with a MatrixConvolver feedback (the RES room coupling) is exact."""
+    rng = np.random.default_rng(1)
+    n, taps, latency, length = 2, 4, 5, 300
+    mix = 0.5 * pyFDN.random_orthogonal(n)
+    coupling = 0.1 * rng.standard_normal((n, n, taps))  # small -> stable loop
+    x = rng.standard_normal((length, n))
+
+    loop = td.Recursion(
+        td.Series([td.Delay(np.full(n, latency)), td.Gain(mix)]),
+        td.MatrixConvolver(coupling),
+    )
+    y_td = loop.process(x)
+
+    # Reference: y[n] = mix @ (x[n-L] + (coupling * y)[n-L]).
+    y_ref = np.zeros((length, n))
+    for k in range(length):
+        if k - latency < 0:
+            continue
+        coupled = np.zeros(n)
+        for tau in range(taps):
+            if k - latency - tau >= 0:
+                coupled += coupling[:, :, tau] @ y_ref[k - latency - tau]
+        y_ref[k] = mix @ (x[k - latency] + coupled)
+    np.testing.assert_allclose(y_td, y_ref, atol=1e-10, rtol=0)
+
+
+def test_nested_recursion_matches_analytic():
+    """A recursion inside a recursion (RES: FDN within the loop) is exact."""
+    a, b, outer_delay, inner_delay, length = 0.5, 0.4, 7, 11, 250
+    inner = td.Recursion(td.Delay([inner_delay]), td.Gain([[b]]))  # comb, gain b
+    outer = td.Recursion(td.Series([td.Delay([outer_delay]), inner]), td.Gain([[a]]))
+    impulse = _impulse(length).reshape(-1, 1)
+    y_td = outer.process(impulse).squeeze()
+
+    # y[n] = x[n-L-d] + a*y[n-L-d] + b*y[n-d]  (L=outer_delay, d=inner_delay)
+    x = _impulse(length)
+    y_ref = np.zeros(length)
+    for n in range(length):
+        if n - outer_delay - inner_delay >= 0:
+            y_ref[n] += x[n - outer_delay - inner_delay]
+            y_ref[n] += a * y_ref[n - outer_delay - inner_delay]
+        if n - inner_delay >= 0:
+            y_ref[n] += b * y_ref[n - inner_delay]
+    np.testing.assert_allclose(y_td, y_ref, atol=1e-10, rtol=0)
+
+
 def test_compile_flamo_matches_process_fdn():
     """Compile a real FLAMO graph and match the time-domain reference exactly."""
     pytest.importorskip("flamo")

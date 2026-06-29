@@ -38,7 +38,10 @@ def _(mo):
       the loop.
     * the reverberator is a 6-in/6-out FDN built from `pyFDN.td` operators, with
       an optional `td.TimeVaryingMatrix` on its feedback path.
-    * a block time-domain simulator runs the closed electroacoustic loop.
+    * the **entire** system — room paths, coupling and FDN — is assembled as a
+      single `td` operator tree and run by one `.process(source)` call. The
+      whole electroacoustic feedback loop is just a `td.Recursion` whose feedback
+      path is the room coupling and whose forward path is the FDN.
 
     We then (1) confirm the RES enhances reverberation and (2) show the
     time-varying FDN stays stable at a loop gain where the static one already
@@ -52,15 +55,13 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
-    from scipy.signal import fftconvolve
 
     import pyFDN
     from pyFDN import td
-    from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
     pio.renderers.default = "sphinx_gallery"
-    return FIRMatrixFilter, TimeVaryingMatrix, fftconvolve, go, np, pyFDN, td
+    return TimeVaryingMatrix, go, np, pyFDN, td
 
 
 @app.cell(hide_code=True)
@@ -184,44 +185,42 @@ def _(mo):
     mo.md(r"""
     ## Extract the room transfer paths
 
-    From the impulse responses we pull out the paths the simulator needs:
-    performer→microphones and performer→listener (the dry excitation),
+    From the impulse responses we pull out four filter matrices the tree needs:
+    performer→microphones (the excitation), performer→listener (dry direct),
     loudspeaker→listener (what the RES delivers), and the 6 × 6
-    loudspeaker→microphone **coupling** that closes the loop. The coupling is
-    truncated to its first ~43 ms — the early part that dominates feedback
-    colouration — so the in-loop convolution stays cheap.
+    loudspeaker→microphone **coupling** that closes the loop. Each becomes a
+    `td.MatrixConvolver`. The coupling is truncated to its first ~43 ms — the
+    early part that dominates feedback colouration — because it runs inside the
+    loop, once per block; the rest use the full room responses.
     """)
     return
 
 
 @app.cell
-def _(fftconvolve, fs, np, room):
+def _(fs, np, room):
     rir = room.rir
-    coupling_taps = 2048  # ~43 ms of loudspeaker -> mic coupling
+    coupling_taps = 2048  # ~43 ms of loudspeaker -> mic coupling (early, in-loop)
+    room_taps = max(len(rir[o][s]) for o in range(len(rir)) for s in range(len(rir[0])))
 
     def _pad(h, n):
         h = np.asarray(h, dtype=float)
         return np.pad(h, (0, max(0, n - len(h))))[:n]
 
+    def _matrix(out_rows, in_cols, taps):
+        """Stack chosen RIRs into a (n_out, n_in, taps) filter matrix."""
+        return np.stack([[_pad(rir[o][i], taps) for i in in_cols] for o in out_rows])
+
     # source index 0 = performer, 1..6 = loudspeakers; mic index 0..5, 6 = listener.
-    coupling = np.stack(
-        [[_pad(rir[m][l + 1], coupling_taps) for l in range(6)] for m in range(6)]
-    )  # (6 mics, 6 speakers, taps)
-    h_speaker_listener = [rir[6][l + 1] for l in range(6)]
-    h_source_listener = np.asarray(rir[6][0], dtype=float)
+    _mic, _spk, _src, _lis = range(6), range(1, 7), [0], [6]
+    source_to_mic = _matrix(_mic, _src, room_taps)  # (6, 1, L): excitation
+    coupling = _matrix(_mic, _spk, coupling_taps)  # (6, 6, taps): closes the loop
+    speaker_to_listener = _matrix(_lis, _spk, room_taps)  # (1, 6, L): delivered
+    source_to_listener = _matrix(_lis, _src, room_taps)  # (1, 1, L): dry direct
 
     sig_len = int(0.8 * fs)
-    impulse = np.zeros(sig_len)
-    impulse[0] = 1.0
-    src_to_mic = np.stack(
-        [fftconvolve(impulse, rir[m][0])[:sig_len] for m in range(6)], axis=1
-    )  # (T, 6)
-    dry_listener = fftconvolve(impulse, h_source_listener)[:sig_len]
-
-    peak_coupling = np.abs(coupling).max()
-    print(f"Peak loudspeaker->mic coupling: {peak_coupling:.3f}")
-    print(f"Coupling length: {coupling_taps} taps ({1000 * coupling_taps / fs:.0f} ms)")
-    return coupling, dry_listener, h_speaker_listener, impulse, sig_len, src_to_mic
+    print(f"Peak loudspeaker->mic coupling: {np.abs(coupling).max():.3f}")
+    print(f"Room RIRs: {room_taps} taps; coupling truncated to {coupling_taps} taps")
+    return coupling, sig_len, source_to_listener, source_to_mic, speaker_to_listener
 
 
 @app.cell(hide_code=True)
@@ -250,8 +249,12 @@ def _(TimeVaryingMatrix, fs, np, pyFDN, td):
     )  # lines -> loudspeakers
     fdn_absorption = pyFDN.first_order_absorption(1.2, 0.6, fdn_delays, fs, None)
 
-    def make_reverberator(time_varying):
-        """Build the 6-in/6-out FDN operator tree; optionally time-varying."""
+    def make_reverberator(time_varying, g):
+        """6-in/6-out FDN operator tree.
+
+        The loop gain ``g`` is folded into the output gain ``C``, and the
+        feedback path is optionally made time-varying.
+        """
         forward = td.Series([td.Delay(fdn_delays), td.SOSBank(fdn_absorption)])
         if time_varying:
             np.random.seed(3)  # deterministic modulation across rebuilds
@@ -262,7 +265,7 @@ def _(TimeVaryingMatrix, fs, np, pyFDN, td):
         else:
             feedback = td.Gain(A)
         return td.Series(
-            [td.Gain(B_fdn), td.Recursion(forward, feedback), td.Gain(C_fdn)]
+            [td.Gain(B_fdn), td.Recursion(forward, feedback), td.Gain(g * C_fdn)]
         )
 
     return (make_reverberator,)
@@ -271,54 +274,73 @@ def _(TimeVaryingMatrix, fs, np, pyFDN, td):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Closed-loop RES simulator
+    ## The entire RES as one `td` tree
 
-    Block by block: the microphones hear the dry source plus the room coupling of
-    the previous block's loudspeaker output (a one-block ≈ 5 ms processing
-    latency, as real RES hardware has); the reverberator turns the microphone
-    signal into the next loudspeaker output, scaled by the loop gain `g`. The
-    listener finally hears the dry source plus every loudspeaker through its
-    room response.
+    Everything now assembles into a single operator tree:
+
+    ```
+    Parallel(
+        Series(
+            MatrixConvolver(source → mics),        # excitation
+            Recursion(                             # the electroacoustic loop
+                fF = Series(Delay(latency), FDN),  #   mics → loudspeakers
+                fB = MatrixConvolver(coupling),    #   loudspeakers → mics
+            ),
+            MatrixConvolver(loudspeakers → listener),
+        ),
+        MatrixConvolver(source → listener),        # dry direct path
+    )
+    ```
+
+    The feedback loop `loudspeaker → room → mic → FDN → loudspeaker` is literally
+    a `td.Recursion`. A short `Delay` (the RES processing latency, ~5 ms) leads
+    its forward path, which is what lets the block recursion break the loop — the
+    same role the FDN's own delays play inside the FDN. One `.process(source)`
+    runs the whole system.
     """)
     return
 
 
 @app.cell
 def _(
-    FIRMatrixFilter,
     coupling,
-    dry_listener,
-    fftconvolve,
-    h_speaker_listener,
+    make_reverberator,
     np,
     sig_len,
-    src_to_mic,
+    source_to_listener,
+    source_to_mic,
+    speaker_to_listener,
+    td,
 ):
-    block = 256  # processing latency / loop block (~5.3 ms)
+    latency = 256  # RES processing latency (~5.3 ms); breaks the electroacoustic loop
 
-    def run_res(reverberator, g):
-        """Run the closed electroacoustic loop; return the listener signal."""
-        length = sig_len - (sig_len % block)
-        coupling_filter = FIRMatrixFilter(coupling)  # 6x6 FIR, stateful
-        loudspeakers = np.zeros((length, 6))
-        previous = np.zeros((block, 6))
-        start = 0
-        while start < length:
-            acoustic_feedback = coupling_filter.filter(previous)  # (block, 6 mics)
-            mic = src_to_mic[start : start + block] + acoustic_feedback
-            speaker_out = g * reverberator.process(mic)  # (block, 6)
-            loudspeakers[start : start + block] = speaker_out
-            previous = speaker_out
-            start += block
-
-        listener = dry_listener[:length].copy()
-        for ls in range(6):
-            listener += fftconvolve(loudspeakers[:, ls], h_speaker_listener[ls])[
-                :length
+    def build_res(time_varying, g):
+        """Assemble the whole reverberation enhancement system as a td tree."""
+        electroacoustic_loop = td.Recursion(
+            td.Series(
+                [td.Delay(np.full(6, latency)), make_reverberator(time_varying, g)]
+            ),
+            td.MatrixConvolver(coupling),  # loudspeakers -> mics (closes the loop)
+        )
+        res_path = td.Series(
+            [
+                td.MatrixConvolver(source_to_mic),  # source -> 6 mics
+                electroacoustic_loop,  # 6 mics -> 6 loudspeakers
+                td.MatrixConvolver(speaker_to_listener),  # 6 loudspeakers -> listener
             ]
-        return listener
+        )
+        return td.Parallel(
+            [res_path, td.MatrixConvolver(source_to_listener)], sum_output=True
+        )
 
-    return block, run_res
+    impulse = np.zeros(sig_len)
+    impulse[0] = 1.0
+
+    def render(time_varying, g):
+        """Listener impulse response of the RES at loop gain ``g``."""
+        return build_res(time_varying, g).process(impulse).squeeze()
+
+    return (render,)
 
 
 @app.cell(hide_code=True)
@@ -334,14 +356,14 @@ def _(mo):
 
 
 @app.cell
-def _(dry_listener, fs, go, make_reverberator, np, run_res):
+def _(fs, go, np, render):
     def edc_db(x):
         energy = np.cumsum(x[::-1] ** 2)[::-1]
         return 10 * np.log10(energy / energy[0] + 1e-20)
 
     g_operating = 0.8
-    enhanced = run_res(make_reverberator(time_varying=True), g_operating)
-    dry = dry_listener[: len(enhanced)]
+    enhanced = render(time_varying=True, g=g_operating)
+    dry = render(time_varying=False, g=0.0)  # g=0 -> only the dry direct path
 
     late = slice(int(0.4 * fs), None)
     enhancement_ratio = np.sqrt((enhanced[late] ** 2).mean()) / np.sqrt(
@@ -390,7 +412,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, make_reverberator, np, run_res):
+def _(fs, go, np, render):
     def envelope_db(x, win=2048, hop=512):
         starts = np.arange(0, len(x) - win, hop)
         env = np.array(
@@ -399,8 +421,8 @@ def _(fs, go, make_reverberator, np, run_res):
         return starts / fs, env
 
     g_challenge = 1.6
-    rec_static = run_res(make_reverberator(time_varying=False), g_challenge)
-    rec_varying = run_res(make_reverberator(time_varying=True), g_challenge)
+    rec_static = render(time_varying=False, g=g_challenge)
+    rec_varying = render(time_varying=True, g=g_challenge)
 
     def growth(x):  # last-quarter energy / first-quarter energy; >1 means growing
         q = len(x) // 4
@@ -451,7 +473,7 @@ def _(mo):
 
 
 @app.cell
-def _(go, make_reverberator, np, run_res):
+def _(go, np, render):
     gains = np.array([1.0, 1.4, 1.8, 2.2, 2.6])
 
     def growth_ratio(x):
@@ -460,8 +482,8 @@ def _(go, make_reverberator, np, run_res):
 
     ratios_static, ratios_varying = [], []
     for g in gains:
-        ratios_static.append(growth_ratio(run_res(make_reverberator(False), g)))
-        ratios_varying.append(growth_ratio(run_res(make_reverberator(True), g)))
+        ratios_static.append(growth_ratio(render(time_varying=False, g=g)))
+        ratios_varying.append(growth_ratio(render(time_varying=True, g=g)))
 
     fig_sweep = go.Figure()
     fig_sweep.add_trace(
