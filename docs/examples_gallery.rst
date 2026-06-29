@@ -82,6 +82,8 @@ Special FDNs
 
    * - `Coupled Rooms FDN Example <_static/marimo/notebooks/example_coupled_rooms.html>`_
      - This example models two acoustically coupled rooms with a Feedback Delay Network (FDN): one small room with a short reverberation time (RT), one large room with a long RT. Each room is an independent FDN with frequency-dependent RT (first-order shelving absorption) and its own output EQ.
+   * - `Reverberation enhancement with a time-varying FDN <_static/marimo/notebooks/example_reverberation_enhancement.html>`_
+     - A reverberation enhancement system (RES) makes a room sound more reverberant electroacoustically: microphones pick up the room, a reverberator processes the signal, and loudspeakers play it back — adding energy to the reverberant field. The catch is that the loudspeakers leak back into the microphones, so the reverberator sits inside an acoustic feedback loop. Too much loop gain and the system colours (rings) or howls; the usable gain before that happens is the maximum stable gain (MSG).
    * - `Scattering Delay Network (SDN) Demo <_static/marimo/notebooks/example_sdn.html>`_
      - This example uses the Scattering Delay Network (SDN) to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a FLAMO model to render the impulse response.
 
@@ -124,6 +126,8 @@ FDN Design & Analysis
      - Open the rendered marimo notebook.
    * - `Time-domain FDN vs FLAMO with GEQ absorption <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
      - The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
+   * - `Time-domain graph engine vs FLAMO <_static/marimo/notebooks/example_td_vs_flamo.html>`_
+     - ``pyFDN.td`` renders an arbitrary FLAMO model structure directly in the time domain — no torch, no FFT. It walks the same Shell / Series / Parallel / Recursion / leaf tree that FLAMO builds and maps each node to a stateful NumPy operator, then streams the signal through block by block. The feedback ``Recursion`` is processed in blocks no larger than the shortest loop delay, so its read-before-write delay line lines up sample-for-sample with FLAMO's frequency-domain render.
 
 ----
 
