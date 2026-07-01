@@ -80,11 +80,9 @@ bugs = "https://github.com/artificial-audio/pyFDN/issues"
 changelog = "https://github.com/artificial-audio/pyFDN/blob/main/changelog.md"
 homepage = "https://github.com/artificial-audio/pyFDN"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
 [tool.setuptools.packages.find]
-where = ["src"]
+where = [".", "src"]
+include = ["docs*", "pyFDN*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.*"]
