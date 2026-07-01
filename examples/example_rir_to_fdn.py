@@ -1,4 +1,5 @@
 # gallery_category: Absorption & Filters
+# references: Concert_Hall_Impulse_Responses
 
 import marimo
 
@@ -9,13 +10,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+def _(mo, paper_link):
+    mo.md(f"""
     # Converting a room impulse response into an FDN
 
     Estimates the frequency-dependent decay of a measured room impulse
@@ -28,7 +30,7 @@ def _(mo):
 
     The impulse response is from the Promenadikeskus concert hall in Pori,
     Finland, published at
-    [legacy.spa.aalto.fi/projects/poririrs](http://legacy.spa.aalto.fi/projects/poririrs/).
+    {paper_link("Concert_Hall_Impulse_Responses")}.
 
     Instead of DecayFitNet (used in the MATLAB original), decay parameters are
     estimated with `estimate_rt_bands` (Schroeder backward integration per
