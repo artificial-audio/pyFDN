@@ -250,6 +250,42 @@ def test_mimo_target_wrong_shape_raises():
         train_fdn(model, "match_spectrogram", target=bad, max_steps=2, **_FAST)
 
 
+# --- unified structure + canonical names -----------------------------------
+
+
+def test_direct_gain_leaf_named_and_default_zeros_not_trainable():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    direct = _leaf(model, "direct_gain")  # stable name (was the unnamed brB)
+    assert direct.param.requires_grad is False
+    np.testing.assert_allclose(np.asarray(direct.param.detach()), 0.0, atol=1e-6)
+
+
+def test_delay_leaf_named_delay_with_and_without_loop_filter():
+    from flamo.processor import dsp
+
+    nfft = 2**10
+    plain = build_fdn(N=4, rt=None, nfft=nfft, device="cpu", rng=0)
+    _leaf(plain, "delay")  # raises if absent
+
+    svf = dsp.parallelSVF(size=(4,), nfft=nfft, fs=48000, requires_grad=True)
+    withf = build_fdn(N=4, rt=None, nfft=nfft, loop_filter=svf, device="cpu", rng=0)
+    _leaf(withf, "delay")
+    assert _leaf(withf, "filter") is svf
+
+
+def test_fdnbuild_direct_none_roundtrips_to_zeros():
+    import dataclasses
+
+    build = pyFDN.extract_build(
+        build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    )
+    build = dataclasses.replace(build, D=None)
+    model = pyFDN.build_to_flamo(build, nfft=2**10, device="cpu")
+    out = pyFDN.extract_build(model)
+    assert out.D.shape == (1, 1)
+    np.testing.assert_allclose(out.D, 0.0, atol=1e-6)
+
+
 # --- trainable in-loop filter (prebuilt module) ----------------------------
 
 
@@ -314,6 +350,8 @@ def test_extract_svf_loop_filter_roundtrips_to_sos():
 
     b = pyFDN.extract_build(model)
     assert b.filters is not None and b.filters.shape == (2, 6, 4)
+    # SOS is normalized (a0 == 1), matching the rest of the codebase / scipy
+    np.testing.assert_allclose(b.filters[:, 3, :], 1.0, atol=1e-12)
 
     # rebuilding from the baked SOS reproduces the SVF-FDN's frequency response
     twin = pyFDN.build_to_flamo(b, nfft=nfft, device="cpu")
