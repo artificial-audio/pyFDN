@@ -126,11 +126,9 @@ def train_fdn(
         device=dev,
         dtype=torch_dtype,
     )
-    # Set the Shell's output layer to match the objective (time iFFT / magnitude
-    # |.|); a deliberate, visible mutation of the model.
+    # Set the Shell's output layer to match the objective (mutates the model).
     model.set_outputLayer(output_layer(output_domain, nfft, torch_dtype))
 
-    # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
     save_checkpoints = log and train_dir is not None
     if save_checkpoints:
         assert train_dir is not None  # implied by save_checkpoints
@@ -163,12 +161,15 @@ def train_fdn(
 
 def _loop_filter_is_trainable(model: Any) -> bool:
     """True if the model's in-loop filter leaf has any ``requires_grad`` param."""
+    from pyFDN.auxiliary import flamo_graph as layout
     from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
 
     leaves = [
         n for n in flamo_nodes_flat(flamo_model_to_nodes(model)) if n["type"] == "Leaf"
     ]
-    modules = [n["module"] for n in leaves if n["name"] in ("filter", "attenuation")]
+    modules = [
+        n["module"] for n in leaves if n["name"] in layout.LOOP_FILTER_ALIASES
+    ]
     return any(
         getattr(p, "requires_grad", False)
         for m in modules
@@ -179,6 +180,7 @@ def _loop_filter_is_trainable(model: Any) -> bool:
 
 def _model_info(model: Any) -> tuple[int, int, float]:
     """``(n_in, n_out, fs)`` read from the model's gain and delay modules."""
+    from pyFDN.auxiliary import flamo_graph as layout
     from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
 
     leaves = [
@@ -193,15 +195,12 @@ def _model_info(model: Any) -> tuple[int, int, float]:
             )
         return matches[0]
 
-    delay = next(
-        (n["module"] for n in leaves if "delay" in type(n["module"]).__name__.lower()),
-        None,
-    )
+    delay = next((n["module"] for n in leaves if n["name"] == layout.DELAY), None)
     if delay is None:
         raise ValueError("model has no delay module; check build again.")
     fs = float(delay.fs)
     return (
-        int(_gain("input_gain").param.shape[1]),
-        int(_gain("output_gain").param.shape[0]),
+        int(_gain(layout.INPUT_GAIN).param.shape[1]),
+        int(_gain(layout.OUTPUT_GAIN).param.shape[0]),
         fs,
     )

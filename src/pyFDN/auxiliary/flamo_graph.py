@@ -16,6 +16,24 @@ if TYPE_CHECKING:
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
 
+# Canonical names of a standard FDN's flamo graph, written by
+# :func:`pyFDN.assemble_fdn_core` and read by :func:`extract_build`.
+INPUT_GAIN = "input_gain"
+OUTPUT_GAIN = "output_gain"
+MIXING_MATRIX = "mixing_matrix"
+DELAY = "delay"
+LOOP_FILTER = "filter"
+OUTPUT_FILTER = "output_filter"
+DIRECT = "direct_gain"
+LOOP_FILTER_ALIASES = (LOOP_FILTER, "attenuation")
+
+# Structural branch labels assigned by the traversal.
+BRANCH_FDN = "fdn"
+BRANCH_DIRECT = "direct"
+BRANCH_FEEDFORWARD = "feedforward"
+BRANCH_FEEDBACK = "feedback"
+
+
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
 
 
@@ -159,11 +177,15 @@ def flamo_model_to_nodes(
         children = []
         if brA is not None:
             children.append(
-                flamo_model_to_nodes(brA, name="brA", include_shell_io=include_shell_io)
+                flamo_model_to_nodes(
+                    brA, name=BRANCH_FDN, include_shell_io=include_shell_io
+                )
             )
         if brB is not None:
             children.append(
-                flamo_model_to_nodes(brB, name="brB", include_shell_io=include_shell_io)
+                flamo_model_to_nodes(
+                    brB, name=BRANCH_DIRECT, include_shell_io=include_shell_io
+                )
             )
         node["children"] = children
         return node
@@ -173,12 +195,16 @@ def flamo_model_to_nodes(
         fF = getattr(model, "fF", None) or getattr(model, "feedforward", None)
         fB = getattr(model, "fB", None) or getattr(model, "feedback", None)
         node["fF"] = (
-            flamo_model_to_nodes(fF, name="fF", include_shell_io=include_shell_io)
+            flamo_model_to_nodes(
+                fF, name=BRANCH_FEEDFORWARD, include_shell_io=include_shell_io
+            )
             if fF is not None
             else None
         )
         node["fB"] = (
-            flamo_model_to_nodes(fB, name="fB", include_shell_io=include_shell_io)
+            flamo_model_to_nodes(
+                fB, name=BRANCH_FEEDBACK, include_shell_io=include_shell_io
+            )
             if fB is not None
             else None
         )
@@ -221,7 +247,7 @@ def flamo_nodes_flat(
         for key in ("fF", "fB"):
             child = root.get(key)
             if child is not None:
-                subpath = f"{path}/{key}"
+                subpath = f"{path}/{child['name']}"
                 out.extend(flamo_nodes_flat(child, path=subpath))
     return out
 
@@ -267,13 +293,7 @@ def _gain_to_sos(gain: np.ndarray) -> np.ndarray:
 
 
 def _svf_to_sos(module: Any) -> np.ndarray:
-    """Bake a flamo ``parallelSVF`` into an ``(n_sections, 6, N)`` SOS bank.
-
-    Each SVF section is a biquad whose coefficients are flamo's closed form of
-    the mapped parameters ``(f, R, mLP, mBP, mHP) = map_param2svf(param)``. The
-    section is normalized so ``a0 == 1`` (the SOS convention; ``H = B/A`` is
-    unchanged), giving a bank the render path consumes like any other.
-    """
+    """Bake a flamo ``parallelSVF`` into a normalized ``(n_sections, 6, N)`` SOS bank."""
 
     def _np(t: Any) -> np.ndarray:
         if hasattr(t, "detach"):
@@ -283,26 +303,23 @@ def _svf_to_sos(module: Any) -> np.ndarray:
         return np.asarray(t.numpy() if hasattr(t, "numpy") else t, dtype=float)
 
     f, r, m_lp, m_bp, m_hp = (_np(t) for t in module.map_param2svf(module.param))
-    # broadcast a scalar R (lowshelf/highshelf) up to (n_sections, N)
     f, r, m_lp, m_bp, m_hp = np.broadcast_arrays(f, r, m_lp, m_bp, m_hp)
+    a0 = f**2 + 2.0 * r * f + 1.0
     sos = np.empty((*f.shape, 6), dtype=float)
-    sos[..., 0] = f**2 * m_lp + f * m_bp + m_hp
-    sos[..., 1] = 2.0 * f**2 * m_lp - 2.0 * m_hp
-    sos[..., 2] = f**2 * m_lp - f * m_bp + m_hp
-    sos[..., 3] = f**2 + 2.0 * r * f + 1.0
-    sos[..., 4] = 2.0 * f**2 - 2.0
-    sos[..., 5] = f**2 - 2.0 * r * f + 1.0
-    # (n_sections, N, 6) -> (n_sections, 6, N)
+    sos[..., 0] = (f**2 * m_lp + f * m_bp + m_hp) / a0
+    sos[..., 1] = (2.0 * f**2 * m_lp - 2.0 * m_hp) / a0
+    sos[..., 2] = (f**2 * m_lp - f * m_bp + m_hp) / a0
+    sos[..., 3] = 1.0
+    sos[..., 4] = (2.0 * f**2 - 2.0) / a0
+    sos[..., 5] = (f**2 - 2.0 * r * f + 1.0) / a0
     return np.ascontiguousarray(np.moveaxis(sos, -1, 1))
 
 
 def _attenuation_to_sos(module: Any) -> np.ndarray:
     """In-loop filter module -> ``(n_sections, 6, N)`` SOS for ``FDNBuild.filters``.
 
-    Biquad-cascade IIR filters are baked to SOS: ``parallelSVF`` via its closed
-    form, ``parallelSOSFilter`` (and a plain broadband gain) via its value. Other
-    types -- graphic/parametric EQs and FIR -- have no SOS extractor yet and
-    raise rather than silently dropping the trained filter.
+    Supports ``parallelSVF`` and ``parallelSOSFilter`` (and a plain broadband
+    gain); other filter types raise.
     """
     type_name = type(module).__name__
     if "SVF" in type_name:
@@ -320,21 +337,13 @@ def _attenuation_to_sos(module: Any) -> np.ndarray:
 
 
 def _feedback_leaf_module(leaves: list[dict[str, Any]]) -> Any:
-    """The single feedback-matrix leaf module from a flat leaf list.
+    """The single feedback-matrix leaf module (named ``mixing_matrix``).
 
-    Accepts a ``mixing_matrix`` leaf or the standard recursion feedback leaf
-    ``fB`` (preferring the one at ``.../feedback_loop/fB`` so a Parallel direct
-    branch does not confuse it). Returns the **live** module (``.map``/``.param``
-    intact). Callers that need gradients must apply ``.map`` themselves rather
-    than going through :func:`_module_value`, which detaches.
+    Returns the **live** module (``.map``/``.param`` intact); callers that need
+    gradients must apply ``.map`` themselves rather than going through
+    :func:`_module_value`, which detaches.
     """
-    matches = [n for n in leaves if n["name"] == "mixing_matrix"]
-    if not matches:
-        matches = [
-            n
-            for n in leaves
-            if n["name"] == "fB" and n["path"].endswith("/feedback_loop/fB")
-        ] or [n for n in leaves if n["name"] == "fB"]
+    matches = [n for n in leaves if n["name"] == MIXING_MATRIX]
     if len(matches) != 1:
         raise ValueError(
             "FLAMO graph must contain exactly one feedback matrix leaf; "
@@ -346,11 +355,8 @@ def _feedback_leaf_module(leaves: list[dict[str, Any]]) -> Any:
 def feedback_matrix_module(model: Any) -> Any:
     """Return the live feedback-matrix module from a FLAMO FDN model.
 
-    Works for both a plain ``Series`` core and a ``Parallel`` core (an FDN summed
-    with a direct path). The module returned is the one on the recursion's
-    feedback branch; apply ``module.map(module.param)`` to read the realized
-    matrix **in-graph** -- e.g. inside a training loss, where the detaching
-    extraction path :func:`extract_build` would break gradients.
+    Apply ``module.map(module.param)`` to read the realized matrix **in-graph**
+    (e.g. inside a training loss); :func:`extract_build` detaches instead.
     """
     root = flamo_model_to_nodes(model)
     leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
@@ -360,13 +366,13 @@ def feedback_matrix_module(model: Any) -> Any:
 def extract_build(model: Any) -> FDNBuild:
     """Extract a complete :class:`~pyFDN.FDNBuild` from a named FLAMO model graph.
 
-    The graph must contain leaves named ``input_gain`` and ``output_gain``, plus
-    either ``mixing_matrix`` or the standard recursion feedback leaf ``fB``.
-    The delay can be named ``delay`` or be the graph's only delay module.
-    Optional attenuation (``filters``), output-filter (``post_eq``), and
-    direct-path leaves are included when present. The sample rate is read from
-    the delay module and is required: a graph that does not expose ``fs`` is
-    malformed and raises :class:`ValueError`.
+    The graph is a standard FDN as built by :func:`assemble_fdn_core`, with the
+    canonical leaf names ``input_gain``, ``output_gain``, ``delay``,
+    ``direct_gain``, ``mixing_matrix`` (the feedback matrix), and optional
+    ``filter`` (-> ``filters``) / ``output_filter`` (-> ``post_eq``). The sample
+    rate is read from the delay module and is
+    required: a graph that does not expose ``fs`` is malformed and raises
+    :class:`ValueError`.
     """
     root = flamo_model_to_nodes(model)
     leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
@@ -387,11 +393,7 @@ def extract_build(model: Any) -> FDNBuild:
             )
         return matches[0]["module"]
 
-    delay_matches = _named("delay")
-    if not delay_matches:
-        delay_matches = [
-            node for node in leaves if "delay" in type(node["module"]).__name__.lower()
-        ]
+    delay_matches = _named(DELAY)
     if len(delay_matches) != 1:
         raise ValueError(
             "FLAMO graph must contain exactly one delay leaf; "
@@ -401,18 +403,12 @@ def extract_build(model: Any) -> FDNBuild:
     delays = _delay_samples(delay_module)
 
     A = np.asarray(_module_value(_feedback_leaf_module(leaves)), dtype=float)
-    B = np.asarray(_module_value(_one_of("input_gain")), dtype=float)
-    C = np.asarray(_module_value(_one_of("output_gain")), dtype=float)
+    B = np.asarray(_module_value(_one_of(INPUT_GAIN)), dtype=float)
+    C = np.asarray(_module_value(_one_of(OUTPUT_GAIN)), dtype=float)
     if A.ndim != 2:
         raise ValueError("feedback matrix must be a constant two-dimensional matrix")
 
-    direct_matches = _named("direct_gain")
-    if not direct_matches:
-        direct_matches = [
-            node
-            for node in _named("brB")
-            if node["path"] in {"root/brB", "root/core/brB"}
-        ]
+    direct_matches = _named(DIRECT)
     D = (
         np.asarray(_module_value(direct_matches[0]["module"]), dtype=float)
         if len(direct_matches) == 1
@@ -420,12 +416,14 @@ def extract_build(model: Any) -> FDNBuild:
     )
 
     attenuation_sos = None
-    attenuation_matches = _named("attenuation") or _named("filter")
+    attenuation_matches = [
+        n for n in leaves if n["name"] in LOOP_FILTER_ALIASES
+    ]
     if len(attenuation_matches) == 1:
         attenuation_sos = _attenuation_to_sos(attenuation_matches[0]["module"])
 
     post_eq_sos = None
-    post_eq_matches = _named("output_filter")
+    post_eq_matches = _named(OUTPUT_FILTER)
     if len(post_eq_matches) == 1:
         post_eq_value = _module_value(post_eq_matches[0]["module"])
         if post_eq_value.ndim == 3 and post_eq_value.shape[1] == 6:

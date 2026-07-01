@@ -111,9 +111,7 @@ def build_fdn(
     else:
         a = _random_so_n(n, local_rng)
 
-    # Default IO is "normalized" (ones / sqrt(N)): puts the initial |H| near unity
-    # so a colorless objective starts well-conditioned. Override with input_gain/
-    # output_gain for other layouts.
+    # Default IO is ones / sqrt(N); override with input_gain / output_gain.
     b = (
         np.ones((n, 1)) / np.sqrt(n)
         if input_gain is None
@@ -127,8 +125,6 @@ def build_fdn(
     n_out, n_in = c.shape[0], b.shape[1]
     d = _resolve_direct(direct, n_out, n_in)
 
-    # A prebuilt loop_filter fully defines the in-loop absorption, so the
-    # rt-derived bank is skipped (and ignored if rt was set).
     if loop_filter is not None and rt is not None:
         warnings.warn(
             f"loop_filter provided; rt={rt!r} is ignored for the in-loop filter "
@@ -239,8 +235,6 @@ def trainable_from_build(
         dtype=dtype,
         requires_grad=trainable.feedback,
     )
-    # Direct path is ALWAYS wired (zero by default) so the same model serves any
-    # objective; the core is therefore a Parallel.
     direct_gain = gain_module(
         d, nfft, device=device, dtype=dtype, requires_grad=trainable.direct
     )
@@ -248,9 +242,7 @@ def trainable_from_build(
         np.asarray(build.delays, dtype=np.float64).ravel(), fs, nfft, device, dtype
     )
 
-    # In-loop absorption (decay). A prebuilt loop_filter module (its own
-    # requires_grad governs trainability) takes precedence; otherwise the
-    # build's SOS bank is wired frozen.
+    # A prebuilt loop_filter takes precedence over the build's SOS bank.
     n = int(np.asarray(build.delays).ravel().size)
     if loop_filter is not None:
         loop_filter_module = _validated_loop_filter(loop_filter, n, nfft)
@@ -313,13 +305,8 @@ def build_set_decay(
 
 
 def _validated_loop_filter(loop_filter: Any, n: int, nfft: int) -> Any:
-    """Return ``loop_filter`` after checking it matches the FDN shape.
-
-    A prebuilt flamo module bakes in its channel count and ``nfft``, so both
-    must line up with the build (``N`` delay lines, FFT size ``nfft``) for the
-    in-loop wiring to be valid. The channel count is the last parameter
-    dimension (flamo's ``.size`` is the full param shape, not ``(N,)``).
-    """
+    """Return ``loop_filter`` after checking its channel count and ``nfft`` match
+    the FDN (``N`` delay lines, FFT size ``nfft``)."""
     param = getattr(loop_filter, "param", None)
     n_ch = int(param.shape[-1]) if param is not None else None
     if n_ch != n:
