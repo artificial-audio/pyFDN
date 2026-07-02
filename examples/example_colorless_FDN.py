@@ -9,16 +9,18 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Colorless FDN
 
-    FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in *"Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.*
+    FDN optimized for reduced metallic ringing (perceptually colorless reverberation). 
+    Original method published in *{paper_link("Differentiable_FDN_For_Colorless_Reverberation")}.*
 
     Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
 

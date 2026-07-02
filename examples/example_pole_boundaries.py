@@ -9,8 +9,9 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -26,10 +27,14 @@ def _(mo):
     The loop here is $P(z) = \mathrm{diag}(z^{m}) - A\,\mathrm{diag}(h(z))$ with
     a two-tap FIR absorption filter $h(z) = 0.65 + 0.3 z^{-1}$ on every delay
     line and a non-orthogonal feedback matrix $A = Q/1.5$.
+    """)
+    return
 
-    Reference: *Schlecht, S., Habets, E. (2019). Modal Decomposition of Feedback
-    Delay Networks. IEEE Transactions on Signal Processing 67(20), 5340-5351.*
-    [doi:10.1109/tsp.2019.2937286](https://dx.doi.org/10.1109/tsp.2019.2937286)
+
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
+    Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}.*
 
     Original MATLAB: `example_poleBoundaries.m`, Sebastian J. Schlecht,
     23 April 2018. Delays are scaled down relative to MATLAB so the

@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Scattering feedback matrices
 
     Demonstration of different types of scattering (FIR paraunitary) feedback
@@ -30,13 +31,12 @@ def _(mo):
     (Abel & Huang 2006): scattering matrices build up echo density much faster
     than the static matrix.
 
-    Reference: *Schlecht, S., Habets, E. (2020). Scattering in Feedback Delay
-    Networks. IEEE/ACM Transactions on Audio, Speech, and Language Processing.*
-    [doi:10.1109/taslp.2020.3001395](https://dx.doi.org/10.1109/taslp.2020.3001395)
+    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
     Original MATLAB: `example_scatteringFDN.m`, Sebastian J. Schlecht,
     28 December 2019.
     """)
+
     return
 
 

@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Filter feedback delay network (FFDN) with paraunitary feedback matrix
 
     An FDN with a *paraunitary* (FIR, lossless) scattering matrix in the loop.
@@ -23,9 +24,7 @@ def _(mo):
     modal decomposition, and verifies that the system is lossless (all poles
     on the unit circle).
 
-    Reference: *Schlecht, S., Habets, E. (2020). Scattering in Feedback Delay
-    Networks. IEEE/ACM Transactions on Audio, Speech, and Language Processing.*
-    [doi:10.1109/taslp.2020.3001395](https://dx.doi.org/10.1109/taslp.2020.3001395)
+    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}.*
 
     Original MATLAB: `example_paraunitaryFDN.m`, Sebastian J. Schlecht,
     23 April 2018.

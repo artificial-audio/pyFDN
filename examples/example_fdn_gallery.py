@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # FDN Gallery
 
     Overview of feedback matrices and full FDN systems available in pyFDN.
@@ -30,7 +31,7 @@ def _(mo):
     series allpass, nested allpass, and the Schroeder reverberator. These are
     checked for the stronger uniallpass condition.
 
-    Reference: *Schlecht, "FDNTB: The Feedback Delay Network Toolbox," DAFx-20, 2020.*
+    Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
     Original MATLAB: Sebastian J. Schlecht, 28 December 2019.
     """)

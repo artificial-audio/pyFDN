@@ -9,8 +9,10 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -27,9 +29,14 @@ def _(mo):
     We compare a 3×3 grid of settings: FDN size $N \in \{4, 8, 16\}$ and
     short/medium/long delays. Echo density (Abel & Huang 2006) makes the
     tradeoff visible: small $N$ with long delays stays sparse for a long time.
+    """)
+    return
 
-    Reference: *Schlecht, S. (2020). FDNTB: The Feedback Delay Network Toolbox,
-    Proc. 23rd International Conference on Digital Audio Effects (DAFx-20).*
+
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
+    Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
     Original MATLAB: `example_tradeoff.m`, Sebastian J. Schlecht, 06 March 2023.
     """)

@@ -9,20 +9,21 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Allpass but not uniallpass FDN
 
     Example of an FDN that is **allpass only for specific delay lengths**, not for arbitrary delays. So it is not *uniallpass* (allpass for any choice of delays).
 
     We build a SISO system by taking a random orthogonal system matrix and applying a **non-diagonal similarity transform** (on the first two delays). The resulting FDN is allpass (and stable) for some delay vectors and not for others.
 
-    See *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See {paper_link("Allpass_Feedback_Delay_Networks")}.
 
     — Original MATLAB: Sebastian J. Schlecht, 22 Dec 2020
     """)

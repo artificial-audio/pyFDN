@@ -9,28 +9,25 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Schroeder's Series Allpass FDN
 
     Example for Schroeder's series (cascade) allpass: a cascade of first-order allpass sections realized as an FDN with diagonal feedback matrix. SISO.
 
-    **Reference:** Schroeder, M. R. & Logan, B. F. (1961). *"Colorless" artificial reverberation.* IRE Trans. Audio AU-9, 209–214.
+    **Reference:** *{paper_link("Schroeder1961ColorlessArtificialReverberation")}*.
 
-    See also: *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
 
     — Original MATLAB: Sebastian J. Schlecht, 7 June 2020
+
     """)
-    return
-
-
-@app.cell
-def _():
     return
 
 
@@ -120,7 +117,7 @@ def _(mo):
 def _(A, B, C, D, Fs, delays, pyFDN):
     ir_len = 2 * Fs
     impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D).squeeze()
-    return impulse_response, ir_len
+    return (impulse_response,)
 
 
 @app.cell(hide_code=True)

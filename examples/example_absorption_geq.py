@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Absorption GEQ in an FDN
 
     Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed
@@ -28,8 +29,9 @@ def _(mo):
     2. Run a one-channel FDN using FLAMO.
     3. Estimate T60 from the impulse response and compare with the target.
 
-    Reference: *Schlecht and Habets 2020.*
-    Reference: *Välimäki and Reiss, "All About Audio Equalization: Solutions and Frontiers," Applied Sciences, vol. 6, no. 5, p. 129, 2016.*
+    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*
+
+    Reference: *{paper_link("Valimaki2016AllAudioEqualization")}*
 
     Original MATLAB: Sebastian J. Schlecht, 22 October 2020.
     """)

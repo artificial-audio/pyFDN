@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
 
     The same FDN with frequency-dependent absorption is rendered by two
@@ -34,9 +35,7 @@ def _(mo):
     frequency-dependent reverberation time. The two impulse responses must
     match to numerical precision.
 
-    Reference: *Schlecht, S., Habets, E. (2020). Accurate reverberation time
-    control in feedback delay networks. Proc. Int. Conf. Digital Audio Effects
-    (DAFx).*
+    Reference: *{paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
     return
 

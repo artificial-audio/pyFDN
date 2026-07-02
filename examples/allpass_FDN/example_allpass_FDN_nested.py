@@ -9,28 +9,24 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Gardner's Nested Allpass FDN
 
     Example for the nested allpass structure: an FDN built by iteratively nesting a feedforward/back allpass around the previous system. SISO (single input, single output).
 
-    **Reference:** Gardner, W. G. (1992). *A real-time multichannel room simulator.* J. Acoust. Soc. Am. 92, 1–23.
+    **Reference:** *{paper_link("Gardner1992RealtimeMultichannelRoom")}*.
 
-    See also: *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
 
     — Original MATLAB: Sebastian J. Schlecht, 7 June 2020
     """)
-    return
-
-
-@app.cell
-def _():
     return
 
 
@@ -125,7 +121,7 @@ def _(A, B, C, D, delays, pyFDN):
     ir_len = 4 * Fs  # 4 seconds
     impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D).squeeze()
     # Shape: (ir_len, n_out, n_in) -> (ir_len, ) for SISO
-    return Fs, impulse_response, ir_len
+    return Fs, impulse_response
 
 
 @app.cell(hide_code=True)

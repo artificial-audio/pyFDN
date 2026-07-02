@@ -9,8 +9,9 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -25,6 +26,22 @@ def _(mo):
     3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
 
     Reference: *Schlecht, S., Habets, E. (2019). Dense Reverberation with Delay Feedback Matrices.* Proc. IEEE Workshop Applicat. Signal Process. Audio Acoust. (WASPAA).
+    """)
+    return
+
+
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
+    # Denser Reverberation with Delay Feedback Matrix
+
+    This example compares three FDN topologies and their **echo density** (Abel & Huang 2006):
+
+    1. **Vanilla FDN** — Build a complete FDN with `pyFDN.fdn_build_gallery`, bake in broadband decay, and render it with `pyFDN.dss_to_flamo`.
+    2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
+    3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
+
+    Reference: *{paper_link("Schlecht2019DenseReverberationDelay")}*.
     """)
     return
 

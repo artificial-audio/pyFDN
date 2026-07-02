@@ -9,18 +9,19 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Interpolate between two orthogonal matrices
 
     Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via `pyFDN.dss2impz`.
 
-    Reference: *Schlecht, S., Habets, E. (2015). Practical considerations of time-varying feedback delay networks.* Proc. Audio Eng. Soc. Conv.
+    Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
 
     - Original version: Sebastian J. Schlecht, Friday, 10. April 2020
     - Translation: Sebastian J. Schlecht, Thursday, 19. February 2026

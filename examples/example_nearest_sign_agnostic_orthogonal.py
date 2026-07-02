@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Nearest Sign-Agnostic Orthogonal Matrix
 
     Given a non-negative matrix **B** (e.g., measured energy flow between delay
@@ -31,9 +32,7 @@ def _(mo):
     3. Alternate: (a) solve nearest-orthogonal via SVD, (b) update signs.
     4. Repeat from 2 with new random initialisations; keep best.
 
-    Reference: *Schlecht and Habets, "Sign-Agnostic Matrix Design for Spatial
-    Artificial Reverberation with Feedback Delay Networks," AES Conf. on Spatial
-    Reproduction, 2018.*
+    Reference: *{paper_link("Schlecht2018SignagnosticMatrixDesign")}.*
 
     Original MATLAB: Sebastian J. Schlecht, 29. January 2020.
     """)

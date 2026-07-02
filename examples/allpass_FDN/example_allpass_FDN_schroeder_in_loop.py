@@ -9,13 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # FDN with Schroeder allpass filters in the loop
 
     Schroeder allpass filters can be placed **behind the delays** in the FDN loop to increase echo density. The rendering is done with **FLAMO** (gain and delay modules).
@@ -25,7 +26,7 @@ def _(mo):
     2. Build a **vanilla FDN (SISO)**.
     3. Place the **Schroeder allpass behind the delays** of the FDN and render.
 
-    > Reference: Väänänen, R., Välimäki, V., Huopaniemi, J. & Karjalainen, M. Efficient and Parametric Reverberator for Room Acoustics Modeling. 200–203 (1997).
+    > Reference: *{paper_link("Vaananen1997EfficientParametricReverberator")}*.
 
 
     — Original MATLAB: Sebastian J. Schlecht, 29 Dec 2019

@@ -9,8 +9,9 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    from docs.references import paper_link
 
-    return (mo,)
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -27,10 +28,14 @@ def _(mo):
     the input-output paths: the more decorrelated its entries, the more
     decorrelated the FDN outputs.  Here we compute the adjugate, then the
     pairwise maximum cross-correlation between all of its entries.
+    """)
+    return
 
-    Reference: *Schlecht, S. J., Fagerström, J. & Välimäki, V. Decorrelation
-    in Feedback Delay Networks. IEEE/ACM Transactions on Audio, Speech and
-    Language Processing, 2023.*
+
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
+    Reference: *{paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
 
     Original MATLAB: `example_decorrelation.m`, Jon Fagerström, 28 April 2023.
     """)

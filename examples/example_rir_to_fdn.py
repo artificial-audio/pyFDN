@@ -1,5 +1,4 @@
 # gallery_category: Absorption & Filters
-# references: Concert_Hall_Impulse_Responses
 
 import marimo
 
