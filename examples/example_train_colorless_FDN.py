@@ -186,7 +186,6 @@ def _(fs, init_build, np, opt_build, pyFDN):
 
 @app.cell
 def _(fs, init_decay, init_noise, mo, opt_decay, opt_noise, pyFDN):
-
     def _clip(label, sig):
         return mo.vstack(
             [mo.Html(label).style({"font-size": "1.1em"}), mo.audio(sig, rate=int(fs))],

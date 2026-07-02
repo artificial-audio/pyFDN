@@ -9,8 +9,8 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
-    from docs.references import paper_link
 
+    from docs.references import paper_link
 
     return mo, paper_link
 
