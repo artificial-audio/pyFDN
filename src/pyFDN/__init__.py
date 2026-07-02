@@ -145,6 +145,8 @@ __all__ = [
     "flamo_nodes_flat",
     "plot_flamo_graph",
     "extract_build",
+    # time-domain graph engine
+    "td",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -378,3 +380,6 @@ from .translate.pr_to_impz import pr_to_impz
 
 # Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
 allpass = import_module(".auxiliary.allpass", __name__)
+
+# Time-domain graph engine (pyFDN.td.process, operator classes).
+from . import td  # noqa: E402

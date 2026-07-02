@@ -47,6 +47,7 @@ INTENTIONALLY_UNDOCUMENTED = {
     # submodule aliases (namespaced access, not standalone functions)
     "allpass",
     "allpass_completion",
+    "td",
 }
 
 
