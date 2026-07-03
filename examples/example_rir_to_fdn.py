@@ -40,7 +40,6 @@ def _(mo, paper_link):
     between the target and the unequalized FDN band levels, which makes the
     level match self-correcting.
 
-    Original MATLAB: `example_RIR2FDN.m`, Sebastian J. Schlecht, 28 January 2023.
     """)
     return
 

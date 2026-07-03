@@ -35,7 +35,6 @@ def _(mo, paper_link):
 
     Reference: *{paper_link("Schlecht2018SignagnosticMatrixDesign")}.*
 
-    Original MATLAB: Sebastian J. Schlecht, 29. January 2020.
     """)
     return
 

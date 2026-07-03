@@ -39,9 +39,6 @@ def _(mo, paper_link):
     mo.md(f"""
     Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}*.
 
-    Original MATLAB: `example_spreadFDNpoles.m`, Sebastian J. Schlecht, 23 April 2018.
-    Delays are scaled down relative to the MATLAB script to keep the
-    eigendecomposition fast; the qualitative behaviour is unchanged.
     """)
     return
 

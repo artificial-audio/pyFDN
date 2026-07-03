@@ -39,7 +39,6 @@ def _(mo, paper_link):
     mo.md(f"""
     Reference: *{paper_link("Schlecht2024ModalExcitationFeedback")}.*
 
-    Original MATLAB: `example_FDNEigenvectors.m`, Sebastian J. Schlecht, 27 February 2024.
     """)
     return
 

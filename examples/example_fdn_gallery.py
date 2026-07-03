@@ -34,7 +34,6 @@ def _(mo, paper_link):
 
     Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
-    Original MATLAB: Sebastian J. Schlecht, 28 December 2019.
     """)
     return
 

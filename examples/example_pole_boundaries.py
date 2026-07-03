@@ -37,9 +37,6 @@ def _(mo, paper_link):
     mo.md(f"""
     Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}.*
 
-    Original MATLAB: `example_poleBoundaries.m`, Sebastian J. Schlecht,
-    23 April 2018. Delays are scaled down relative to MATLAB so the
-    root-finding stays fast.
     """)
     return
 

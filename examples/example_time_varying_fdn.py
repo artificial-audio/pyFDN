@@ -33,7 +33,6 @@ def _(mo, paper_link):
     Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
     Reference: *{paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
 
-    Original MATLAB: Sebastian J. Schlecht, 28 December 2019
     """)
     return
 

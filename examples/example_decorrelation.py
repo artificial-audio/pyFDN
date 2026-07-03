@@ -38,7 +38,6 @@ def _(mo, paper_link):
     mo.md(f""" 
     Reference: *{paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
 
-    Original MATLAB: `example_decorrelation.m`, Jon Fagerström, 28 April 2023.
     """)
     return
 

@@ -29,8 +29,6 @@ def _(mo, paper_link):
 
     > Reference: *{paper_link("Vaananen1997EfficientParametricReverberator")}*.
 
-
-    — Original MATLAB: Sebastian J. Schlecht, 29 Dec 2019
     """)
     return
 

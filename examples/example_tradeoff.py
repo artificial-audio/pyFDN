@@ -38,7 +38,6 @@ def _(mo, paper_link):
     mo.md(f"""
     Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
-    Original MATLAB: `example_tradeoff.m`, Sebastian J. Schlecht, 06 March 2023.
     """)
     return
 

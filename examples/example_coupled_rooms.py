@@ -32,7 +32,6 @@ def _(mo, paper_link):
     Based on:
     > *{paper_link("Delay_Network_Architectures_for_Room_and_Coupled_Space_Modeling")}*.
 
-    **Original MATLAB:** (c) Sebastian Jiro Schlecht, 2020. **Python:** Facundo Franchino, 2025.
     """)
     return
 

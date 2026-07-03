@@ -24,8 +24,6 @@ def _(mo, paper_link):
 
     See {paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    — Original MATLAB: Sebastian J. Schlecht, 10 June 2020
-
     """)
     return
 

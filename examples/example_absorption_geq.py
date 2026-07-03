@@ -34,7 +34,6 @@ def _(mo, paper_link):
 
     Reference: *{paper_link("Valimaki2016AllAudioEqualization")}*
 
-    Original MATLAB: Sebastian J. Schlecht, 22 October 2020.
     """)
     return
 

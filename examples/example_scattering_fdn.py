@@ -34,8 +34,6 @@ def _(mo, paper_link):
 
     Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
-    Original MATLAB: `example_scatteringFDN.m`, Sebastian J. Schlecht,
-    28 December 2019.
     """)
 
     return

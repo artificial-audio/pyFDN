@@ -24,8 +24,6 @@ def _(mo, paper_link):
 
     Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
 
-    - Original version: Sebastian J. Schlecht, Friday, 10. April 2020
-    - Translation: Sebastian J. Schlecht, Thursday, 19. February 2026
     """)
     return
 

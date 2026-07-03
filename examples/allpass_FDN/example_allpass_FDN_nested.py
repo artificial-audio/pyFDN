@@ -25,8 +25,6 @@ def _(mo, paper_link):
     **Reference:** *{paper_link("Gardner1992RealtimeMultichannelRoom")}*.
 
     See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
-
-    — Original MATLAB: Sebastian J. Schlecht, 7 June 2020
     """)
     return
 
