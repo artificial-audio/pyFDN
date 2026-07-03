@@ -73,6 +73,7 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
+    "bibtexparser",
 ]
 
 [project.urls]
