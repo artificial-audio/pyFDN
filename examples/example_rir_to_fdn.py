@@ -1,4 +1,5 @@
 # gallery_category: Absorption & Filters
+# references: Concert_Hall_Impulse_Responses
 
 import marimo
 
@@ -9,7 +10,7 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
-
+    
     from docs.references import paper_link
 
     return mo, paper_link
