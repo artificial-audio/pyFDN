@@ -56,7 +56,7 @@ def _(mo):
 @app.cell
 def _(hadamard, math, np, pyFDN):
     N = 4
-    # Hadamard, normalized and sign-normalized on diagonal (match MATLAB fdnMatrixGallery)
+    # Hadamard, normalized and sign-normalized on diagonal
     A = hadamard(N) / math.sqrt(N)
     A = A @ np.diag(np.sign(np.diag(A)))
     B = np.eye(N)

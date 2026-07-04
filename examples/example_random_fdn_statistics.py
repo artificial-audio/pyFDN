@@ -40,8 +40,7 @@ def _(mo, paper_link):
     mo.md(f"""
     Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}*
 
-    Original MATLAB: `example_randomFDNstatistics.m`, Sebastian J. Schlecht, 23 April 2018.
-    Delays are scaled down relative to MATLAB to keep the eigendecomposition fast.
+    Delays are scaled down to keep the eigendecomposition fast.
     """)
     return
 

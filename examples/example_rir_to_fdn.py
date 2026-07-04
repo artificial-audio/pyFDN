@@ -33,8 +33,7 @@ def _(mo, paper_link):
     Finland, published at
     {paper_link("Concert_Hall_Impulse_Responses")}.
 
-    Instead of DecayFitNet (used in the MATLAB original), decay parameters are
-    estimated with `estimate_rt_bands` (Schroeder backward integration per
+    Decay parameters are estimated with `estimate_rt_bands` (Schroeder backward integration per
     octave band) and `estimate_initial_level_bands` (band energy matched to an
     exponential decay model).  The output EQ is designed from the *difference*
     between the target and the unequalized FDN band levels, which makes the
