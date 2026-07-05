@@ -149,9 +149,9 @@ def _(mo):
     mo.md(r"""
     ## Listen: random init vs colorless
 
-    Two renderings of each FDN, built end to end through the render API (`pyFDN.build_set_decay` -> `pyFDN.build_impulse_response`), peak-normalized with `pyFDN.peak_normalize` so the A/B compares *timbre*, not level:
+    Two renderings of each FDN, built end to end through the render API (`pyFDN.build_set_decay` -> `pyFDN.build_to_impz`), peak-normalized with `pyFDN.peak_normalize` so the A/B compares *timbre*, not level:
 
-    * **Long tail (hear the colour)** -- a very long reverberation time, so the FDN rings with almost no decay and you hear its colour directly: the random init is tonal/metallic (sharp modal resonances), the colorless one is noise-like (flat spectrum). `build_impulse_response` renders in the time domain (`pyFDN.process_fdn`), so the long ring is captured faithfully without the FFT wrap-around an nfft-length frequency-domain render would alias back onto the start.
+    * **Long tail (hear the colour)** -- a very long reverberation time, so the FDN rings with almost no decay and you hear its colour directly: the random init is tonal/metallic (sharp modal resonances), the colorless one is noise-like (flat spectrum). `build_to_impz` renders in the time domain (`pyFDN.process_fdn`), so the long ring is captured faithfully without the FFT wrap-around an nfft-length frequency-domain render would alias back onto the start.
     * **Reverb tail** -- a short homogeneous $T_{60}$, giving an audible decay.
     """)
     return
@@ -166,7 +166,7 @@ def _(fs, init_build, opt_build, pyFDN):
 
     def render(build, rt):
         """build (with homogeneous decay) -> peak-normalized 1-D impulse response."""
-        ir = pyFDN.build_impulse_response(
+        ir = pyFDN.build_to_impz(
             pyFDN.build_set_decay(build, rt), n_samples
         ).squeeze()
         # peak-normalize so the A/B compares timbre at matched level, not loudness.

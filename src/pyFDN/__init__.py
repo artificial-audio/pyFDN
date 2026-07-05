@@ -104,7 +104,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
-    "build_impulse_response",
+    "build_to_impz",
     "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
@@ -368,7 +368,7 @@ from .train import (
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
-from .translate.dss_to_impz import build_impulse_response, dss_to_impz
+from .translate.dss_to_impz import build_to_impz, dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_tf import dss_to_tf

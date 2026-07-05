@@ -55,7 +55,7 @@ def dss_to_impz(
     return np.stack(out_list, axis=-1)
 
 
-def build_impulse_response(build: FDNBuild, ir_len: int) -> np.ndarray:
+def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
     """Render an :class:`FDNBuild` to a time-domain impulse response.
 
     Time-domain sibling of the FLAMO render path (:func:`pyFDN.build_to_flamo`
@@ -94,7 +94,7 @@ def build_impulse_response(build: FDNBuild, ir_len: int) -> np.ndarray:
 
     if build.post_eq is not None:
         raise ValueError(
-            "build_impulse_response does not apply build.post_eq (output EQ); "
+            "build_to_impz does not apply build.post_eq (output EQ); "
             "use build_to_flamo + flamo_time_response for output-EQ builds."
         )
 
