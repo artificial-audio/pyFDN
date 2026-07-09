@@ -1,16 +1,10 @@
 """Tests for the generated examples gallery."""
 
-import sys
 from pathlib import Path
 
+from docs.example_gallery import OUTPUT_FILE, discover_examples, render_gallery
+ 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "docs"))
-
-from example_gallery import (  # noqa: E402
-    OUTPUT_FILE,
-    discover_examples,
-    render_gallery,
-)
 
 
 def test_gallery_is_up_to_date() -> None:
