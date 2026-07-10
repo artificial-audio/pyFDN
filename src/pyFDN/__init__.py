@@ -34,6 +34,8 @@ __all__ = [
     "flamo_freq_response",
     "flamo_process",
     "load_audio",
+    "load_sample",
+    "list_samples",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -202,7 +204,7 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .auxiliary.audio import load_audio
+from .auxiliary.audio import load_audio, load_sample, list_samples
 
 # delay utilities
 from .auxiliary.delay import (

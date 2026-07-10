@@ -100,7 +100,10 @@ def _(mo, np, pyFDN, sound_selection):
         synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
-        synth, fs = pyFDN.load_audio("synth_dry.wav")
+        # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
+        synth, fs = pyFDN.load_sample("synth_dry")
+
+
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))
@@ -109,6 +112,11 @@ def _(mo, np, pyFDN, sound_selection):
     _audio_src = synth.T if synth.ndim == 2 else synth
     mo.vstack([mo.audio(_audio_src, fs)])
     return fs, synth
+
+
+@app.cell
+def _():
+    return
 
 
 @app.cell(hide_code=True)
