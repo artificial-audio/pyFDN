@@ -1,38 +1,11 @@
 """Helpers for loading the audio files packaged with pyFDN."""
 
 from __future__ import annotations
-
 from importlib.resources import files
-
+from pathlib import Path
 import numpy as np
 
-SAMPLES = {
-    "synth_dry": {
-        "file": "general/synth_dry.wav",
-        "description": "",
-        "Source": "",
-    },
-    "speech1": {
-        "file": "speech/p008_emo_contentment_sentences.wav",
-        "description": "Human speech",
-        "Source": "Richter, J., Wu, Y.-C., Krenn, S., Welker, S., Lay, B., Watanabe, S., Richard, A., Gerkmann, T. (2024) EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation. Proc. Interspeech 2024, 4873-4877, doi: 10.21437/Interspeech.2024-153",
-    },
-    "drum1": {
-        "file": "drums/drum.wav",
-        "description": "Synthesized Drum",
-        "Source": "www.openairlib.net",
-    },
-    "string1": {
-        "file": "strings/cl-class-bb-arp-des-32.wav",
-        "description": "String Instrument",
-        "Source": "www.openairlib.net",
-    },
-    "wind": {
-        "file": "wind/tr-1967-ex1-32.wav",
-        "description": "Piccolo trumpet",
-        "Source": "www.openairlib.net",
-    },
-}
+AUDIO_SOURCE_DIR = Path(__file__).resolve().parent.parent / "audio"
 
 
 def load_audio(
@@ -92,7 +65,7 @@ def load_sample(
     Parameters
     ----------
     name : str
-        Name of the sample (e.g. ``"room_small"``).
+        Name of the sample (e.g. ``"synth_dry"``).
     fs : int, optional
         Target sampling rate. If given and different from the original
         sampling rate, the signal is resampled.
@@ -108,14 +81,15 @@ def load_sample(
     """
     import soundfile as sf
 
-    if name not in SAMPLES:
+    samples_dict = list_samples()
+    if name not in samples_dict:
         raise ValueError(
             f"Unknown sample '{name}'. "
-            f"Available samples: {list(SAMPLES.keys())}"
+            f"Available samples: {list(samples_dict.keys())}"
         )
 
-    filename = SAMPLES[name]["file"]
-    path = files("pyFDN.audio") / filename
+    relative_path = samples_dict[name]
+    path = files("pyFDN.audio") / relative_path
 
     with path.open("rb") as f:
         data, file_fs = sf.read(f, dtype="float64")
@@ -133,5 +107,17 @@ def load_sample(
     return data, file_fs
 
 
-def list_samples():
-    return SAMPLES.copy()
+def list_samples() -> dict[str, str]:
+    """Scan the audio folder and return a dictionary of file names to relative paths.
+    
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping file names to their relative paths within the audio folder.
+    """
+    samples = {}
+    for path in sorted(AUDIO_SOURCE_DIR.rglob("*.wav")):
+        relative = path.relative_to(AUDIO_SOURCE_DIR)
+        filename = path.stem  # Get the file name without extension
+        samples[filename] = relative.as_posix()
+    return samples
