@@ -94,8 +94,6 @@ FDN Design & Analysis
 
    * - `Colorless Fdn <_static/marimo/notebooks/example_colorless_FDN.html>`_
      - Open the rendered marimo notebook.
-   * - `Colorless FDN, trained in-notebook <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
-     - The companion to Colorless FDN, which loads pre-optimized parameters from ``.mat`` files. Here we run the optimization ourselves with ``pyFDN``'s training API, following "Differentiable Feedback Delay Network for Colorless Reverberation", Dal Santo, Prawda, Schlecht, Välimäki, DAFx23 (and its "tiny colorless FDN" follow-up):
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
      - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
    * - `Denser Reverberation with Delay Feedback Matrix <_static/marimo/notebooks/example_delay_matrix_density.html>`_
@@ -123,6 +121,8 @@ FDN Design & Analysis
    * - `Scattering Fdn <_static/marimo/notebooks/example_scattering_fdn.html>`_
      - Open the rendered marimo notebook.
    * - `Time Varying FDN <_static/marimo/notebooks/example_time_varying_fdn.html>`_
+     - Open the rendered marimo notebook.
+   * - `Train Colorless Fdn <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
      - Open the rendered marimo notebook.
 
 ----
