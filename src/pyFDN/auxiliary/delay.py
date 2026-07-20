@@ -59,8 +59,8 @@ def flamo_delay_feedback_matrix(
 
     target = model if inplace else copy.deepcopy(model)
     feedback_loop = target.get_core().branchA.feedback_loop
-    base_delay = feedback_loop.feedforward
-    feedback_matrix = feedback_loop.feedback
+    base_delay = feedback_loop.feedforward.delay
+    feedback_matrix = feedback_loop.feedback.mixing_matrix
 
     _assign_flamo_delay_samples(base_delay, delay_vectors[0])
     extra_delay_in = copy.deepcopy(base_delay)

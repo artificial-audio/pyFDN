@@ -28,7 +28,7 @@ def dss_to_flamo(
     A: np.ndarray,
     B: np.ndarray,
     C: np.ndarray,
-    D: np.ndarray,
+    D: np.ndarray | None,
     m: np.ndarray,
     Fs: float,
     nfft: int = 2**16,
@@ -55,8 +55,8 @@ def dss_to_flamo(
         Input gain.
     C : (num_out, N) array
         Output gain.
-    D : (num_out, num_in) array
-        Direct gain.
+    D : (num_out, num_in) array or None
+        Direct gain. ``None`` resolves to a zero ``(num_out, num_in)`` gain.
     m : (N,) array
         Delay lengths in samples (one per delay line).
     Fs : float
@@ -104,7 +104,11 @@ def dss_to_flamo(
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
     C = np.asarray(C, dtype=np.float64)
-    D = np.asarray(D, dtype=np.float64)
+    D = (
+        np.zeros((C.shape[0], B.shape[1]), dtype=np.float64)
+        if D is None
+        else np.asarray(D, dtype=np.float64)
+    )
     m = np.asarray(m, dtype=np.float64).ravel()
     N = A.shape[0]
     if m.shape[0] != N:

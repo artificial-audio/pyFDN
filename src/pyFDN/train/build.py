@@ -9,6 +9,7 @@ trainable flamo ``Shell`` you can render, train, and extract.
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -43,6 +44,7 @@ def build_fdn(
     output_gain: np.ndarray | None = None,
     direct: float | np.ndarray = 0.0,
     trainable: Trainable | None = None,
+    loop_filter: Any | None = None,
     fs: float = 48000.0,
     nfft: int = 2**14,
     output: str = "time",
@@ -71,6 +73,13 @@ def build_fdn(
         Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
         Trainable parameter groups (default :class:`Trainable`).
+    loop_filter : flamo dsp module, optional
+        A prebuilt flamo filter module to use as the in-loop attenuation filter
+        (its own ``requires_grad`` governs trainability). Must match the build:
+        ``loop_filter.param.shape[-1] == N`` and ``loop_filter.nfft == nfft``.
+        When given it overrides ``rt`` / sampled absorption for the loop slot;
+        pass ``rt=None`` to silence the override warning. See
+        :func:`trainable_from_build`.
     fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
         Seed for the sampled delays / default feedback matrix.
@@ -102,9 +111,7 @@ def build_fdn(
     else:
         a = _random_so_n(n, local_rng)
 
-    # Default IO is "normalized" (ones / sqrt(N)): puts the initial |H| near unity
-    # so a colorless objective starts well-conditioned. Override with input_gain/
-    # output_gain for other layouts.
+    # Default IO is ones / sqrt(N); override with input_gain / output_gain.
     b = (
         np.ones((n, 1)) / np.sqrt(n)
         if input_gain is None
@@ -118,8 +125,15 @@ def build_fdn(
     n_out, n_in = c.shape[0], b.shape[1]
     d = _resolve_direct(direct, n_out, n_in)
 
+    if loop_filter is not None and rt is not None:
+        warnings.warn(
+            f"loop_filter provided; rt={rt!r} is ignored for the in-loop filter "
+            "(pass rt=None to silence)",
+            stacklevel=2,
+        )
+
     filters = None
-    if rt is not None:
+    if rt is not None and loop_filter is None:
         from pyFDN.auxiliary.acoustics import first_order_absorption
 
         rt_dc, rt_ny = _rt_pair(rt)
@@ -138,6 +152,7 @@ def build_fdn(
     return trainable_from_build(
         build,
         trainable=trainable,
+        loop_filter=loop_filter,
         matrix=matrix,
         nfft=nfft,
         output=output,
@@ -150,6 +165,7 @@ def trainable_from_build(
     build: FDNBuild,
     *,
     trainable: Trainable | None = None,
+    loop_filter: Any | None = None,
     matrix: MatrixParam = "orthogonal",
     nfft: int = 2**14,
     output: str = "time",
@@ -165,6 +181,14 @@ def trainable_from_build(
         ``filters``/``post_eq``).
     trainable : Trainable, optional
         Trainable parameter groups (default :class:`Trainable`).
+    loop_filter : flamo dsp module, optional
+        A prebuilt flamo filter module placed in the in-loop attenuation slot.
+        Trainability comes from the module's own ``requires_grad`` (there is no
+        ``Trainable`` flag for it). Must satisfy ``loop_filter.param.shape[-1]``
+        ``== N`` (the number of delay lines) and ``loop_filter.nfft == nfft``.
+        When given it overrides ``build.filters`` for the loop slot;
+        :func:`pyFDN.extract_build` bakes a trained ``parallelSVF`` /
+        ``parallelSOSFilter`` back to ``FDNBuild.filters`` (other types raise).
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
     nfft : int
@@ -211,8 +235,6 @@ def trainable_from_build(
         dtype=dtype,
         requires_grad=trainable.feedback,
     )
-    # Direct path is ALWAYS wired (zero by default) so the same model serves any
-    # objective; the core is therefore a Parallel.
     direct_gain = gain_module(
         d, nfft, device=device, dtype=dtype, requires_grad=trainable.direct
     )
@@ -220,17 +242,23 @@ def trainable_from_build(
         np.asarray(build.delays, dtype=np.float64).ravel(), fs, nfft, device, dtype
     )
 
-    # In-loop absorption (decay) is a frozen build property.
-    loop_filter = (
-        sos_filter_module(
+    # A prebuilt loop_filter takes precedence over the build's SOS bank.
+    n = int(np.asarray(build.delays).ravel().size)
+    if loop_filter is not None:
+        loop_filter_module = _validated_loop_filter(loop_filter, n, nfft)
+        if build.filters is not None:
+            warnings.warn(
+                "loop_filter provided; build.filters is ignored", stacklevel=2
+            )
+    elif build.filters is not None:
+        loop_filter_module = sos_filter_module(
             np.asarray(build.filters, dtype=np.float64),
             nfft,
             device=device,
             dtype=dtype,
         )
-        if build.filters is not None
-        else None
-    )
+    else:
+        loop_filter_module = None
     output_filter = (
         sos_filter_module(
             np.asarray(build.post_eq, dtype=np.float64),
@@ -249,7 +277,7 @@ def trainable_from_build(
         delays=delays,
         output_gain=output_gain,
         direct=direct_gain,
-        loop_filter=loop_filter,
+        loop_filter=loop_filter_module,
         output_filter=output_filter,
     )
     return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, output=output)
@@ -274,6 +302,24 @@ def build_set_decay(
         rt_dc, rt_ny, np.asarray(build.delays), float(build.fs), rt_crossover
     )
     return dataclasses.replace(build, filters=filters)
+
+
+def _validated_loop_filter(loop_filter: Any, n: int, nfft: int) -> Any:
+    """Return ``loop_filter`` after checking its channel count and ``nfft`` match
+    the FDN (``N`` delay lines, FFT size ``nfft``)."""
+    param = getattr(loop_filter, "param", None)
+    n_ch = int(param.shape[-1]) if param is not None else None
+    if n_ch != n:
+        raise ValueError(
+            f"loop_filter operates on {n_ch} channels but the FDN has {n} "
+            "delay lines"
+        )
+    lf_nfft = getattr(loop_filter, "nfft", None)
+    if lf_nfft is None or int(lf_nfft) != int(nfft):
+        raise ValueError(
+            f"loop_filter nfft={lf_nfft} must match the build nfft={nfft}"
+        )
+    return loop_filter
 
 
 def _rt_pair(rt: float | tuple[float, float]) -> tuple[float, float]:
