@@ -3,12 +3,17 @@ the paraunitary / scattering / pole-boundary examples)."""
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
 import pyFDN
 from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
+from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.train import build_set_decay
+from pyFDN.translate.dss_to_impz import build_to_impz, dss_to_impz
 
 FDNFixture = dict[str, np.ndarray]
 
@@ -209,3 +214,53 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
         :ir_len
     ]
     np.testing.assert_allclose(ir_eq, sosfilt(eq_sos, ir_plain), atol=1e-8)
+
+
+# ============================================================================
+# build_to_impz (build -> time-domain IR via process_fdn)
+# ============================================================================
+
+
+def _siso_build(filters: np.ndarray | None = None) -> FDNBuild:
+    n = 4
+    return FDNBuild(
+        A=pyFDN.random_orthogonal(n),
+        B=np.ones((n, 1)),
+        C=np.ones((1, n)),
+        D=np.zeros((1, 1)),
+        delays=np.array([101, 143, 165, 177]),
+        fs=48000.0,
+        filters=filters,
+    )
+
+
+def test_build_to_impz_lossless_matches_dss_to_impz() -> None:
+    np.random.seed(3)
+    build = _siso_build()  # filters=None -> no absorption
+    ir_len = 4096
+    got = build_to_impz(build, ir_len)
+    ref = dss_to_impz(ir_len, build.delays, build.A, build.B, build.C, build.D)
+    assert got.shape == (ir_len, 1, 1)
+    np.testing.assert_allclose(got, ref)
+
+
+def test_build_to_impz_applies_absorption_decay() -> None:
+    np.random.seed(3)
+    lossless = _siso_build()
+    decayed = build_set_decay(lossless, 0.3)
+    assert decayed.filters is not None
+
+    ir_len = 16384
+    ir_loss = build_to_impz(lossless, ir_len).squeeze()
+    ir_dec = build_to_impz(decayed, ir_len).squeeze()
+
+    # A lossless orthogonal FDN rings on; a 0.3 s RT is nearly gone by the
+    # second half of the buffer, so its tail energy is far lower.
+    tail = slice(ir_len // 2, None)
+    assert np.sum(ir_dec[tail] ** 2) < 1e-2 * np.sum(ir_loss[tail] ** 2)
+
+
+def test_build_to_impz_rejects_post_eq() -> None:
+    build = dataclasses.replace(_siso_build(), post_eq=np.zeros((1, 6, 1)))
+    with pytest.raises(ValueError, match="post_eq"):
+        build_to_impz(build, 128)

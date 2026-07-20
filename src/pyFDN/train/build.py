@@ -255,7 +255,7 @@ def trainable_from_build(
     return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, output=output)
 
 
-def with_decay(
+def build_set_decay(
     build: FDNBuild,
     rt: float | tuple[float, float],
     *,
@@ -277,7 +277,7 @@ def with_decay(
 
 
 def _rt_pair(rt: float | tuple[float, float]) -> tuple[float, float]:
-    if isinstance(rt, (tuple, list)):
+    if isinstance(rt, tuple | list):
         return float(rt[0]), float(rt[1])
     return float(rt), float(rt)
 

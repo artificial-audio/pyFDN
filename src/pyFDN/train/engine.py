@@ -91,7 +91,6 @@ def train_fdn(
         Checkpoint directory (used when ``log=True``).
     """
     import torch
-
     from flamo.optimize.trainer import EagerTrainer
 
     from pyFDN.auxiliary.flamo import output_layer
@@ -125,6 +124,7 @@ def train_fdn(
     # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
     save_checkpoints = log and train_dir is not None
     if save_checkpoints:
+        assert train_dir is not None  # implied by save_checkpoints
         os.makedirs(train_dir, exist_ok=True)
     trainer = EagerTrainer(
         model,
@@ -146,9 +146,7 @@ def train_fdn(
     steps_run = len(train_loss)
     return TrainLog(
         train_loss=train_loss,
-        loss_log={
-            k: [float(x) for x in v] for k, v in history.items() if k != "total"
-        },
+        loss_log={k: [float(x) for x in v] for k, v in history.items() if k != "total"},
         steps_run=steps_run,
         stopped_early=steps_run < max_steps,
     )
@@ -182,5 +180,3 @@ def _model_info(model: Any) -> tuple[int, int, float]:
         int(_gain("output_gain").param.shape[0]),
         fs,
     )
-
-

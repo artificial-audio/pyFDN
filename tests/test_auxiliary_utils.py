@@ -15,6 +15,7 @@ from pyFDN.auxiliary.delay import ms_to_smp
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
 from pyFDN.auxiliary.utils import (
     ensure_3d,
+    fade_out,
     hertz_to_unit,
     is_bounding_curve,
     last_nonzero_indices,
@@ -273,3 +274,35 @@ def test_max_corr_zero_signal_yields_zero_row():
     M = max_corr(signals)
     assert M[0, 1] == 0.0
     assert M[1, 1] == 0.0
+
+
+# ============================================================================
+# fade_out
+# ============================================================================
+
+
+def test_fade_out_ramps_tail_to_zero_and_leaves_head():
+    x = np.ones(100)
+    y = fade_out(x, 10)
+    np.testing.assert_array_equal(y[:90], 1.0)  # head untouched
+    np.testing.assert_allclose(y[90:], np.linspace(1.0, 0.0, 10))
+    assert y[-1] == 0.0
+    np.testing.assert_array_equal(x, np.ones(100))  # input not mutated
+
+
+def test_fade_out_clamps_to_length_and_noops_on_nonpositive():
+    x = np.arange(5, dtype=float)
+    # fade longer than the signal clamps to the full length
+    np.testing.assert_allclose(fade_out(x, 999), x * np.linspace(1.0, 0.0, 5))
+    # a non-positive fade returns an unmodified copy (not the same object)
+    y = fade_out(x, 0)
+    np.testing.assert_array_equal(y, x)
+    assert y is not x
+
+
+def test_fade_out_applies_along_last_axis():
+    y = fade_out(np.ones((3, 8)), 4)
+    ramp = np.linspace(1.0, 0.0, 4)
+    for row in y:
+        np.testing.assert_array_equal(row[:4], 1.0)
+        np.testing.assert_allclose(row[4:], ramp)

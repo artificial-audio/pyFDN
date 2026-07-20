@@ -11,7 +11,13 @@
 
 from __future__ import annotations
 
-from .build import MatrixParam, Trainable, build_fdn, trainable_from_build, with_decay
+from .build import (
+    MatrixParam,
+    Trainable,
+    build_fdn,
+    build_set_decay,
+    trainable_from_build,
+)
 from .engine import TrainLog, train_fdn
 from .objectives import Objective
 
@@ -19,7 +25,7 @@ __all__ = [
     # build
     "build_fdn",
     "trainable_from_build",
-    "with_decay",
+    "build_set_decay",
     "Trainable",
     "MatrixParam",
     # train

@@ -175,6 +175,29 @@ def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
     return x
 
 
+def fade_out(x: ArrayLike, fade_samples: int) -> np.ndarray:
+    """Apply a linear fade-out over the last ``fade_samples`` samples.
+
+    Ramps the tail of ``x`` linearly from 1 to 0 along the last axis, so a
+    finite render can end at zero instead of clicking on an abrupt cutoff.
+
+    Args:
+        x: Input signal; the fade is applied along the last axis.
+        fade_samples: Number of trailing samples to ramp down. Clamped to the
+            signal length; values <= 0 leave the signal unchanged.
+
+    Returns:
+        Faded copy of ``x`` (float), same shape as the input. ``x`` is not
+        modified in place.
+    """
+    x = np.asarray(x, dtype=float).copy()
+    k = int(min(fade_samples, x.shape[-1]))
+    if k <= 0:
+        return x
+    x[..., -k:] *= np.linspace(1.0, 0.0, k)
+    return x
+
+
 def hertz_to_unit(hz: ArrayLike, fs: float) -> np.ndarray:
     """Convert frequency (Hz) to normalised frequency (0-1)."""
     return np.asarray(hz) / fs * 2

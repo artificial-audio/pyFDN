@@ -172,6 +172,7 @@ General Utilities
    pyFDN.lin_to_db
    pyFDN.sq_to_db
    pyFDN.ensure_3d
+   pyFDN.fade_out
    pyFDN.hertz_to_unit
    pyFDN.hertz_to_rad
    pyFDN.rad_to_hertz
@@ -194,6 +195,7 @@ State-Space Translators
 
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
+   pyFDN.build_to_impz
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
@@ -225,7 +227,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
-   pyFDN.with_decay
+   pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
@@ -251,6 +253,15 @@ Plotting
    pyFDN.downsampled_scatter
    pyFDN.downsample_minmax
    pyFDN.downsample_plotly_trace
+
+Notebook Display
+----------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.labeled_audio
 
 FLAMO Graph
 -----------

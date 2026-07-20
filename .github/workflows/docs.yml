@@ -61,17 +61,14 @@ jobs:
         working-directory: docs
         run: make html
 
-      # Save built docs as an artifact for later deployment.
-      # Only needed to hand off to the deploy-docs job, which runs on
-      # push/workflow_dispatch to main — so skip the upload on PRs, and keep
-      # retention short since it only has to survive the same workflow run.
-      - name: Upload built docs artifact
+      # Upload the built docs as the GitHub Pages artifact.
+      # deploy-pages@v4 consumes exactly this one "github-pages" artifact, so we
+      # skip it on PRs (the deploy job below only runs on push/dispatch to main).
+      - name: Upload Pages artifact
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: docs-html
           path: docs/_build/html
-          retention-days: 1
 
   deploy-docs:
     runs-on: ubuntu-latest
@@ -82,28 +79,15 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Configure Pages
+      # Configure Pages (enables Pages + sets source to GitHub Actions)
       - name: Setup Pages
         uses: actions/configure-pages@v4
         with:
           enablement: true
 
-      # Download the built docs from the previous job
-      - name: Download docs artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docs-html
-          path: docs/_build/html
-
-      # Upload artifact for GitHub Pages
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/_build/html
-
-      # Deploy to GitHub Pages
+      # Deploy the artifact built above to GitHub Pages.
+      # No token: deploy-pages@v4 authenticates via the OIDC id-token (see the
+      # id-token: write permission above); passing GITHUB_TOKEN breaks that path.
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
