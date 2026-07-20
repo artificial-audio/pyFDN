@@ -48,6 +48,7 @@ test = [
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
+    "bibtexparser",
 ]
 dev = [
     "pyFDN[test]",  # everything from [test] (and transitively [examples])
