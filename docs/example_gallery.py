@@ -106,7 +106,14 @@ def discover_examples() -> list[Example]:
     examples = []
     for path in sorted(EXAMPLES_DIR.rglob("example_*.py")):
         title, description = _title_and_description(path)
-        examples.append(Example(path, title, description, _required_category(path)))
+        examples.append(
+            Example(
+                path,
+                title,
+                description,
+                _required_category(path),
+                )
+            )
     return examples
 
 

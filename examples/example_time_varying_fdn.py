@@ -10,7 +10,9 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    return (mo,)
+    from docs.references import paper_link
+
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -21,20 +23,16 @@ def _(mo):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    Example for time-varying matrices.<br/>
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
+    Example for time-varying matrices. <br/>
     Process a musical sound with a time-varying FDN reverberation. Different
     options include slow and fast time-variation.
 
+    Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
+    Reference: *{paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
 
-    Reference: *Schlecht and Habets 2015 : "Practical Considerations of Time-Varying
-    Feedback Delay Networks"* <br/>
-    Reference: *Schlecht and Habets 2015 : "Time-varying feedback matrices in feedback delay networks
-    and their application in artificial reverberation"*
-
-    Original MATLAB: Sebastian J. Schlecht, Saturday, 28 December 2019
     """)
     return
 

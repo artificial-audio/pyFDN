@@ -48,6 +48,7 @@ test = [
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
+    "bibtexparser",
 ]
 dev = [
     "pyFDN[test]",  # everything from [test] (and transitively [examples])
@@ -73,6 +74,7 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
+    "bibtexparser",
 ]
 
 [project.urls]
@@ -80,11 +82,9 @@ bugs = "https://github.com/artificial-audio/pyFDN/issues"
 changelog = "https://github.com/artificial-audio/pyFDN/releases"
 homepage = "https://github.com/artificial-audio/pyFDN"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
 [tool.setuptools.packages.find]
-where = ["src"]
+where = [".", "src"]
+include = ["docs*", "pyFDN*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.*"]
