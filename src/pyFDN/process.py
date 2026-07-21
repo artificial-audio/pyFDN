@@ -10,6 +10,7 @@ from numpy.typing import ArrayLike
 from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 from pyFDN.dsp.feedback_delay import FeedbackDelay
 
+
 def process_fdn(
     input_signal: ArrayLike,
     delays: ArrayLike,
