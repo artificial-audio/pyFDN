@@ -161,7 +161,7 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_fdn(impulse, delays, A, B, C, D, absorption=absorption)
+    ir_td = pyFDN.process_fdn(impulse, delays, A, B, C, D, post_delay=absorption)
 
     model = pyFDN.dss_to_flamo(
         A,

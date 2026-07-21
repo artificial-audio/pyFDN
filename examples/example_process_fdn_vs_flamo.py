@@ -185,7 +185,7 @@ def _(
         input_gain,
         output_gain,
         direct,
-        absorption=absorption,
+        post_delay=absorption,
     )
 
     model = pyFDN.dss_to_flamo(
