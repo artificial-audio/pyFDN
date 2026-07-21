@@ -112,8 +112,8 @@ def discover_examples() -> list[Example]:
                 title,
                 description,
                 _required_category(path),
-                )
             )
+        )
     return examples
 
 

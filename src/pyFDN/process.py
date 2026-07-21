@@ -9,7 +9,6 @@ from numpy.typing import ArrayLike
 
 from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 from pyFDN.dsp.feedback_delay import FeedbackDelay
-from pyFDN.dsp.sos_filter_bank import SOSFilterBank
 
 
 def process_fdn(
@@ -20,14 +19,16 @@ def process_fdn(
     C: ArrayLike,
     D: ArrayLike,
     *,
-    absorption: SOSFilterBank | None = None,
-    extra_matrix: Any | None = None,
+    post_delay: Any | None = None,
+    post_matrix: Any | None = None,
+    post_output: Any | None = None,
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
 
     Recursion per block (same ordering as the MATLAB ``processFDN``):
-    delay output -> absorption filters -> output gains C, and in the feedback
-    path: absorbed delay output -> feedback matrix A -> extra matrix -> + B input.
+    delay output -> optional post-delay filter -> output gains C, and in the feedback
+    path: absorbed delay output -> feedback matrix A -> optional post-matrix filter -> + B input.
+    The wet signal is processed with an optional post-output filter before being added to the direct signal.
 
     Parameters
     ----------
@@ -40,12 +41,15 @@ def process_fdn(
         z^{-1} convention.
     B, C, D : array
         Static input, output, and direct gains.
-    absorption : object, optional
-        Per-delay-line SOS filters; see :class:`pyFDN.dsp.SOSFilterBank` for
-        accepted shapes. Applied to the delay outputs inside the loop.
-    extra_matrix : object, optional
-        Object with a ``filter(block) -> block`` method applied after the
-        feedback matrix (e.g. ``TimeVaryingMatrix``).
+    post_delay : object or None, optional
+        An optional filter applied to the delay output before feedback processing.
+        Must implement a `filter` method that accepts and processes the delay output.
+    post_matrix : object or None, optional
+        An optional filter applied to the feedback signal after the feedback matrix
+        multiplication. Must implement a `filter` method that accepts and processes the feedback signal.
+    post_output : object or None, optional
+        An optional filter applied to the wet signal (output signal) before it is
+        added to the direct signal. Must implement a `filter` method that accepts and processes the wet signal.
 
     Returns
     -------
@@ -87,19 +91,23 @@ def process_fdn(
         block_in = x[start : start + block_size, :]
 
         delay_out = delay_bank.get_values(block_size)  # (block, N)
-        if absorption is not None:
-            delay_out = absorption.filter(delay_out)
+        if post_delay is not None:
+            delay_out = post_delay.filter(delay_out)
 
         if feedback_filter is not None:
             feedback = feedback_filter.filter(delay_out)
         else:
             feedback = delay_out @ A_mat.T
-        if extra_matrix is not None:
-            feedback = extra_matrix.filter(feedback)
+        if post_matrix is not None:
+            feedback = post_matrix.filter(feedback)
+
+        wet_signal = delay_out @ C_mat.T
+        if post_output is not None:
+            wet_signal = post_output.filter(wet_signal)
 
         delay_bank.set_values(block_in @ B_mat.T + feedback)
 
-        output[start : start + block_size] = delay_out @ C_mat.T + block_in @ D_mat.T
+        output[start : start + block_size] = wet_signal + block_in @ D_mat.T
         delay_bank.advance(block_size)
         start += block_size
 
