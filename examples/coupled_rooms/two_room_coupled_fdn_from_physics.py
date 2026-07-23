@@ -14,8 +14,9 @@ def _():
     from numpy.typing import NDArray
 
     import pyFDN
+    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
-    return NDArray, Optional, block_diag, mo, np, plt, pyFDN
+    return NDArray, Optional, TimeVaryingMatrix, block_diag, mo, np, plt, pyFDN
 
 
 @app.cell
@@ -204,8 +205,10 @@ def _(
     N1,
     N2,
     NDArray,
+    Ntot,
     Optional,
     R_room,
+    TimeVaryingMatrix,
     block_diag,
     delays,
     fs,
@@ -217,8 +220,18 @@ def _(
 ):
     # --- Lift into the full GFDN feedback matrix --------------------------------
     np.random.seed(12343)
+    # time varying matrix for faster mixing
+    modulation_frequency = 1.0  # hz
+    modulation_amplitude = 3.0
+    spread = 0.3
+    tv_matrix = TimeVaryingMatrix(
+            Ntot, modulation_frequency, modulation_amplitude, fs, spread
+        )
+
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2))
+
+
 
     def compensating_matrix():
         rho = np.sqrt(ratio_mismatch)
@@ -244,7 +257,7 @@ def _(
     Gamma = block_diag(Gamma1, Gamma2)
     D = compensating_matrix()
 
-    A = get_feedback_matrix(D)
+    A = get_feedback_matrix()
     A_lossy = A @ Gamma 
     _ok = pyFDN.is_unilossless(A)
 
@@ -256,11 +269,24 @@ def _(
     $\mathbf R_{{\rm room}}$ differs. `is_unilossless`: = **{_ok}**
     (both should be `True` — pure exchange, no absorption).
     """)
-    return A, A_lossy
+    return A, A_lossy, tv_matrix
 
 
 @app.cell
-def _(A, A_lossy, N1, N2, Ntot, delays, dur, fs, np, num_rooms, pyFDN):
+def _(
+    A,
+    A_lossy,
+    N1,
+    N2,
+    Ntot,
+    delays,
+    dur,
+    fs,
+    np,
+    num_rooms,
+    pyFDN,
+    tv_matrix,
+):
     # --- Impulse responses + exact per-room energy ledger, all rooms excited equally -----
     n_samp = int(dur.value * fs)
     B = np.zeros((Ntot, num_rooms))
@@ -277,7 +303,8 @@ def _(A, A_lossy, N1, N2, Ntot, delays, dur, fs, np, num_rooms, pyFDN):
             _x[:] = 0.0
             _x[0, _src] = 1.0
             Y[_src] = pyFDN.process_fdn(_x, delays, A, B, C_lines,
-                                        np.zeros((Ntot, num_rooms)))
+                                        np.zeros((Ntot, num_rooms)), 
+                                        extra_matrix=tv_matrix)
         return Y
 
     Y = run(A)
@@ -319,8 +346,8 @@ def _(NDArray, Optional, Q, fs, gamma, n_ex, n_samp, np, num_rooms):
         return np.einsum("ik,tk->ti", Vv, modes * coeffs[None, :])
 
     rate_s = 1.0 / fs
-    Eref = trajectory(Q)
-    Eref_lossy = trajectory(Q, gamma)
+    Eref = trajectory(Q, _src=1)
+    Eref_lossy = trajectory(Q, gamma, _src=1)
     return Eref, Eref_lossy
 
 
@@ -352,7 +379,7 @@ def _(
             _axs, [E_ex, db(E_ex_lossy)], [Eref, db(Eref_lossy)],["Lossless", "Lossy"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
-                     _Eex[0, :, _r],
+                     _Eex[1, :, _r],
                      color=_colors[_r],
                      lw=1.1,
                      label=f"GFDN {_labels[_r]}")
@@ -460,6 +487,54 @@ def _(N1, Y, Y_lossy, mo, np, num_rooms, plt, tsec):
     return h_mic, h_mic_lossy
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Lossless IRs
+    """)
+    return
+
+
+@app.cell
+def _(fs, h_mic, mo, num_rooms):
+    mo.vstack(
+        [
+        [
+            mo.vstack(
+                [mo.md(f"src={_src}, rec={_rec}"), mo.audio(src=h_mic[_src, :, _rec].T, rate=fs)]
+            )
+            for _rec in range(num_rooms)
+            for _src in range(num_rooms)
+        ]
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Lossy IRs
+    """)
+    return
+
+
+@app.cell
+def _(fs, h_mic_lossy, mo, num_rooms):
+    mo.vstack(
+        [
+            [
+                mo.vstack(
+                    [mo.md(f"src={_src}, rec={_rec}"), mo.audio(src=h_mic_lossy[_src, :, _rec].T, rate=fs)]
+                )
+                for _src in range(num_rooms)
+                for _rec in range(num_rooms)
+            ]
+        ]
+    )
+    return
+
+
 @app.cell
 def _(db, h_mic, h_mic_lossy, mo, num_rooms, plt, pyFDN, tsec):
     _fig, _axs = plt.subplots(2, 2, figsize=(8, 4.6), sharex=True, sharey=True)
@@ -476,6 +551,7 @@ def _(db, h_mic, h_mic_lossy, mo, num_rooms, plt, pyFDN, tsec):
     for _ax in _axs[:, 0]:
         _ax.set_ylabel("$h(t)$")
     _axs[0, 0].set_ylim(-100, 20)
+    _axs[0,0].legend(['Lossless', 'Lossy'])
     _fig.suptitle("Four lossless + lossy EDCs (first %.0f ms)" % (_tmax * 1000), fontsize=10)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)

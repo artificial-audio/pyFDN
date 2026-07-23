@@ -12,8 +12,9 @@ def _():
     from scipy.linalg import block_diag, expm
 
     import pyFDN
+    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
-    return block_diag, expm, mo, np, plt, pyFDN
+    return TimeVaryingMatrix, block_diag, expm, mo, np, plt, pyFDN
 
 
 @app.cell
@@ -29,7 +30,7 @@ def _(mo):
     Pipeline: physical dimensions $\to$ Cremer–Müller generator $\mathbf Q$ $\to$ pairwise angles
     $\theta_{ij}$ (rate-matched via each room's own clock $\Delta t_i\propto V_i$) $\to$ skew-symmetric
     $\mathbf K\to\mathbf R_{\rm room}=\exp(\mathbf K)\to$ lifted into the full GFDN feedback matrix
-    $\mathbf A=\bigl[\mathbf I+\mathbf U(\mathbf R_{\rm room}-\mathbf I)\mathbf U^{\mathsf T}\bigr]\operatorname{blkdiag}(\mathbf Q_1,\mathbf Q_2,\mathbf Q_3)$.
+    $\mathbf A=\bigl[\mathbf R_{\rm room} \otimes I_{N_{tot} / N}]\operatorname{blkdiag}(\mathbf Q_1,\mathbf Q_2,\mathbf Q_3)$.
     We then compare the GFDN's **exact** per-line energy ledger against $\mathbf e(t)=e^{t\mathbf Q}\mathbf e(0)$,
     the true physical energy trajectory — for both topologies, side by side.
     """)
@@ -83,8 +84,8 @@ def _(mo):
 
 
     dur = mo.ui.slider(0.5,
-                       4.0,
-                       value=2.0,
+                       10.0,
+                       value=5.0,
                        step=0.25,
                        label="impulse‑response length (s)")
     mo.md(
@@ -239,6 +240,7 @@ def _(
     Ntot,
     R_room_chain,
     R_room_complete,
+    TimeVaryingMatrix,
     block_diag,
     delays_per_fdn,
     fs,
@@ -249,6 +251,15 @@ def _(
     pyFDN,
 ):
     np.random.seed(1)
+
+    # time varying matrix for faster mixing
+    modulation_frequency = 1.0  # hz
+    modulation_amplitude = 3.0
+    spread = 0.3
+    tv_matrix = TimeVaryingMatrix(
+            Ntot, modulation_frequency, modulation_amplitude, fs, spread
+        )
+
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2),
                          pyFDN.random_orthogonal(N3))
@@ -301,7 +312,7 @@ def _(
     $\mathbf R_{{\rm room}}$ differs. `is_unilossless`: chain = **{_ok_chain}**, complete = **{_ok_complete}**
     (both should be `True` — pure exchange, no absorption).
     """)
-    return A_chain, A_chain_lossy, A_complete, A_complete_lossy
+    return A_chain, A_chain_lossy, A_complete, A_complete_lossy, tv_matrix
 
 
 @app.cell
@@ -320,6 +331,7 @@ def _(
     np,
     num_rooms,
     pyFDN,
+    tv_matrix,
 ):
     # --- Impulse responses + exact per-room energy ledger, all rooms excited equally -----
     n_samp = int(dur.value * fs)
@@ -336,7 +348,7 @@ def _(
         for _src in range(num_rooms):
             _x[:] = 0.0
             _x[0, _src] = 1.0
-            Y[_src] = pyFDN.process_fdn(_x, delays, A, B, C_lines, np.zeros((Ntot, num_rooms)))
+            Y[_src] = pyFDN.process_fdn(_x, delays, A, B, C_lines, np.zeros((Ntot, num_rooms)), extra_matrix=tv_matrix)
         return Y 
 
     Y_chain = run(A_chain)
@@ -393,7 +405,6 @@ def _(Q_chain, Q_complete, gamma, n_ex, np, tsec):
 
     Eref_complete = trajectory(Q_complete)
     Eref_complete_lossy = trajectory(Q_complete, gamma)
-
     return Eref_chain, Eref_chain_lossy, Eref_complete, Eref_complete_lossy
 
 
@@ -598,7 +609,7 @@ def _(
         tmp = np.log10(np.abs(_Y) + 1e-10)
         return 10*tmp if is_energy_signal else 20*tmp
 
-    
+
     _fig, _axs = plt.subplots(3, 3, figsize=(8, 6.6), sharex=True, sharey=True)
     _tmax =  tsec[-1]
     _nmax = int(_tmax * len(tsec) / tsec[-1])
