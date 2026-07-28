@@ -9,14 +9,36 @@ def _():
     import marimo as mo
     import numpy as np
     import matplotlib.pyplot as plt
-    from scipy.linalg import block_diag, expm
+    from scipy.linalg import block_diag
     from typing import Optional
     from numpy.typing import NDArray
 
     import pyFDN
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
+    from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
+                                                        trajectory, trajectory_with_delays,
+                                                        make_theta, make_K, get_decay_matrix, get_feedback_matrix,
+                                                        run_gfdn, gfdn_ledger)
 
-    return NDArray, Optional, TimeVaryingMatrix, block_diag, mo, np, plt, pyFDN
+    return (
+        NDArray,
+        TimeVaryingMatrix,
+        block_diag,
+        get_decay_matrix,
+        get_feedback_matrix,
+        gfdn_ledger,
+        make_K,
+        make_Q,
+        make_beta,
+        make_gamma,
+        make_theta,
+        mo,
+        np,
+        plt,
+        pyFDN,
+        run_gfdn,
+        trajectory,
+    )
 
 
 @app.cell
@@ -75,34 +97,20 @@ def _(mo):
 
 
 @app.cell
-def _(S12, V1, V2, a1, a2, mo, np):
+def _(S12, V1, V2, a1, a2, make_Q, make_beta, make_gamma, mo, np):
     # --- Cremer-Muller generators for the two topologies -----------------------
     c = 343.0
     V = np.array([V1.value, V2.value])
     absorp = np.array([a1.value, a2.value])
     num_rooms = 2
 
-    def make_beta(S, V):
-        beta = c * S / (4.0 * V[:, None])
-        np.fill_diagonal(beta, 0.0)
-        return beta
-
-    def make_gamma(absorp, A, V):
-        gamma = (c * absorp * A) / (4 * V)
-        return np.diag(gamma)
-
-    def make_Q(beta):
-        Q = beta.T.copy()
-        np.fill_diagonal(Q, -beta.sum(axis=1))
-        return Q
-
     S = np.array([[0, S12.value], [S12.value, 0]])
     beta = make_beta(S, V)
     Q = make_Q(beta)
 
     # assuming a perfect cube
-    _A = 6 * (np.cbrt(V)**2)
-    gamma = make_gamma(absorp, _A, V)
+    _A = 6 * (np.cbrt(V)**2) * absorp
+    gamma = make_gamma(_A, V)
 
     mo.md(rf"""
     ## 0 · Physical generators
@@ -134,6 +142,7 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
         N1, (int(M_avg * 0.5 * gscale), int(M_avg * 1.5 * gscale)), coprime=True, rng=331
     )
     delays = np.concatenate([d1, d2]).astype(int)
+    delays_per_fdn = np.asarray([delays[:N1], delays[N1:]], dtype=np.int32)
     M1, M2 = int(d1.sum()), int(d2.sum())
     M = [M1, M2]
     ratio_mismatch = (V[0] / V[1]) / (M1 / M2)
@@ -152,29 +161,12 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
     | Ratio mismatch| {ratio_mismatch:.4f} |
     | $\Delta t_i=M_i/(N_if_s)$ | {dt_i[0]*1000:.3f} ms | {dt_i[1]*1000:.3f} ms | 
     """)
-    return N1, N2, Ntot, delays, dt_i, fs, ratio_mismatch
+    return N1, N2, Ntot, delays, delays_per_fdn, dt_i, fs, ratio_mismatch
 
 
 @app.cell
-def _(beta, dt_i, mo, np, num_rooms):
-    # --- Pairwise angles, K, R_room for both topologies -------------------------
-    def make_theta(beta):
-        n = len(dt_i)
-        theta = np.zeros((n, n))
-        for _i in range(n):
-            for _j in range(_i + 1, n):
-                # val = 0.5 * (beta[_i, _j] * dt_i[_i] + beta[_j, _i] * dt_i[_j])
-                val = 0.5 * (1 - np.exp(-(beta[_i, _j] * dt_i[_i] + beta[_j, _i] * dt_i[_j])))
-                val = min(val, 0.999)
-                theta[_i, _j] = theta[_j, _i] = np.arcsin(
-                    np.sqrt(val)) if val > 0 else 0.0
-        return theta
-
-    def make_K(theta):
-        tri = np.triu(theta, 1)
-        return tri - tri.T
-
-    theta = make_theta(beta)
+def _(beta, dt_i, make_K, make_theta, mo, np, num_rooms):
+    theta = make_theta(beta, dt_i)
     K = make_K(theta)
     R_room = np.array([[np.cos(theta[0,1]), np.sin(theta[0, 1])],[-np.sin(theta[1, 0]), np.cos(theta[1, 0])]])
 
@@ -204,15 +196,15 @@ def _(beta, dt_i, mo, np, num_rooms):
 def _(
     N1,
     N2,
-    NDArray,
     Ntot,
-    Optional,
     R_room,
     TimeVaryingMatrix,
     block_diag,
-    delays,
+    delays_per_fdn,
     fs,
     gamma,
+    get_decay_matrix,
+    get_feedback_matrix,
     mo,
     np,
     pyFDN,
@@ -231,33 +223,15 @@ def _(
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2))
 
-
-
     def compensating_matrix():
         rho = np.sqrt(ratio_mismatch)
         return block_diag(rho * np.eye(N1), np.eye(N2))
 
-    def get_decay(_gamma, _M):
-        return np.diag(np.exp(-_gamma * _M / (2 * fs)))
 
-    def lift(R_room):
-        R_lift = np.block([[R_room[0, 0] * np.eye(N1), R_room[0, 1] * np.eye(N1)],
-                      [R_room[1,0] * np.eye(N2), R_room[1, 1] * np.eye(N2)]])
-        return R_lift
-
-    def get_feedback_matrix(D: Optional[NDArray] = None):
-        if D is None:
-            return lift(R_room) @ Qblocks
-        else:
-            return D @ lift(R_room) @ np.linalg.inv(D) @ Qblocks
-
-
-    Gamma1 = get_decay(gamma[0, 0], delays[:N1])
-    Gamma2 = get_decay(gamma[1, 1], delays[N1:])
-    Gamma = block_diag(Gamma1, Gamma2)
+    Gamma = get_decay_matrix(gamma, delays_per_fdn, fs)
     D = compensating_matrix()
 
-    A = get_feedback_matrix()
+    A = get_feedback_matrix(R_room, Qblocks, N1)
     A_lossy = A @ Gamma 
     _ok = pyFDN.is_unilossless(A)
 
@@ -282,9 +256,10 @@ def _(
     delays,
     dur,
     fs,
+    gfdn_ledger,
     np,
     num_rooms,
-    pyFDN,
+    run_gfdn,
     tv_matrix,
 ):
     # --- Impulse responses + exact per-room energy ledger, all rooms excited equally -----
@@ -295,60 +270,22 @@ def _(
 
     # output taken from all rooms
     C_lines = np.eye(Ntot)
+    Y = run_gfdn(A, B, C_lines, delays, n_samp, _src=[0, 1], tv_matrix=tv_matrix)
+    Y_lossy = run_gfdn(A_lossy, B, C_lines, delays, n_samp, _src=[0, 1], tv_matrix=tv_matrix)
 
-    def run(A):
-        Y = np.zeros((num_rooms, n_samp, Ntot))
-        _x = np.zeros((n_samp, num_rooms))
-        for _src in range(num_rooms):
-            _x[:] = 0.0
-            _x[0, _src] = 1.0
-            Y[_src] = pyFDN.process_fdn(_x, delays, A, B, C_lines,
-                                        np.zeros((Ntot, num_rooms)), 
-                                        extra_matrix=tv_matrix)
-        return Y
+    E_ex, n_ex = gfdn_ledger(Y, num_rooms, N1, delays)
+    E_ex_lossy, _ = gfdn_ledger(Y_lossy, num_rooms, N1, delays)
 
-    Y = run(A)
-    Y_lossy = run(A_lossy)
-
-    def ledger(Y):
-        cs = np.concatenate(
-            [np.zeros((num_rooms, 1, Ntot)),
-             np.cumsum(Y**2, axis=1)], axis=1)
-        n_ex = n_samp - int(delays.max()) - 1
-        idx = np.arange(n_ex)
-        E = np.zeros((num_rooms, n_ex, num_rooms))
-        bounds = [0, N1, N1 + N2]
-        for _j, _m in enumerate(delays):
-            _room = 0 if _j < bounds[1] else 1
-            E[:, :, _room] += cs[:, idx + 1 + _m, _j] - cs[:, idx + 1, _j]
-        return E, n_ex
-
-    E_ex, n_ex = ledger(Y)
-    E_ex_lossy, _ = ledger(Y_lossy)
-    tsec = np.arange(n_samp) / fs
-    return E_ex, E_ex_lossy, Y, Y_lossy, n_ex, n_samp, tsec
+    return E_ex, E_ex_lossy, Y, Y_lossy, n_ex, n_samp
 
 
 @app.cell
-def _(NDArray, Optional, Q, fs, gamma, n_ex, n_samp, np, num_rooms):
+def _(Q, fs, gamma, n_samp, np, num_rooms, trajectory):
     # --- True physical trajectory e(t) = expm(Q t) e(0), source = room 1 -------
-    def trajectory(Q, _gamma: Optional[NDArray] = None, _src:int = 0):
-        if _gamma is None:
-            _gamma = np.zeros_like(Q)
-        w, Vv = np.linalg.eig(Q - _gamma)
-        w, Vv = w.real, Vv.real  # Q is reversible w.r.t. pi ~ V, so spectrum is real
-        Vinv = np.linalg.inv(Vv)
-        e0 = np.zeros(num_rooms)
-        e0[_src] = 1.0
-        coeffs = Vinv @ e0
-        _tsec = np.arange(n_samp) * rate_s
-        modes = np.exp(np.outer(_tsec[:n_ex], w))
-        return np.einsum("ik,tk->ti", Vv, modes * coeffs[None, :])
-
-    rate_s = 1.0 / fs
-    Eref = trajectory(Q, _src=1)
-    Eref_lossy = trajectory(Q, gamma, _src=1)
-    return Eref, Eref_lossy
+    tsec = np.arange(n_samp) / fs
+    _, Eref = trajectory(Q, np.array([1.0, 0]), np.eye(num_rooms), fs, n_samp)
+    _, Eref_lossy = trajectory(Q, np.array([1.0, 0]), np.eye(num_rooms), fs, n_samp, gamma=gamma)
+    return Eref, Eref_lossy, tsec
 
 
 @app.cell
@@ -357,6 +294,7 @@ def _(
     E_ex_lossy,
     Eref,
     Eref_lossy,
+    NDArray,
     V,
     mo,
     n_ex,
@@ -371,19 +309,19 @@ def _(
     _colors = ["C0", "C1"]
     _targets = V / V.sum()
 
-    def db(_Y, is_energy_signal:bool=True):
-        tmp = np.log10(np.abs(_Y) + 1e-10)
-        return 10*tmp if is_energy_signal else 20*tmp
+    def db(_Y: NDArray, is_energy_signal:bool=True):
+        _tmp = np.log10(np.abs(_Y) + 1e-10)
+        return 10*_tmp if is_energy_signal else 20*_tmp
 
     for _ax, _Eex, _Eref, _title in zip(
             _axs, [E_ex, db(E_ex_lossy)], [Eref, db(Eref_lossy)],["Lossless", "Lossy"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
-                     _Eex[1, :, _r],
+                     _Eex[0, :, _r],
                      color=_colors[_r],
                      lw=1.1,
                      label=f"GFDN {_labels[_r]}")
-            _ax.plot(tsec[:n_ex],
+            _ax.plot(tsec,
                      _Eref[:, _r],
                      "--",
                      color=_colors[_r],
@@ -393,7 +331,7 @@ def _(
         _ax.set_title(_title, fontsize=10)
         _ax.set_xlabel("time (s)")
     _axs[0].set_ylim(-0.02, 1.0)
-    _axs[1].set_ylim(-80, 0.0)
+    _axs[1].set_ylim(-40, 10.0)
     _axs[0].set_ylabel("fraction of total energy")
     _axs[1].legend(fontsize=7.5, loc="upper right")
     _axs[1].set_ylabel('fraction of total energy (dB)')
@@ -409,8 +347,8 @@ def _(
 def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np):
     _tail = slice(int(0.85 * n_ex), n_ex)
 
-    _err = np.max(np.abs(E_ex[0] - Eref))
-    _err_lossy = np.max(np.abs(E_ex_lossy[0] - Eref_lossy))
+    _err = np.max(np.abs(E_ex[0] - Eref[:n_ex]))
+    _err_lossy = np.max(np.abs(E_ex_lossy[0] - Eref_lossy[:n_ex]))
 
     _gfdn_tail = E_ex[0, _tail].mean(0)
     _gfdn_split = _gfdn_tail / _gfdn_tail.sum()
