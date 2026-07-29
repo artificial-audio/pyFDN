@@ -22,14 +22,19 @@ def _():
                                           get_room_volume, 
                                           get_room_surface_area, 
                                           get_room_absorptive_area, 
-                                          point_in_room, 
-                                          solid_angle_quad)
+                                          point_in_room,
+                                          solid_angle_quad,
+                                          find_room,
+                                          get_point_to_room_weights,
+                                          Aperture
+                                        )
     from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
                                                         trajectory, trajectory_with_delays,
                                                         make_theta, make_K, get_decay_matrix, get_feedback_matrix,
                                                         run_gfdn, gfdn_ledger)
 
     return (
+        Aperture,
         ArrayLike,
         NDArray,
         Path,
@@ -37,9 +42,10 @@ def _():
         Tuple,
         Union,
         block_diag,
+        find_room,
         get_decay_matrix,
         get_feedback_matrix,
-        get_plane_area,
+        get_point_to_room_weights,
         get_room_absorptive_area,
         get_room_volume,
         gfdn_ledger,
@@ -232,17 +238,19 @@ def _(
 
 
 @app.cell
-def _(get_plane_area, np):
+def _(Aperture, np):
     # depth, length, height
     ROOM1_DIMS = [4.5, 18.0, 2.8]
     # ERTD recPos x spans up to 9.3m, so ROOM1_DIMS[0] + ROOM2_DIMS[0] must be >= 9.3
     # to keep mirrored positions inside the simulated geometry.
     ROOM2_DIMS = [4.8, 6.6, 2.8]
+    ROOM_DIMS = [ROOM1_DIMS, ROOM2_DIMS]
+
     ROOM1_START = [0, 0, 0]
     ROOM2_START = [4.5, 7.0, 0.0]
-    SOURCE_POS = [5.9, 12.5, 1.5]
-    ROOM_DIMS = [ROOM1_DIMS, ROOM2_DIMS]
     ROOM_START = [ROOM1_START, ROOM2_START]
+
+    SOURCE_POS = [5.9, 12.5, 1.5]
     ROOM1_ABS = [0.042 for i in range(6)]
     ROOM2_ABS = [0.12 for i in range(6)]
 
@@ -255,8 +263,9 @@ def _(get_plane_area, np):
         [aperture_start[0], aperture_start[1] + aperture_y_len, aperture_start[2]],
         [aperture_start[0],aperture_start[1] + aperture_y_len,aperture_start[2] + aperture_z_len],
         [aperture_start[0], aperture_start[1], aperture_start[2] + aperture_z_len]]
-    aperture_area = get_plane_area(aperture_coords)
-    aperture_center = np.mean(np.asarray(aperture_coords), axis=0)
+    aperture = Aperture(np.asarray(aperture_coords), 0, 1)
+    aperture_area = aperture.area
+    aperture_center = aperture.centroid
     return (
         ROOM1_ABS,
         ROOM1_DIMS,
@@ -264,7 +273,10 @@ def _(get_plane_area, np):
         ROOM2_ABS,
         ROOM2_DIMS,
         ROOM2_START,
+        ROOM_DIMS,
+        ROOM_START,
         SOURCE_POS,
+        aperture,
         aperture_area,
         aperture_center,
         aperture_coords,
@@ -336,7 +348,7 @@ def _(
     all_rirs, all_rec_pos, src_pos = read_ertd(file_path)
     _, sel_rec, sel_rirs, sel_idx = parse_ertd(all_rirs, all_rec_pos, src_pos)
 
-    def find_room(point: ArrayLike) -> int:
+    def _find_room(point: ArrayLike) -> int:
         """Find which room point is in"""
         in_rooms = [
             point_in_room(ROOM1_START, ROOM1_DIMS, point),
@@ -347,11 +359,11 @@ def _(
 
     def set_point_weight(point: ArrayLike) -> ArrayLike:
         """Decide which room a point is in and set its weight according to the solid angle it subtends to the aperture"""
-        point_in_which_room = find_room(point)
+        point_in_which_room = _find_room(point)
 
         _omega = solid_angle_quad(np.array(aperture_coords), point)
         _weight = np.ones(num_rooms) * (_omega / (4*np.pi))
-        _weight[point_in_which_room] = (1 -(_omega / (4 * np.pi))) / (num_rooms - 1)
+        _weight[point_in_which_room] = (1 -(_omega / (4 * np.pi)))
         return _weight
 
 
@@ -360,7 +372,6 @@ def _(
         all_rec_pos,
         all_rirs,
         c,
-        find_room,
         fs,
         n_samp,
         sel_rec,
@@ -373,13 +384,17 @@ def _(
 @app.cell
 def _(
     Q,
+    ROOM_DIMS,
+    ROOM_START,
     SOURCE_POS,
+    aperture,
     aperture_center,
     c,
     dataset_to_sim_mic_pos,
     find_room,
     fs,
     gamma,
+    get_point_to_room_weights,
     mo,
     n_samp,
     np,
@@ -390,14 +405,16 @@ def _(
     trajectory_with_delays,
 ):
     # get source weighting
-    src_weight = set_point_weight(np.asarray(SOURCE_POS))
-    src_room = [find_room(SOURCE_POS)]
+    src_weight = get_point_to_room_weights(np.asarray(SOURCE_POS), ROOM_DIMS, ROOM_START, [aperture])
+    src_weight_corr = set_point_weight(np.array(SOURCE_POS))
+    src_room = [find_room(ROOM_DIMS, ROOM_START, SOURCE_POS)]
 
     # for now select two receivers and plot their ledger
     rec_idx = [2, 5, 8, 13]
     rec_pos = dataset_to_sim_mic_pos(sel_rec[rec_idx])
-    rec_weight = np.asarray([set_point_weight(rec_pos[k]) for k in range(len(rec_idx))])
-    rec_room = [find_room(rec_pos[k]) for k in range(len(rec_idx))]
+    rec_weight = np.asarray([get_point_to_room_weights(rec_pos[k], ROOM_DIMS, ROOM_START, [aperture]) for k in range(len(rec_idx))])
+    rec_weight_corr = np.asarray([set_point_weight(rec_pos[k]) for k in range(len(rec_idx))])
+    rec_room = [find_room(ROOM_DIMS, ROOM_START, rec_pos[k]) for k in range(len(rec_idx))]
 
     # propagation delays (samples)
     src_delay = np.round(
@@ -426,9 +443,13 @@ def _(
 
     The common decay times are {np.round(common_t60, 3)}s
 
-    The source weights are [{src_weight[0]:.3f}, {src_weight[1]:.3f}].
+    The correct source weights are [{src_weight_corr[0]:.3f}, {src_weight_corr[1]:.3f}].
 
-    The receiver weights are {np.round(rec_weight, 3)}
+    The estimated source weights are [{src_weight[0]:.3f}, {src_weight[1]:.3f}]
+
+    The correct receiver weights are {np.round(rec_weight_corr, 3)}
+
+    The estimated receiver weights are {np.round(rec_weight, 3)}
     """)
     return (
         Emarkov_lossy,
@@ -699,13 +720,13 @@ def _(
                lw=1.2, 
                label='GFDN'
         )
-        # ax.axhline(
-        #     db(np.array([_targets[room]]))[0],
-        #     color=_colors[room],
-        #     ls=":",
-        #     lw=1.0,
-        #     label="Target",
-        # )
+        ax.axhline(
+            db(np.array([_targets[room]]))[0],
+            color=_colors[room],
+            ls=":",
+            lw=1.0,
+            label="Target",
+        )
         ax.set_title(_labels[room])
         ax.set_xlabel("Time (s)")
         ax.set_ylim(-60, 5)
