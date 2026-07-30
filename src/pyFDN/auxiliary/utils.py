@@ -124,6 +124,11 @@ def db_to_sq(db: ArrayLike) -> np.ndarray:
     return np.power(10.0, db_arr / 10.0)
 
 
+def ms_to_samps(time_ms: float, fs: float):
+    """Convert time in ms to samples based on the sampling rate (fs)"""
+    return int(np.round(time_ms * 1e-3 * fs))
+
+
 def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
     """Mu-law companding (encode): linear amplitude to companded.
 
@@ -153,7 +158,7 @@ def mulaw_decode(y: ArrayLike, mu: float = 255.0) -> np.ndarray:
     y = np.asarray(y, dtype=float)
     sgn = np.sign(y)
     y_abs = np.abs(y)
-    return sgn * ((1.0 + mu) ** y_abs - 1.0) / mu
+    return sgn * ((1.0 + mu)**y_abs - 1.0) / mu
 
 
 def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
@@ -262,8 +267,8 @@ def pole_boundaries(
     Max = np.zeros(nfft)
     for it in range(nfft):
         s = svd(FeedbackMatrix[:, :, it], compute_uv=False)
-        Min[it] = np.min(np.abs(s)) ** (1 / np.min(delays_arr))
-        Max[it] = np.max(np.abs(s)) ** (1 / np.max(delays_arr))
+        Min[it] = np.min(np.abs(s))**(1 / np.min(delays_arr))
+        Max[it] = np.max(np.abs(s))**(1 / np.max(delays_arr))
 
     # Combine with absorption
     b = np.transpose(absorption.b, (0, 2, 1))  # shape (N, len, 1)
@@ -285,7 +290,7 @@ def pole_boundaries(
     # delays: shape (N,)
     # G: shape (nfft, N)
     # d: shape (nfft, N)
-    d = np.abs(H) ** (1.0 / (delays_arr + G))
+    d = np.abs(H)**(1.0 / (delays_arr + G))
     dMin = np.min(d, axis=1)
     dMax = np.max(d, axis=1)
 

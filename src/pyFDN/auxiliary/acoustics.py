@@ -6,10 +6,10 @@ import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import firwin2, sosfreqz
+from scipy.signal import firwin2, sosfreqz, fftconvolve
 from scipy.special import erfc
 
-from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
+from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db, ms_to_samps
 
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
@@ -30,7 +30,7 @@ def rt_to_gain_per_sample(rt: float, fs: float) -> float:
 
     The gain g satisfies g^(rt*fs) = 10^(-3), i.e. about -30 dB after rt seconds.
     """
-    return 10 ** (-3 / (rt * fs))
+    return 10**(-3 / (rt * fs))
 
 
 def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
@@ -56,6 +56,48 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     rev = np.flip(ir, axis=axis)
     cum = np.cumsum(rev**2, axis=axis)
     return np.flip(cum, axis=axis)
+
+
+def calculate_energy_envelope(sig: NDArray,
+                              fs: float,
+                              smooth_time_ms: float,
+                              time_axis: int = -1) -> ArrayLike:
+    """
+    Calculate the energy envelope (broadband EDC) of a RIR
+    Args:
+        sig (ArrayLike): ND RIR signal
+        fs (float): sampling rate
+        smooth_time_ms (float): smoothing window length in ms,
+                                longer window leads to more smoothing
+        time_axis (int): axis along which time samples are specified
+
+    """
+    staps = ms_to_samps(smooth_time_ms / 2, fs)
+    odd_win_len = 2 * staps - 1
+    # normalised smoothing window
+    bs = np.hanning(odd_win_len) / np.sum(np.hanning(odd_win_len))
+
+    # Reshape bs to broadcast correctly along the time axis
+    bs_shape = [1] * sig.ndim
+    bs_shape[time_axis] = bs.shape[0]
+    bs_broadcasted = bs.reshape(bs_shape)
+
+    # Pad along the time axis, before and after the signal
+    pad_width = [(0, 0)] * sig.ndim
+    pad_width[time_axis] = (staps, staps)
+    padded_signal = np.pad(np.power(sig, 2), pad_width, mode='constant')
+
+    # Smooth using convolution along the time axis
+    smoothed_signal = fftconvolve(padded_signal,
+                                  bs_broadcasted,
+                                  mode='valid',
+                                  axes=time_axis)
+
+    # Take square root to get envelope
+    env = np.sqrt(np.abs(smoothed_signal))
+    env = env[..., odd_win_len:]
+
+    return env
 
 
 def absorption_filters(
@@ -103,8 +145,8 @@ def absorption_to_rt(
     response = np.fft.fft(filterCoeffs, nfft, axis=1)
     freq = np.linspace(0, fs / 2, nfft // 2, endpoint=False)
 
-    response = response[:, : nfft // 2]
-    freq = freq[: nfft // 2]
+    response = response[:, :nfft // 2]
+    freq = freq[:nfft // 2]
 
     totalDelay = delays_arr[:, None] + filterLen / 2
     decayPerSample = lin_to_db(np.abs(response)) / totalDelay
@@ -161,8 +203,7 @@ def echo_density(
     if len_ir < n:
         raise ValueError(
             f"IR length {len_ir} is shorter than analysis window {n}. "
-            "Provide at least an IR of some 100 ms."
-        )
+            "Provide at least an IR of some 100 ms.")
     half_win = n // 2
     w_tau = np.hanning(n)
     w_tau = w_tau / np.sum(w_tau)
@@ -174,14 +215,14 @@ def echo_density(
 
     for ii, n_center in enumerate(sparse_ind):
         if n_center <= half_win:
-            h_tau = ir_arr[0 : n_center + half_win]
-            w_t = w_tau[-(n_center + half_win) :]
+            h_tau = ir_arr[0:n_center + half_win]
+            w_t = w_tau[-(n_center + half_win):]
         elif n_center <= len_ir - half_win - 1:
-            h_tau = ir_arr[n_center - half_win : n_center + half_win]
+            h_tau = ir_arr[n_center - half_win:n_center + half_win]
             w_t = w_tau.copy()
         else:
-            h_tau = ir_arr[n_center - half_win : len_ir]
-            w_t = w_tau[: len(h_tau)].copy()
+            h_tau = ir_arr[n_center - half_win:len_ir]
+            w_t = w_tau[:len(h_tau)].copy()
 
         s = np.sqrt(np.sum(w_t * (h_tau**2)))
         tip_ct = (np.abs(h_tau) > s).astype(float)
@@ -202,9 +243,9 @@ def echo_density(
             t_abel = 0.0
     else:
         t_abel = 0.0
-        warnings.warn(
-            "Mixing time not found within given limits.", UserWarning, stacklevel=2
-        )
+        warnings.warn("Mixing time not found within given limits.",
+                      UserWarning,
+                      stacklevel=2)
 
     return float(t_abel), echo_dens
 
@@ -269,7 +310,10 @@ def estimate_rt_bands(
     bands = bands[valid]
     f_centre = f_centre[valid]
 
-    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    sos_bank = pra.bandpass_filterbank(bands,
+                                       fs=fs,
+                                       order=filter_order,
+                                       output="sos")
     rt = np.zeros(len(f_centre))
     for k, sos in enumerate(sos_bank):
         ir_band = sosfilt(sos, ir)
@@ -319,8 +363,7 @@ def estimate_initial_level_bands(
     except ImportError as exc:
         raise ImportError(
             "estimate_initial_level_bands requires pyroomacoustics "
-            "(pip install pyroomacoustics)"
-        ) from exc
+            "(pip install pyroomacoustics)") from exc
 
     from scipy.signal import sosfilt
 
@@ -334,7 +377,10 @@ def estimate_initial_level_bands(
     if rt.size != len(f_centre):
         raise ValueError("rt must have one entry per octave band")
 
-    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    sos_bank = pra.bandpass_filterbank(bands,
+                                       fs=fs,
+                                       order=filter_order,
+                                       output="sos")
     level = np.zeros(len(f_centre))
     for k, sos in enumerate(sos_bank):
         ir_band = sosfilt(sos, ir)
@@ -344,9 +390,8 @@ def estimate_initial_level_bands(
     return level, f_centre
 
 
-def one_pole_absorption(
-    rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
-) -> np.ndarray:
+def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike,
+                        fs: float) -> np.ndarray:
     """Design one-pole absorption filters according to specified reverb time.
 
     Returns a one-section per-channel SOS bank of shape ``(1, 6, N)`` (the
@@ -492,9 +537,8 @@ def first_order_shelving_eq(
         np.asarray(db_dc, dtype=float).ravel(),
         np.asarray(db_nyquist, dtype=float).ravel(),
     )
-    return _first_order_shelf(
-        db_to_lin(db_dc_arr), db_to_lin(db_ny_arr), fs, crossover_frequency
-    )
+    return _first_order_shelf(db_to_lin(db_dc_arr), db_to_lin(db_ny_arr), fs,
+                              crossover_frequency)
 
 
 def sos_gain_per_sample_curves(
@@ -534,7 +578,8 @@ def sos_gain_per_sample_curves(
         raise ValueError("sos must have shape (n_sections, 6, N)")
     N = sos.shape[2]
     if delays_arr.shape[0] != N:
-        raise ValueError("delays must have length N (number of channels in sos)")
+        raise ValueError(
+            "delays must have length N (number of channels in sos)")
     if np.any(delays_arr < 1):
         raise ValueError("delays must be >= 1")
     magnitude = np.zeros((nfft, N), dtype=np.float64)

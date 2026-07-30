@@ -291,7 +291,7 @@ def get_point_to_room_weights(
     apertures: List[Aperture],
     return_delays: bool = False,
     speed_sound: float = 343,
-    fs: Optional[float] = None
+    fs: float = 44100,
 ) -> Union[Tuple[ArrayLike, ArrayLike], ArrayLike]:
     """
     Get the weights from point to each room in the geometry.
@@ -332,15 +332,21 @@ def get_point_to_room_weights(
             cur_target_room_idx] = spherical_polygon_intersection_solid_angle(
                 aperture_hit_order, point) / (4 * np.pi)
 
-        if return_delays:
-            distance_traversed = 0.0
-            cur_point = point.copy()
-            for aperture in aperture_hit_order:
-                distance_traversed += np.linalg.norm(aperture.centroid -
-                                                     cur_point)
-                cur_point = aperture.centroid
-            delays[cur_target_room_idx] = int(
-                np.round(distance_traversed / speed_sound * fs))
+        distance_traversed = 0.0
+        cur_point = point.copy()
+        for aperture in aperture_hit_order:
+            distance_traversed += np.linalg.norm(aperture.centroid - cur_point)
+            cur_point = aperture.centroid
+        delays[cur_target_room_idx] = int(
+            np.round(distance_traversed / speed_sound * fs))
+
+    # adds positional dependency, according to Summers' formula
+    # weights[cur_target_room_idx] *= (speed_sound *
+    #                                  fs) / (4 * np.pi * distance_traversed**2)
 
     weights[start_room_idx] = 1 - np.sum(weights)
-    return weights, delays if return_delays else weights
+
+    if return_delays:
+        return weights, delays
+    else:
+        return weights

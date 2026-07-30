@@ -10,8 +10,14 @@ from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
 def make_beta(aperture_area: NDArray, volume: ArrayLike, c: float = 343):
     """Create the coupling coefficient from Cremer-Muller theory"""
-    beta = c * aperture_area / (4.0 * volume[:, None])
-    np.fill_diagonal(beta, 0.0)
+    num_rooms = len(volume)
+    beta = np.zeros((num_rooms, num_rooms))
+    for i in range(num_rooms):
+        for j in range(num_rooms):
+            if i == j:
+                continue
+            else:
+                beta[i, j] = c * aperture_area[i, j] / (4 * volume[i])
     return beta
 
 
@@ -23,7 +29,7 @@ def make_gamma(absorp_area: List, volume: List, c: float = 343):
 
 def make_Q(beta: NDArray):
     """Create the state transition matrix of the CT system from Cremer-Muller theory"""
-    Q = beta.T.copy()
+    Q = beta.copy()
     np.fill_diagonal(Q, -beta.sum(axis=1))
     return Q
 
@@ -64,8 +70,8 @@ def trajectory_with_delays(
     Q: NDArray,
     src_weight: ArrayLike,
     rec_weight: ArrayLike,
-    src_delay: List[int],
-    rec_delay: List[int],
+    src_delay: NDArray,
+    rec_delay: NDArray,
     src_room: List[int],
     rec_room: List[int],
     fs: float,
@@ -73,73 +79,69 @@ def trajectory_with_delays(
     gamma: Optional[NDArray] = None,
 ) -> NDArray:
     """
-    Continuous-time Markov model with propagation delays between the
-    source/receiver and the aperture.
+    Continuous-time Markov model with per-room propagation delays between
+    each source/receiver and each room, to account for multiple aperture
+    chains (different rooms may be reached through different sequences of
+    apertures, so a single shared delay per source/receiver is no longer
+    correct -- the delay is room-specific).
 
     Args:
         src_weight : (n_src, n_room)
         rec_weight : (n_rec, n_room)
         src_room   : (n_src,) room index of each source
         rec_room   : (n_rec,) room index of each receiver
-        src_delay  : (n_src,) aperture->source delay (samples)
-        rec_delay  : (n_rec,) aperture->receiver delay (samples)
+        src_delay  : (n_src, n_room) source->room aperture-chain delay (samples)
+        rec_delay  : (n_rec, n_room) room->receiver aperture-chain delay (samples)
     Returns:
-        NDArray: the common decays and the energy decay trajectory
-"""
-
+        w   : (n_room,) eigenvalues (common decay rates)
+        out : (n_samp, n_src, n_rec) energy decay trajectory
+    """
+    src_delay = np.asarray(src_delay)
+    rec_delay = np.asarray(rec_delay)
     if gamma is None:
         gamma = np.zeros_like(Q)
-
     A = Q - gamma
-
-    # eigendecomposition
     w, V = np.linalg.eig(A)
     w = w.real
     V = V.real
     Vinv = np.linalg.inv(V)
-
     t = np.arange(n_samp) / fs
     modes = np.exp(np.outer(t, w))
-
     n_src = src_weight.shape[0]
     n_rec = rec_weight.shape[0]
     n_room = src_weight.shape[1]
 
+    assert src_delay.shape == (
+        n_src,
+        n_room), f"src_delay must be (n_src, n_room), got {src_delay.shape}"
+    assert rec_delay.shape == (
+        n_rec,
+        n_room), f"rec_delay must be (n_rec, n_room), got {rec_delay.shape}"
+
+    def delay_room_energy(room_energy: NDArray, delays: NDArray,
+                          skip_room: int) -> NDArray:
+        """Shift each room's trace by its own delay; leave `skip_room` untouched."""
+        out = room_energy.copy()
+        for room in range(n_room):
+            if room == skip_room:
+                continue
+            L = int(delays[room])
+            if L <= 0:
+                continue
+            out[:, room] = 0.0
+            if L < n_samp:
+                out[L:, room] = room_energy[:-L, room]
+        return out
+
     out = np.zeros((n_samp, n_src, n_rec))
-
     for s in range(n_src):
-
-        # Source operator
         coeff = Vinv @ src_weight[s]
         room_energy = (V @ (modes * coeff[None, :]).T).T
+        room_energy = delay_room_energy(room_energy, src_delay[s], src_room[s])
 
-        # delay only the rooms different from the source room
-        Ls = int(src_delay[s])
-        if Ls > 0:
-            room_energy_delayed = room_energy.copy()
-
-            for room in range(n_room):
-                if room == src_room[s]:
-                    continue
-
-                room_energy_delayed[:, room] = 0.0
-                room_energy_delayed[Ls:, room] = room_energy[:-Ls, room]
-
-            room_energy = room_energy_delayed
-
-        # Receiver operator
         for r in range(n_rec):
-            Lr = int(rec_delay[r])
-            room_energy_obs = room_energy.copy()
-
-            if Lr > 0:
-                for room in range(n_room):
-                    if room == rec_room[r]:
-                        continue
-
-                    room_energy_obs[:, room] = 0.0
-                    room_energy_obs[Lr:, room] = room_energy[:-Lr, room]
-
+            room_energy_obs = delay_room_energy(room_energy, rec_delay[r],
+                                                rec_room[r])
             out[:, s, r] = room_energy_obs @ rec_weight[r]
 
     return w, out
@@ -155,6 +157,7 @@ def make_theta(beta: NDArray, dt_i: List) -> NDArray:
     for _i in range(n):
         for _j in range(_i + 1, n):
             val = 0.5 * (beta[_i, _j] * dt_i[_i] + beta[_j, _i] * dt_i[_j])
+            val = 0.999 if val > 0.999 else val
             theta[_i,
                   _j] = theta[_j,
                               _i] = np.arcsin(np.sqrt(val)) if val > 0 else 0.0
@@ -289,3 +292,47 @@ def gfdn_ledger(Y: NDArray, num_rooms: int, Nroom: int, delays: ArrayLike):
                      len(bounds) - 1)
         E[:, :, _room] += cs[:, idx + 1 + _m, _j] - cs[:, idx + 1, _j]
     return E, n_ex
+
+
+def room_energy_ledger_from_rirs(
+    rirs: np.ndarray,
+    receiver_positions: np.ndarray,
+    ROOM_START: List,
+    ROOM_DIMS: List,
+):
+    """
+    Estimate the spatially integrated room energy from a dense set of RIRs.
+    Args:
+        rirs : (Nrec, Nt)
+            Pressure RIRs.
+        receiver_positions : (Nrec,3)
+            Receiver coordinates.
+        ROOM_START (List): room start coordinates for each room
+        ROOM_DIMS (List): room dimensions for each room
+    Returns:
+        room_energy : (Nroom,Nt)
+            Estimated room energies.
+        room_masks : List[np.ndarray]
+            Boolean mask of receivers belonging to each room.
+    """
+    room_bounds = []
+    n_rooms = len(ROOM_START)
+    for i in range(n_rooms):
+        room_bounds.append((np.array(ROOM_START[i]),
+                            np.array(ROOM_START[i]) + np.array(ROOM_DIMS[i])))
+    n_samples = rirs.shape[1]
+    room_energy = np.zeros((n_rooms, n_samples))
+    room_masks = []
+
+    pressure2 = rirs**2
+    for room_idx, (xyz_min, xyz_max) in enumerate(room_bounds):
+        mask = np.all(
+            (receiver_positions >= xyz_min)
+            & (receiver_positions <= xyz_max),
+            axis=1,
+        )
+
+        room_masks.append(mask)
+        room_energy[room_idx] = pressure2[mask].mean(axis=0)
+
+    return room_energy, room_masks
