@@ -33,7 +33,7 @@ def rt_to_gain_per_sample(rt: float, fs: float) -> float:
     return 10**(-3 / (rt * fs))
 
 
-def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
+def edc(ir: ArrayLike, axis: int = 0, normalize: bool = False) -> np.ndarray:
     """Energy decay curve: backward cumulative sum of squared signal along an axis.
 
     EDC(t) = sum(ir[t:]^2), so the curve decreases from total energy to zero.
@@ -46,6 +46,8 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
         EDC is computed along the time axis for each channel.
     axis : int, optional
         Axis along which time runs (default 0). EDC is computed along this axis.
+    normalize: bool
+        Whether to normalize the group of EDCs so that the maximum starts at 0dB
 
     Returns
     -------
@@ -55,7 +57,17 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     ir = np.asarray(ir, dtype=float)
     rev = np.flip(ir, axis=axis)
     cum = np.cumsum(rev**2, axis=axis)
-    return np.flip(cum, axis=axis)
+    out = np.flip(cum, axis=axis)
+
+    if normalize:
+        # normalize acc to CV SDN paper
+        norm_vals = np.sum(np.abs(np.power(ir, 2)), axis=axis,
+                           keepdims=True)  # per channel
+        # norm_vals = np.max(out, keepdims=True)  # global max for all channels
+        out = out / norm_vals if not np.isnan(norm_vals).any() else out
+        return out
+    else:
+        return out
 
 
 def calculate_energy_envelope(sig: NDArray,

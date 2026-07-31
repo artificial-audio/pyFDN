@@ -284,6 +284,56 @@ def get_aperture_hit_order(start_room_idx: int, target_room_idx: int,
     return None
 
 
+def _next_room_through_aperture(current_room_idx: int,
+                                aperture: Aperture) -> int:
+    """Return the room reached after crossing an aperture from current_room_idx."""
+    if aperture.room_a == current_room_idx:
+        return aperture.room_b
+    if aperture.room_b == current_room_idx:
+        return aperture.room_a
+    raise ValueError("aperture path is not connected to current room")
+
+
+def _chained_aperture_weight(
+    aperture_hit_order: List[Aperture],
+    point: ArrayLike,
+    start_room_idx: int,
+    ROOM_DIMS: List,
+    apertures: List[Aperture],
+) -> float:
+    """
+    Estimate late-field coupling through an aperture chain.
+
+    A single-aperture path keeps the geometric solid-angle weight. Multi-hop
+    paths should not require one straight ray through every aperture; after the
+    first aperture, energy is treated as diffuse in each intermediate room.
+    This ensures even without a line of sight, a point to room weight is never zero.
+    """
+    if len(aperture_hit_order) == 1:
+        return spherical_polygon_intersection_solid_angle(
+            aperture_hit_order, point) / (4 * np.pi)
+
+    first_aperture = aperture_hit_order[0]
+    # true geometric weight of first aperture
+    weight = solid_angle_quad(first_aperture.poly_points, point) / (4 * np.pi)
+    current_room_idx = _next_room_through_aperture(start_room_idx,
+                                                   first_aperture)
+
+    for aperture in aperture_hit_order[1:]:
+        # total area of all the apertures connected to the current room
+        connected_area = sum(candidate.area for candidate in apertures
+                             if current_room_idx in (candidate.room_a,
+                                                     candidate.room_b))
+        if connected_area <= 0:
+            connected_area = get_room_surface_area(ROOM_DIMS[current_room_idx])
+        # current aperture area / total aperture area
+        weight *= aperture.area / connected_area
+        current_room_idx = _next_room_through_aperture(current_room_idx,
+                                                       aperture)
+
+    return float(weight)
+
+
 def get_point_to_room_weights(
     point: ArrayLike,
     ROOM_DIMS: List,
@@ -328,9 +378,13 @@ def get_point_to_room_weights(
         if aperture_hit_order is None:
             continue
 
-        weights[
-            cur_target_room_idx] = spherical_polygon_intersection_solid_angle(
-                aperture_hit_order, point) / (4 * np.pi)
+        weights[cur_target_room_idx] = _chained_aperture_weight(
+            aperture_hit_order,
+            point,
+            start_room_idx,
+            ROOM_DIMS,
+            apertures,
+        )
 
         distance_traversed = 0.0
         cur_point = point.copy()

@@ -15,6 +15,7 @@ def _():
     from scipy.linalg import block_diag, expm
     from scipy.signal import butter, sosfilt, fftconvolve
     from scipy.spatial import cKDTree
+    from scipy.optimize import least_squares
     from typing import Optional, Tuple, List, Union
     from numpy.typing import NDArray, ArrayLike
 
@@ -34,9 +35,14 @@ def _():
                                                         make_theta, make_K, get_decay_matrix, get_feedback_matrix,
                                                         run_gfdn, gfdn_ledger, room_energy_ledger_from_rirs)
 
+    from dependencies.DecayFitNet.python.toolbox.DecayFitNetToolbox import DecayFitNetToolbox
+    from sklearn.cluster import KMeans
+
     return (
         Aperture,
         ArrayLike,
+        DecayFitNetToolbox,
+        KMeans,
         List,
         NDArray,
         Path,
@@ -54,6 +60,7 @@ def _():
         get_room_absorptive_area,
         get_room_volume,
         gfdn_ledger,
+        least_squares,
         make_K,
         make_Q,
         make_beta,
@@ -238,6 +245,45 @@ def _(
 
 
 @app.cell
+def _(DecayFitNetToolbox, KMeans, NDArray, mo, np, pyFDN):
+    # --- Stage 1: per-receiver multi-slope fits, aggregated per room -----------
+    def estimate_room_slopes(rirs_in_room: NDArray, fs: float, n_slopes: int=3):
+        """
+        Estimate the T60s from the RIRs using k-means clustering
+        Args:
+            rirs_in_room : (n_rec_in_room, n_samples) raw RIRs for receivers in one room
+        Returns: 
+            T60s (s) and amplitudes for up to n_slopes, averaged across
+        receivers and sorted slowest-first (most physically identifiable slope
+        first, matching the paper's point that dominant/late slopes are best-
+        supported by the data).
+        """
+        decayfitnet = DecayFitNetToolbox(n_slopes=n_slopes, sample_rate=fs)
+        edcs_in_room = pyFDN.auxiliary.acoustics.edc(rirs_in_room, axis=-1)
+
+        Ts, As = [], []
+        for edc in edcs_in_room:
+            estimated_parameters, _ = decayfitnet.estimate_parameters(edc.copy(), input_is_edc=True)
+            T, A, N = estimated_parameters  # T: decay times, A: amplitudes, N: noise floor
+            T, A = np.asarray(T).flatten(), np.asarray(A).flatten()
+            order = np.argsort(-T)  # slowest (largest T60) first
+            Ts.append(T)
+            As.append(A)
+
+        model_order = 1
+        kmeans = KMeans(n_clusters=model_order)
+        # Ts should be of shape n_samples, n_feature
+        Ts = np.asarray(Ts)
+        kmeans.fit(Ts)
+        cluster_labels = kmeans.labels_.reshape(rirs_in_room.shape[0])
+        cluster_centers = np.squeeze(kmeans.cluster_centers_)
+        return cluster_centers
+
+    mo.md("### Common slopes analysis from data")
+    return (estimate_room_slopes,)
+
+
+@app.cell
 def _(Aperture, mo, np):
     # depth, length, height (middle room is room 1, first room from left is 2 and room at right is 3)
     ROOM1_DIMS = [3.0, 6.0, 3.0]
@@ -298,6 +344,44 @@ def _(Aperture, mo, np):
 
 @app.cell
 def _(
+    ROOM_DIMS,
+    ROOM_START,
+    all_rec_pos,
+    all_rirs,
+    dataset_to_sim_mic_pos,
+    fs,
+    mo,
+    pyFDN,
+    room_energy_ledger_from_rirs,
+):
+    fdtd_room_energy, room_masks = room_energy_ledger_from_rirs(all_rirs, dataset_to_sim_mic_pos(all_rec_pos), 
+                                                                ROOM_START, ROOM_DIMS)
+
+    fdtd_energy_env = pyFDN.auxiliary.acoustics.calculate_energy_envelope(fdtd_room_energy, 
+                                                                          fs, smooth_time_ms=50, time_axis=-1)
+
+    mo.md(rf"""### FDTD integrated energy ledger (mean over receivers in each room)
+
+    We are plotting the EDC of the averaged room-integrated FDTD ledger, calculated as,
+
+    $E_{{i_\text{{FDTD}}}}(t) = \int_{{V_i}} p^2(\mathbf{{x}}, t) dV \approx \frac{{1}}{{N}} \sum_i p_i^2(t)$, 
+
+    vs the predicted energy update from Cremer-Muller equations when we excite room 2 with $b_S = [0, 1]$ and weigh the outputs
+    equally from both roons $c_R = \begin{{pmatrix}}1 & 0 \\ 0 & 1 \end{{pmatrix}}$.
+    """)
+    return (fdtd_energy_env,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Coupled room ODEs and solutions
+    """)
+    return
+
+
+@app.cell
+def _(
     ROOM1_ABS,
     ROOM1_DIMS,
     ROOM2_ABS,
@@ -326,18 +410,15 @@ def _(
     mo.md(rf"""
     ### Physical generators
 
-    $\mathbf \beta$ :
-    $$\begin{{pmatrix}}{beta[0,0]:.4f}&{beta[0,1]:.4f}&{beta[0, 2]:.4f}\\{beta[1,0]:.4f}&{beta[1,1]:.4f}&{beta[1, 2]:.4f}\\
+    $$\mathbf \beta = \begin{{pmatrix}}{beta[0,0]:.4f}&{beta[0,1]:.4f}&{beta[0, 2]:.4f}\\{beta[1,0]:.4f}&{beta[1,1]:.4f}&{beta[1, 2]:.4f}\\
     {beta[2,0]:.4f}&{beta[2,1]:.4f}&{beta[2,2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
 
-    $\mathbf Q$ :
-    $$\begin{{pmatrix}}{Q[0,0]:.4f}&{Q[0,1]:.4f}&{Q[0, 2]:.4f}\\{Q[1,0]:.4f}&{Q[1,1]:.4f}&{Q[1, 2]:.4f}\\
+    $$\mathbf Q = \begin{{pmatrix}}{Q[0,0]:.4f}&{Q[0,1]:.4f}&{Q[0, 2]:.4f}\\{Q[1,0]:.4f}&{Q[1,1]:.4f}&{Q[1, 2]:.4f}\\
     {Q[2,0]:.4f}&{Q[2,1]:.4f}&{Q[2,2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
 
     Both have zero column sums (pure exchange, no absorption in this notebook) and are reversible w.r.t.
     $\pi_i\propto V_i$ — target long‑run split $V_1{{:}}V_2{{:}}V_3 = {V[0]:.0f}{{:}}{V[1]:.0f}{{:}}{V[2]:.0f}$.
 
-    $\mathbf \Gamma$ :
     $$\mathbf \Gamma = \begin{{pmatrix}}{gamma[0,0]:.4f}&{gamma[0,1]:.4f}&{gamma[0, 2]:.4f}\\{gamma[1,0]:.4f}&{gamma[1,1]:.4f}&{gamma[1,2]:.4f}\\{gamma[2,0]:.4f}&{gamma[2,1]:.4f}&{gamma[2, 2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
     """)
     return Q, V, beta, gamma, num_rooms
@@ -406,6 +487,8 @@ def _(
 @app.cell
 def _(
     Q,
+    all_rirs,
+    estimate_room_slopes,
     fs,
     gamma,
     mo,
@@ -426,52 +509,155 @@ def _(
                                                          rec_weight, src_delay[None, :], rec_delay, 
                                                          src_room, rec_room, fs, n_samp,
                                                          gamma)
+
     Emarkov_src_rec = Emarkov_src_rec.squeeze()
     common_t60= np.log(1e-6) / common_decay
 
     # trajectory independent of source and receiver position
     _, Emarkov_lossy = trajectory(Q, np.array([0, 1, 0]), np.eye(num_rooms), fs, n_samp, gamma)
 
+    # without the 0.5, the decay rates appear to be twice as long
+    common_t60_ref = 0.5 * estimate_room_slopes(all_rirs, int(fs), n_slopes=num_rooms)
+
     mo.md(rf"""
     ### Markov trajectory
 
-    The common decay times are {np.round(common_t60, 3)}s
+    The common decay times from solving ODEs are {np.round(common_t60, 3)}s.
+
+    The common decay times from kmeans are {np.round(common_t60_ref, 3)}s.
 
     The estimated source weights are [{src_weight[0]:.3f}, {src_weight[1]:.3f}, {src_weight[2]:.3f}]
 
     The estimated receiver weights are {np.round(rec_weight, 3)}
     """)
-    return Emarkov_lossy, Emarkov_src_rec
+    return common_t60, common_t60_ref
 
 
 @app.cell
 def _(
-    ROOM_DIMS,
-    ROOM_START,
-    all_rec_pos,
-    all_rirs,
-    dataset_to_sim_mic_pos,
-    fs,
+    List,
+    NDArray,
+    beta,
+    common_t60_ref,
+    gamma,
+    least_squares,
+    make_Q,
     mo,
-    pyFDN,
-    room_energy_ledger_from_rirs,
+    np,
 ):
-    fdtd_room_energy, room_masks = room_energy_ledger_from_rirs(all_rirs, dataset_to_sim_mic_pos(all_rec_pos), 
-                                                                ROOM_START, ROOM_DIMS)
+    # Fit the eta correction against the DecayFitNet-identified rates ---
+    def fit_eta_to_decayfitnet(common_T60s: List,
+                               beta :NDArray,
+                               gamma_diag :NDArray,
+                               db_target=60.0):
+        """
+        common_T60s : list of length num_rooms, each element containing estimated T60s
+                      for that room's DecayFitNet fit.
 
-    fdtd_energy_env = pyFDN.auxiliary.acoustics.calculate_energy_envelope(fdtd_room_energy, 
-                                                                          fs, smooth_time_ms=50, time_axis=-1)
+        Strategy: use only the SLOWEST (best-identified) rate from each room as
+        the calibration target, since faster/secondary slopes are typically
+        weakly supported by the data (cf. the paper's note that Room 2's rate
+        had "a platykurtic posterior... only weakly supported"). If the model is
+        behaving physically, these per-room slowest rates should roughly agree
+        with each other (same shared system eigenvalue seen from different
+        rooms)
+        """
+        # Longest T60 and corresponding room
+        idx_slow = np.argmax(np.asarray(common_T60s))
+        T60_slow = common_T60s[idx_slow]
 
-    mo.md(rf"""### FDTD integrated energy ledger (mean over receivers in each room)
+        ln_target = np.log(10**(-db_target / 10))  # e.g. ln(1e-6) for 60 dB
+        dominant_rate = np.array([ln_target / -T60_slow])  # 1/s, positive
+        # dominant_rate = np.array([ln_target / -common_T60s])  # 1/s, positive
 
-    We are plotting the EDC of the averaged room-integrated FDTD ledger, calculated as,
+        def residual(eta):
+            eta = np.abs(eta)
+            # eta[i] = 1 : no correction in room i
+            # eta[i] > 1 : stronger decay than Sabine predicts
+            # eta[i] < 1 : weaker decay than Sabine predicts
+            gamma_c = gamma_diag.copy()
+            # Correct ONLY the absorption of the room
+            # associated with the longest T60
+            gamma_c[idx_slow] *= eta[0]
+            # Correct absorption of all rooms
+            # gamma_c = gamma_c * eta
+            Q = make_Q(beta)
+            A_c = Q - gamma_c
+            w = np.sort(np.abs(np.linalg.eig(A_c)[0].real))
+            # match the model's SLOWEST eigenvalue to the consensus dominant rate --
+            # the best-identified quantity on both sides of the comparison
+            return np.sum(np.abs(np.array([w[0] - dominant_rate])))
 
-    $E_{{i_\text{{FDTD}}}}(t) = \int_{{V_i}} p^2(\mathbf{{x}}, t) dV \approx \frac{{1}}{{N}} \sum_i p_i^2(t)$, 
+        result = least_squares(residual,
+                               x0=np.ones_like(gamma_diag.shape[0]),
+                               bounds=(0.1, 5.0))
+        print(f'Mismatch in rates is {result.fun}s')
+        return np.abs(result.x)
 
-    vs the predicted energy update from Cremer-Muller equations when we excite room 2 with $b_S = [0, 1]$ and weigh the outputs
-    equally from both roons $c_R = \begin{{pmatrix}}1 & 0 \\ 0 & 1 \end{{pmatrix}}$.
+
+    eta_fit = fit_eta_to_decayfitnet(common_t60_ref, beta, gamma)
+    # gamma_c  = gamma * eta_fit
+
+    idx_slow = np.argmax(np.asarray(common_t60_ref))
+    gamma_c = gamma.copy()
+    gamma_c[idx_slow, idx_slow] *= eta_fit[0]
+
+    mo.md(rf"""# Fix mismatch in decay rates between observation and theory
+
+    Use the common decay times calculated from the data and use that to find the correct
+    absorption matrix that would reproduce the same decay rates.
+
+    Original absorption:
+    $\mathbf \Gamma$ :
+    $$\mathbf \Gamma = \begin{{pmatrix}}{gamma[0,0]:.4f}&{gamma[0,1]:.4f}&{gamma[0, 2]:.4f}\\{gamma[1,0]:.4f}&{gamma[1,1]:.4f}&{gamma[1,2]:.4f}\\{gamma[2,0]:.4f}&{gamma[2,1]:.4f}&{gamma[2, 2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
+
+    Corrected absorption:
+    $\mathbf \Gamma_c$ :
+    $$\mathbf \Gamma_c = \begin{{pmatrix}}{gamma_c[0,0]:.4f}&{gamma_c[0,1]:.4f}&{gamma_c[0, 2]:.4f}\\{gamma_c[1,0]:.4f}&{gamma_c[1,1]:.4f}&{gamma_c[1,2]:.4f}\\{gamma_c[2,0]:.4f}&{gamma_c[2,1]:.4f}&{gamma_c[2, 2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
+
     """)
-    return (fdtd_energy_env,)
+    return (gamma_c,)
+
+
+@app.cell
+def _(
+    Q,
+    common_t60,
+    common_t60_ref,
+    fs,
+    gamma_c,
+    mo,
+    n_samp,
+    np,
+    num_rooms,
+    rec_delay,
+    rec_room,
+    rec_weight,
+    src_delay,
+    src_room,
+    src_weight,
+    trajectory,
+    trajectory_with_delays,
+):
+    # trajectory for a particular source and receiver position
+    new_common_decay, Emarkov_src_rec_new = trajectory_with_delays(Q, src_weight[None,:], 
+                                                             rec_weight, src_delay[None, :], rec_delay, 
+                                                             src_room, rec_room, fs, n_samp,
+                                                             gamma_c)
+    Emarkov_src_rec_new = Emarkov_src_rec_new.squeeze()
+    new_common_t60= np.log(1e-6) / new_common_decay
+
+    # trajectory independent of source and receiver position
+    _, Emarkov_lossy_new = trajectory(Q, np.array([0, 1, 0]), np.eye(num_rooms), fs, n_samp, gamma_c)
+
+    mo.md(rf"""
+    The old common decay times from solving ODEs are {np.round(common_t60, 3)}s.
+
+    The common decay times from kmeans are {np.round(common_t60_ref, 3)}s.
+
+    The new common decay times from solving ODEs are {np.round(new_common_t60, 3)}s.
+    """)
+    return Emarkov_lossy_new, Emarkov_src_rec_new
 
 
 @app.cell(hide_code=True)
@@ -488,7 +674,7 @@ def _(V, fs, mo, np, num_rooms, pyFDN):
         return int(np.round(time_ms * 1e-3 * fs))
 
     Nroom = 24
-    avg_delay_ms = 50
+    avg_delay_ms = 30
     avg_delays = ms_to_samps(avg_delay_ms, fs)
     N1 = N2 = N3 = Nroom
     Ntot = N1 + N2 + N3
@@ -566,7 +752,7 @@ def _(
     block_diag,
     delays_per_fdn,
     fs,
-    gamma,
+    gamma_c,
     get_decay_matrix,
     get_feedback_matrix,
     mo,
@@ -586,7 +772,7 @@ def _(
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2),
                          pyFDN.random_orthogonal(N3))
-    Gamma = get_decay_matrix(gamma, delays_per_fdn, fs)
+    Gamma = get_decay_matrix(gamma_c, delays_per_fdn, fs)
     A = get_feedback_matrix(R_room, Qblocks, N1)
     A_lossy = A @ Gamma 
     _ok = pyFDN.is_unilossless(A)
@@ -673,7 +859,7 @@ def _(
 @app.cell
 def _(
     E_ex_lossy,
-    Emarkov_lossy,
+    Emarkov_lossy_new,
     V,
     fdtd_energy_env,
     mo,
@@ -704,7 +890,7 @@ def _(
         )
         ax.plot(
             tsec,
-            db(Emarkov_lossy[:, room]),
+            db(Emarkov_lossy_new[:, room]),
             "--",
             color=_colors[room],
             lw=1.5,
@@ -744,7 +930,7 @@ def _(mo):
 
 @app.cell
 def _(
-    Emarkov_src_rec,
+    Emarkov_src_rec_new,
     Y_src_rec,
     butter,
     db,
@@ -778,15 +964,14 @@ def _(
         output="sos",
     )
     _ref_rirs = sosfilt(_highpass_sos, sel_rirs[rec_idx], axis=-1)
-    edc_ref = pyFDN.auxiliary.acoustics.edc(_ref_rirs[:,_start_time:_nmax] / np.sqrt(np.sum(_ref_rirs[:, _start_time:_nmax]**2)), axis=-1)
-
-    edc_fdn = pyFDN.auxiliary.acoustics.edc(Y_src_rec[:,_start_time:_nmax, :].squeeze() / np.sqrt(np.sum(Y_src_rec[:, _start_time:_nmax,:].squeeze()**2)), axis=0)
+    edc_ref = pyFDN.auxiliary.acoustics.edc(_ref_rirs[:,_start_time:_nmax], axis=-1, normalize=True)
+    edc_fdn = pyFDN.auxiliary.acoustics.edc(Y_src_rec[:,_start_time:_nmax, :].squeeze(), axis=0, normalize=True)
 
     # shape noise to generate RIR from Markov ledger
     noise = np.random.normal(0, 1.0, n_samp)
     noise *= np.sqrt(n_samp / np.sum(noise**2))
-    rir_markov = np.einsum('tk, t -> tk', np.sqrt(Emarkov_src_rec), noise)
-    edc_markov = pyFDN.auxiliary.acoustics.edc(rir_markov / np.sqrt(np.sum(rir_markov**2)), axis=0)
+    rir_markov = np.einsum('tk, t -> tk', np.sqrt(Emarkov_src_rec_new), noise)
+    edc_markov = pyFDN.auxiliary.acoustics.edc(rir_markov, axis=0, normalize=True)
 
     for _rec, _ax in zip(range(len(rec_pos)), _axs):
         _ax.plot(tsec[_start_time:_nmax] * 1000, db(edc_ref[_rec, :]), lw=1.0, color="C0")
@@ -797,29 +982,10 @@ def _(
         _ax.set_ylabel("$EDC (db)$")
         _ax.grid(True, alpha=0.3)
 
-    _axs[0].set_ylim(-60, 0)
+    _axs[0].set_ylim(-60, 10)
     _axs[0].legend(['Reference', 'Cremer-Muller', 'GFDN'])
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    for _rec, _ax in zip(range(len(rec_pos)), _axs):
-        _ax.plot(tsec[_start_time:_nmax] * 1000, db(edc_ref[_rec, :]), lw=1.0, color="C0")
-        _ax.plot(tsec[:_nmax] * 1000, db(edc_markov[:, _rec]), lw=1.0, color="C2")
-        _ax.plot(tsec[_start_time:_nmax] * 1000, db(edc_fdn[:, _rec]), lw=1.0, color="C3")
-        _ax.set_title(f"receiver:{np.round(sel_rec[rec_idx[_rec]], 2)}", fontsize=9)
-        _ax.set_xlabel("time (ms)")
-        _ax.set_ylabel("$EDC (db)$")
-        _ax.grid(True, alpha=0.3)
-
-    _axs[0].set_ylim(-60, 0)
-    _axs[0].legend(['Reference', 'Cremer-Muller', 'GFDN'])
-    _fig.tight_layout()
-    mo.mpl.interactive(_fig)
-    return
-
-
-@app.cell
-def _(fs):
-    print(fs)
     return
 
 
