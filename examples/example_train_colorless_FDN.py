@@ -10,15 +10,17 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    return (mo,)
+    from docs.references import paper_link
+
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
     # Colorless FDN, trained in-notebook
 
-    The companion to **Colorless FDN**, which *loads* pre-optimized parameters from `.mat` files. Here we run the optimization ourselves with `pyFDN`'s training API, following *"Differentiable Feedback Delay Network for Colorless Reverberation", Dal Santo, Prawda, Schlecht, Välimäki, DAFx23* (and its "tiny colorless FDN" follow-up):
+    The companion to **Colorless FDN**, which *loads* pre-optimized parameters from `.mat` files. Here we run the optimization ourselves with `pyFDN`'s training API, following *{paper_link("Differentiable_FDN_For_Colorless_Reverberation")}* (and its "tiny colorless FDN" follow-up):
 
     1. `pyFDN.build_fdn` -- a standard FDN skeleton with random orthogonal feedback matrix.
     2. `pyFDN.train_fdn(model, "colorless")` -- optimize the feedback matrix and gains for a flat magnitude (magnitude MSE + a feedback-matrix sparsity penalty), in place.
@@ -166,9 +168,7 @@ def _(fs, init_build, opt_build, pyFDN):
 
     def render(build, rt):
         """build (with homogeneous decay) -> peak-normalized 1-D impulse response."""
-        ir = pyFDN.build_to_impz(
-            pyFDN.build_set_decay(build, rt), n_samples
-        ).squeeze()
+        ir = pyFDN.build_to_impz(pyFDN.build_set_decay(build, rt), n_samples).squeeze()
         # peak-normalize so the A/B compares timbre at matched level, not loudness.
         return pyFDN.fade_out(pyFDN.peak_normalize(ir), 2048)
 

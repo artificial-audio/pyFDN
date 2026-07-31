@@ -1,0 +1,223 @@
+@misc{Concert_Hall_Impulse_Responses,
+  title = {legacy.spa.aalto.fi/projects/poririrs},
+  author = {Juha Merimaa, Timo Peltonen, and Tapio Lokki},
+  year = {2005},
+  url = {http://legacy.spa.aalto.fi/projects/poririrs/}
+}
+
+@article{Allpass_Feedback_Delay_Networks,
+  title = {Allpass Feedback Delay Networks},
+  author = {Schlecht, Sebastian J.},
+  year = 2021,
+  journal = {IEEE Transactions on Signal Processing},
+  volume = {69},
+  pages = {1028--1038},
+  issn = {1053-587X},
+  doi = {10.1109/tsp.2021.3053507},
+  abstract = {In the 1960s, Schroeder and Logan introduced delay line-based allpass filters, which are still popular due to their computational efficiency and versatile applicability in artificial reverberation, decorrelation, and dispersive system design. In this work, we extend the theory of allpass systems to any arbitrary connection of delay lines, namely feedback delay networks (FDNs). We present a characterization of uniallpass FDNs, i.e., FDNs, which are allpass for an arbitrary choice of delays. Further, we develop a solution to the completion problem, i.e., given an FDN feedback matrix to determine the remaining gain parameters such that the FDN is allpass. Particularly useful for the completion problem are feedback matrices, which yield a homogeneous decay of all system modes. Finally, we apply the uniallpass characterization to previous FDN designs, namely, Schroeder's series allpass and Gardner's nested allpass for single-input, single-output systems, and, Poletti's unitary reverberator for multi-input, multi-output systems and demonstrate the significant extension of the design space.},
+  url = {https://ieeexplore.ieee.org/document/9332286}
+}
+
+@article{Scattering_in_Feedback_Delay_Networks,
+  author = {Sebastian J. Schlecht and Emanuël A. P. Habets},
+  title = {Scattering in Feedback Delay Networks},
+  journal = {IEEE/ACM Transactions on Audio, Speech, and Language Processing},
+  volume = {28},
+  pages = {1915--1924},
+  year = {2020},
+  url = {https://ieeexplore.ieee.org/document/9113451}
+}
+
+@article{Decorrelation_in_Feedback_Delay_Networks,
+  author = {Sebastian J. Schlecht and Jon Fagerström and Vesa Välimäki},
+  title = {Decorrelation in Feedback Delay Networks},
+  journal = {IEEE/ACM Transactions on Audio, Speech and Language Processing},
+  volume = {31},
+  pages = {3478--3487},
+  year = {2023},
+  url = {https://ieeexplore.ieee.org/document/10251633/}
+}
+
+@inproceedings{Differentiable_FDN_For_Colorless_Reverberation,
+  author = {Gloria Dal Santo and Karolina Prawda and Sebastian J. Schlecht and Vesa Välimäki},
+  title = {Differentiable Feedback Delay Network For Colorless Reverberation},
+  booktitle = {International Conference on Digital Audio Effects (DAFx23)},
+  address = {Copenhagen, Denmark},
+  year = {2023},
+  url = {https://gispoint.de/fileadmin/user_upload/paper_gis_open/DLA_2023/537740052.pdf}
+}
+
+@inproceedings{Schlecht2019DenseReverberationDelay,
+  author = {Sebastian J. Schlecht and Emanuël A. P. Habets},
+  title = {Dense Reverberation with Delay Feedback Matrices},
+  booktitle = {{{IEEE}} Workshop on Applications of Signal Processing to Audio and Acoustics ({{WASPAA}})},
+  year = {2019},
+  pages = {1--5},
+  doi = {10.1109/waspaa.2019.8937284},
+  abstract = {This paper received the [Best Paper Award](http://waspaa.com/). Feedback delay networks (FDNs) belong to a general class of recursive filters which are widely used in artificial reverberation and decorrelation applications. One central challenge in the design of FDNs is the generation of sufficient echo density in the impulse response without compromising the computational efficiency. In a previous contribution, we have demonstrated that the echo density of an FDN grows polynomially over time, and that the growth depends on the number and lengths of the delays. In this work, we introduce so-called delay feedback matrices (DFMs) where each matrix entry is a scalar gain and a delay. While the computational complexity of DFMs is similar to a scalar-only feedback matrix, we show that the echo density grows significantly faster over time, however, at the cost of non-uniform modal decays.},
+  url = {https://ieeexplore.ieee.org/document/8937284}
+}
+
+@article{Schlecht2024ModalExcitationFeedback,
+  title = {Modal Excitation in Feedback Delay Networks},
+  author = {Schlecht, Sebastian J. and Scerbo, Matteo and Sena, Enzo De and Välimäki, Vesa},
+  year = 2024,
+  journal = {IEEE Signal Processing Letters},
+  volume = {31},
+  number = {99},
+  pages = {2690--2694},
+  issn = {1070-9908},
+  doi = {10.1109/lsp.2024.3466790},
+  abstract = {Feedback delay networks (FDNs) are used in audio processing and synthesis. The modal shapes of the system describe the modal excitation by input and output signals. Previously, the Ehrlich-Aberth method was used to find modes in large FDNs. Here, the method is extended to the corresponding eigenvectors indicating the modal shape. In particular, the computational complexity of the proposed analysis method does not depend on the delay-line lengths and is thus suitable for large FDNs, such as artificial reverberators. We show the relation between the compact generalized eigenvectors in the delay state space and the spatially extended modal shapes in the state space. We illustrate this method with an example FDN in which the suggested modal excitation control does not increase the computational cost. The modal shapes can help optimize input and output gains. This letter teaches how selecting the input and output points along the delay lines of an FDN adjusts the spectral shape of the system output.},
+  url = {https://ieeexplore.ieee.org/document/10689470/}
+}
+
+@inproceedings{Schlecht2020FDNTBFeedbackDelay,
+  title = {FDNTB: The Feedback Delay Network Toolbox},
+  booktitle = {23rd International Conference on Digital Audio Effects (Dafx2020)},
+  author = {Schlecht, Sebastian J.},
+  year = 2020,
+  series = {Proc. {{Int}}. {{Conf}}. {{Digital}} Audio Effects (Dafx)},
+  pages = {211--218},
+  address = {Vienna, Austria},
+  abstract = {Feedback delay networks (FDNs) are recursive filters, which are widely used for artificial reverberation and decorrelation. While there exists a vast literature on a wide variety of reverb topologies, this work aims to provide a unifying framework to design and analyze delay-based reverberators. To this end, we present the Feedback Delay Network Toolbox (FDNTB), a collection of the MATLAB functions and example scripts. The FDNTB includes various representations of FDNs and corresponding translation functions. Further, it provides a selection of special feedback matrices, topologies, and attenuation filters. In particular, more advanced algorithms such as modal decomposition, time-varying matrices, and filter feedback matrices are readily accessible. Furthermore, our toolbox contains several additional FDN designs. Providing MATLAB code under a GNU-GPL 3.0 license and including illustrative examples, we aim to foster research and education in the field of audio processing.},
+  url = {https://dafx2020.mdw.ac.at/proceedings/papers/DAFx2020_paper_53.pdf}
+}
+
+@inproceedings{Schlecht2015PracticalConsiderationsTimevarying,
+  title = {Practical Considerations of Time-Varying Feedback Delay Networks},
+  booktitle = {Proc. {{Audio}} Eng. {{Soc}}. {{Conv}}.},
+  author = {Schlecht, Sebastian J and Habets, Emanuël A P},
+  year = 2015,
+  series = {Proc. {{Audio}} Eng. {{Soc}}. {{Conv}}.},
+  pages = {1--9},
+  abstract = {Feedback delay networks (FDNs) can be efficiently used to generate parametric artificial reverberation. Recently, the authors proposed a novel approach to time-varying FDNs by introducing a time-varying feedback matrix. The formulation of the time-varying feedback matrix was given in the complex eigenvalue domain, whereas this contribution specifies the requirements for real valued time-domain processing. In addition, the computational costs of different time-varying feedback matrices, which depend on the matrix type and modulation function, are discussed. In a performance evaluation, the proposed orthogonal matrix modulation is compared to a direct interpolation of the matrix entries.},
+  langid = {english},
+  url = {https://www.sebastianjiroschlecht.com/publication/schlecht-2015-tj/}
+}
+
+@inproceedings{Schlecht2018SignagnosticMatrixDesign,
+  title = {Sign-Agnostic Matrix Design for Spatial Artificial Reverberation with Feedback Delay Networks},
+  booktitle = {{{AES}} Conference on Spatial Reproduction},
+  author = {Schlecht, Sebastian J and Habets, Emanuël A P},
+  year = 2018,
+  month = jul,
+  pages = {1--10},
+  abstract = {Feedback delay networks (FDNs) are an efficient tool for creating artificial reverberation. Recently, various designs for spatially extending the FDN were proposed. A central topic in the design of spatial FDNs is the choice of the feedback matrix that governs the interaction between spatially distributed elements and therefore the spatial impression. In the design prototype, the feedback matrix is chosen to be unilossless such that the reverberation time is infinite. However, in physics- and aesthetics-driven design of spatial FDNs, the target feedback matrix is not necessarily unilossless. This contribution proposes an optimization method for finding a close unilossless feedback matrix and improves the accuracy by relaxing the specification of the target matrix phase component and focussing on the sign-agnostic component.},
+  langid = {english},
+  url = {https://www.sebastianjiroschlecht.com/publication/schlecht-2018-tw/}
+}
+
+@article{Schlecht2019ModalDecompositionFeedback,
+  title = {Modal Decomposition of Feedback Delay Networks},
+  author = {Schlecht, Sebastian J and Habets,  Emanuël A P},
+  year = 2019,
+  journal = {IEEE Transactions on Signal Processing},
+  volume = {67},
+  number = {20},
+  pages = {5340--5351},
+  issn = {1053-587X},
+  doi = {10.1109/tsp.2019.2937286},
+  abstract = {Feedback delay networks (FDNs) belong to a general class of recursive filters which are widely used in sound synthesis and physical modeling applications. We present a numerical technique to compute the modal decomposition of the FDN transfer function. The proposed pole finding algorithm is based on the Ehrlich-Aberth iteration for matrix polynomials and has improved computational performance of up to three orders of magnitude compared to a scalar polynomial root finder. The computational performance is further improved by bounds on the pole location and an approximate iteration step. We demonstrate how explicit knowledge of the FDN's modal behavior facilitates analysis and improvements for artificial reverberation. The statistical distribution of mode frequency and residue magnitudes demonstrate that relatively few modes contribute a large portion of impulse response energy.},
+  url = {https://www.sebastianjiroschlecht.com/publication/schlecht-2019-uj/}
+}
+
+@inproceedings{Schlecht2017AccurateReverberationTime,
+  title = {Accurate Reverberation Time Control in Feedback Delay Networks},
+  booktitle = {Proc. {{Int}}. {{Conf}}. {{Digital}} Audio Effects (Dafx)},
+  author = {Schlecht, Sebastian J and Habets, Emanuël A P},
+  year = 2017,
+  month = aug,
+  pages = {337--344},
+  abstract = {The reverberation time is one of the most prominent acoustical qualities of a physical room. Therefore, it is crucial that artificial reverberation algorithms match a specified target reverberation time accurately. In feedback delay networks, a popular framework for modeling room acoustics, the reverberation time is determined by combining delay and attenuation filters such that the frequency-dependent attenuation response is proportional to the delay length and by this complying to a global attenuation-per-second. However, only few details are available on the attenuation filter design as the approximation errors of the filter design are often regarded negligible. In this work, we demonstrate that the error of the filter approximation propagates in a non-linear fashion to the resulting reverberation time possibly causing large deviation from the specified target. For the special case of a proportional graphic equalizer, we propose a non-linear least squares solution and demonstrate the improved accuracy with a Monte Carlo simulation.},
+  url = {https://dafx17.eca.ed.ac.uk/papers/DAFx17_paper_11.pdf}
+}
+
+@article{Schlecht2015TimevaryingFeedbackMatrices,
+  title = {Time-Varying Feedback Matrices in Feedback Delay Networks and Their Application in Artificial Reverberation},
+  author = {Schlecht, Sebastian J and Habets, Emanuël A P},
+  year = 2015,
+  journal = {The Journal of the Acoustical Society of America},
+  volume = {138},
+  number = {3},
+  pages = {1389--1398},
+  issn = {0001-4966},
+  doi = {10.1121/1.4928394},
+  abstract = {This paper introduces a time-variant reverberation algorithm as an extension of the feedback delay network (FDN). By modulating the feedback matrix nearly continuously over time, a complex pattern of concurrent amplitude modulations of the feedback paths evolves. Due to its complexity, the modulation produces less likely perceivable artifacts and the time-variation helps to increase the liveliness of the reverberation tail. A listening test, which has been conducted, confirms that the perceived quality of the reverberation tail can be enhanced by the feedback matrix modulation. In contrast to the prior art time-varying allpass FDNs, it is shown that unitary feedback matrix modulation is guaranteed to be stable. Analytical constraints on the pole locations of the FDN help to describe the modulation effect in depth. Further, techniques and conditions for continuous feedback matrix modulation are presented.},
+  langid = {english},
+  pmid = {26428777},
+  url = {https://pubs.aip.org/asa/jasa/article-abstract/138/3/1389/680169/Time-varying-feedback-matrices-in-feedback-delay?redirectedFrom=fulltext}
+}
+
+@article{Schroeder1961ColorlessArtificialReverberation,
+  title = {"Colorless" Artificial Reverberation},
+  author = {Schroeder, Manfred R and Logan, B F},
+  year = 1961,
+  journal = {IRE Transactions on Audio},
+  volume = {9},
+  number = {6},
+  pages = {209--214},
+  issn = {0096-1981},
+  doi = {10.1109/tau.1961.1166351},
+  abstract = {Electronic devices are widely used to introduce in sound signals an artificial reverberation subjectively similar to that caused by multiple reflections in a room. Attention is focused on those devices employing delay loops. Usually, these devices have a comb-like frequency response which adds an undesired "color" to the sound quality. Also, for a given reverberation time, the density of echoes is far below that encountered in a room, giving rise to a noticeable flutter effect in transient sounds. A class of all-pass filters is described which may be employed in cascade to obtain "colorless" reverberation with high echo density.},
+  url = {https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/reading/Schroeder_1961.pdf}
+}
+
+@article{Vaananen1997EfficientParametricReverberator,
+  title = {Efficient and Parametric Reverberator for Room Acoustics Modeling},
+  author = {Väänänen, Riitta and Välimäki, Vesa and Huopaniemi, Jyri and Karjalainen, Matti},
+  year = 1997,
+  month = sep,
+  journal = {Proc. Int. Comput. Music Conf.},
+  pages = {200--203},
+  url = {https://www.researchgate.net/publication/298974672_Efficient_and_Parametric_Reverberator_for_Room_Acoustics_Modeling}
+}
+
+@article{Poletti1995UnitaryReverberatorReduced,
+  title = {A Unitary Reverberator for Reduced Colouration in Assisted Reverberation Systems},
+  author = {Poletti, Mark A},
+  year = 1995,
+  month = jul,
+  journal = {INTER-NOISE and NOISE-CON},
+  volume = {5},
+  pages = {1223--1232},
+  langid = {english},
+  url = {https://ince.publisher.ingentaconnect.com/contentone/ince/incecp/1995/00001995/00000005/art00114;jsessionid=48cdkcc83ti6g.x-ic-live-02}
+}
+
+@article{Gardner1992RealtimeMultichannelRoom,
+  title = {A Real-Time Multichannel Room Simulator},
+  author = {Gardner, William G},
+  year = 1992,
+  journal = {The Journal of the Acoustical Society of America},
+  volume = {92},
+  number = {4\_Supplement},
+  pages = {2395--2395},
+  issn = {0001-4966},
+  doi = {10.1121/1.404752},
+  abstract = {A room simulator has been developed as part of a project involving virtual acoustic environments. The system is similar to auditorium simulators for home use. The simulated reverberant field is rendered using four to six loudspeakers evenly spaced around the perimeter of a listening area. Listeners are not constrained to any particular orientation, although best results are obtained near the center of the space. The simulation is driven from a simple description of the desired room and the location of the sound source. The system accepts monophonic input sound and renders the simulated reverberant field in real time. Early echo generation is based on the source image model, which determines a finite impulse response filter per output channel. Diffuse reverberant field generation is accomplished using infinite impulse response reverberators based on nested and cascaded allpass filters. The system is implemented using Motorola 56001 digital signal processors, one per output channel. The talk will discuss implementation, design tradeoffs, and results.},
+  langid = {english},
+  url = {https://pubs.aip.org/asa/jasa/article/92/4_Supplement/2395/646024/A-real-time-multichannel-room-simulator}
+}
+
+@article{Valimaki2016AllAudioEqualization,
+  title = {All about Audio Equalization: Solutions and Frontiers},
+  author = {Välimäki, Vesa and Reiss, Joshua D.},
+  year = 2016,
+  journal = {Applied Sciences},
+  volume = {6},
+  number = {5},
+  pages = {129},
+  doi = {10.3390/app6050129},
+  abstract = {Audio equalization is a vast and active research area. The extent of research means that one often cannot identify the preferred technique for a particular problem. This review paper bridges those gaps, systemically providing a deep understanding of the problems and approaches in audio equalization, their relative merits and applications. Digital signal processing techniques for modifying the spectral balance in audio signals and applications of these techniques are reviewed, ranging from classic equalizers to emerging designs based on new advances in signal processing and machine learning. Emphasis is placed on putting the range of approaches within a common mathematical and conceptual framework. The application areas discussed herein are diverse, and include well-defined, solvable problems of filter design subject to constraints, as well as newly emerging challenges that touch on problems in semantics, perception and human computer interaction. Case studies are given in order to illustrate key concepts and how they are applied in practice. We also recommend preferred signal processing approaches for important audio equalization problems. Finally, we discuss current challenges and the uncharted frontiers in this field. The source code for methods discussed in this paper is made available at https://code.soundsoftware.ac.uk/projects/allaboutaudioeq.},
+  langid = {english},
+  url = {https://www.mdpi.com/2076-3417/6/5/129}
+}
+
+@article{Delay_Network_Architectures_for_Room_and_Coupled_Space_Modeling,
+  title = {Delay Network Architectures for Room and Coupled Space Modeling},
+  author = {Orchisama Das , Jonathan S. Abel , Elliot K. Canfield-Dafilou},
+  year = 2020,
+  month = Sep,
+  url = {https://dafx2020.mdw.ac.at/proceedings/papers/DAFx2020_paper_25.pdf}
+}

@@ -10,7 +10,9 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    return (mo,)
+    from docs.references import paper_link
+
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -29,13 +31,16 @@ def _(mo):
 
     so we compare the distribution of total residues, undriven residues, and
     the input–output drive.
+    """)
+    return
 
-    Reference: *Schlecht, S., Habets, E. (2019). Modal Decomposition of Feedback
-    Delay Networks. IEEE Transactions on Signal Processing 67(20), 5340-5351.*
-    [doi:10.1109/tsp.2019.2937286](https://dx.doi.org/10.1109/tsp.2019.2937286)
 
-    Original MATLAB: `example_randomFDNstatistics.m`, Sebastian J. Schlecht, 23 April 2018.
-    Delays are scaled down relative to MATLAB to keep the eigendecomposition fast.
+@app.cell
+def _(mo, paper_link):
+    mo.md(f"""
+    Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}*
+
+    Delays are scaled down to keep the eigendecomposition fast.
     """)
     return
 
