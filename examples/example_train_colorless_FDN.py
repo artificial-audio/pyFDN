@@ -9,6 +9,7 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+
     from docs.references import paper_link
 
     return mo, paper_link
@@ -167,9 +168,7 @@ def _(fs, init_build, opt_build, pyFDN):
 
     def render(build, rt):
         """build (with homogeneous decay) -> peak-normalized 1-D impulse response."""
-        ir = pyFDN.build_to_impz(
-            pyFDN.build_set_decay(build, rt), n_samples
-        ).squeeze()
+        ir = pyFDN.build_to_impz(pyFDN.build_set_decay(build, rt), n_samples).squeeze()
         # peak-normalize so the A/B compares timbre at matched level, not loudness.
         return pyFDN.fade_out(pyFDN.peak_normalize(ir), 2048)
 

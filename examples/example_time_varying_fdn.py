@@ -208,8 +208,8 @@ def _(
             input_gain,
             output_gain,
             direct,
-            absorption=absorption,
-            extra_matrix=tv_matrix,
+            post_delay=absorption,
+            post_matrix=tv_matrix,
         )
     return matrix_types, reverbed_synth
 

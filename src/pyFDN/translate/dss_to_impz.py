@@ -119,7 +119,7 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
             build.B,
             build.C,
             build.D,
-            absorption=absorption,
+            post_delay=absorption,
         )
         if out_j.ndim == 1:
             out_j = out_j[:, np.newaxis]
