@@ -36,7 +36,9 @@ def load_audio(
     """
     import soundfile as sf
 
-    path = files(package) / name
+    root = files(package)
+    path = find_file(root, name)
+
     try:
         with path.open("rb") as f:
             data, file_fs = sf.read(f, dtype="float64")
@@ -121,3 +123,14 @@ def list_samples() -> dict[str, str]:
         filename = path.stem  # Get the file name without extension
         samples[filename] = relative.as_posix()
     return samples
+
+def find_file(root, filename):
+    for item in root.iterdir():
+        if item.is_file() and item.name == filename:
+            return item
+        if item.is_dir():
+            try:
+                return find_file(item, filename)
+            except FileNotFoundError:
+                pass
+    raise FileNotFoundError(filename)
