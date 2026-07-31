@@ -453,8 +453,9 @@ def _(
                                                       ROOM_DIMS, ROOM_START, apertures, return_delays=True, fs=fs)
     src_room = [find_room(ROOM_DIMS, ROOM_START, SOURCE_POS)]
 
+
     # for now select a few receivers and plot their ledger
-    rec_idx = [2, 8, 13, 21, 30]
+    rec_idx = [2, 4, 8, 10, 13, 21, 30]
     rec_pos = dataset_to_sim_mic_pos(sel_rec[rec_idx])
     rec_params = np.asarray([get_point_to_room_weights(rec_pos[k], ROOM_DIMS, ROOM_START, 
                                                                   apertures, return_delays=True, fs=fs) 
@@ -836,18 +837,14 @@ def _(
     # size is num_delay_lines x num_sources
     num_src = 1
     B_src = np.zeros((Ntot, num_src))
-    B_src[:N1, 0] = src_weight[0] / np.sqrt(N1)
-    B_src[N1:N1+N2, 0] = src_weight[1] / np.sqrt(N2)
-    B_src[N1+N2:, 0] = src_weight[2] / np.sqrt(N3)
 
     # size is num_receivers x num_delay_lines
     num_rec = rec_pos.shape[0]
     C_rec = np.zeros((num_rec, Ntot))
     offset = 0
     for _room, _M in enumerate([N1, N2, N3]):
-        C_rec[:, offset:offset+_M] = (
-            rec_weight[:, _room][:, None] / np.sqrt(_M)
-        )
+        B_src[offset: offset+ _M, 0] = np.sqrt(src_weight[_room]) / np.sqrt(_M)
+        C_rec[:, offset:offset+_M] = np.sqrt(rec_weight[:, _room])[:, None] / np.sqrt(_M)
         offset += _M
 
     Y_src_rec = run_gfdn(A_lossy, B_src, C_rec, delays, n_samp, tv_matrix=tv_matrix)
@@ -949,7 +946,7 @@ def _(
     sosfilt,
     tsec,
 ):
-    _fig, _axs = plt.subplots(1, num_rec, figsize=(12.5, 3.5), sharex=True, sharey=True)
+    _fig, _axs = plt.subplots(1, num_rec, figsize=(15.5, 3.5), sharex=True, sharey=True)
     _tmax =  tsec[-1]
     _nmax = int(_tmax * len(tsec) / tsec[-1])
     _src = 1

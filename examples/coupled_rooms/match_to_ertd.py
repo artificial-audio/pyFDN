@@ -622,16 +622,15 @@ def _(
     # size is num_delay_lines x num_sources
     num_src = 1
     B_src = np.zeros((Ntot, num_src))
-    B_src[:N1, 0] = src_weight[0] / np.sqrt(N1)
-    B_src[N1:, 0] = src_weight[1] / np.sqrt(N2)
 
     # size is num_receivers x num_delay_lines
     num_rec = rec_pos.shape[0]
     C_rec = np.zeros((num_rec, Ntot))
     offset = 0
     for _room, _M in enumerate([N1, N2]):
+        B_src[offset:offset + _M, 0] = np.sqrt(src_weight[_room]) / np.sqrt(_M)
         C_rec[:, offset:offset+_M] = (
-            rec_weight[:, _room][:, None] / np.sqrt(_M)
+            np.sqrt(rec_weight[:, _room][:, None]) / np.sqrt(_M)
         )
         offset += _M
 

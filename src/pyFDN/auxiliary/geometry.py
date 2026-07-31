@@ -378,13 +378,17 @@ def get_point_to_room_weights(
         if aperture_hit_order is None:
             continue
 
-        weights[cur_target_room_idx] = _chained_aperture_weight(
-            aperture_hit_order,
-            point,
-            start_room_idx,
-            ROOM_DIMS,
-            apertures,
-        )
+        # weights[cur_target_room_idx] = _chained_aperture_weight(
+        #     aperture_hit_order,
+        #     point,
+        #     start_room_idx,
+        #     ROOM_DIMS,
+        #     apertures,
+        # )
+
+        weights[
+            cur_target_room_idx] = spherical_polygon_intersection_solid_angle(
+                aperture_hit_order, point) / (4 * np.pi)
 
         distance_traversed = 0.0
         cur_point = point.copy()
@@ -393,10 +397,6 @@ def get_point_to_room_weights(
             cur_point = aperture.centroid
         delays[cur_target_room_idx] = int(
             np.round(distance_traversed / speed_sound * fs))
-
-    # adds positional dependency, according to Summers' formula
-    # weights[cur_target_room_idx] *= (speed_sound *
-    #                                  fs) / (4 * np.pi * distance_traversed**2)
 
     weights[start_room_idx] = 1 - np.sum(weights)
 
