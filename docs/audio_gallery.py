@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import base64
+import bibtexparser
 import html
 from collections import defaultdict
 from dataclasses import dataclass
@@ -47,8 +47,21 @@ def discover_audio_files() -> list[AudioExample]:
         examples.append(AudioExample(path, category))
     return examples
 
+def load_references(bib_file: Path) -> dict[str, dict[str, str]]:
+    with open(bib_file, encoding="utf-8") as bibfile:
+        bib_database = bibtexparser.load(bibfile)
+    references = {
+        entry["ID"]: {"title": entry.get("title", "Unknown Title"), "url": entry.get("url", "#")}
+        for entry in bib_database.entries
+    }
+    return references
+
 
 def render_gallery(examples: list[AudioExample]) -> str:
+    # Load references from the .bib file
+    bib_file = AUDIO_SOURCE_DIR / "sounds_references.bib"
+    references = load_references(bib_file)
+
     grouped: dict[str, list[AudioExample]] = defaultdict(list)
     for example in examples:
         grouped[example.category].append(example)
@@ -84,16 +97,34 @@ def render_gallery(examples: list[AudioExample]) -> str:
         for example in entries:
             label_html = html.escape(example.display_label)
             src = example.audio_url
-            lines.extend(
-                [
-                    f"   <p>{label_html}<br>",
-                    "   <audio controls>",
-                    f"       <source src=\"{src}\" type=\"audio/wav\">",
-                    "       Your browser does not support the audio element.",
-                    "   </audio>",
-                    "   </p>",
-                ]
-            )
+            file_key = example.filename.rsplit(".", 1)[0]
+
+            if file_key in references:
+                ref = references[file_key]
+                title = html.escape(ref["title"])
+                url = html.escape(ref["url"])
+
+                lines.extend(
+                    [
+                        f"   <p>{label_html} (source <a href=\"{url}\">{title}</a>)<br>",
+                        "   <audio controls>",
+                        f"       <source src=\"{src}\" type=\"audio/wav\">",
+                        "       Your browser does not support the audio element.",
+                        "   </audio>",
+                        "   </p>",
+                    ]
+                )
+            else:
+                lines.extend(
+                    [
+                        f"   <p>{label_html}<br>",
+                        "   <audio controls>",
+                        f"       <source src=\"{src}\" type=\"audio/wav\">",
+                        "       Your browser does not support the audio element.",
+                        "   </audio>",
+                        "   </p>",
+                    ]
+                )
 
         lines.append("")
 
@@ -109,7 +140,7 @@ def render_gallery(examples: list[AudioExample]) -> str:
     return "\n".join(lines)
 
 
-def generate_gallery(output_file: Path = OUTPUT_FILE) -> str:
+def generate_audio_gallery(output_file: Path = OUTPUT_FILE) -> str:
     examples = discover_audio_files()
     rendered = render_gallery(examples)
     output_file.write_text(rendered, encoding="utf-8")
@@ -117,4 +148,4 @@ def generate_gallery(output_file: Path = OUTPUT_FILE) -> str:
 
 
 if __name__ == "__main__":
-    generate_gallery()
+    generate_audio_gallery()

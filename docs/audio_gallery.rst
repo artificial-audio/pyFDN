@@ -8,6 +8,30 @@ Audio examples demonstrating ``pyFDN``. The gallery is generated
 automatically from every ``.wav`` file under ``src/pyFDN/audio/``, grouped
 by the subfolder each file is located in.
 
+drums
+-----
+
+.. raw:: html
+
+   <p>drum_hit.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/drum_hit.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>drums.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/drums.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>snare_drum_dry.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/snare_drum_dry.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
 general
 -------
 
@@ -32,26 +56,74 @@ general
    </audio>
    </p>
 
+piano
+-----
+
+.. raw:: html
+
+   <p>piano_key.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/piano/piano_key.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>piano_key_b.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/piano/piano_key_b.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
 speech
 ------
 
 .. raw:: html
 
-   <p>p008_emo_contentment_sentences.wav<br>
+   <p>angelina_06_delgado_f000139.wav (source <a href="https://huggingface.co/datasets/mueller91/MLAAD">MLAAD</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/angelina_06_delgado_f000139.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>argentinetz_s000371.wav (source <a href="https://huggingface.co/datasets/mueller91/MLAAD">MLAAD</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/argentinetz_s000371.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>p008_emo_contentment_sentences.wav (source <a href=""></a>)<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/p008_emo_contentment_sentences.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
 
-srings
-------
+strings
+-------
 
 .. raw:: html
 
-   <p>cl-class-bb-arp-des-32.wav<br>
+   <p>guitar.wav<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/srings/cl-class-bb-arp-des-32.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/guitar.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>guitar_b.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/guitar_b.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
+wind
+----
+
+.. raw:: html
+
+   <p>tr-1967-ex1-32.wav (source <a href=""></a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/wind/tr-1967-ex1-32.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>

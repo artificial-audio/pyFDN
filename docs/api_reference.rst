@@ -183,6 +183,8 @@ General Utilities
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
    pyFDN.load_audio
+   pyFDN.load_sample
+   pyFDN.list_samples
    pyFDN.pole_boundaries
    pyFDN.skew
 
