@@ -19,6 +19,12 @@ drums
        Your browser does not support the audio element.
    </audio>
    </p>
+   <p>drum_hit2.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/drum_hit2.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
    <p>drums.wav<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/drums.wav" type="audio/wav">
@@ -43,15 +49,39 @@ general
        Your browser does not support the audio element.
    </audio>
    </p>
+   <p>pan_right_to_left.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/pan_right_to_left.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
    <p>s3_r4_o.wav<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/s3_r4_o.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
+   <p>small_bells.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/small_bells.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
    <p>synth_dry.wav<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/synth_dry.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>tap_on_glass.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/tap_on_glass.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>taps.wav<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/taps.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
