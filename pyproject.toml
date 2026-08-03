@@ -223,3 +223,10 @@ disable_error_code = ["operator", "index", "arg-type"]
 # Configure the max output size in Marimo notebooks
 [tool.marimo.runtime]
 output_max_bytes = 80_000_000
+# The examples import ``docs.references`` for their bibliography links, which
+# needs the project root on sys.path. Marimo puts the notebook's own directory
+# there instead, so without this every example fails on its first cell with
+# ``ModuleNotFoundError: No module named 'docs.references'``. Entries are
+# resolved relative to this file, so marimo can be started from any directory.
+# Pytest does not need it, as it inserts its rootdir automatically.
+pythonpath = ["."]
