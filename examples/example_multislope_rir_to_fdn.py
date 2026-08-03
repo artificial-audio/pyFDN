@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App()
 
 
@@ -38,10 +38,6 @@ def _(mo):
        `pyFDN.slope_amplitude_to_level`.
     5. Build **one FDN per slope**, sum them, and compare the octave-band EDCs
        with the original.
-
-    The estimator stays outside `pyFDN`: it returns plain NumPy arrays — decay
-    times, amplitudes, noise floor — and only those arrays enter the FDN
-    design below.
     """)
     return
 
@@ -426,7 +422,7 @@ def _(f_centre, fs, np, pyFDN, resynthesis, rir, sosfilt):
 
     edc_target = np.stack([band_edc_db(rir, k) for k in range(len(f_centre))])
     edc_fdn = np.stack([band_edc_db(resynthesis, k) for k in range(len(f_centre))])
-    return band_edc_db, edc_fdn, edc_target
+    return edc_fdn, edc_target
 
 
 @app.cell
