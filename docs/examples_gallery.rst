@@ -28,6 +28,8 @@ Absorption & Filters
 
    * - `Absorption Geq <_static/marimo/notebooks/example_absorption_geq.html>`_
      - Open the rendered marimo notebook.
+   * - `Multi-slope decay: from a coupled-space RIR to an FDN <_static/marimo/notebooks/example_multislope_rir_to_fdn.html>`_
+     - A single room decays with one exponential slope per frequency band, and ``pyFDN.estimate_rt_bands`` is built for exactly that case. Two coupled rooms do not: energy leaks from the small room into the large one, so the energy decay curve (EDC) bends — a fast slope early on, a slow one later, and a single reverberation time fitted to it describes neither room.
    * - `Rir To Fdn <_static/marimo/notebooks/example_rir_to_fdn.html>`_
      - Open the rendered marimo notebook.
 

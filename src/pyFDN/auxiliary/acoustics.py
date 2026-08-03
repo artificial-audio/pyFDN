@@ -209,6 +209,123 @@ def echo_density(
     return float(t_abel), echo_dens
 
 
+def octave_bands(
+    fc: float = 1000.0,
+    start: float = -4.0,
+    n: int = 8,
+    fs: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Octave band edges and centre frequencies.
+
+    Centre frequencies are ``fc * 2**k`` for ``k = start … start + n - 1``; the
+    band edges are the centre frequency divided and multiplied by ``sqrt(2)``.
+
+    Parameters
+    ----------
+    fc : float
+        Reference centre frequency in Hz (default 1000).
+    start : float
+        Octave offset of the lowest band relative to ``fc`` (default -4 → 62.5 Hz).
+    n : int
+        Number of octave bands (default 8).
+    fs : float, optional
+        If given, bands whose upper edge reaches Nyquist (``fs/2``) are dropped.
+
+    Returns
+    -------
+    bands : (n_bands, 2) ndarray
+        Lower and upper edge of each band in Hz.
+    f_centre : (n_bands,) ndarray
+        Centre frequency of each band in Hz.
+    """
+    f_centre = fc * 2.0 ** np.arange(start, start + n)
+    fd = np.sqrt(2.0)
+    bands = np.stack((f_centre / fd, f_centre * fd), axis=1)
+
+    if fs is not None:
+        valid = bands[:, 1] < fs / 2
+        bands = bands[valid]
+        f_centre = f_centre[valid]
+
+    return bands, f_centre
+
+
+def octave_band_filterbank(
+    bands: np.ndarray, fs: float, filter_order: int = 8
+) -> list[np.ndarray]:
+    """Butterworth bandpass filters (SOS) for the given band edges.
+
+    Parameters
+    ----------
+    bands : (n_bands, 2) array
+        Lower and upper band edges in Hz, e.g. from :func:`octave_bands`.
+    fs : float
+        Sampling rate in Hz.
+    filter_order : int
+        Order of the bandpass filters (default 8). The Butterworth prototype
+        order is ``filter_order // 2``, so the value counts poles of the
+        bandpass, not of the lowpass prototype.
+
+    Returns
+    -------
+    list of (n_sections, 6) ndarray
+        One SOS array per band.
+    """
+    from scipy.signal import butter
+
+    nyquist = fs / 2.0
+    sos_bank = []
+    for lower, upper in np.asarray(bands, dtype=float):
+        if lower >= nyquist:
+            raise ValueError(
+                f"Band edge {lower} Hz is at or above Nyquist {nyquist} Hz"
+            )
+        # the top band is truncated just below Nyquist, where the filter design
+        # would otherwise be ill-conditioned
+        edges = np.minimum(0.99, np.array([lower, upper]) / nyquist)
+        sos_bank.append(
+            butter(filter_order // 2, edges, btype="bandpass", output="sos")
+        )
+    return sos_bank
+
+
+def _rt_from_ir(ir: np.ndarray, fs: float, decay_db: float) -> float:
+    """RT from a linear fit to the Schroeder decay curve of a single signal.
+
+    The fit starts at -5 dB (skipping the direct sound) and spans ``decay_db``
+    dB, or the available dynamic range if that is smaller. Its slope is
+    extrapolated to a 60 dB decay. Returns 0 if the decay never reaches -5 dB.
+    """
+    energy = edc(ir)
+    positive = np.flatnonzero(energy > 0)
+    if positive.size < 2:
+        return 0.0
+    energy_db = 10.0 * np.log10(energy[: positive[-1] + 1])
+    energy_db -= energy_db[0]
+
+    # shrink the fit range if the decay curve does not span decay_db + 5 dB
+    dynamic_range = -np.min(energy_db)
+    if dynamic_range - 5.0 < decay_db:
+        decay_db = dynamic_range
+
+    below_5db = np.flatnonzero(energy_db < -5.0)
+    if below_5db.size == 0:
+        return 0.0
+    i_start = int(below_5db[0])
+    below_end = np.flatnonzero(energy_db < energy_db[i_start] - decay_db)
+    i_end = int(below_end[0]) if below_end.size else len(energy_db)
+
+    segment = energy_db[i_start:i_end]
+    if segment.size < 2:
+        return 0.0
+
+    time = np.arange(segment.size) / fs
+    slope = np.polyfit(time, segment - segment[0], 1)[0]
+    if slope >= 0:
+        return 0.0
+    return float(-60.0 / slope)
+
+
 def estimate_rt_bands(
     ir: ArrayLike,
     fs: float,
@@ -220,12 +337,17 @@ def estimate_rt_bands(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Estimate RT in octave bands via Butterworth bandpass filtering.
 
-    Filters the impulse response into octave bands using
-    ``pyroomacoustics.bandpass_filterbank``, then estimates RT per band
-    using ``pyroomacoustics.measure_rt60`` (extrapolated from ``decay_db``).
+    Filters the impulse response into octave bands (:func:`octave_bands`,
+    :func:`octave_band_filterbank`), then fits a line to the Schroeder decay
+    curve of each band: the fit starts at -5 dB and spans ``decay_db``, and its
+    slope is extrapolated to a 60 dB decay.
+
+    Assumes a **single-slope** decay per band. For multi-exponential decays
+    (coupled rooms) estimate the slopes with a dedicated multi-slope estimator
+    and convert its amplitudes with :func:`slope_amplitude_to_level`.
 
     Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
-    Bands whose upper edge exceeds ``fs/2`` are dropped.
+    Bands whose upper edge reaches ``fs/2`` are dropped.
 
     Parameters
     ----------
@@ -252,30 +374,68 @@ def estimate_rt_bands(
     f_centre : (n_bands,) ndarray
         Centre frequencies in Hz corresponding to each RT value.
     """
-    try:
-        import pyroomacoustics as pra
-    except ImportError as exc:
-        raise ImportError(
-            "estimate_rt_bands requires pyroomacoustics (pip install pyroomacoustics)"
-        ) from exc
-
     from scipy.signal import sosfilt
 
     ir = np.asarray(ir, dtype=float).ravel()
-    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
+    bands, f_centre = octave_bands(fc=fc, start=start, n=n, fs=fs)
+    sos_bank = octave_band_filterbank(bands, fs, filter_order)
 
-    # drop bands whose upper edge is at or above Nyquist
-    valid = bands[:, 1] < fs / 2
-    bands = bands[valid]
-    f_centre = f_centre[valid]
-
-    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
     rt = np.zeros(len(f_centre))
     for k, sos in enumerate(sos_bank):
-        ir_band = sosfilt(sos, ir)
-        rt[k] = pra.measure_rt60(ir_band, fs=fs, decay_db=decay_db)
+        rt[k] = _rt_from_ir(sosfilt(sos, ir), fs, decay_db)
 
     return rt, f_centre
+
+
+def slope_amplitude_to_level(
+    amplitude: ArrayLike, decay_time: ArrayLike, fs: float
+) -> np.ndarray:
+    """Initial amplitude of an exponential decay from its energy (EDC amplitude).
+
+    A decay with initial amplitude ``L`` and reverberation time ``T``, i.e. the
+    envelope ``L * 10**(-3 t / T)``, carries the energy
+    ``E = L**2 * T * fs / (6 ln 10)``, so ``L = sqrt(6 ln(10) E / (T fs))``.
+
+    ``E`` is the amplitude of the energy decay curve at ``t = 0``, which is what
+    multi-slope estimators (DecayFitNet, Bayesian decay analysis) report as the
+    slope amplitude ``A`` — one value per slope and band. The conversion is
+    therefore how a multi-slope estimate becomes a set of per-slope FDN levels.
+    Note that estimators usually normalise the EDC to 0 dB, in which case the
+    amplitudes must be multiplied by the reported normalisation value first.
+
+    Slopes with ``decay_time == 0`` are inactive and map to level 0.
+
+    Parameters
+    ----------
+    amplitude : array-like
+        Energy of the decay, i.e. the EDC amplitude of the slope. Any shape.
+    decay_time : array-like
+        Reverberation time in seconds, broadcastable against ``amplitude``.
+    fs : float
+        Sampling rate in Hz.
+
+    Returns
+    -------
+    ndarray
+        Initial level (linear amplitude), broadcast shape of the inputs.
+
+    See Also
+    --------
+    estimate_initial_level_bands : single-slope band levels straight from an IR.
+    """
+    amplitude_arr, decay_arr = np.broadcast_arrays(
+        np.asarray(amplitude, dtype=float), np.asarray(decay_time, dtype=float)
+    )
+    active = decay_arr > 0
+    level = np.zeros(amplitude_arr.shape, dtype=float)
+    np.sqrt(
+        6.0
+        * np.log(10.0)
+        * np.where(active, amplitude_arr, 0.0)
+        / np.where(active, decay_arr * fs, 1.0),
+        out=level,
+    )
+    return level
 
 
 def estimate_initial_level_bands(
@@ -291,9 +451,9 @@ def estimate_initial_level_bands(
 
     Companion to :func:`estimate_rt_bands` (same octave filterbank). Models
     the squared band-filtered impulse response as ``L^2 * 10^(-6 t / T)`` and
-    matches the total band energy: ``E = L^2 * T * fs / (6 ln 10)``, hence
-    ``L = sqrt(6 ln(10) E / (T fs))``. This replaces the DecayFitNet
-    initial-level estimate used in the MATLAB ``example_RIR2FDN``.
+    matches the total band energy, see :func:`slope_amplitude_to_level`. This
+    replaces the DecayFitNet initial-level estimate used in the MATLAB
+    ``example_RIR2FDN``.
 
     Parameters
     ----------
@@ -314,34 +474,18 @@ def estimate_initial_level_bands(
     f_centre : (n_bands,) ndarray
         Centre frequencies in Hz corresponding to each level.
     """
-    try:
-        import pyroomacoustics as pra
-    except ImportError as exc:
-        raise ImportError(
-            "estimate_initial_level_bands requires pyroomacoustics "
-            "(pip install pyroomacoustics)"
-        ) from exc
-
     from scipy.signal import sosfilt
 
     ir = np.asarray(ir, dtype=float).ravel()
     rt = np.asarray(rt, dtype=float).ravel()
-    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
-
-    valid = bands[:, 1] < fs / 2
-    bands = bands[valid]
-    f_centre = f_centre[valid]
+    bands, f_centre = octave_bands(fc=fc, start=start, n=n, fs=fs)
     if rt.size != len(f_centre):
         raise ValueError("rt must have one entry per octave band")
 
-    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
-    level = np.zeros(len(f_centre))
-    for k, sos in enumerate(sos_bank):
-        ir_band = sosfilt(sos, ir)
-        energy = np.sum(ir_band**2)
-        level[k] = np.sqrt(6.0 * np.log(10.0) * energy / (rt[k] * fs))
+    sos_bank = octave_band_filterbank(bands, fs, filter_order)
+    energy = np.array([np.sum(sosfilt(sos, ir) ** 2) for sos in sos_bank])
 
-    return level, f_centre
+    return slope_amplitude_to_level(energy, rt, fs), f_centre
 
 
 def one_pole_absorption(
