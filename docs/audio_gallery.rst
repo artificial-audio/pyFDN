@@ -121,12 +121,6 @@ speech
        Your browser does not support the audio element.
    </audio>
    </p>
-   <p>p008_emo_contentment_sentences.wav (source <a href=""></a>)<br>
-   <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/p008_emo_contentment_sentences.wav" type="audio/wav">
-       Your browser does not support the audio element.
-   </audio>
-   </p>
 
 strings
 -------
@@ -142,18 +136,6 @@ strings
    <p>guitar_b.wav<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/guitar_b.wav" type="audio/wav">
-       Your browser does not support the audio element.
-   </audio>
-   </p>
-
-wind
-----
-
-.. raw:: html
-
-   <p>tr-1967-ex1-32.wav (source <a href=""></a>)<br>
-   <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/wind/tr-1967-ex1-32.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
