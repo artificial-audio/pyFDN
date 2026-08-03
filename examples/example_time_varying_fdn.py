@@ -101,7 +101,6 @@ def _(mo, np, pyFDN, sound_selection):
         # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
         synth, fs = pyFDN.load_audio("synth_dry")
 
-
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))

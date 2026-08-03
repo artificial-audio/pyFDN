@@ -1,7 +1,5 @@
 """Tests for the generated audio gallery."""
 
-from pathlib import Path
-
 from docs.audio_gallery import OUTPUT_FILE, discover_audio_files, render_gallery
 
 

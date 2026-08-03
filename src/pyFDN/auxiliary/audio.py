@@ -1,8 +1,10 @@
 """Helpers for loading the audio files packaged with pyFDN."""
 
 from __future__ import annotations
+
 from importlib.resources import files
 from pathlib import Path
+
 import numpy as np
 
 AUDIO_SOURCE_DIR = Path(__file__).resolve().parent.parent / "audio"
@@ -36,7 +38,7 @@ def load_audio(
     import soundfile as sf
 
     # Strip file extension if provided
-    sample_name = name.rsplit('.', 1)[0] if '.' in name else name
+    sample_name = name.rsplit(".", 1)[0] if "." in name else name
 
     samples_dict = list_samples()
     if sample_name not in samples_dict:
@@ -66,7 +68,7 @@ def load_audio(
 
 def list_samples() -> dict[str, str]:
     """Scan the audio folder and return a dictionary of file names to relative paths.
-    
+
     Returns
     -------
     dict[str, str]
@@ -78,6 +80,7 @@ def list_samples() -> dict[str, str]:
         filename = path.stem  # Get the file name without extension
         samples[filename] = relative.as_posix()
     return samples
+
 
 def find_file(root, filename):
     for item in root.iterdir():

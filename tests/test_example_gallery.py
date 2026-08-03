@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from docs.example_gallery import OUTPUT_FILE, discover_examples, render_gallery
- 
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 

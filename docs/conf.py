@@ -9,8 +9,8 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
-from example_gallery import generate_gallery  # noqa: E402
 from audio_gallery import generate_audio_gallery
+from example_gallery import generate_gallery  # noqa: E402
 
 import pyFDN  # noqa: E402
 
