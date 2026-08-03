@@ -12,54 +12,6 @@ def load_audio(
     name: str,
     *,
     fs: int | None = None,
-    package: str = "pyFDN.audio",
-    mono: bool = True,
-) -> tuple[np.ndarray, int]:
-    """Load a packaged audio file as a NumPy array.
-
-    Parameters
-    ----------
-    name : str
-        File name within ``package`` (e.g. ``"synth_dry.wav"``).
-    fs : int, optional
-        Target sampling rate. If given and different from the file's rate,
-        the signal is resampled to ``fs``.
-    package : str
-        Importable package holding the audio resource.
-    mono : bool
-        If True, keep only the first channel of multichannel files.
-
-    Returns
-    -------
-    (signal, fs) : tuple[np.ndarray, int]
-        Samples as float64 and the (possibly resampled) sampling rate.
-    """
-    import soundfile as sf
-
-    root = files(package)
-    path = find_file(root, name)
-
-    try:
-        with path.open("rb") as f:
-            data, file_fs = sf.read(f, dtype="float64")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"{package}/{name} not found.") from None
-
-    if mono and data.ndim > 1:
-        data = data[:, 0]
-
-    if fs is not None and file_fs != fs:
-        from scipy.signal import resample
-
-        data = resample(data, int(round(len(data) * fs / file_fs)))
-        file_fs = fs
-
-    return data, file_fs
-
-def load_sample(
-    name: str,
-    *,
-    fs: int | None = None,
     mono: bool = True,
 ) -> tuple[np.ndarray, int]:
     """Load a packaged audio sample.
@@ -67,7 +19,7 @@ def load_sample(
     Parameters
     ----------
     name : str
-        Name of the sample (e.g. ``"synth_dry"``).
+        Name of the sample (e.g. ``"synth_dry"`` or ``"synth_dry.wav"``).
     fs : int, optional
         Target sampling rate. If given and different from the original
         sampling rate, the signal is resampled.
@@ -83,14 +35,17 @@ def load_sample(
     """
     import soundfile as sf
 
+    # Strip file extension if provided
+    sample_name = name.rsplit('.', 1)[0] if '.' in name else name
+
     samples_dict = list_samples()
-    if name not in samples_dict:
+    if sample_name not in samples_dict:
         raise ValueError(
-            f"Unknown sample '{name}'. "
+            f"Unknown sample '{sample_name}'. "
             f"Available samples: {list(samples_dict.keys())}"
         )
 
-    relative_path = samples_dict[name]
+    relative_path = samples_dict[sample_name]
     path = files("pyFDN.audio") / relative_path
 
     with path.open("rb") as f:
