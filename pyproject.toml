@@ -40,6 +40,7 @@ examples = [
     "marimo",  # the example notebooks are marimo apps
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
+    "bibtexparser",  # examples cite papers via docs/references.py
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
@@ -48,6 +49,7 @@ test = [
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
+    "bibtexparser",
 ]
 dev = [
     "pyFDN[test]",  # everything from [test] (and transitively [examples])
@@ -73,6 +75,7 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
+    "bibtexparser",
 ]
 
 [project.urls]
@@ -80,11 +83,9 @@ bugs = "https://github.com/artificial-audio/pyFDN/issues"
 changelog = "https://github.com/artificial-audio/pyFDN/releases"
 homepage = "https://github.com/artificial-audio/pyFDN"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
 [tool.setuptools.packages.find]
-where = ["src"]
+where = [".", "src"]
+include = ["docs*", "pyFDN*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.*"]
@@ -221,3 +222,8 @@ disable_error_code = ["operator", "index", "arg-type"]
 # Configure the max output size in Marimo notebooks
 [tool.marimo.runtime]
 output_max_bytes = 80_000_000
+# Put the repo root on sys.path (resolved relative to this file) so the examples
+# can do `from docs.references import paper_link`. Marimo only adds the
+# notebook's own directory (examples/) by default, which does not contain
+# the `docs` package.
+pythonpath = ["."]

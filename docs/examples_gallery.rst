@@ -26,10 +26,10 @@ Absorption & Filters
    :widths: 35 65
    :header-rows: 0
 
-   * - `Absorption GEQ in an FDN <_static/marimo/notebooks/example_absorption_geq.html>`_
-     - Demonstrates ``pyFDN.absorption_geq``: frequency-dependent absorption designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
-   * - `Converting a room impulse response into an FDN <_static/marimo/notebooks/example_rir_to_fdn.html>`_
-     - Estimates the frequency-dependent decay of a measured room impulse response and designs an FDN to match it:
+   * - `Absorption Geq <_static/marimo/notebooks/example_absorption_geq.html>`_
+     - Open the rendered marimo notebook.
+   * - `Rir To Fdn <_static/marimo/notebooks/example_rir_to_fdn.html>`_
+     - Open the rendered marimo notebook.
 
 Translation Examples
 --------------------
@@ -54,24 +54,24 @@ Allpass FDN Examples
    :widths: 35 65
    :header-rows: 0
 
-   * - `Allpass but not uniallpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_not_uniallpass.html>`_
-     - Example of an FDN that is allpass only for specific delay lengths, not for arbitrary delays. So it is not uniallpass (allpass for any choice of delays).
-   * - `Allpass FDN completion <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_completion.html>`_
-     - For a given feedback matrix A, the goal is to construct b, c, and d such that the FDN is uniallpass.
+   * - `Allpass Fdn Completion <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_completion.html>`_
+     - Open the rendered marimo notebook.
    * - `Allpass FDN embedded in a larger FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_in_FDN.html>`_
      - Single input, stereo output. The signal flow is:
-   * - `FDN with Schroeder allpass filters in the loop <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder_in_loop.html>`_
-     - Schroeder allpass filters can be placed behind the delays in the FDN loop to increase echo density. The rendering is done with FLAMO (gain and delay modules).
-   * - `Gardner's Nested Allpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_nested.html>`_
-     - Example for the nested allpass structure: an FDN built by iteratively nesting a feedforward/back allpass around the previous system. SISO (single input, single output).
-   * - `Homogeneous allpass FDN (MIMO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_mimo.html>`_
-     - Example for an allpass FDN with homogeneous decay so that all poles have the same decay rate. Compared to the SISO case, the MIMO has considerably more degrees of freedom.
-   * - `Homogeneous allpass FDN (SISO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_siso.html>`_
-     - Example for an allpass FDN with homogeneous decay so that all poles have the same decay rate.
-   * - `Poletti's Allpass FDN (MIMO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_poletti.html>`_
-     - Example for Poletti's unitary reverberator: a multi-input multi-output (MIMO) allpass feedback delay network with reduced colouration.
-   * - `Schroeder's Series Allpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
-     - Example for Schroeder's series (cascade) allpass: a cascade of first-order allpass sections realized as an FDN with diagonal feedback matrix. SISO.
+   * - `Allpass Fdn Homogeneous Mimo <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_mimo.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Homogeneous Siso <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_siso.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Nested <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_nested.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Not Uniallpass <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_not_uniallpass.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Poletti <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_poletti.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Schroeder <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
+     - Open the rendered marimo notebook.
+   * - `Allpass Fdn Schroeder In Loop <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder_in_loop.html>`_
+     - Open the rendered marimo notebook.
 
 Special FDNs
 ------------
@@ -80,8 +80,8 @@ Special FDNs
    :widths: 35 65
    :header-rows: 0
 
-   * - `Coupled Rooms FDN Example <_static/marimo/notebooks/example_coupled_rooms.html>`_
-     - This example models two acoustically coupled rooms with a Feedback Delay Network (FDN): one small room with a short reverberation time (RT), one large room with a long RT. Each room is an independent FDN with frequency-dependent RT (first-order shelving absorption) and its own output EQ.
+   * - `Coupled Rooms <_static/marimo/notebooks/example_coupled_rooms.html>`_
+     - Open the rendered marimo notebook.
    * - `Scattering Delay Network (SDN) Demo <_static/marimo/notebooks/example_sdn.html>`_
      - This example uses the Scattering Delay Network (SDN) to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a FLAMO model to render the impulse response.
 
@@ -92,10 +92,8 @@ FDN Design & Analysis
    :widths: 35 65
    :header-rows: 0
 
-   * - `Colorless FDN <_static/marimo/notebooks/example_colorless_FDN.html>`_
-     - FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in "Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.
-   * - `Colorless FDN, trained in-notebook <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
-     - The companion to Colorless FDN, which loads pre-optimized parameters from ``.mat`` files. Here we run the optimization ourselves with ``pyFDN``'s training API, following "Differentiable Feedback Delay Network for Colorless Reverberation", Dal Santo, Prawda, Schlecht, Välimäki, DAFx23 (and its "tiny colorless FDN" follow-up):
+   * - `Colorless Fdn <_static/marimo/notebooks/example_colorless_FDN.html>`_
+     - Open the rendered marimo notebook.
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
      - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
    * - `Denser Reverberation with Delay Feedback Matrix <_static/marimo/notebooks/example_delay_matrix_density.html>`_
@@ -104,26 +102,28 @@ FDN Design & Analysis
      - FDN design typically needs to balance modal and echo density with computational complexity:
    * - `FDN eigenvectors (mode shapes) <_static/marimo/notebooks/example_fdn_eigenvectors.html>`_
      - Demonstrates how to compute the mode shapes of an FDN from the left and right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
-   * - `FDN Gallery <_static/marimo/notebooks/example_fdn_gallery.html>`_
-     - Overview of feedback matrices and full FDN systems available in pyFDN.
+   * - `Fdn Gallery <_static/marimo/notebooks/example_fdn_gallery.html>`_
+     - Open the rendered marimo notebook.
    * - `FDN with spread modal decay <_static/marimo/notebooks/example_spread_fdn_poles.html>`_
      - Demonstrates an FDN without homogeneous decay, but with a certain decay spread, as is typically observed in shoebox rooms and scattering delay networks. The spread is evaluated via the modal decomposition.
-   * - `Filter feedback delay network (FFDN) with paraunitary feedback matrix <_static/marimo/notebooks/example_paraunitary_fdn.html>`_
-     - An FDN with a paraunitary (FIR, lossless) scattering matrix in the loop. The example computes the impulse response by time-domain recursion and by modal decomposition, and verifies that the system is lossless (all poles on the unit circle).
    * - `Frequency-dependent pole boundaries <_static/marimo/notebooks/example_pole_boundaries.html>`_
      - FDN with frequency-dependent absorption filters, but not with homogeneous (delay-proportional) decay. Still, boundaries for the pole magnitudes can be computed from the singular values of the loop transfer function and tested against the actual poles.
-   * - `Interpolate between two orthogonal matrices <_static/marimo/notebooks/example_interpolate_matrix.html>`_
-     - Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via ``pyFDN.dss2impz``.
-   * - `Nearest Sign-Agnostic Orthogonal Matrix <_static/marimo/notebooks/example_nearest_sign_agnostic_orthogonal.html>`_
-     - Given a non-negative matrix B (e.g., measured energy flow between delay lines), find the orthogonal matrix U that minimises ``‖B − |U|‖_F`` where ``|·|`` is element-wise absolute value.
+   * - `Interpolate Matrix <_static/marimo/notebooks/example_interpolate_matrix.html>`_
+     - Open the rendered marimo notebook.
+   * - `Nearest Sign Agnostic Orthogonal <_static/marimo/notebooks/example_nearest_sign_agnostic_orthogonal.html>`_
+     - Open the rendered marimo notebook.
+   * - `Paraunitary Fdn <_static/marimo/notebooks/example_paraunitary_fdn.html>`_
+     - Open the rendered marimo notebook.
+   * - `Process Fdn Vs Flamo <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
+     - Open the rendered marimo notebook.
    * - `Random FDN statistics <_static/marimo/notebooks/example_random_fdn_statistics.html>`_
      - Statistics of the modal decomposition of a random FDN. The pole angles are almost equidistributed on the unit circle, while the residue magnitudes are spread across a large range.
-   * - `Scattering feedback matrices <_static/marimo/notebooks/example_scattering_fdn.html>`_
-     - Demonstration of different types of scattering (FIR paraunitary) feedback matrices from ``filter_matrix_gallery``:
+   * - `Scattering Fdn <_static/marimo/notebooks/example_scattering_fdn.html>`_
+     - Open the rendered marimo notebook.
    * - `Time Varying FDN <_static/marimo/notebooks/example_time_varying_fdn.html>`_
      - Open the rendered marimo notebook.
-   * - `Time-domain FDN vs FLAMO with GEQ absorption <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
-     - The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
+   * - `Train Colorless Fdn <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
+     - Open the rendered marimo notebook.
 
 ----
 

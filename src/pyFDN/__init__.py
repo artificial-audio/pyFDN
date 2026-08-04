@@ -89,6 +89,7 @@ __all__ = [
     "db_to_lin",
     "db_to_sq",
     "ensure_3d",
+    "fade_out",
     "hertz_to_unit",
     "hertz_to_rad",
     "rad_to_hertz",
@@ -103,6 +104,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_impz",
     "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
@@ -121,7 +123,7 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
-    "with_decay",
+    "build_set_decay",
     "Trainable",
     "train_fdn",
     "TrainLog",
@@ -140,6 +142,8 @@ __all__ = [
     "downsample_minmax",
     "downsample_plotly_trace",
     "downsampled_scatter",
+    # notebook display (marimo)
+    "labeled_audio",
     # FLAMO graph
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
@@ -215,6 +219,7 @@ from .auxiliary.flamo_graph import (
     flamo_nodes_flat,
     plot_flamo_graph,
 )
+from .auxiliary.marimo_utils import labeled_audio
 
 # polynomial and matrix maths
 from .auxiliary.math import (
@@ -266,6 +271,7 @@ from .auxiliary.utils import (
     db_to_lin,
     db_to_sq,
     ensure_3d,
+    fade_out,
     hertz_to_rad,
     hertz_to_unit,
     is_bounding_curve,
@@ -355,14 +361,14 @@ from .train import (
     Trainable,
     TrainLog,
     build_fdn,
+    build_set_decay,
     train_fdn,
     trainable_from_build,
-    with_decay,
 )
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
-from .translate.dss_to_impz import dss_to_impz
+from .translate.dss_to_impz import build_to_impz, dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_tf import dss_to_tf

@@ -385,9 +385,7 @@ def extract_build(model: Any) -> FDNBuild:
 
     fs_value = getattr(delay_module, "fs", None)
     if fs_value is None:
-        raise ValueError(
-            "FLAMO delay module exposes no sample rate; cannot extract fs"
-        )
+        raise ValueError("FLAMO delay module exposes no sample rate; cannot extract fs")
 
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 

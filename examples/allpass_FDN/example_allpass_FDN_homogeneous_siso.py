@@ -10,19 +10,20 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    return (mo,)
+    from docs.references import paper_link
+
+    return mo, paper_link
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, paper_link):
+    mo.md(f""" 
     # Homogeneous allpass FDN (SISO)
 
     Example for an allpass FDN with **homogeneous decay** so that all poles have the same decay rate.
 
-    See *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See {paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    — Original MATLAB: Sebastian J. Schlecht, 10 June 2020
     """)
     return
 
