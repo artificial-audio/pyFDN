@@ -25,9 +25,9 @@ def _():
                                           get_room_volume, 
                                           get_room_surface_area, 
                                           get_room_absorptive_area, 
-                                          point_in_room,
                                           find_room,
                                           get_point_to_room_weights,
+                                          get_aperture_form_factor,
                                           Aperture
                                         )
     from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
@@ -54,6 +54,7 @@ def _():
         cKDTree,
         expm,
         find_room,
+        get_aperture_form_factor,
         get_decay_matrix,
         get_feedback_matrix,
         get_point_to_room_weights,
@@ -336,7 +337,9 @@ def _(Aperture, mo, np):
         ROOM_DIMS,
         ROOM_START,
         SOURCE_POS,
+        aperture_12,
         aperture_12_area,
+        aperture_13,
         aperture_13_area,
         apertures,
     )
@@ -388,8 +391,11 @@ def _(
     ROOM2_DIMS,
     ROOM3_ABS,
     ROOM3_DIMS,
+    aperture_12,
     aperture_12_area,
+    aperture_13,
     aperture_13_area,
+    get_aperture_form_factor,
     get_room_absorptive_area,
     get_room_volume,
     make_Q,
@@ -398,7 +404,16 @@ def _(
     mo,
     np,
 ):
-    S = np.array([[0, aperture_12_area, aperture_13_area], [aperture_12_area, 0, 0], [aperture_13_area, 0, 0]])
+    # whether to use non-diffuse energy according to Summers eq (21)
+    use_non_diffuse_energy = False
+    if use_non_diffuse_energy:
+        form_factor = get_aperture_form_factor(aperture_12, aperture_13)
+        S = np.array([[0, (1-form_factor)*aperture_12_area, (1-form_factor)*aperture_13_area],
+                    [(1-form_factor)*aperture_12_area, 0, form_factor*aperture_12_area],
+                    [(1-form_factor)*aperture_13_area, form_factor*aperture_13_area, 0]])
+    else:
+        S = np.array([[0, aperture_12_area, aperture_13_area], [aperture_12_area, 0, 0], [aperture_13_area, 0, 0]])
+
     V = np.array([get_room_volume(ROOM1_DIMS), get_room_volume(ROOM2_DIMS), get_room_volume(ROOM3_DIMS)])
     absorp_area = np.array([get_room_absorptive_area(ROOM1_DIMS, ROOM1_ABS), get_room_absorptive_area(ROOM2_DIMS, ROOM2_ABS), get_room_absorptive_area(ROOM3_DIMS, ROOM3_ABS)])
     num_rooms = 3

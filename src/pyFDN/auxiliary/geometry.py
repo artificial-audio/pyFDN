@@ -34,6 +34,175 @@ def get_plane_area(points: List):
     return area1 + area2
 
 
+def get_polygon_normal(points: ArrayLike,
+                       reference_point: Optional[ArrayLike] = None,
+                       eps: float = 1e-12) -> NDArray:
+    """Return the unit normal of a planar polygon.
+
+    If `reference_point` is given, the normal is flipped when needed so it
+    points toward that reference.
+
+    Args:
+        points: Planar polygon coordinates with shape (N, 3), where N >= 3.
+        reference_point: Optional point used to orient the returned normal.
+        eps: Tolerance for detecting degenerate polygons.
+
+    Returns:
+        Unit-length polygon normal with shape (3,).
+    """
+    points = np.asarray(points, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3 or points.shape[0] < 3:
+        raise ValueError("points must have shape (N, 3) with N >= 3")
+
+    normal = np.zeros(3, dtype=np.float64)
+    for idx in range(points.shape[0]):
+        current = points[idx]
+        next_point = points[(idx + 1) % points.shape[0]]
+        normal += np.cross(current, next_point)
+
+    norm = np.linalg.norm(normal)
+    if norm <= eps:
+        raise ValueError("points define a degenerate polygon")
+
+    normal /= norm
+    if reference_point is not None:
+        reference_direction = (np.asarray(reference_point, dtype=np.float64) -
+                               np.mean(points, axis=0))
+        if np.dot(normal, reference_direction) < 0:
+            normal = -normal
+
+    return normal
+
+
+def _triangle_quadrature_points(triangle: NDArray, order: int):
+    """Return Gauss-Legendre quadrature points for one triangle.
+    Gauss-Legendre quadrature sampling is a mathematical method used to select 
+    the optimal points and weights for numerically calculating a definite integral.
+
+    Args:
+        triangle: Triangle coordinates with shape (3, 3).
+        order: Gauss-Legendre order per reference-triangle dimension.
+
+    Returns:
+        Tuple containing integration points with shape (N, 3) and matching
+        differential area weights with shape (N,).
+    """
+    if order < 1:
+        raise ValueError("order must be >= 1")
+
+    triangle = np.asarray(triangle, dtype=np.float64)
+    if triangle.shape != (3, 3):
+        raise ValueError("triangle must have shape (3, 3)")
+
+    nodes, weights = np.polynomial.legendre.leggauss(order)
+    nodes = 0.5 * (nodes + 1.0)
+    weights = 0.5 * weights
+
+    area_scale = np.linalg.norm(
+        np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0]))
+    points = []
+    area_weights = []
+
+    for u_idx, u in enumerate(nodes):
+        for v_idx, v in enumerate(nodes):
+            point = ((1.0 - u) * triangle[0] + u * (1.0 - v) * triangle[1] +
+                     u * v * triangle[2])
+            points.append(point)
+            area_weights.append(weights[u_idx] * weights[v_idx] * area_scale *
+                                u)
+
+    return np.asarray(points), np.asarray(area_weights)
+
+
+def aperture_quadrature_points(aperture_coords: ArrayLike,
+                               order: int = 8) -> Tuple[NDArray, NDArray]:
+    """Return quadrature points and area weights for an aperture.
+
+    Args:
+        aperture_coords: Quadrilateral aperture coordinates with shape (4, 3).
+        order: Gauss-Legendre order per reference-triangle dimension.
+
+    Returns:
+        Tuple containing integration points with shape (N, 3) and matching
+        differential area weights with shape (N,).
+    """
+    aperture_coords = np.asarray(aperture_coords, dtype=np.float64)
+    if aperture_coords.shape != (4, 3):
+        raise ValueError("aperture_coords must have shape (4, 3)")
+
+    points = []
+    weights = []
+    for triangle in triangulate_quad(aperture_coords):
+        triangle_points, triangle_weights = _triangle_quadrature_points(
+            triangle, order)
+        points.append(triangle_points)
+        weights.append(triangle_weights)
+
+    return np.vstack(points), np.concatenate(weights)
+
+
+def get_aperture_form_factor(aperture_from_obj: Aperture,
+                             aperture_to_obj: Aperture,
+                             order: int = 8,
+                             eps: float = 1e-12) -> float:
+    """Calculate the aperture-to-aperture form factor from Eq. (21).
+
+    The apertures are quadrilateral coordinate arrays of shape (4, 3). Normals
+    are oriented automatically toward the other aperture centroid, so vertex
+    winding does not affect the result.
+
+    Args:
+        aperture_from: Source aperture coordinates with shape (4, 3).
+        aperture_to: Receiving aperture coordinates with shape (4, 3).
+        order: Gauss-Legendre order per reference-triangle dimension.
+        eps: Tolerance for zero-area and coincident-point checks.
+
+    Returns:
+        Form factor from `aperture_from` to `aperture_to`.
+    """
+    aperture_from = np.asarray(aperture_from_obj.poly_points, dtype=np.float64)
+    aperture_to = np.asarray(aperture_to_obj.poly_points, dtype=np.float64)
+    if aperture_from.shape != (4, 3) or aperture_to.shape != (4, 3):
+        raise ValueError("apertures must both have shape (4, 3)")
+
+    area_from = aperture_from_obj.area
+    if area_from <= eps:
+        raise ValueError("aperture_from has zero area")
+    if get_plane_area(aperture_to) <= eps:
+        raise ValueError("aperture_to has zero area")
+
+    centroid_from = aperture_from_obj.centroid
+    centroid_to = aperture_to_obj.centroid
+    normal_from = get_polygon_normal(aperture_from, centroid_to, eps=eps)
+    normal_to = get_polygon_normal(aperture_to, centroid_from, eps=eps)
+
+    points_from, weights_from = aperture_quadrature_points(
+        aperture_from, order)
+    points_to, weights_to = aperture_quadrature_points(aperture_to, order)
+
+    # solve the integral numerically
+    integral = 0.0
+    for point_from, weight_from in zip(points_from, weights_from):
+        vectors = points_to - point_from[None, :]
+        distances_squared = np.einsum("ij,ij->i", vectors, vectors)
+        valid = distances_squared > eps
+        if not np.any(valid):
+            continue
+
+        vectors = vectors[valid]
+        distances_squared = distances_squared[valid]
+        distances = np.sqrt(distances_squared)
+        directions = vectors / distances[:, None]
+
+        cos_from = directions @ normal_from
+        cos_to = (-directions) @ normal_to
+        kernel = np.maximum(cos_from, 0.0) * np.maximum(
+            cos_to, 0.0) / distances_squared
+        integral += weight_from * np.sum(weights_to[valid] * kernel)
+
+    return float(integral / (np.pi * area_from))
+
+
 def get_room_volume(room_dims: List):
     """Get volume of a cuboid room"""
     return room_dims[0] * room_dims[1] * room_dims[2]

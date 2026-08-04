@@ -172,7 +172,7 @@ def make_K(theta: NDArray):
 
 def lift(R_room: NDArray, Nroom: int):
     """
-    List R_room from num_rooms x num_rooms to num_rooms x Nroom, num_rooms x Nroom.
+    Lift R_room from num_rooms x num_rooms to num_rooms x Nroom, num_rooms x Nroom.
     Nroom is the number of delay lines per room (same for each room)
     """
     # Simpler lifting with kroneckers
