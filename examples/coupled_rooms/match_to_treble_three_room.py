@@ -35,13 +35,13 @@ def _():
                                                         make_theta, make_K, get_decay_matrix, get_feedback_matrix,
                                                         run_gfdn, gfdn_ledger, room_energy_ledger_from_rirs)
 
-    from dependencies.DecayFitNet.python.toolbox.DecayFitNetToolbox import DecayFitNetToolbox
+    from multislope import DecayFitNet
     from sklearn.cluster import KMeans
 
     return (
         Aperture,
         ArrayLike,
-        DecayFitNetToolbox,
+        DecayFitNet,
         KMeans,
         List,
         NDArray,
@@ -246,7 +246,7 @@ def _(
 
 
 @app.cell
-def _(DecayFitNetToolbox, KMeans, NDArray, mo, np, pyFDN):
+def _(DecayFitNet, KMeans, NDArray, mo, np, pyFDN):
     # --- Stage 1: per-receiver multi-slope fits, aggregated per room -----------
     def estimate_room_slopes(rirs_in_room: NDArray, fs: float, n_slopes: int=3):
         """
@@ -259,7 +259,7 @@ def _(DecayFitNetToolbox, KMeans, NDArray, mo, np, pyFDN):
         first, matching the paper's point that dominant/late slopes are best-
         supported by the data).
         """
-        decayfitnet = DecayFitNetToolbox(n_slopes=n_slopes, sample_rate=fs)
+        decayfitnet = DecayFitNet(n_slopes=n_slopes, sample_rate=fs)
         edcs_in_room = pyFDN.auxiliary.acoustics.edc(rirs_in_room, axis=-1)
 
         Ts, As = [], []
