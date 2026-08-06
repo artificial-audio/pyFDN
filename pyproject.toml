@@ -75,6 +75,7 @@ docs = [
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "bibtexparser",
+    "json",
 ]
 
 [project.urls]

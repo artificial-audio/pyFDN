@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,8 @@ import bibtexparser
 DOCS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = DOCS_DIR.parent
 AUDIO_SOURCE_DIR = PROJECT_ROOT / "src" / "pyFDN" / "audio"
+AUDIO_REFERENCES_FILE = AUDIO_SOURCE_DIR / "audio_references.json"
+BIB_FILE = DOCS_DIR / "references.bib"
 OUTPUT_FILE = DOCS_DIR / "audio_gallery.rst"
 GITHUB_AUDIO_ROOT = (
     "https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/"
@@ -63,8 +66,14 @@ def load_references(bib_file: Path) -> dict[str, dict[str, str]]:
 
 def render_gallery(examples: list[AudioExample]) -> str:
     # Load references from the .bib file
-    bib_file = AUDIO_SOURCE_DIR / "sounds_references.bib"
-    references = load_references(bib_file)
+    references = load_references(BIB_FILE)
+
+    # Load audio metadata
+    with open(AUDIO_REFERENCES_FILE, encoding="utf-8") as f:
+        audio_references = {
+            item["filename"]: item
+            for item in json.load(f)
+        }
 
     grouped: dict[str, list[AudioExample]] = defaultdict(list)
     for example in examples:
@@ -103,16 +112,27 @@ def render_gallery(examples: list[AudioExample]) -> str:
         for example in entries:
             label_html = html.escape(example.display_label)
             src = example.audio_url
-            file_key = example.filename.rsplit(".", 1)[0]
 
-            if file_key in references:
-                ref = references[file_key]
+            if example.filename in audio_references:
+                audio_ref = audio_references[example.filename]
+
+                ref = references.get(audio_ref["reference"], {})
+
+                title = html.escape(audio_ref["source"])
+                url = html.escape(audio_ref["url"])
+
+                citation = html.escape(
+                    ref.get("author", "Unknown author")
+                    + ", "
+                    + ref.get("year", "")
+)
+
                 title = html.escape(ref["title"])
                 url = html.escape(ref["url"])
 
                 lines.extend(
                     [
-                        f'   <p>{label_html} (source <a href="{url}">{title}</a>)<br>',
+                        f'   <p>{label_html} (source: <a href="{url}">{title}</a>)<br>',
                         "   <audio controls>",
                         f'       <source src="{src}" type="audio/wav">',
                         "       Your browser does not support the audio element.",
