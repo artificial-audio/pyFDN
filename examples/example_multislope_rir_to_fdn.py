@@ -147,9 +147,11 @@ def _(fs, mo, pyFDN, rir):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The reference decay times are known here, because the two rooms were
-    designed: the per-sample gain of each room's absorption filters gives its
-    reverberation time as a function of frequency.
+    The decay times of the two rooms *in isolation* are known here, because the
+    rooms were designed: the per-sample gain of each room's absorption filters
+    gives its reverberation time as a function of frequency.  They are the
+    reference below — but note that the coupled system does not decay at
+    exactly these rates, as the fit will show.
     """)
     return
 
@@ -305,9 +307,14 @@ def _(
 def _(mo):
     mo.md(r"""
     The single-slope estimate runs between the two rooms, while the fitted
-    slopes track them individually.  DecayFitNet slightly underestimates the
-    slow decay, which is the harder of the two to observe: it carries roughly
-    20 dB less energy than the fast one.
+    slopes track them individually.  The slow slope lands below the large
+    room's dotted curve, and that is the coupling rather than an estimation
+    error: the dotted curves are the decay times the two rooms would have in
+    isolation, but the coupling rotation mixes their feedback loops, so the
+    decay rates of the *coupled* system are pulled towards each other.  The
+    slow decay time of the coupled space therefore sits somewhere between the
+    two isolated ones, and moves further from the large room the larger the
+    coupling angle.
 
     ## One FDN per slope
 
@@ -319,6 +326,15 @@ def _(mo):
 
     The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
     the octave-band estimates are extended to it by repeating the edge bands.
+
+    `pyFDN.design_geq` returns its biquad sections in the unnormalised form
+    `[b0, b1, b2, a0, a1, a2]`, straight out of the analytic filter formulas,
+    so `a0` is not 1 (a peaking section, for instance, has `a0 = sqrt(g) + t`).
+    Filtering code expects the normalised form, so each section is divided by
+    its own `a0` — column 3 of the SOS matrix — which scales `b` and `a`
+    together and leaves the transfer function unchanged.
+    `pyFDN.absorption_geq` does this internally; `design_geq` leaves it to the
+    caller.
     """)
     return
 
@@ -367,7 +383,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
             _level_flat
         )
         _eq, _ = pyFDN.design_geq(geq_grid(_gain_db), fs=fs)
-        _eq = _eq / _eq[:, 3:4]  # a0 = 1
+        _eq = _eq / _eq[:, 3:4]  # normalise each section so a0 = 1
 
         resynthesis += pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
