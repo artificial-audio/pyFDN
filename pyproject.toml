@@ -40,6 +40,7 @@ examples = [
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
+    "bibtexparser",  # examples cite papers via docs/references.py
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
@@ -223,10 +224,8 @@ disable_error_code = ["operator", "index", "arg-type"]
 # Configure the max output size in Marimo notebooks
 [tool.marimo.runtime]
 output_max_bytes = 80_000_000
-# The examples import ``docs.references`` for their bibliography links, which
-# needs the project root on sys.path. Marimo puts the notebook's own directory
-# there instead, so without this every example fails on its first cell with
-# ``ModuleNotFoundError: No module named 'docs.references'``. Entries are
-# resolved relative to this file, so marimo can be started from any directory.
-# Pytest does not need it, as it inserts its rootdir automatically.
+# Put the repo root on sys.path (resolved relative to this file) so the examples
+# can do `from docs.references import paper_link`. Marimo only adds the
+# notebook's own directory (examples/) by default, which does not contain
+# the `docs` package.
 pythonpath = ["."]
