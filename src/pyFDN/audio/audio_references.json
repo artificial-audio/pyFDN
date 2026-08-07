@@ -33,6 +33,20 @@
         "reference": "OezerSALSM23_PCD_TISMIR",
         "url": "https://audiolabs-erlangen.de/resources/MIR/PCD"
     },
+
+    {
+        "filename": "sentences_06_loud.wav",
+        "source": "EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation",
+        "reference": "richter2024ears",
+        "url": "https://github.com/usc-imi/EARS"
+    },
+
+    {
+        "filename": "rainbow_05_loud.wav",
+        "source": "EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation",
+        "reference": "richter2024ears",
+        "url": "https://github.com/usc-imi/EARS"
+    },
     
     {
         "filename": "TechnoDrum01_02#SD#train.wav",
