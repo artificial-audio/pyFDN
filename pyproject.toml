@@ -78,7 +78,6 @@ docs = [
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
     "bibtexparser",
-    "json",
 ]
 
 [project.urls]
