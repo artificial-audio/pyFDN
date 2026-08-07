@@ -74,6 +74,24 @@ piano
    </audio>
    </p>
 
+speech
+------
+
+.. raw:: html
+
+   <p>rainbow_05_loud.wav (source: <a href="#">{EARS}: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/rainbow_05_loud.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>sentences_06_loud.wav (source: <a href="#">{EARS}: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/sentences_06_loud.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
 strings
 -------
 
