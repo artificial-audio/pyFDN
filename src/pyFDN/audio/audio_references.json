@@ -74,5 +74,33 @@
         "source": "IDMT-SMT-Drums Dataset",
         "reference": "Weber2023IDMTDrums",
         "url": "https://zenodo.org/records/7544164"
+    },
+
+    {
+        "filename": "P1_Set1_5.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+
+    {
+        "filename": "P1_Set1_8.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+
+    {
+        "filename": "P20_Set1_5.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+    {
+        "filename": "P20_Set1_8.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
     }
+
 ]

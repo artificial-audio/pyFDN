@@ -79,13 +79,37 @@ speech
 
 .. raw:: html
 
-   <p>rainbow_05_loud.wav (source: <a href="#">{EARS}: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
+   <p>P1_Set1_5.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P1_Set1_5.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>P1_Set1_8.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P1_Set1_8.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>P20_Set1_5.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P20_Set1_5.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>P20_Set1_8.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P20_Set1_8.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>rainbow_05_loud.wav (source: <a href="https://github.com/usc-imi/EARS">EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/rainbow_05_loud.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
-   <p>sentences_06_loud.wav (source: <a href="#">{EARS}: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
+   <p>sentences_06_loud.wav (source: <a href="https://github.com/usc-imi/EARS">EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/sentences_06_loud.wav" type="audio/wav">
        Your browser does not support the audio element.
