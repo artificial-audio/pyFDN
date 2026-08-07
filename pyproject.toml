@@ -32,7 +32,6 @@ dependencies = [
   "scipy",
   "flamo>=0.2.14",
   "flareverb",
-  "pyroomacoustics",
 ]
 
 [project.optional-dependencies]
@@ -40,12 +39,14 @@ examples = [
     "marimo",  # the example notebooks are marimo apps
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
+    "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
     "bibtexparser",  # examples cite papers via docs/references.py
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
+    "multislope>=0.1.1",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
@@ -75,6 +76,7 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
+    "multislope>=0.1.1",  # rendered by the multi-slope example notebook
     "bibtexparser",
     "json",
 ]
@@ -146,8 +148,8 @@ disable_error_code = ["no-any-return"]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
     "flamo.*",
+    "multislope.*",
     "plotly.*",
-    "pyroomacoustics.*",
     "scipy.*",
 ]
 ignore_missing_imports = true

@@ -51,3 +51,40 @@ jobs:
         name: coverage-${{ matrix.python-version }}
         path: coverage.xml
         retention-days: 7
+
+  # Guards the runtime dependency boundary: the library itself must work with
+  # only its mandatory dependencies installed. Decay estimation beyond a single
+  # slope (multislope/DecayFitNet) and the plotting stack belong to the example
+  # environment and are exercised by the tox job above, not here.
+  core-install:
+    runs-on: ubuntu-latest
+    env:
+      PIP_NO_CACHE_DIR: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y libsndfile1
+
+    - name: Install pyFDN without optional extras
+      run: |
+        python -m pip install --upgrade pip --no-cache-dir
+        pip install --no-cache-dir . pytest
+
+    - name: Assert no decay-estimation extra was pulled in
+      run: |
+        for package in pyroomacoustics multislope; do
+          if python -c "import $package" 2>/dev/null; then
+            echo "::error::$package must not be a runtime dependency of pyFDN"
+            exit 1
+          fi
+        done
+
+    - name: Run the estimator tests on the bare install
+      run: pytest tests/test_auxiliary_acoustics.py -q

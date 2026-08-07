@@ -93,8 +93,11 @@ Acoustics & Absorption
    pyFDN.absorption_to_rt
    pyFDN.estimate_initial_level_bands
    pyFDN.estimate_rt_bands
+   pyFDN.octave_bands
+   pyFDN.octave_band_filterbank
    pyFDN.rt_to_gain_per_sample
    pyFDN.rt_to_slope
+   pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
 Graphic EQ
