@@ -46,6 +46,8 @@ Translation Examples
      - Convert the delay state-space form of an FDN into matrix transfer function form (``dss_to_tf``). Verify by comparing the impulse response from the TF with the one from direct delay state-space simulation (``dss_to_impz``).
    * - `DSS→PR example <_static/marimo/notebooks/example_dss_to_pr_direct.html>`_
      - Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
+   * - `FDN to FAUST: compiling a pyFDN design to real-time DSP <_static/marimo/notebooks/example_fdn_to_faust.html>`_
+     - A pyFDN design lives as NumPy arrays and, through ``dss_to_flamo``, as a differentiable FLAMO graph. Neither runs in a DAW. ``adac`` closes that gap: it walks the FLAMO graph, extracts every delay, gain, matrix and filter into a JSON intermediate representation, and emits FAUST source that compiles to a plugin.
    * - `FLAMO→PR (Notebook) <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
      - In-depth math documentation of the refinement fix, with an SOS filter in the loop and plotting.
 
