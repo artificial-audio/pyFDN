@@ -1,0 +1,102 @@
+---
+title: "Feedback Delay Networks in Python"
+subtitle: "A 90-minute tutorial at DAFx 2026 · Cambridge, MA"
+---
+
+::: {.callout-note appearance="simple"}
+**[▶ Open the slides](slides.html)** — they work in any browser, offline included.
+Press `S` for speaker notes, `O` for the slide overview, `?` for all shortcuts.
+:::
+
+Feedback Delay Networks (FDNs) are the workhorse of efficient artificial
+reverberation. This tutorial builds one from first principles, analyses what
+makes it sound good or bad, and then optimises it with gradients — using
+[**pyFDN**](https://artificial-audio.github.io/pyFDN/), an open-source Python
+toolbox released at DAFx 2026.
+
+**No prior experience with FDNs is required.** You should be comfortable with
+Python and with basic DSP: filtering, convolution, and what a pole is.
+
+## Before you arrive
+
+Install the toolbox and the notebook extras:
+
+```bash
+# any environment manager works — uv shown here
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install "pyfdn[examples]"
+```
+
+Then clone the repository for the notebooks and check the install:
+
+```bash
+git clone https://github.com/artificial-audio/pyFDN
+cd pyFDN
+python -c "import pyFDN; print(pyFDN.__version__)"
+marimo edit examples/
+```
+
+`pyfdn[examples]` installs `marimo`, `matplotlib`, `plotly` and — via
+[`flamo`](https://github.com/gdalsanto/flamo) — PyTorch. That last one is a
+large download, so do it on hotel wifi rather than in the room.
+
+::: {.callout-tip appearance="simple"}
+**If the install does not work**, come anyway. Every notebook is
+[rendered on the website](https://artificial-audio.github.io/pyFDN/examples_gallery.html)
+with its plots and audio, and needs nothing but a browser.
+:::
+
+## What we will cover
+
+| Time  | Duration | Segment | Content |
+| ----- | -------- | ------- | ------- |
+| 0:00  | 15 min   | **What is an FDN?** | Structure, transfer function, poles. The three knobs — delays, feedback matrix, absorption — and the three properties they control: density, mixing, decay. |
+| 0:15  | 15 min   | **pyFDN, the tour** | Package layout, the `FDNBuild` data class, the representation translators, and a reverb in five lines of code. |
+| 0:30  | 25 min   | **Hands-on 1 — build an FDN** | Choose delay lengths, swap feedback matrices, prescribe a frequency-dependent $T_{60}$ and measure whether you got it. Listen at every step. |
+| 0:55  | 20 min   | **Hands-on 2 — optimise an FDN** | Differentiable FDNs with FLAMO: train a colorless reverberator, match a measured room, and see where optimisation fails. |
+| 1:15  | 10 min   | **Beyond the vanilla FDN** | Allpass, paraunitary and scattering FDNs; coupled rooms and multi-slope decay. Then real time: compiling a pyFDN design to FAUST with [`adac`](https://github.com/cucuwritescode/adac), stability-certified, and running it in the browser. |
+| 1:25  | 5 min    | **Q&A** | And how to contribute. |
+
+## Notebooks we will use
+
+All of these live in [`examples/`](https://github.com/artificial-audio/pyFDN/tree/main/examples)
+and are rendered in the
+[examples gallery](https://artificial-audio.github.io/pyFDN/examples_gallery.html).
+
+| Segment | Notebook |
+| --- | --- |
+| Tour | `example_process_fdn`, `example_vanilla_FDN` |
+| Hands-on 1 | `example_vanilla_FDN`, `example_absorption_geq`, `example_delay_matrix_density` |
+| Hands-on 2 | `example_train_colorless_FDN`, `example_colorless_FDN`, `example_rir_to_fdn` |
+| Beyond | `example_paraunitary_fdn`, `example_scattering_fdn`, `example_coupled_rooms`, `example_multislope_rir_to_fdn` |
+| Real time | `example_fdn_to_faust` |
+
+## Presenters
+
+**Sebastian J. Schlecht** is Associate Professor of Signal Processing at
+Friedrich-Alexander-Universität Erlangen-Nürnberg. His research covers
+artificial reverberation, differentiable audio processing and spatial audio, and
+he is the lead developer of pyFDN.
+
+**Facundo Franchino** is a graduate student at MIT. His BEng work at the
+University of York proposed structured pruning for feedback delay networks; his
+interests are FDNs, real-time audio and machine listening.
+
+## Optional, for the real-time segment
+
+The FAUST demo needs no toolchain — the notebook builds a link that compiles the
+generated DSP in your browser. If you want to go further:
+
+```bash
+pip install dawdreamer        # render the compiled FAUST offline and compare
+brew install faust            # or grame.fr/downloads — for faust2juce / C++ output
+```
+
+Both are optional and the notebook degrades gracefully without them.
+
+## Room requirements
+
+- Projector and screen
+- Audio playback for listening examples
+- Power for participant laptops, ideally

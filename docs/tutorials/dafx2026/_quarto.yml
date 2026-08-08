@@ -1,0 +1,24 @@
+project:
+  title: "pyFDN tutorial — DAFx 2026"
+  # Renders into ./_site (git-ignored), which `make publish` then syncs into
+  # docs/_static/tutorials/dafx2026/ — the copy Sphinx serves. Pointing
+  # output-dir straight at _static works but puts Quarto in an unsupported path
+  # configuration: it warns, and refuses to clean stale files between renders.
+  output-dir: _site
+  render:
+    - index.qmd
+    - slides.qmd
+
+# Nothing in this project executes Python. Every figure is a checked-in SVG built
+# by figures/make_figures.py, and every code listing is display-only. That is
+# deliberate: the deck must still render years from now, after the API has moved
+# on. See README.md ("Why no executed code?") before adding a live code cell.
+execute:
+  enabled: false
+
+format:
+  html:
+    theme: [cosmo, theme/pyfdn-page.scss]
+    toc: true
+    toc-depth: 2
+    anchor-sections: true

@@ -1,0 +1,20 @@
+/*-- scss:defaults --*/
+$primary: #1f6fb4;
+$body-color: #17365a;
+$link-color: #1f6fb4;
+$font-family-sans-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+/*-- scss:rules --*/
+.quarto-title-block .quarto-title .title {
+  color: #17365a;
+}
+
+table {
+  font-size: 0.92rem;
+}
+
+blockquote {
+  border-left: 4px solid #fbc02d;
+  background: #f2f5f8;
+  padding: 0.6em 1em;
+}

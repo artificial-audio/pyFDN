@@ -142,3 +142,23 @@ profile_default/
 # Matlab
 *.m
 *.lock
+
+# Quarto intermediates for the tutorial decks (sources live in docs/tutorials/).
+# These are local build products; the published copy is handled below.
+docs/tutorials/*/_site/
+docs/tutorials/*/.quarto/
+docs/tutorials/*/slides-standalone.html
+
+# The *published* tutorial output under docs/_static/tutorials/ must be committed
+# verbatim: the Sphinx build only copies docs/_static, it never runs Quarto, so
+# this tree is what the website actually serves.
+#
+# It is mostly vendored web assets (reveal.js, bootstrap), whose directory and
+# file names collide with generic rules above — `dist/` swallows reveal.js's
+# entire core, and `*.wav` would swallow any audio a deck embeds. Re-include the
+# whole subtree, then put back the exclusions that still make sense inside it.
+# (Note the path: docs/_static/tutorials/ is the output, docs/tutorials/ above is
+# the source. Do not mix them up.)
+!docs/_static/tutorials/**
+docs/_static/tutorials/**/.DS_Store
+docs/_static/tutorials/**/__pycache__/

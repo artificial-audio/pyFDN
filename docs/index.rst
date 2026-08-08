@@ -29,6 +29,13 @@ feedback matrices, designing loop filters, and inspecting pole locations.
       Interactive Marimo notebooks covering vanilla FDNs,
       absorption design, coupled rooms, and more.
 
+   .. grid-item-card:: Tutorials
+      :link: tutorials
+      :link-type: doc
+
+      The DAFx 2026 tutorial: FDN theory, hands-on design,
+      and differentiable optimisation.
+
    .. grid-item-card:: API Reference
       :link: api_reference
       :link-type: doc
@@ -51,6 +58,7 @@ feedback matrices, designing loop filters, and inspecting pole locations.
    installation
    usage
    examples_gallery
+   tutorials
    api_reference
    modules
    contributing

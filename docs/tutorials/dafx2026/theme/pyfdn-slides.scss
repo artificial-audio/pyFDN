@@ -1,0 +1,146 @@
+/*-- scss:defaults --*/
+// Palette taken from the pyFDN logo (docs/logo/logo_pyFDN_3.png).
+$pyfdn-navy: #17365a;
+$pyfdn-blue: #1f6fb4;
+$pyfdn-green: #4caf50;
+$pyfdn-yellow: #fbc02d;
+$pyfdn-orange: #f57c20;
+$pyfdn-red: #ef3e36;
+$pyfdn-grey: #6b7885;
+$pyfdn-mist: #f2f5f8;
+
+$body-bg: #ffffff;
+$body-color: $pyfdn-navy;
+$link-color: $pyfdn-blue;
+$selection-bg: rgba(31, 111, 180, 0.25);
+
+$font-family-sans-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
+$presentation-font-size-root: 30px;
+$presentation-heading-color: $pyfdn-navy;
+$presentation-heading-font-weight: 600;
+$presentation-h1-font-size: 1.9em;
+$presentation-h2-font-size: 1.35em;
+$presentation-h3-font-size: 1.1em;
+$code-block-font-size: 0.62em;
+$code-color: $pyfdn-orange;
+
+/*-- scss:rules --*/
+
+// Section-divider slides get the navy background; invert everything on them.
+.reveal .slide-background.navy {
+  background-color: $pyfdn-navy;
+}
+
+.reveal section.navy,
+.reveal section.navy h1,
+.reveal section.navy h2,
+.reveal section.navy p,
+.reveal section.navy li {
+  color: #ffffff;
+}
+
+.reveal h2 {
+  border-bottom: 2px solid rgba(31, 111, 180, 0.25);
+  padding-bottom: 0.25em;
+  margin-bottom: 0.6em;
+}
+
+.reveal section img {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.reveal pre code {
+  border-radius: 8px;
+  padding: 0.7em 0.9em;
+  max-height: 62vh;
+}
+
+.reveal blockquote {
+  border-left: 4px solid $pyfdn-yellow;
+  background: $pyfdn-mist;
+  box-shadow: none;
+  font-style: normal;
+  width: 100%;
+  padding: 0.6em 1em;
+}
+
+// "Do this live" markers: ::: {.live} … :::
+.reveal .live {
+  background: rgba(245, 124, 32, 0.1);
+  border-left: 4px solid $pyfdn-orange;
+  border-radius: 6px;
+  padding: 0.5em 0.9em;
+  margin: 0.6em 0;
+  font-size: 0.85em;
+}
+
+.reveal .live::before {
+  content: "LIVE  ";
+  color: $pyfdn-orange;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+// Exercise markers: ::: {.exercise} … :::
+.reveal .exercise {
+  background: rgba(76, 175, 80, 0.1);
+  border-left: 4px solid $pyfdn-green;
+  border-radius: 6px;
+  padding: 0.5em 0.9em;
+  margin: 0.6em 0;
+  font-size: 0.85em;
+}
+
+.reveal .exercise::before {
+  content: "YOUR TURN  ";
+  color: darken($pyfdn-green, 12%);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+// Draft markers for content that is not written/decided yet: ::: {.todo} … :::
+.reveal .todo {
+  background: rgba(239, 62, 54, 0.08);
+  border-left: 4px solid $pyfdn-red;
+  border-radius: 6px;
+  padding: 0.5em 0.9em;
+  margin: 0.6em 0;
+  font-size: 0.8em;
+  color: darken($pyfdn-red, 18%);
+}
+
+.reveal .todo::before {
+  content: "DRAFT  ";
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.reveal .dim {
+  color: $pyfdn-grey;
+}
+
+// Timing chip in the top-right corner of a slide.
+.reveal .timing {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 0.55em;
+  color: $pyfdn-grey;
+  letter-spacing: 0.06em;
+}
+
+.reveal table {
+  font-size: 0.75em;
+}
+
+.reveal .footer {
+  color: $pyfdn-grey;
+  font-size: 0.5em;
+}
+
+// Keep the logo from crowding the slide content.
+.reveal .slide-logo {
+  max-height: 48px !important;
+}
