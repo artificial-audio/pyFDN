@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from importlib.resources import files
 from pathlib import Path
 
 import numpy as np
-
-AUDIO_SOURCE_DIR = Path(__file__).resolve().parent.parent / "audio"
-
+import soundfile as sf
 
 def load_audio(
+    source_dir,
     name: str,
     *,
     fs: int | None = None,
@@ -21,7 +19,9 @@ def load_audio(
     Parameters
     ----------
     name : str
-        Name of the sample (e.g. ``"synth_dry"`` or ``"synth_dry.wav"``).
+        Name of the sample.
+    source_dir : Path
+        Root directory to search for the audio file.
     fs : int, optional
         Target sampling rate. If given and different from the original
         sampling rate, the signal is resampled.
@@ -35,23 +35,20 @@ def load_audio(
     fs : int
         Sampling rate of the returned signal.
     """
-    import soundfile as sf
 
     # Strip file extension if provided
     sample_name = name.rsplit(".", 1)[0] if "." in name else name
+    filename = f"{sample_name}.wav"
 
-    samples_dict = list_samples()
-    if sample_name not in samples_dict:
+    try:
+        path = find_file(Path(source_dir), filename)
+    except FileNotFoundError as exc:
         raise ValueError(
             f"Unknown sample '{sample_name}'. "
-            f"Available samples: {list(samples_dict.keys())}"
-        )
+            f"No file named '{filename}' found under '{source_dir}'."
+        ) from exc
 
-    relative_path = samples_dict[sample_name]
-    path = files("pyFDN.audio") / relative_path
-
-    with path.open("rb") as f:
-        data, file_fs = sf.read(f, dtype="float64")
+    data, file_fs = sf.read(str(path), dtype="float64")
 
     if mono and data.ndim > 1:
         data = data[:, 0]
@@ -64,23 +61,6 @@ def load_audio(
         file_fs = fs
 
     return data, file_fs
-
-
-def list_samples() -> dict[str, str]:
-    """Scan the audio folder and return a dictionary of file names to relative paths.
-
-    Returns
-    -------
-    dict[str, str]
-        Dictionary mapping file names to their relative paths within the audio folder.
-    """
-    samples = {}
-    for path in sorted(AUDIO_SOURCE_DIR.rglob("*.wav")):
-        relative = path.relative_to(AUDIO_SOURCE_DIR)
-        filename = path.stem  # Get the file name without extension
-        samples[filename] = relative.as_posix()
-    return samples
-
 
 def find_file(root, filename):
     for item in root.iterdir():

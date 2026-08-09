@@ -1,4 +1,4 @@
-"""Generate the audio gallery from the .wav files under src/pyFDN/audio."""
+"""Generate the audio gallery from the .wav files under examples/auxiliary/audio/."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ import bibtexparser
 
 DOCS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = DOCS_DIR.parent
-AUDIO_SOURCE_DIR = PROJECT_ROOT / "src" / "pyFDN" / "audio"
+AUDIO_SOURCE_DIR = PROJECT_ROOT / "examples" / "auxiliary" / "audio"
 AUDIO_REFERENCES_FILE = AUDIO_SOURCE_DIR / "audio_references.json"
 BIB_FILE = DOCS_DIR / "references.bib"
 OUTPUT_FILE = DOCS_DIR / "audio_gallery.rst"
 GITHUB_AUDIO_ROOT = (
-    "https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/"
+    "https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/"
 )
 
 UNCATEGORIZED = "uncategorized"
@@ -91,7 +91,7 @@ def render_gallery(examples: list[AudioExample]) -> str:
         "============",
         "",
         "Audio examples demonstrating ``pyFDN``. The gallery is generated",
-        "automatically from every ``.wav`` file under ``src/pyFDN/audio/``, grouped",
+        "automatically from every ``.wav`` file under ``examples/auxiliary/audio/``, grouped",
         "by the subfolder each file is located in.",
         "",
     ]
@@ -159,7 +159,7 @@ def render_gallery(examples: list[AudioExample]) -> str:
             "----",
             "",
             "All audio files can also be browsed in the repository's",
-            "`audio directory <https://github.com/artificial-audio/pyFDN/tree/main/src/pyFDN/audio>`_.",
+            "`audio directory <https://github.com/artificial-audio/pyFDN/tree/main/examples/auxiliary/audio>`_.",
             "",
         ]
     )

@@ -1,0 +1,106 @@
+[
+    {
+        "filename": "Sommerhit2016_Taylor_DI.wav",
+        "source": "Gemeinfreie Gitarrenaufnahmen 1",
+        "reference": "GemeinfreieGitarrenaufnahmen1",
+        "url": "https://phaidra.kug.ac.at/detail/o:68022"
+    },
+    
+    {
+        "filename": "Kleiderschrank_Taylor_DI.wav",
+        "source": "Gemeinfreie Gitarrenaufnahmen 1",
+        "reference": "GemeinfreieGitarrenaufnahmen1",
+        "url": "https://phaidra.kug.ac.at/detail/o:68022"
+    },
+
+    {
+        "filename": "Jazzkadenz_Hanika_Mic#1.wav",
+        "source": "Gemeinfreie Gitarrenaufnahmen 1",
+        "reference": "GemeinfreieGitarrenaufnahmen1",
+        "url": "https://phaidra.kug.ac.at/detail/o:68022"
+    },
+
+    {
+        "filename": "Flageolet_Taylor_DI.wav",
+        "source": "Gemeinfreie Gitarrenaufnahmen 1",
+        "reference": "GemeinfreieGitarrenaufnahmen1",
+        "url": "https://phaidra.kug.ac.at/detail/o:68022"
+    },
+
+    {
+        "filename": "Bach_BWV1056-01-mm001-008_YO-V1_O_reverb.wav",
+        "source": "Piano Concerto Dataset (PCD): A Multitrack Dataset of Piano Concertos",
+        "reference": "OezerSALSM23_PCD_TISMIR",
+        "url": "https://audiolabs-erlangen.de/resources/MIR/PCD"
+    },
+
+    {
+        "filename": "sentences_06_loud.wav",
+        "source": "EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation",
+        "reference": "richter2024ears",
+        "url": "https://github.com/usc-imi/EARS"
+    },
+
+    {
+        "filename": "rainbow_05_loud.wav",
+        "source": "EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation",
+        "reference": "richter2024ears",
+        "url": "https://github.com/usc-imi/EARS"
+    },
+    
+    {
+        "filename": "TechnoDrum01_02#SD#train.wav",
+        "source": "IDMT-SMT-Drums Dataset",
+        "reference": "Weber2023IDMTDrums",
+        "url": "https://zenodo.org/records/7544164"
+    }
+    ,
+    {
+        "filename": "TechnoDrum01_04#MIX.wav",
+        "source": "IDMT-SMT-Drums Dataset",
+        "reference": "Weber2023IDMTDrums",
+        "url": "https://zenodo.org/records/7544164"
+    },
+
+    {
+        "filename": "TechnoDrum01_06#HH#train.wav",
+        "source": "IDMT-SMT-Drums Dataset",
+        "reference": "Weber2023IDMTDrums",
+        "url": "https://zenodo.org/records/7544164"
+    },
+
+    {
+        "filename": "WaveDrum02_07#MIX.wav",
+        "source": "IDMT-SMT-Drums Dataset",
+        "reference": "Weber2023IDMTDrums",
+        "url": "https://zenodo.org/records/7544164"
+    },
+
+    {
+        "filename": "P1_Set1_5.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+
+    {
+        "filename": "P1_Set1_8.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+
+    {
+        "filename": "P20_Set1_5.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    },
+    {
+        "filename": "P20_Set1_8.wav",
+        "source": "Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)",
+        "reference": "MeyerKahlen2025AVSpeech",
+        "url": "https://zenodo.org/records/15034732"
+    }
+
+]

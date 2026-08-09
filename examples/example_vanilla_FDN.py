@@ -30,7 +30,9 @@ def _():
 
     import pyFDN
 
-    return np, pyFDN, torch
+    from docs import AUDIO_SOURCE_DIR
+
+    return AUDIO_SOURCE_DIR, np, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -138,8 +140,8 @@ def _(mo):
 
 
 @app.cell
-def _(fs, mo, model, np, pyFDN):
-    dry, _ = pyFDN.load_audio("synth_dry.wav", fs=fs)
+def _(AUDIO_SOURCE_DIR, fs, mo, model, np, pyFDN):
+    dry, _ = pyFDN.load_audio(AUDIO_SOURCE_DIR, "synth_dry.wav", fs=fs)
     # Reserve 2 s of trailing silence so the reverb tail does not wrap around.
     wet = pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=2.0)
 

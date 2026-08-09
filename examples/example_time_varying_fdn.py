@@ -11,8 +11,9 @@ def _():
     import marimo as mo
 
     from docs.references import paper_link
+    from docs import AUDIO_SOURCE_DIR
 
-    return mo, paper_link
+    return AUDIO_SOURCE_DIR, mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -79,7 +80,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo, np, pyFDN, sound_selection):
+def _(AUDIO_SOURCE_DIR, mo, np, pyFDN, sound_selection):
     np.random.seed(1)
 
     # init source signal
@@ -99,7 +100,7 @@ def _(mo, np, pyFDN, sound_selection):
 
     elif mode == "melody":
         # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
-        synth, fs = pyFDN.load_audio("synth_dry")
+        synth, fs = pyFDN.load_audio(AUDIO_SOURCE_DIR, "synth_dry")
 
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
@@ -109,11 +110,6 @@ def _(mo, np, pyFDN, sound_selection):
     _audio_src = synth.T if synth.ndim == 2 else synth
     mo.vstack([mo.audio(_audio_src, fs)])
     return fs, synth
-
-
-@app.cell
-def _():
-    return
 
 
 @app.cell(hide_code=True)

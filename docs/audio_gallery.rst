@@ -5,7 +5,7 @@ Audio Gallery
 ============
 
 Audio examples demonstrating ``pyFDN``. The gallery is generated
-automatically from every ``.wav`` file under ``src/pyFDN/audio/``, grouped
+automatically from every ``.wav`` file under ``examples/auxiliary/audio/``, grouped
 by the subfolder each file is located in.
 
 drums
@@ -13,27 +13,15 @@ drums
 
 .. raw:: html
 
-   <p>TechnoDrum01_02#SD#train.wav (source: <a href="https://doi.org/10.5281/zenodo.7544164">IDMT-SMT-Drums Dataset</a>)<br>
-   <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/TechnoDrum01_02#SD#train.wav" type="audio/wav">
-       Your browser does not support the audio element.
-   </audio>
-   </p>
    <p>TechnoDrum01_04#MIX.wav (source: <a href="https://doi.org/10.5281/zenodo.7544164">IDMT-SMT-Drums Dataset</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/TechnoDrum01_04#MIX.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/drums/TechnoDrum01_04#MIX.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>TechnoDrum01_06#HH#train.wav (source: <a href="https://doi.org/10.5281/zenodo.7544164">IDMT-SMT-Drums Dataset</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/TechnoDrum01_06#HH#train.wav" type="audio/wav">
-       Your browser does not support the audio element.
-   </audio>
-   </p>
-   <p>WaveDrum02_07#MIX.wav (source: <a href="https://doi.org/10.5281/zenodo.7544164">IDMT-SMT-Drums Dataset</a>)<br>
-   <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/drums/WaveDrum02_07#MIX.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/drums/TechnoDrum01_06#HH#train.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
@@ -45,31 +33,25 @@ general
 
    <p>example_process_fdn_output.wav<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/example_process_fdn_output.wav" type="audio/wav">
-       Your browser does not support the audio element.
-   </audio>
-   </p>
-   <p>s3_r4_o.wav<br>
-   <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/s3_r4_o.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/general/example_process_fdn_output.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>synth_dry.wav<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/general/synth_dry.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/general/synth_dry.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
 
-piano
------
+rir
+---
 
 .. raw:: html
 
-   <p>Bach_BWV1056-01-mm001-008_YO-V1_O_reverb.wav (source: <a href="https://audiolabs-erlangen.de/resources/MIR/PCD">Piano Concerto Dataset (PCD): A Multitrack Dataset of Piano Concertos</a>)<br>
+   <p>s3_r4_o.wav<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/piano/Bach_BWV1056-01-mm001-008_YO-V1_O_reverb.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/rir/s3_r4_o.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
@@ -81,37 +63,37 @@ speech
 
    <p>P1_Set1_5.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P1_Set1_5.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/P1_Set1_5.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>P1_Set1_8.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P1_Set1_8.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/P1_Set1_8.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>P20_Set1_5.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P20_Set1_5.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/P20_Set1_5.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>P20_Set1_8.wav (source: <a href="https://doi.org/10.5281/zenodo.15034732">Dataset of Audiovisual Speech for AR Telepresence Studies (Speech Recordings)</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/P20_Set1_8.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/P20_Set1_8.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>rainbow_05_loud.wav (source: <a href="https://github.com/usc-imi/EARS">EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/rainbow_05_loud.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/rainbow_05_loud.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>sentences_06_loud.wav (source: <a href="https://github.com/usc-imi/EARS">EARS: An Anechoic Fullband Speech Dataset Benchmarked for Speech Enhancement and Dereverberation</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/speech/sentences_06_loud.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/speech/sentences_06_loud.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
@@ -123,25 +105,25 @@ strings
 
    <p>Flageolet_Taylor_DI.wav (source: <a href="https://phaidra.kug.ac.at/detail/o:68022">Gemeinfreie Gitarrenaufnahmen 1</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/Flageolet_Taylor_DI.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/strings/Flageolet_Taylor_DI.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>Jazzkadenz_Hanika_Mic#1.wav (source: <a href="https://phaidra.kug.ac.at/detail/o:68022">Gemeinfreie Gitarrenaufnahmen 1</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/Jazzkadenz_Hanika_Mic#1.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/strings/Jazzkadenz_Hanika_Mic#1.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>Kleiderschrank_Taylor_DI.wav (source: <a href="https://phaidra.kug.ac.at/detail/o:68022">Gemeinfreie Gitarrenaufnahmen 1</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/Kleiderschrank_Taylor_DI.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/strings/Kleiderschrank_Taylor_DI.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
    <p>Sommerhit2016_Taylor_DI.wav (source: <a href="https://phaidra.kug.ac.at/detail/o:68022">Gemeinfreie Gitarrenaufnahmen 1</a>)<br>
    <audio controls>
-       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/audio/strings/Sommerhit2016_Taylor_DI.wav" type="audio/wav">
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/strings/Sommerhit2016_Taylor_DI.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>
@@ -149,4 +131,4 @@ strings
 ----
 
 All audio files can also be browsed in the repository's
-`audio directory <https://github.com/artificial-audio/pyFDN/tree/main/src/pyFDN/audio>`_.
+`audio directory <https://github.com/artificial-audio/pyFDN/tree/main/examples/auxiliary/audio>`_.
