@@ -1,4 +1,4 @@
-"""Generate the audio gallery from the .wav files under examples/auxiliary/audio/."""
+"""Generate the audio gallery from the audio files packaged with pyFDN."""
 
 from __future__ import annotations
 
@@ -7,17 +7,16 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-
-import bibtexparser
+from urllib.parse import quote
 
 DOCS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = DOCS_DIR.parent
-AUDIO_SOURCE_DIR = PROJECT_ROOT / "examples" / "auxiliary" / "audio"
-AUDIO_REFERENCES_FILE = AUDIO_SOURCE_DIR / "audio_references.json"
-BIB_FILE = DOCS_DIR / "references.bib"
+AUDIO_SOURCE_DIR = PROJECT_ROOT / "src" / "pyFDN" / "resources" / "audio"
+AUDIO_REFERENCES_FILE = AUDIO_SOURCE_DIR / "metadata.json"
 OUTPUT_FILE = DOCS_DIR / "audio_gallery.rst"
 GITHUB_AUDIO_ROOT = (
-    "https://raw.githubusercontent.com/artificial-audio/pyFDN/main/examples/auxiliary/audio/"
+    "https://raw.githubusercontent.com/artificial-audio/pyFDN/"
+    "main/src/pyFDN/resources/audio/"
 )
 
 UNCATEGORIZED = "uncategorized"
@@ -39,7 +38,7 @@ class AudioExample:
     @property
     def audio_url(self) -> str:
         relative = self.path.relative_to(AUDIO_SOURCE_DIR)
-        return GITHUB_AUDIO_ROOT + relative.as_posix()
+        return GITHUB_AUDIO_ROOT + quote(relative.as_posix())
 
 
 def discover_audio_files() -> list[AudioExample]:
@@ -51,29 +50,10 @@ def discover_audio_files() -> list[AudioExample]:
     return examples
 
 
-def load_references(bib_file: Path) -> dict[str, dict[str, str]]:
-    with open(bib_file, encoding="utf-8") as bibfile:
-        bib_database = bibtexparser.load(bibfile)
-    references = {
-        entry["ID"]: {
-            "title": entry.get("title", "Unknown Title"),
-            "url": entry.get("url", "#"),
-        }
-        for entry in bib_database.entries
-    }
-    return references
-
-
 def render_gallery(examples: list[AudioExample]) -> str:
-    # Load references from the .bib file
-    references = load_references(BIB_FILE)
-
     # Load audio metadata
     with open(AUDIO_REFERENCES_FILE, encoding="utf-8") as f:
-        audio_references = {
-            item["filename"]: item
-            for item in json.load(f)
-        }
+        audio_references = {item["filename"]: item for item in json.load(f)}
 
     grouped: dict[str, list[AudioExample]] = defaultdict(list)
     for example in examples:
@@ -91,8 +71,7 @@ def render_gallery(examples: list[AudioExample]) -> str:
         "============",
         "",
         "Audio examples demonstrating ``pyFDN``. The gallery is generated",
-        "automatically from every ``.wav`` file under ``examples/auxiliary/audio/``, grouped",
-        "by the subfolder each file is located in.",
+        "automatically from every packaged ``.wav`` file, grouped by resource category.",
         "",
     ]
 
@@ -116,23 +95,17 @@ def render_gallery(examples: list[AudioExample]) -> str:
             if example.filename in audio_references:
                 audio_ref = audio_references[example.filename]
 
-                ref = references.get(audio_ref["reference"], {})
-
                 title = html.escape(audio_ref["source"])
-                url = html.escape(audio_ref["url"])
-
-                citation = html.escape(
-                    ref.get("author", "Unknown author")
-                    + ", "
-                    + ref.get("year", "")
-)
-
-                title = html.escape(ref["title"])
-                url = html.escape(ref["url"])
+                url = html.escape(audio_ref["source_url"])
+                creator = html.escape(audio_ref["creator"])
+                license_name = html.escape(audio_ref["license"])
+                license_url = html.escape(audio_ref["license_url"])
 
                 lines.extend(
                     [
-                        f'   <p>{label_html} (source: <a href="{url}">{title}</a>)<br>',
+                        f"   <p>{label_html}<br>",
+                        f'   Source: <a href="{url}">{title}</a> — {creator}<br>',
+                        f'   Terms: <a href="{license_url}">{license_name}</a><br>',
                         "   <audio controls>",
                         f'       <source src="{src}" type="audio/wav">',
                         "       Your browser does not support the audio element.",
@@ -159,7 +132,7 @@ def render_gallery(examples: list[AudioExample]) -> str:
             "----",
             "",
             "All audio files can also be browsed in the repository's",
-            "`audio directory <https://github.com/artificial-audio/pyFDN/tree/main/examples/auxiliary/audio>`_.",
+            "`packaged audio directory <https://github.com/artificial-audio/pyFDN/tree/main/src/pyFDN/resources/audio>`_.",
             "",
         ]
     )

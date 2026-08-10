@@ -10,17 +10,17 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
 
 @app.cell
 def _(mo, paper_link):
-    mo.md(f""" 
+    mo.md(f"""
     # Colorless FDN
 
-    FDN optimized for reduced metallic ringing (perceptually colorless reverberation). 
+    FDN optimized for reduced metallic ringing (perceptually colorless reverberation).
     Original method published in *{paper_link("Differentiable_FDN_For_Colorless_Reverberation")}.*
 
     Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
@@ -30,15 +30,11 @@ def _(mo, paper_link):
 
 @app.cell
 def _():
-    from pathlib import Path
-
     import numpy as np
-    from scipy.io import loadmat
-    from scipy.linalg import expm
 
     import pyFDN
 
-    return Path, expm, loadmat, np, pyFDN
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -50,24 +46,11 @@ def _(mo):
 
 
 @app.cell
-def _(Path, pyFDN):
+def _():
     fs = 48000
     rt = 3.0
     ir_len = int(rt * fs)
-    g = pyFDN.db_to_lin(pyFDN.rt_to_slope(rt, fs))
-
-    # Resolve param_dir: nbsphinx runs with cwd = notebook dir (docs/examples/), so go up to repo root
-    _param_candidates = [
-        Path.cwd().parent.parent
-        / "examples"
-        / "resources"
-        / "colorless_FDN",  # from docs/examples/
-        Path.cwd().parent / "examples" / "resources" / "colorless_FDN",  # from docs/
-        Path.cwd() / "resources" / "colorless_FDN",  # from examples/
-        Path.cwd() / "examples" / "resources" / "colorless_FDN",  # from project root
-    ]
-    param_dir = next((p for p in _param_candidates if p.is_dir()), _param_candidates[0])
-    return fs, g, ir_len, param_dir
+    return fs, ir_len, rt
 
 
 @app.cell(hide_code=True)
@@ -81,16 +64,16 @@ def _(mo):
 
 
 @app.cell
-def _(mo, param_dir):
+def _(mo, pyFDN):
     import re
 
     _pairs = sorted(
         {
             (int(match.group(1)), int(match.group(2)))
-            for p in param_dir.glob("param_N*_d*.mat")
-            if (match := re.fullmatch(r"param_N(\d+)_d(\d+)\.mat", p.name))
+            for name in pyFDN.available_fdn_presets()
+            if (match := re.fullmatch(r"colorless_N(\d+)_d(\d+)", name))
         }
-    ) or [(16, 1)]
+    )
     _options = {f"N = {n}, delay set {d}": (n, d) for n, d in _pairs}
     _default = "N = 16, delay set 1"
     param_choice = mo.ui.dropdown(
@@ -112,43 +95,27 @@ def _(param_choice):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Load parameters from mat file
+    ## Load the packaged preset
 
-    `load_colorless_params(path, g)` loads m, A, B, C from the mat file, builds Ag = expm(skew(A)) @ diag(g^m) using `pyFDN.skew`, and returns (m_int, Ag, B, C, D) for use with dss2impz.
+    `pyFDN.load_fdn_preset` returns the coefficients as an `FDNBuild`. We add
+    the desired decay with `pyFDN.build_set_decay` and render it directly.
     """)
     return
 
 
 @app.cell
-def _(Path, expm, loadmat, np, pyFDN):
-    def load_colorless_params(path):
-        """Load colorless FDN parameters from a .mat file. Returns (m_int, A, B, C, D)."""
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"Parameter file not found: {path}")
-        data = loadmat(path)
-        m = np.asarray(data["m"], dtype=np.float64).ravel()
-        A = np.asarray(data["A"], dtype=np.float64)
-        B = np.asarray(data["B"], dtype=np.float64).ravel().reshape(-1, 1)
-        C = np.asarray(data["C"], dtype=np.float64)
-        if C.ndim == 1:
-            C = C.reshape(1, -1)
-        D = np.zeros((1, 1))
-        A_skew = pyFDN.skew(A)
-        A = expm(A_skew)
-        m_int = np.round(m).astype(np.int64)
-        return m_int, A, B, C, D
-
-    return (load_colorless_params,)
-
-
-@app.cell
-def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
-    path_optim = param_dir / f"param_N{N}_d{delay_set}.mat"
-    m, A, B, C, D = load_colorless_params(path_optim)
-    _Gamma = np.diag(g**m)
-    Ag = A @ _Gamma
-    ir_optim = pyFDN.dss_to_impz(ir_len, m, Ag, B, C, D).squeeze()
+def _(N, delay_set, fs, ir_len, pyFDN, rt):
+    _preset = f"colorless_N{N}_d{delay_set}"
+    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _build = pyFDN.build_set_decay(_lossless, rt)
+    ir_optim = pyFDN.build_to_impz(_build, ir_len).squeeze()
+    A, B, C, D, m = (
+        _lossless.A,
+        _lossless.B,
+        _lossless.C,
+        _lossless.D,
+        _lossless.delays,
+    )
     return A, B, C, D, ir_optim, m
 
 
@@ -161,12 +128,18 @@ def _(mo):
 
 
 @app.cell
-def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
-    path_init = param_dir / f"param_init_N{N}_d{delay_set}.mat"
-    m_i, A_i, B_i, C_i, D_i = load_colorless_params(path_init)
-    _Gamma = np.diag(g**m_i)
-    Ag_i = A_i @ _Gamma
-    ir_init = pyFDN.dss_to_impz(ir_len, m_i, Ag_i, B_i, C_i, D_i).squeeze()
+def _(N, delay_set, fs, ir_len, pyFDN, rt):
+    _preset = f"colorless_init_N{N}_d{delay_set}"
+    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _build = pyFDN.build_set_decay(_lossless, rt)
+    ir_init = pyFDN.build_to_impz(_build, ir_len).squeeze()
+    A_i, B_i, C_i, D_i, m_i = (
+        _lossless.A,
+        _lossless.B,
+        _lossless.C,
+        _lossless.D,
+        _lossless.delays,
+    )
     return A_i, B_i, C_i, D_i, ir_init, m_i
 
 

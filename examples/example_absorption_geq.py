@@ -10,14 +10,14 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
 
 @app.cell
 def _(mo, paper_link):
-    mo.md(f""" 
+    mo.md(f"""
     # Absorption GEQ in an FDN
 
     Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed

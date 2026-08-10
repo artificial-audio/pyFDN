@@ -45,9 +45,7 @@ def _(mo):
 
 @app.cell
 def _(mo, pyFDN):
-    from docs import AUDIO_SOURCE_DIR
-
-    dry, fs = pyFDN.load_audio(AUDIO_SOURCE_DIR, "synth_dry.wav")
+    dry, fs = pyFDN.load_audio("synth_dry")
 
     print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry) / fs:.2f} s)")
     mo.vstack([mo.audio(dry, fs)])

@@ -11,10 +11,9 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-    from docs import AUDIO_SOURCE_DIR
+    from pyFDN import paper_link
 
-    return AUDIO_SOURCE_DIR, mo, paper_link
+    return mo, paper_link
 
 
 @app.cell(hide_code=True)
@@ -67,8 +66,8 @@ def _(mo):
 
 
 @app.cell
-def _(AUDIO_SOURCE_DIR, np, pyFDN):
-    rir, fs = pyFDN.load_audio(AUDIO_SOURCE_DIR, "s3_r4_o.wav")
+def _(np, pyFDN):
+    rir, fs = pyFDN.load_audio("s3_r4_o")
     _onset = int(np.argmax(np.abs(rir)))
     rir = rir[_onset:]
     rir = rir / np.linalg.norm(rir)

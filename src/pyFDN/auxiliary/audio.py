@@ -1,54 +1,72 @@
-"""Helpers for loading the audio files packaged with pyFDN."""
+"""Helpers for the compact audio examples distributed with pyFDN."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
+from functools import lru_cache
+from importlib.resources import as_file, files
+from pathlib import PurePosixPath
+from typing import Any
 
 import numpy as np
 import soundfile as sf
 
+_AUDIO_ROOT = files("pyFDN.resources").joinpath("audio")
+
+
+@lru_cache(maxsize=1)
+def _metadata() -> tuple[dict[str, Any], ...]:
+    metadata_file = _AUDIO_ROOT.joinpath("metadata.json")
+    return tuple(json.loads(metadata_file.read_text(encoding="utf-8")))
+
+
+def available_audio() -> tuple[str, ...]:
+    """Return the names accepted by :func:`load_audio`."""
+
+    return tuple(sorted(item["name"] for item in _metadata()))
+
+
+def audio_metadata(name: str) -> dict[str, Any]:
+    """Return attribution and license metadata for a packaged audio sample."""
+
+    sample_name = PurePosixPath(name).stem
+    for item in _metadata():
+        if item["name"] == sample_name or item["filename"] == name:
+            return dict(item)
+    choices = ", ".join(available_audio())
+    raise ValueError(f"Unknown audio sample '{name}'. Available samples: {choices}")
+
+
 def load_audio(
-    source_dir,
     name: str,
     *,
     fs: int | None = None,
     mono: bool = True,
 ) -> tuple[np.ndarray, int]:
-    """Load a packaged audio sample.
+    """Load an audio sample distributed with pyFDN.
 
     Parameters
     ----------
     name : str
-        Name of the sample.
-    source_dir : Path
-        Root directory to search for the audio file.
+        Sample name, with or without the ``.wav`` extension. See
+        :func:`available_audio`.
     fs : int, optional
-        Target sampling rate. If given and different from the original
-        sampling rate, the signal is resampled.
+        Target sampling rate. A differing source rate is resampled.
     mono : bool
-        If True, keep only the first channel of multichannel audio.
+        If ``True``, retain only the first channel of multichannel audio.
 
     Returns
     -------
     signal : np.ndarray
-        Audio samples as float64.
+        Audio samples as ``float64``.
     fs : int
         Sampling rate of the returned signal.
     """
 
-    # Strip file extension if provided
-    sample_name = name.rsplit(".", 1)[0] if "." in name else name
-    filename = f"{sample_name}.wav"
-
-    try:
-        path = find_file(Path(source_dir), filename)
-    except FileNotFoundError as exc:
-        raise ValueError(
-            f"Unknown sample '{sample_name}'. "
-            f"No file named '{filename}' found under '{source_dir}'."
-        ) from exc
-
-    data, file_fs = sf.read(str(path), dtype="float64")
+    metadata = audio_metadata(name)
+    resource = _AUDIO_ROOT.joinpath(metadata["category"], metadata["filename"])
+    with as_file(resource) as path:
+        data, file_fs = sf.read(path, dtype="float64")
 
     if mono and data.ndim > 1:
         data = data[:, 0]
@@ -60,15 +78,4 @@ def load_audio(
         data = resample(data, new_length)
         file_fs = fs
 
-    return data, file_fs
-
-def find_file(root, filename):
-    for item in root.iterdir():
-        if item.is_file() and item.name == filename:
-            return item
-        if item.is_dir():
-            try:
-                return find_file(item, filename)
-            except FileNotFoundError:
-                pass
-    raise FileNotFoundError(filename)
+    return data, int(file_fs)

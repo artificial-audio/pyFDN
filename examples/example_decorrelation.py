@@ -10,7 +10,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
@@ -35,7 +35,7 @@ def _(mo):
 
 @app.cell
 def _(mo, paper_link):
-    mo.md(f""" 
+    mo.md(f"""
     Reference: *{paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
 
     """)
