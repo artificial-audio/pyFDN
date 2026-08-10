@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Process music through an FDN whose orthogonal feedback matrix changes over time at selectable modulation rates.
 
 import marimo
 

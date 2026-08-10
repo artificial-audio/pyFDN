@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Schroeder allpass reverberator
+# gallery_description: Build the classic Schroeder series-allpass reverberator and verify its lossless magnitude response.
 
 import marimo
 

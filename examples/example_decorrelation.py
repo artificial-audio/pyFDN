@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Measure how a velvet-noise scattering feedback matrix decorrelates the input-output paths of an FDN.
 
 import marimo
 

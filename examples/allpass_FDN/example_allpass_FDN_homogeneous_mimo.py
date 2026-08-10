@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Homogeneous allpass FDN (MIMO)
+# gallery_description: Construct and verify a multi-input, multi-output homogeneous allpass FDN from delay-line gains and an orthogonal mixing matrix.
 
 import marimo
 

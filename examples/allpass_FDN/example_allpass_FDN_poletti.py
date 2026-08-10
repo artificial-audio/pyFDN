@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Poletti allpass FDN
+# gallery_description: Construct Poletti's homogeneous allpass FDN topology and inspect its impulse and frequency responses.
 
 import marimo
 

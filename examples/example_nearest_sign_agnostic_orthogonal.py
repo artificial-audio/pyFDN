@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Nearest sign-agnostic orthogonal matrix
+# gallery_description: Fit an orthogonal matrix whose element magnitudes approximate a non-negative target matrix despite unknown signs.
 
 import marimo
 

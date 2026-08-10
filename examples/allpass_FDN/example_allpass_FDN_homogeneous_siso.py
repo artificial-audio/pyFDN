@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Homogeneous allpass FDN (SISO)
+# gallery_description: Build a single-input, single-output homogeneous allpass FDN and validate its allpass response.
 
 import marimo
 

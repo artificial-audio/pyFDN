@@ -29,6 +29,9 @@ Overview
 
 ``pyFDN`` provides building blocks for designing, simulating, and analysing Feedback Delay Networks (FDNs). The package focuses on reusable, tested helper functions that simplify typical FDN workflows such as creating orthogonal feedback matrices, designing loop filters, and inspecting pole locations. Using ``flamo`` as a dependency, ``pyFDN`` allows modular design of advanced FDN structure with DSP operations in time and frequency domain.
 
+For a quick introduction, visit the `pyFDN tutorial
+<https://artificial-audio.github.io/pyfdn-tutorial-2026/>`_.
+
 The source code is MIT-licensed. Small packaged tutorial resources retain the
 separate terms recorded in ``src/pyFDN/resources/ATTRIBUTION.md``; in
 particular, the Pori concert-hall impulse response is limited to

@@ -1,4 +1,6 @@
 # gallery_category: Absorption & Filters
+# gallery_title: Absorption GEQ in an FDN
+# gallery_description: Design per-delay graphic-EQ absorption filters and confirm that the rendered FDN follows a target frequency-dependent reverberation time.
 
 import marimo
 

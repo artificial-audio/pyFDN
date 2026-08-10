@@ -1,4 +1,5 @@
 # gallery_category: Getting Started
+# gallery_description: Build a basic FLAMO FDN, inspect its response, and process a dry audio signal through it.
 
 import marimo
 

@@ -15,9 +15,9 @@ Getting Started
    :header-rows: 0
 
    * - `process_fdn — Pure DSS Simulation <_static/marimo/notebooks/example_process_fdn.html>`_
-     - Demonstrates ``pyFDN.process_fdn`` for time-domain simulation of a feedback delay network with static matrices. A dry audio signal is run through the FDN to produce reverberation.
+     - Process dry audio directly through a static delay state-space FDN using the NumPy time-domain simulator.
    * - `Vanilla FDN (FLAMO) <_static/marimo/notebooks/example_vanilla_FDN.html>`_
-     - Build a vanilla FDN with ``pyFDN.dss_to_flamo``, optionally alter delays and feedforward (e.g. diagonal gain, no absorption), plot IRs, and run a dry signal through the model.
+     - Build a basic FLAMO FDN, inspect its response, and process a dry audio signal through it.
 
 Absorption & Filters
 --------------------
@@ -26,12 +26,12 @@ Absorption & Filters
    :widths: 35 65
    :header-rows: 0
 
-   * - `Absorption Geq <_static/marimo/notebooks/example_absorption_geq.html>`_
-     - Open the rendered marimo notebook.
+   * - `Absorption GEQ in an FDN <_static/marimo/notebooks/example_absorption_geq.html>`_
+     - Design per-delay graphic-EQ absorption filters and confirm that the rendered FDN follows a target frequency-dependent reverberation time.
+   * - `Convert a room impulse response into an FDN <_static/marimo/notebooks/example_rir_to_fdn.html>`_
+     - Estimate octave-band decay and level from a measured room response, then design an FDN that matches both.
    * - `Multi-slope decay: from a coupled-space RIR to an FDN <_static/marimo/notebooks/example_multislope_rir_to_fdn.html>`_
-     - A single room decays with one exponential slope per frequency band, and ``pyFDN.estimate_rt_bands`` is built for exactly that case. Two coupled rooms do not: energy leaks from the small room into the large one, so the energy decay curve (EDC) bends — a fast slope early on, a slow one later, and a single reverberation time fitted to it describes neither room.
-   * - `Rir To Fdn <_static/marimo/notebooks/example_rir_to_fdn.html>`_
-     - Open the rendered marimo notebook.
+     - Estimate two decay slopes per octave from a coupled-room response and resynthesize them with parallel FDNs.
 
 Translation Examples
 --------------------
@@ -41,13 +41,13 @@ Translation Examples
    :header-rows: 0
 
    * - `Delay state-space to state-space <_static/marimo/notebooks/example_dss_to_ss.html>`_
-     - This example converts an FDN in delay state-space form (separate delay lengths and feedback matrix) into a single state-space system, and checks that the impulse response matches the delay-state-space implementation.
+     - Convert delay state-space FDN parameters into a conventional state-space model and verify matching impulse responses.
    * - `Delay state-space to transfer function <_static/marimo/notebooks/example_dss_to_tf.html>`_
-     - Convert the delay state-space form of an FDN into matrix transfer function form (``dss_to_tf``). Verify by comparing the impulse response from the TF with the one from direct delay state-space simulation (``dss_to_impz``).
+     - Convert a delay state-space FDN into a matrix transfer function and verify the result in the time domain.
    * - `DSS→PR example <_static/marimo/notebooks/example_dss_to_pr_direct.html>`_
-     - Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
+     - Compare three pole-residue solvers by reconstructing an FDN impulse response from its modal decomposition.
    * - `FLAMO→PR (Notebook) <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
-     - In-depth math documentation of the refinement fix, with an SOS filter in the loop and plotting.
+     - Convert a FLAMO feedback model with an SOS loop filter into poles and residues, including iterative pole refinement.
 
 Allpass FDN Examples
 --------------------
@@ -56,24 +56,24 @@ Allpass FDN Examples
    :widths: 35 65
    :header-rows: 0
 
-   * - `Allpass Fdn Completion <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_completion.html>`_
-     - Open the rendered marimo notebook.
+   * - `Allpass but not uniallpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_not_uniallpass.html>`_
+     - Demonstrate an FDN that is allpass for one delay configuration but loses that property when its delays change.
+   * - `Allpass FDN completion <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_completion.html>`_
+     - Complete the input, output, and direct-path coefficients that turn a given feedback matrix into a uniallpass FDN.
    * - `Allpass FDN embedded in a larger FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_in_FDN.html>`_
-     - Single input, stereo output. The signal flow is:
-   * - `Allpass Fdn Homogeneous Mimo <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_mimo.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Homogeneous Siso <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_siso.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Nested <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_nested.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Not Uniallpass <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_not_uniallpass.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Poletti <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_poletti.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Schroeder <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
-     - Open the rendered marimo notebook.
-   * - `Allpass Fdn Schroeder In Loop <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder_in_loop.html>`_
-     - Open the rendered marimo notebook.
+     - Embed a homogeneous MIMO allpass FDN inside a larger recursive delay network with stereo output.
+   * - `Gardner's nested allpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_nested.html>`_
+     - Recreate Gardner's SISO reverberator by iteratively nesting feedforward and feedback allpass sections.
+   * - `Homogeneous allpass FDN (MIMO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_mimo.html>`_
+     - Construct and verify a multi-input, multi-output homogeneous allpass FDN from delay-line gains and an orthogonal mixing matrix.
+   * - `Homogeneous allpass FDN (SISO) <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_homogeneous_siso.html>`_
+     - Build a single-input, single-output homogeneous allpass FDN and validate its allpass response.
+   * - `Poletti allpass FDN <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_poletti.html>`_
+     - Construct Poletti's homogeneous allpass FDN topology and inspect its impulse and frequency responses.
+   * - `Schroeder allpass in a feedback loop <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder_in_loop.html>`_
+     - Place a Schroeder allpass cascade inside a recursive loop and examine the resulting reverberator.
+   * - `Schroeder allpass reverberator <_static/marimo/notebooks/allpass_FDN_example_allpass_FDN_schroeder.html>`_
+     - Build the classic Schroeder series-allpass reverberator and verify its lossless magnitude response.
 
 Special FDNs
 ------------
@@ -82,10 +82,10 @@ Special FDNs
    :widths: 35 65
    :header-rows: 0
 
-   * - `Coupled Rooms <_static/marimo/notebooks/example_coupled_rooms.html>`_
-     - Open the rendered marimo notebook.
+   * - `Coupled rooms FDN <_static/marimo/notebooks/example_coupled_rooms.html>`_
+     - Model two rooms with different decay characteristics and join their delay networks through an acoustic coupling matrix.
    * - `Scattering Delay Network (SDN) Demo <_static/marimo/notebooks/example_sdn.html>`_
-     - This example uses the Scattering Delay Network (SDN) to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a FLAMO model to render the impulse response.
+     - Derive a scattering delay network from room geometry and wall absorption, then render its impulse response with FLAMO.
 
 FDN Design & Analysis
 ---------------------
@@ -94,38 +94,38 @@ FDN Design & Analysis
    :widths: 35 65
    :header-rows: 0
 
-   * - `Colorless Fdn <_static/marimo/notebooks/example_colorless_FDN.html>`_
-     - Open the rendered marimo notebook.
+   * - `Colorless FDN presets <_static/marimo/notebooks/example_colorless_FDN.html>`_
+     - Load optimized colorless FDN builds, add a chosen decay time, and compare their magnitude responses and impulse responses.
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
-     - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
+     - Measure how a velvet-noise scattering feedback matrix decorrelates the input-output paths of an FDN.
    * - `Denser Reverberation with Delay Feedback Matrix <_static/marimo/notebooks/example_delay_matrix_density.html>`_
-     - This example compares three FDN topologies and their echo density (Abel & Huang 2006):
+     - Compare three feedback-path topologies to show how delay feedback matrices accelerate echo-density buildup.
    * - `FDN design tradeoff <_static/marimo/notebooks/example_tradeoff.html>`_
-     - FDN design typically needs to balance modal and echo density with computational complexity:
+     - Visualize how delay count and delay length trade computational cost against modal and echo density.
    * - `FDN eigenvectors (mode shapes) <_static/marimo/notebooks/example_fdn_eigenvectors.html>`_
-     - Demonstrates how to compute the mode shapes of an FDN from the left and right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
-   * - `Fdn Gallery <_static/marimo/notebooks/example_fdn_gallery.html>`_
-     - Open the rendered marimo notebook.
+     - Compute and visualize FDN mode shapes from the left and right eigenvectors of the loop polynomial.
+   * - `FDN matrix and system gallery <_static/marimo/notebooks/example_fdn_gallery.html>`_
+     - Explore pyFDN's catalog of feedback matrices and complete FDN systems while checking their lossless and allpass properties.
    * - `FDN with spread modal decay <_static/marimo/notebooks/example_spread_fdn_poles.html>`_
-     - Demonstrates an FDN without homogeneous decay, but with a certain decay spread, as is typically observed in shoebox rooms and scattering delay networks. The spread is evaluated via the modal decomposition.
+     - Contrast homogeneous modal decay with a rotated absorption design that spreads reverberation times across modes.
    * - `Frequency-dependent pole boundaries <_static/marimo/notebooks/example_pole_boundaries.html>`_
-     - FDN with frequency-dependent absorption filters, but not with homogeneous (delay-proportional) decay. Still, boundaries for the pole magnitudes can be computed from the singular values of the loop transfer function and tested against the actual poles.
-   * - `Interpolate Matrix <_static/marimo/notebooks/example_interpolate_matrix.html>`_
-     - Open the rendered marimo notebook.
-   * - `Nearest Sign Agnostic Orthogonal <_static/marimo/notebooks/example_nearest_sign_agnostic_orthogonal.html>`_
-     - Open the rendered marimo notebook.
-   * - `Paraunitary Fdn <_static/marimo/notebooks/example_paraunitary_fdn.html>`_
-     - Open the rendered marimo notebook.
-   * - `Process Fdn Vs Flamo <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
-     - Open the rendered marimo notebook.
+     - Bound the poles of an FDN with frequency-dependent absorption using loop-transfer singular values.
+   * - `Interpolate orthogonal matrices <_static/marimo/notebooks/example_interpolate_matrix.html>`_
+     - Follow a geodesic between two orthogonal feedback matrices and listen to representative interpolated FDNs.
+   * - `Nearest sign-agnostic orthogonal matrix <_static/marimo/notebooks/example_nearest_sign_agnostic_orthogonal.html>`_
+     - Fit an orthogonal matrix whose element magnitudes approximate a non-negative target matrix despite unknown signs.
+   * - `Paraunitary filter feedback delay network <_static/marimo/notebooks/example_paraunitary_fdn.html>`_
+     - Build an FDN with a lossless FIR scattering matrix and verify its time-domain and modal responses.
    * - `Random FDN statistics <_static/marimo/notebooks/example_random_fdn_statistics.html>`_
-     - Statistics of the modal decomposition of a random FDN. The pole angles are almost equidistributed on the unit circle, while the residue magnitudes are spread across a large range.
-   * - `Scattering Fdn <_static/marimo/notebooks/example_scattering_fdn.html>`_
-     - Open the rendered marimo notebook.
+     - Analyze the pole-angle and residue distributions of random FDNs and separate modal drive from undriven residue.
+   * - `Scattering feedback matrices <_static/marimo/notebooks/example_scattering_fdn.html>`_
+     - Compare dense, velvet-noise, elemental, and static feedback matrices by their echo-density buildup.
    * - `Time Varying FDN <_static/marimo/notebooks/example_time_varying_fdn.html>`_
-     - Open the rendered marimo notebook.
-   * - `Train Colorless Fdn <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
-     - Open the rendered marimo notebook.
+     - Process music through an FDN whose orthogonal feedback matrix changes over time at selectable modulation rates.
+   * - `Time-domain FDN versus FLAMO <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
+     - Render the same paraunitary FDN with GEQ absorption in two independent engines and verify sample-accurate agreement.
+   * - `Train a colorless FDN <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
+     - Optimize an FDN for a flat lossless magnitude response, extract its build, and add decay for listening.
 
 ----
 

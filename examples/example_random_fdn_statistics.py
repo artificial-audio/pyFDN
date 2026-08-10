@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Analyze the pole-angle and residue distributions of random FDNs and separate modal drive from undriven residue.
 
 import marimo
 

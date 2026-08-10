@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Paraunitary filter feedback delay network
+# gallery_description: Build an FDN with a lossless FIR scattering matrix and verify its time-domain and modal responses.
 
 import marimo
 

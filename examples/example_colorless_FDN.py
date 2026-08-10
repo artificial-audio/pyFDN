@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Colorless FDN presets
+# gallery_description: Load optimized colorless FDN builds, add a chosen decay time, and compare their magnitude responses and impulse responses.
 
 import marimo
 
@@ -21,7 +23,7 @@ def _(mo, pyFDN):
     FDN optimized for reduced metallic ringing (perceptually colorless reverberation).
     Original method published in *{pyFDN.paper_link("Differentiable_FDN_For_Colorless_Reverberation")}.*
 
-    Parameters are loaded from `.mat` files (e.g. from [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless)). The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
+    Parameters are loaded from readable, versioned JSON `FDNBuild` files converted from the [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless) companion material. The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
     """)
     return
 
@@ -56,7 +58,7 @@ def _(mo):
     mo.md(r"""
     ## Choose parameter file
 
-    Pick the FDN size $N$ and delay set; the matching `param_init_*` file provides the random initialization.
+    Pick the FDN size $N$ and delay set; the matching `colorless_init_*` JSON build provides the random initialization.
     """)
     return
 

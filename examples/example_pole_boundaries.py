@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Bound the poles of an FDN with frequency-dependent absorption using loop-transfer singular values.
 
 import marimo
 

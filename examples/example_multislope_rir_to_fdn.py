@@ -1,4 +1,5 @@
 # gallery_category: Absorption & Filters
+# gallery_description: Estimate two decay slopes per octave from a coupled-room response and resynthesize them with parallel FDNs.
 # references: Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis
 # requires: multislope
 
