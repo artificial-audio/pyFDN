@@ -7,6 +7,13 @@ import zipfile
 from pathlib import Path
 
 MAX_WHEEL_BYTES = 6_000_000
+COLORLESS_PRESET_ROOT = "pyFDN/resources/presets/colorless_FDN"
+COLORLESS_PRESETS = {
+    f"{COLORLESS_PRESET_ROOT}/colorless_{initial}N{size}_d{delay}.json"
+    for initial in ("", "init_")
+    for size in (4, 6, 8, 16)
+    for delay in (1, 2)
+}
 REQUIRED_SUFFIXES = {
     "pyFDN/resources/audio/metadata.json",
     "pyFDN/resources/audio/drums/drums.wav",
@@ -17,9 +24,8 @@ REQUIRED_SUFFIXES = {
     "pyFDN/resources/audio/strings/Kleiderschrank_Taylor_DI.wav",
     "pyFDN/resources/audio/strings/Sommerhit2016_Taylor_DI.wav",
     "pyFDN/resources/licenses/diff-fdn-colorless-MIT.txt",
-    "pyFDN/resources/presets/colorless_FDN/param_N4_d1.mat",
     "pyFDN/resources/references.bib",
-}
+} | COLORLESS_PRESETS
 
 
 def main(wheel_name: str) -> None:
@@ -31,6 +37,14 @@ def main(wheel_name: str) -> None:
         names = set(archive.namelist())
     leaked_docs = sorted(name for name in names if name.startswith("docs/"))
     assert not leaked_docs, f"documentation files leaked into wheel: {leaked_docs[:5]}"
+    obsolete_mat_presets = sorted(
+        name
+        for name in names
+        if name.startswith(f"{COLORLESS_PRESET_ROOT}/") and name.endswith(".mat")
+    )
+    assert not obsolete_mat_presets, (
+        f"obsolete colorless-FDN MAT presets leaked into wheel: {obsolete_mat_presets}"
+    )
     missing = sorted(REQUIRED_SUFFIXES - names)
     assert not missing, f"packaged resources missing from wheel: {missing}"
 
