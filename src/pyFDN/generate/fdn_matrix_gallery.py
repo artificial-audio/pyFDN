@@ -24,21 +24,22 @@ class FDNSystem(NamedTuple):
     D: np.ndarray
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FDNBuild:
     """Complete FDN parameters returned by :func:`fdn_build_gallery`.
 
-    ``filters`` is either ``None`` (lossless) or a per-delay first-order
-    absorption SOS bank with shape ``(num_sections, 6, N)`` suitable for
-    ``dss_to_flamo(..., sos_filter=...)``. ``post_eq`` is an optional per-output
-    SOS bank with shape ``(num_sections, 6, num_outputs)`` suitable for the
-    ``output_filter`` argument of :func:`pyFDN.dss_to_flamo`.
+    ``D`` is the direct gain, or ``None`` for a zero ``(num_outputs, num_inputs)``
+    direct path. ``filters`` is either ``None`` (lossless) or a per-delay
+    first-order absorption SOS bank with shape ``(num_sections, 6, N)`` suitable
+    for ``dss_to_flamo(..., sos_filter=...)``. ``post_eq`` is an optional
+    per-output SOS bank with shape ``(num_sections, 6, num_outputs)`` suitable for
+    the ``output_filter`` argument of :func:`pyFDN.dss_to_flamo`.
     """
 
     A: np.ndarray
     B: np.ndarray
     C: np.ndarray
-    D: np.ndarray
+    D: np.ndarray | None = None
     delays: np.ndarray
     fs: float
     filters: np.ndarray | None = None
@@ -295,7 +296,16 @@ def fdn_build_gallery(
     post_eq = _build_post_eq(
         num_outputs, float(fs), post_eq_db_dc, post_eq_db_nyquist, post_eq_crossover
     )
-    return FDNBuild(A, B, C, D, delays_array, float(fs), filters, post_eq)
+    return FDNBuild(
+        A=A,
+        B=B,
+        C=C,
+        D=D,
+        delays=delays_array,
+        fs=float(fs),
+        filters=filters,
+        post_eq=post_eq,
+    )
 
 
 @overload

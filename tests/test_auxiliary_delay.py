@@ -69,7 +69,7 @@ def test_flamo_delay_feedback_matrix_copies_and_rewires_model():
     assert hasattr(result_loop.feedback, "delay_out")
 
     for module, samples in (
-        (result_loop.feedforward, [5, 7]),
+        (result_loop.feedforward.delay, [5, 7]),
         (result_loop.feedback.delay_in, [1, 2]),
         (result_loop.feedback.delay_out, [3, 4]),
     ):

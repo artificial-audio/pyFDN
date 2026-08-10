@@ -91,23 +91,71 @@ def test_dss_to_flamo_roundtrips_through_extractor():
     np.testing.assert_array_equal(params.delays, m.astype(int))
 
 
-def test_assemble_fdn_core_direct_toggles_parallel():
+def _leaf_names(model):
+    from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
+
+    return {
+        node["name"]
+        for node in flamo_nodes_flat(flamo_model_to_nodes(model))
+        if node["type"] == "Leaf"
+    }
+
+
+def _assemble_kw(nfft):
     n, a, b, c, d, m = _small_fdn()
-    nfft = 2**11
-    kw = {
+    return {
         "input_gain": gain_module(b, nfft, device="cpu"),
         "feedback": gain_module(a, nfft, device="cpu"),
         "delays": delay_module(m / 48000.0, nfft, Fs=48000, device="cpu"),
         "output_gain": gain_module(c, nfft, device="cpu"),
     }
-    # No direct path -> plain Series core whose feedback matrix stays reachable
-    # at core.feedback_loop.feedback (required by flamo's sparsity_loss).
-    series_core = assemble_fdn_core(direct=None, **kw)
-    assert type(series_core).__name__ == "Series"
-    assert hasattr(series_core.feedback_loop, "feedback")
-    # Direct path -> Parallel(brA=fdn, brB=direct).
-    parallel_core = assemble_fdn_core(direct=gain_module(d, nfft, device="cpu"), **kw)
-    assert type(parallel_core).__name__ == "Parallel"
+
+
+def test_assemble_fdn_core_always_parallel():
+    nfft = 2**11
+    d = np.zeros((1, 1))
+    core = assemble_fdn_core(direct=gain_module(d, nfft, device="cpu"), **_assemble_kw(nfft))
+    assert type(core).__name__ == "Parallel"
+
+
+def test_assemble_fdn_core_requires_direct():
+    nfft = 2**11
+    with pytest.raises(TypeError):
+        assemble_fdn_core(**_assemble_kw(nfft))
+
+
+def test_dss_to_flamo_names_delay_and_direct_leaves():
+    n, a, b, c, d, m = _small_fdn()
+    model = dss_to_flamo(a, b, c, d, m, Fs=48000, nfft=2**11, device="cpu")
+    names = _leaf_names(model)
+    assert {"input_gain", "output_gain", "delay", "direct_gain"} <= names
+
+
+def test_dss_to_flamo_direct_none_defaults_to_zeros():
+    n, a, b, c, d, m = _small_fdn()
+    model = dss_to_flamo(a, b, c, None, m, Fs=48000, nfft=2**11, device="cpu")
+    params = extract_build(model)
+    assert params.D.shape == (1, 1)
+    np.testing.assert_allclose(params.D, 0.0, atol=1e-6)
+
+
+def test_feedback_leaf_is_mixing_matrix():
+    n, a, b, c, d, m = _small_fdn()
+    model = dss_to_flamo(a, b, c, d, m, Fs=48000, nfft=2**11, device="cpu")
+    assert "mixing_matrix" in _leaf_names(model)
+    np.testing.assert_allclose(extract_build(model).A, a, atol=1e-5)
+
+
+def test_graph_branch_labels_are_descriptive():
+    from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
+
+    n, a, b, c, d, m = _small_fdn()
+    model = dss_to_flamo(a, b, c, d, m, Fs=48000, nfft=2**11, device="cpu")
+    paths = "\n".join(
+        node["path"] for node in flamo_nodes_flat(flamo_model_to_nodes(model))
+    )
+    for seg in ("/fdn/", "/direct/", "/feedforward/", "/feedback/"):
+        assert seg in paths, seg
 
 
 def test_wrap_fdn_shell_output_modes():
@@ -118,6 +166,7 @@ def test_wrap_fdn_shell_output_modes():
         feedback=gain_module(a, nfft, device="cpu"),
         delays=delay_module(m / 48000.0, nfft, Fs=48000, device="cpu"),
         output_gain=gain_module(c, nfft, device="cpu"),
+        direct=gain_module(d, nfft, device="cpu"),
     )
     impulse = torch.zeros(1, nfft, 1)
     impulse[:, 0, :] = 1.0
