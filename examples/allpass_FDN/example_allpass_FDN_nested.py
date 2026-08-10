@@ -10,21 +10,19 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Gardner's Nested Allpass FDN
 
     Example for the nested allpass structure: an FDN built by iteratively nesting a feedforward/back allpass around the previous system. SISO (single input, single output).
 
-    **Reference:** *{paper_link("Gardner1992RealtimeMultichannelRoom")}*.
+    **Reference:** *{pyFDN.paper_link("Gardner1992RealtimeMultichannelRoom")}*.
 
-    See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
+    See also: {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
     """)
     return
 

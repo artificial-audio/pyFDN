@@ -10,13 +10,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Allpass but not uniallpass FDN
 
@@ -24,7 +22,7 @@ def _(mo, paper_link):
 
     We build a SISO system by taking a random orthogonal system matrix and applying a **non-diagonal similarity transform** (on the first two delays). The resulting FDN is allpass (and stable) for some delay vectors and not for others.
 
-    See {paper_link("Allpass_Feedback_Delay_Networks")}.
+    See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
     """)
     return

@@ -10,9 +10,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -36,9 +34,9 @@ def _(mo):
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
-    Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}*
+    Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}*
 
     Delays are scaled down to keep the eigendecomposition fast.
     """)

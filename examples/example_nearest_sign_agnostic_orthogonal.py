@@ -10,13 +10,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Nearest Sign-Agnostic Orthogonal Matrix
 
@@ -33,7 +31,7 @@ def _(mo, paper_link):
     3. Alternate: (a) solve nearest-orthogonal via SVD, (b) update signs.
     4. Repeat from 2 with new random initialisations; keep best.
 
-    Reference: *{paper_link("Schlecht2018SignagnosticMatrixDesign")}.*
+    Reference: *{pyFDN.paper_link("Schlecht2018SignagnosticMatrixDesign")}.*
 
     """)
     return

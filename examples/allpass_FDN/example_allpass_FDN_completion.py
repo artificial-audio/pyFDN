@@ -10,19 +10,17 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Allpass FDN completion
 
     For a given feedback matrix **A**, the goal is to construct **b**, **c**, and **d** such that the FDN is uniallpass.
 
-    See *{paper_link("Allpass_Feedback_Delay_Networks")}.*
+    See *{pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.*
 
     """)
     return

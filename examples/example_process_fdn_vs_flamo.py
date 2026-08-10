@@ -10,13 +10,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
 
@@ -36,7 +34,7 @@ def _(mo, paper_link):
     frequency-dependent reverberation time. The two impulse responses must
     match to numerical precision.
 
-    Reference: *{paper_link("Schlecht2017AccurateReverberationTime")}.*
+    Reference: *{pyFDN.paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
     return
 

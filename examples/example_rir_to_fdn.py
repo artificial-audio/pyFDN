@@ -11,13 +11,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Converting a room impulse response into an FDN
 
@@ -31,7 +29,7 @@ def _(mo, paper_link):
 
     The impulse response is from the Promenadikeskus concert hall in Pori,
     Finland, published at
-    {paper_link("Concert_Hall_Impulse_Responses")}.
+    {pyFDN.paper_link("Concert_Hall_Impulse_Responses")}.
 
     Decay parameters are estimated with `estimate_rt_bands` (Schroeder backward integration per
     octave band) and `estimate_initial_level_bands` (band energy matched to an

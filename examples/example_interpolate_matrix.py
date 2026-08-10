@@ -10,19 +10,17 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Interpolate between two orthogonal matrices
 
     Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via `pyFDN.dss2impz`.
 
-    Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
+    Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
 
     """)
     return

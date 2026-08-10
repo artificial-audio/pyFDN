@@ -10,9 +10,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -32,7 +30,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Denser Reverberation with Delay Feedback Matrix
 
@@ -42,7 +40,7 @@ def _(mo, paper_link):
     2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
     3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
 
-    Reference: *{paper_link("Schlecht2019DenseReverberationDelay")}*.
+    Reference: *{pyFDN.paper_link("Schlecht2019DenseReverberationDelay")}*.
     """)
     return
 

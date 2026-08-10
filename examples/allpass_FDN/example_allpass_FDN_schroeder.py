@@ -10,21 +10,19 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Schroeder's Series Allpass FDN
 
     Example for Schroeder's series (cascade) allpass: a cascade of first-order allpass sections realized as an FDN with diagonal feedback matrix. SISO.
 
-    **Reference:** *{paper_link("Schroeder1961ColorlessArtificialReverberation")}*.
+    **Reference:** *{pyFDN.paper_link("Schroeder1961ColorlessArtificialReverberation")}*.
 
-    See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
+    See also: {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
     """)
     return

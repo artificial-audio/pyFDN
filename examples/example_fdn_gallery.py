@@ -10,13 +10,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # FDN Gallery
 
@@ -32,7 +30,7 @@ def _(mo, paper_link):
     series allpass, nested allpass, and the Schroeder reverberator. These are
     checked for the stronger uniallpass condition.
 
-    Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
+    Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
     """)
     return

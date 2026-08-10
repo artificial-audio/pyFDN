@@ -10,13 +10,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from pyFDN import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
 
@@ -30,9 +28,9 @@ def _(mo, paper_link):
     2. Run a one-channel FDN using FLAMO.
     3. Estimate T60 from the impulse response and compare with the target.
 
-    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*
 
-    Reference: *{paper_link("Valimaki2016AllAudioEqualization")}*
+    Reference: *{pyFDN.paper_link("Valimaki2016AllAudioEqualization")}*
 
     """)
     return
