@@ -10,7 +10,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
@@ -98,7 +98,9 @@ def _(mo, np, pyFDN, sound_selection):
         synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
-        synth, fs = pyFDN.load_audio("synth_dry.wav")
+        # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
+        synth, fs = pyFDN.load_audio("synth_dry")
+
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))

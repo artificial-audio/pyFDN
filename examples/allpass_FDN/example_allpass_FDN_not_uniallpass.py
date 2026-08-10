@@ -10,14 +10,14 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
 
 @app.cell
 def _(mo, paper_link):
-    mo.md(f""" 
+    mo.md(f"""
     # Allpass but not uniallpass FDN
 
     Example of an FDN that is **allpass only for specific delay lengths**, not for arbitrary delays. So it is not *uniallpass* (allpass for any choice of delays).

@@ -139,7 +139,7 @@ def _(mo):
 
 @app.cell
 def _(fs, mo, model, np, pyFDN):
-    dry, _ = pyFDN.load_audio("synth_dry.wav", fs=fs)
+    dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     # Reserve 2 s of trailing silence so the reverb tail does not wrap around.
     wet = pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=2.0)
 

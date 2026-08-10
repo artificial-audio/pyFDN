@@ -9,12 +9,14 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
+from audio_gallery import generate_audio_gallery
 from example_gallery import generate_gallery  # noqa: E402
 
 import pyFDN  # noqa: E402
 
-# Keep the gallery in sync with every marimo notebook before Sphinx reads it.
+# Keep the gallery in sync with every marimo notebook and audio file before Sphinx reads it.
 generate_gallery()
+generate_audio_gallery()
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"

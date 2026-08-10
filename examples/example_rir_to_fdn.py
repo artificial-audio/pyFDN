@@ -11,7 +11,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
@@ -67,7 +67,7 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    rir, fs = pyFDN.load_audio("s3_r4_o.wav")
+    rir, fs = pyFDN.load_audio("s3_r4_o")
     _onset = int(np.argmax(np.abs(rir)))
     rir = rir[_onset:]
     rir = rir / np.linalg.norm(rir)

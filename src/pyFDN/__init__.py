@@ -3,7 +3,7 @@
 from importlib import import_module
 
 __author__ = "Facundo Franchino"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # dsp
@@ -36,7 +36,14 @@ __all__ = [
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",
+    "audio_metadata",
+    "available_audio",
     "load_audio",
+    # packaged references and presets
+    "paper_link",
+    "paper_reference",
+    "available_fdn_presets",
+    "load_fdn_preset",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -208,7 +215,7 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .auxiliary.audio import load_audio
+from .auxiliary.audio import audio_metadata, available_audio, load_audio
 
 # delay utilities
 from .auxiliary.delay import (
@@ -358,9 +365,11 @@ from .graphicEQ import (
     probe_sos,
     shelving_filter,
 )
+from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing
 from .process import process_fdn
+from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
 from .train import (
