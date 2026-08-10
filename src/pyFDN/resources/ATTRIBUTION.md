@@ -5,6 +5,13 @@ small example resources listed below retain their own terms.
 
 - `audio/general/synth_dry.wav` was created by Sebastian J. Schlecht and is
   dedicated to the public domain under CC0 1.0.
+- `audio/drums/drums.wav` was created by Sebastian J. Schlecht and is dedicated
+  to the public domain under CC0 1.0.
+- `audio/speech/P1_Set1_8.wav` and `audio/speech/P20_Set1_8.wav` are mono
+  excerpts from *Dataset of Audiovisual Speech for AR Telepresence Studies*
+  by Nils Meyer-Kahlen, Anja Hofmann, Sebastian J. Schlecht, and Tapio Lokki:
+  https://zenodo.org/records/15034732. They are included in pyFDN with
+  permission from the dataset creators.
 - `audio/strings/Kleiderschrank_Taylor_DI.wav` and
   `audio/strings/Sommerhit2016_Taylor_DI.wav` are cropped excerpts from
   *Gemeinfreie Gitarrenaufnahmen 1* by Franz Zotter and Daniel Rudrich. The

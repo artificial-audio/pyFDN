@@ -18,7 +18,10 @@ def test_packaged_audio_manifest_and_files_agree() -> None:
     names = pyFDN.available_audio()
     assert names == (
         "Kleiderschrank_Taylor_DI",
+        "P1_Set1_8",
+        "P20_Set1_8",
         "Sommerhit2016_Taylor_DI",
+        "drums",
         "s3_r4_o",
         "synth_dry",
     )

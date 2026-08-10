@@ -11,6 +11,17 @@
     "modifications": "Cropped for use as a compact pyFDN example."
   },
   {
+    "name": "drums",
+    "filename": "drums.wav",
+    "category": "drums",
+    "creator": "Sebastian J. Schlecht",
+    "source": "Original pyFDN drum example",
+    "source_url": "https://github.com/artificial-audio/pyFDN",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "modifications": "Created as a compact dry-audio example for pyFDN."
+  },
+  {
     "name": "s3_r4_o",
     "filename": "s3_r4_o.wav",
     "category": "rir",
@@ -20,6 +31,28 @@
     "license": "PORIRIR noncommercial terms",
     "license_url": "http://legacy.spa.aalto.fi/projects/poririrs/",
     "modifications": "Cropped for use as a compact pyFDN example. Commercial use is prohibited without written permission from the copyright owners."
+  },
+  {
+    "name": "P1_Set1_8",
+    "filename": "P1_Set1_8.wav",
+    "category": "speech",
+    "creator": "Nils Meyer-Kahlen, Anja Hofmann, Sebastian J. Schlecht, and Tapio Lokki",
+    "source": "Dataset of Audiovisual Speech for AR Telepresence Studies",
+    "source_url": "https://zenodo.org/records/15034732",
+    "license": "Included with creator permission",
+    "license_url": "https://zenodo.org/records/15034732",
+    "modifications": "A mono excerpt selected as a compact pyFDN example."
+  },
+  {
+    "name": "P20_Set1_8",
+    "filename": "P20_Set1_8.wav",
+    "category": "speech",
+    "creator": "Nils Meyer-Kahlen, Anja Hofmann, Sebastian J. Schlecht, and Tapio Lokki",
+    "source": "Dataset of Audiovisual Speech for AR Telepresence Studies",
+    "source_url": "https://zenodo.org/records/15034732",
+    "license": "Included with creator permission",
+    "license_url": "https://zenodo.org/records/15034732",
+    "modifications": "A mono excerpt selected as a compact pyFDN example."
   },
   {
     "name": "Kleiderschrank_Taylor_DI",

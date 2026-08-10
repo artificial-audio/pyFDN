@@ -9,8 +9,11 @@ from pathlib import Path
 MAX_WHEEL_BYTES = 6_000_000
 REQUIRED_SUFFIXES = {
     "pyFDN/resources/audio/metadata.json",
+    "pyFDN/resources/audio/drums/drums.wav",
     "pyFDN/resources/audio/general/synth_dry.wav",
     "pyFDN/resources/audio/rir/s3_r4_o.wav",
+    "pyFDN/resources/audio/speech/P1_Set1_8.wav",
+    "pyFDN/resources/audio/speech/P20_Set1_8.wav",
     "pyFDN/resources/audio/strings/Kleiderschrank_Taylor_DI.wav",
     "pyFDN/resources/audio/strings/Sommerhit2016_Taylor_DI.wav",
     "pyFDN/resources/licenses/diff-fdn-colorless-MIT.txt",

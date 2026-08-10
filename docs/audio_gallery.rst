@@ -7,6 +7,20 @@ Audio Gallery
 Audio examples demonstrating ``pyFDN``. The gallery is generated
 automatically from every packaged ``.wav`` file, grouped by resource category.
 
+drums
+-----
+
+.. raw:: html
+
+   <p>drums.wav<br>
+   Source: <a href="https://github.com/artificial-audio/pyFDN">Original pyFDN drum example</a> — Sebastian J. Schlecht<br>
+   Terms: <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0-1.0</a><br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/resources/audio/drums/drums.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
 general
 -------
 
@@ -31,6 +45,28 @@ rir
    Terms: <a href="http://legacy.spa.aalto.fi/projects/poririrs/">PORIRIR noncommercial terms</a><br>
    <audio controls>
        <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/resources/audio/rir/s3_r4_o.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+
+speech
+------
+
+.. raw:: html
+
+   <p>P1_Set1_8.wav<br>
+   Source: <a href="https://zenodo.org/records/15034732">Dataset of Audiovisual Speech for AR Telepresence Studies</a> — Nils Meyer-Kahlen, Anja Hofmann, Sebastian J. Schlecht, and Tapio Lokki<br>
+   Terms: <a href="https://zenodo.org/records/15034732">Included with creator permission</a><br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/resources/audio/speech/P1_Set1_8.wav" type="audio/wav">
+       Your browser does not support the audio element.
+   </audio>
+   </p>
+   <p>P20_Set1_8.wav<br>
+   Source: <a href="https://zenodo.org/records/15034732">Dataset of Audiovisual Speech for AR Telepresence Studies</a> — Nils Meyer-Kahlen, Anja Hofmann, Sebastian J. Schlecht, and Tapio Lokki<br>
+   Terms: <a href="https://zenodo.org/records/15034732">Included with creator permission</a><br>
+   <audio controls>
+       <source src="https://raw.githubusercontent.com/artificial-audio/pyFDN/main/src/pyFDN/resources/audio/speech/P20_Set1_8.wav" type="audio/wav">
        Your browser does not support the audio element.
    </audio>
    </p>

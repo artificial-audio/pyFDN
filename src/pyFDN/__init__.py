@@ -3,7 +3,7 @@
 from importlib import import_module
 
 __author__ = "Facundo Franchino"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # dsp
