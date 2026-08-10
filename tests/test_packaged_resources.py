@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import pyFDN
+from pyFDN.auxiliary import audio as audio_module
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -38,6 +39,21 @@ def test_load_audio_accepts_extension_and_resamples() -> None:
     resampled, returned_fs = pyFDN.load_audio("synth_dry", fs=target_fs)
     assert returned_fs == target_fs
     assert len(resampled) == round(len(original) * target_fs / original_fs)
+
+
+def test_load_audio_passes_string_path_to_soundfile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def read(path: str, *, dtype: str) -> tuple[np.ndarray, int]:
+        assert isinstance(path, str)
+        assert dtype == "float64"
+        return np.ones(4), 48_000
+
+    monkeypatch.setattr(audio_module.sf, "read", read)
+    signal, fs = pyFDN.load_audio("synth_dry")
+
+    np.testing.assert_array_equal(signal, np.ones(4))
+    assert fs == 48_000
 
 
 def test_unknown_audio_lists_choices() -> None:

@@ -66,7 +66,9 @@ def load_audio(
     metadata = audio_metadata(name)
     resource = _AUDIO_ROOT.joinpath(metadata["category"], metadata["filename"])
     with as_file(resource) as path:
-        data, file_fs = sf.read(path, dtype="float64")
+        # PySoundFile 0.9, which can still be selected by older dependency
+        # sets, does not accept pathlib.Path objects.
+        data, file_fs = sf.read(str(path), dtype="float64")
 
     if mono and data.ndim > 1:
         data = data[:, 0]
