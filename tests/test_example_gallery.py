@@ -2,20 +2,21 @@
 
 from pathlib import Path
 
-from docs.example_gallery import OUTPUT_FILE, discover_examples, render_gallery
+from docs.example_gallery import discover_examples, generate_gallery, render_gallery
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_gallery_is_up_to_date() -> None:
+def test_gallery_generator_writes_rendered_content(tmp_path: Path) -> None:
+    output_file = tmp_path / "examples_gallery.rst"
     expected = render_gallery(discover_examples())
-    assert OUTPUT_FILE.read_text(encoding="utf-8") == expected, (
-        "docs/examples_gallery.rst is stale; run python3 docs/example_gallery.py"
-    )
+
+    assert generate_gallery(output_file) == expected
+    assert output_file.read_text(encoding="utf-8") == expected
 
 
 def test_gallery_contains_every_example_once() -> None:
-    gallery = OUTPUT_FILE.read_text(encoding="utf-8")
+    gallery = render_gallery(discover_examples())
     for example in discover_examples():
         link = f"_static/marimo/notebooks/{example.output_name}.html"
         assert gallery.count(link) == 1, f"Gallery does not contain {example.path} once"
