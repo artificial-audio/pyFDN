@@ -17,6 +17,9 @@ from scipy.signal import lfilter
 class FIRMatrixFilter:
     """Apply a matrix of FIR filters to a multichannel signal, block by block.
 
+    Filter state persists across calls to :meth:`filter`, so a long signal
+    can be processed in consecutive blocks.
+
     Parameters
     ----------
     coefficients : (n_out, n_in, order) array
@@ -24,8 +27,12 @@ class FIRMatrixFilter:
         (``coefficients[i, j, k]`` is the tap of ``z^{-k}`` from input ``j``
         to output ``i``).
 
-    Filter state persists across calls to :meth:`filter`, so a long signal
-    can be processed in consecutive blocks.
+    Notes
+    -----
+    :func:`pyFDN.process_fdn` constructs this filter automatically when its
+    feedback matrix ``A`` has shape ``(n_out, n_in, order)``. It can also be
+    passed to any ``process_fdn`` filter hook that accepts a stateful object
+    with a :meth:`filter` method.
     """
 
     def __init__(self, coefficients: ArrayLike):
