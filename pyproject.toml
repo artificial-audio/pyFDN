@@ -41,12 +41,14 @@ dependencies = [
 [project.optional-dependencies]
 examples = [
     "marimo",  # the example notebooks are marimo apps
+    "adac",  # example_fdn_to_faust compiles a FLAMO model to FAUST
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
+    "adac",
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
     "multislope>=0.1.1",
@@ -79,6 +81,7 @@ docs = [
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
+    "adac",  # example_fdn_to_faust is rendered into the docs
 ]
 
 [project.urls]
