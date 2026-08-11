@@ -1,4 +1,5 @@
 # gallery_category: Absorption & Filters
+# gallery_description: Estimate two decay slopes per octave from a coupled-room response and resynthesize them with parallel FDNs.
 # references: Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis
 # requires: multislope
 
@@ -12,9 +13,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -193,7 +192,7 @@ def _(fs, pyFDN, rir):
 
 
 @app.cell(hide_code=True)
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     ## Fitting two slopes with DecayFitNet
 
@@ -201,7 +200,7 @@ def _(mo, paper_link):
     integrates each band, and predicts the decay times `T`, the slope
     amplitudes `A` and the noise floor `N` of a multi-exponential decay model.
     The network is described in
-    {paper_link("Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis")}.
+    {pyFDN.paper_link("Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis")}.
 
     The network resamples every EDC to a fixed length, so the analysis window
     sets the time resolution of the fit: a 0.6 s slope inside a 5.5 s window

@@ -196,9 +196,11 @@ def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
     """
     Full MIMO (k=N) Halmos/Julia dilation.
 
-    For A with ||A||_2 <= 1 (contraction), the block matrix
+    For A with ||A||_2 <= 1 (contraction), the block matrix::
+
         V = [[A,  (I - A A^*)^{1/2}],
              [(I - A^* A)^{1/2},  -A^*]]
+
     is unitary/orthogonal.
 
     Returns: B, C, D (all NxN)

@@ -1,4 +1,5 @@
 # gallery_category: Translation Examples
+# gallery_description: Compile a pyFDN design through FLAMO and adac into certified FAUST source for browser, offline, and plugin deployment.
 # references: Franchino2026ADAC
 # requires: adac
 

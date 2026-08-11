@@ -137,8 +137,34 @@ Building the Documentation
 Repository Index
 ----------------
 
-.. note::
-    This section will be filled out later with the goal structure of the repository.
+The repository separates the installable package, executable examples,
+documentation sources, and tests:
+
+* ``src/pyFDN/`` contains the library. The top-level ``__init__.py`` defines
+  the public API, while ``process.py``, ``build_io.py``, and ``presets.py``
+  provide the main processing and persistence entry points.
+* ``src/pyFDN/generate/`` contains feedback-matrix and FDN construction
+  algorithms, including the allpass and scattering-delay-network builders.
+* ``src/pyFDN/dsp/`` contains stateful block-processing components.
+  ``process_fdn`` uses ``FIRMatrixFilter`` for polynomial feedback matrices;
+  ``SOSFilterBank`` implements per-delay-line filter cascades used for
+  frequency-dependent absorption.
+* ``src/pyFDN/graphicEQ/`` contains graphic-EQ and absorption-filter design,
+  while ``src/pyFDN/translate/`` converts between delay state-space, transfer
+  function, pole-residue, impulse-response, and FLAMO representations.
+* ``src/pyFDN/train/`` contains the trainable FDN construction, objectives,
+  and optimization loop. ``src/pyFDN/auxiliary/`` holds shared analysis,
+  plotting, audio, delay, and numerical helpers.
+* ``examples/`` contains executable Marimo notebooks. Metadata at the top of
+  each ``example_*.py`` file drives the generated documentation gallery.
+* ``tests/`` mirrors the public feature areas with unit, regression, and
+  integration coverage; ``tests/reference/`` stores reference data and its
+  provenance notes.
+* ``docs/`` contains authored Sphinx pages and the scripts that generate API
+  stubs and galleries. Generated pages and HTML output are intentionally not
+  committed.
+* ``.github/`` contains the continuous-integration, packaging, and GitHub
+  Pages workflows.
 
 
 Testing Pipeline

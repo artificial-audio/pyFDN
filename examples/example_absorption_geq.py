@@ -1,4 +1,6 @@
 # gallery_category: Absorption & Filters
+# gallery_title: Absorption GEQ in an FDN
+# gallery_description: Design per-delay graphic-EQ absorption filters and confirm that the rendered FDN follows a target frequency-dependent reverberation time.
 
 import marimo
 
@@ -10,14 +12,12 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
-    mo.md(f""" 
+def _(mo, pyFDN):
+    mo.md(f"""
     # Absorption GEQ in an FDN
 
     Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed
@@ -30,9 +30,9 @@ def _(mo, paper_link):
     2. Run a one-channel FDN using FLAMO.
     3. Estimate T60 from the impulse response and compare with the target.
 
-    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*
 
-    Reference: *{paper_link("Valimaki2016AllAudioEqualization")}*
+    Reference: *{pyFDN.paper_link("Valimaki2016AllAudioEqualization")}*
 
     """)
     return

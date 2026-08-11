@@ -70,7 +70,7 @@ def build_fdn(
     direct : float or np.ndarray
         Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
-        Trainable parameter groups (default :class:`Trainable`).
+        Trainable parameter groups (default :class:`~pyFDN.Trainable`).
     fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
         Seed for the sampled delays / default feedback matrix.
@@ -164,7 +164,7 @@ def trainable_from_build(
         Initial FDN (``A``/``B``/``C``/``D``/``delays``/``fs`` + optional
         ``filters``/``post_eq``).
     trainable : Trainable, optional
-        Trainable parameter groups (default :class:`Trainable`).
+        Trainable parameter groups (default :class:`~pyFDN.Trainable`).
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
     nfft : int

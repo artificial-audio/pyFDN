@@ -1,13 +1,13 @@
 """Map a training *mode* (and optional target) to the ``(input, target)``
 tensors, loss criteria, and output domain that :func:`pyFDN.train_fdn` uses.
 
-==========================  ====================================  ============
-mode                        loss                                  target
-==========================  ====================================  ============
-``"colorless"``             magnitude MSE vs a flat response      none
-``"match_spectrogram"``     multi-resolution STFT (``mss``)       impulse resp.
-``"match_mel_spectrogram"`` mel multi-resolution STFT             impulse resp.
-==========================  ====================================  ============
+===========================  ================================  =============
+mode                         loss                              target
+===========================  ================================  =============
+``"colorless"``              magnitude MSE vs a flat response  none
+``"match_spectrogram"``      multi-resolution STFT (``mss``)   impulse resp.
+``"match_mel_spectrogram"``  mel multi-resolution STFT         impulse resp.
+===========================  ================================  =============
 
 ``colorless`` is single-input/single-output (its loss sums the model's outputs).
 The matching modes take a time-domain IR target; a 3-D ``(n_samples, n_out,

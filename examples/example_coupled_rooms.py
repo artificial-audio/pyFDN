@@ -1,4 +1,6 @@
 # gallery_category: Special FDNs
+# gallery_title: Coupled rooms FDN
+# gallery_description: Model two rooms with different decay characteristics and join their delay networks through an acoustic coupling matrix.
 
 import marimo
 
@@ -10,13 +12,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Coupled Rooms FDN Example
 
@@ -30,7 +30,7 @@ def _(mo, paper_link):
     Translation of `example_coupledRooms.m` to Python using FLAMO.
 
     Based on:
-    > *{paper_link("Delay_Network_Architectures_for_Room_and_Coupled_Space_Modeling")}*.
+    > *{pyFDN.paper_link("Delay_Network_Architectures_for_Room_and_Coupled_Space_Modeling")}*.
 
     """)
     return

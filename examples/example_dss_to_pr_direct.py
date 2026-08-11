@@ -1,4 +1,5 @@
 # gallery_category: Translation Examples
+# gallery_description: Compare three pole-residue solvers by reconstructing an FDN impulse response from its modal decomposition.
 
 import marimo
 

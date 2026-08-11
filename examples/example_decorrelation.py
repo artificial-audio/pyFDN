@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Measure how a velvet-noise scattering feedback matrix decorrelates the input-output paths of an FDN.
 
 import marimo
 
@@ -10,9 +11,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -34,9 +33,9 @@ def _(mo):
 
 
 @app.cell
-def _(mo, paper_link):
-    mo.md(f""" 
-    Reference: *{paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
 
     """)
     return

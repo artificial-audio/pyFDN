@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Allpass FDN embedded in a larger FDN
+# gallery_description: Embed a homogeneous MIMO allpass FDN inside a larger recursive delay network with stereo output.
 
 import marimo
 

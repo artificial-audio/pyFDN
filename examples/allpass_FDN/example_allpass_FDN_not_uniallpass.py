@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Allpass but not uniallpass FDN
+# gallery_description: Demonstrate an FDN that is allpass for one delay configuration but loses that property when its delays change.
 
 import marimo
 
@@ -10,21 +12,19 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
-    mo.md(f""" 
+def _(mo, pyFDN):
+    mo.md(f"""
     # Allpass but not uniallpass FDN
 
     Example of an FDN that is **allpass only for specific delay lengths**, not for arbitrary delays. So it is not *uniallpass* (allpass for any choice of delays).
 
     We build a SISO system by taking a random orthogonal system matrix and applying a **non-diagonal similarity transform** (on the first two delays). The resulting FDN is allpass (and stable) for some delay vectors and not for others.
 
-    See {paper_link("Allpass_Feedback_Delay_Networks")}.
+    See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
     """)
     return

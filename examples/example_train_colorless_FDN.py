@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Train a colorless FDN
+# gallery_description: Optimize an FDN for a flat lossless magnitude response, extract its build, and add decay for listening.
 
 import marimo
 
@@ -10,17 +12,15 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Colorless FDN, trained in-notebook
 
-    The companion to **Colorless FDN**, which *loads* pre-optimized parameters from `.mat` files. Here we run the optimization ourselves with `pyFDN`'s training API, following *{paper_link("Differentiable_FDN_For_Colorless_Reverberation")}* (and its "tiny colorless FDN" follow-up):
+    The companion to **Colorless FDN**, which loads pre-optimized, build-ready JSON presets. Here we run the optimization ourselves with `pyFDN`'s training API, following *{pyFDN.paper_link("Differentiable_FDN_For_Colorless_Reverberation")}* (and its "tiny colorless FDN" follow-up):
 
     1. `pyFDN.build_fdn` -- a standard FDN skeleton with random orthogonal feedback matrix.
     2. `pyFDN.train_fdn(model, "colorless")` -- optimize the feedback matrix and gains for a flat magnitude (magnitude MSE + a feedback-matrix sparsity penalty), in place.
