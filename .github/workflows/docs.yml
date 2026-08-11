@@ -51,12 +51,8 @@ jobs:
           python -m pip install --upgrade pip --no-cache-dir
           pip install --no-cache-dir ".[docs]"
       
-      # Auto-generate .rst files from source
-      - name: Generate Sphinx RST
-        run: |
-          sphinx-apidoc -o ./docs/ ./src/pyFDN  # replace with your package
-
-      # Build the HTML documentation
+      # The docs Makefile owns all generated RST inputs so local and CI builds
+      # follow exactly the same path.
       - name: Build HTML docs
         working-directory: docs
         run: make html
