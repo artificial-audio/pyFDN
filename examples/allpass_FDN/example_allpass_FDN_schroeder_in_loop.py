@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Schroeder allpass in a feedback loop
+# gallery_description: Place a Schroeder allpass cascade inside a recursive loop and examine the resulting reverberator.
 
 import marimo
 
@@ -10,13 +12,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # FDN with Schroeder allpass filters in the loop
 
@@ -27,7 +27,7 @@ def _(mo, paper_link):
     2. Build a **vanilla FDN (SISO)**.
     3. Place the **Schroeder allpass behind the delays** of the FDN and render.
 
-    > Reference: *{paper_link("Vaananen1997EfficientParametricReverberator")}*.
+    > Reference: *{pyFDN.paper_link("Vaananen1997EfficientParametricReverberator")}*.
 
     """)
     return

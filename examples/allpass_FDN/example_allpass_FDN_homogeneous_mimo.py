@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Homogeneous allpass FDN (MIMO)
+# gallery_description: Construct and verify a multi-input, multi-output homogeneous allpass FDN from delay-line gains and an orthogonal mixing matrix.
 
 import marimo
 
@@ -10,19 +12,17 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
-    mo.md(f""" 
+def _(mo, pyFDN):
+    mo.md(f"""
     # Homogeneous allpass FDN (MIMO)
 
     Example for an allpass FDN with **homogeneous decay** so that all poles have the same decay rate. Compared to the SISO case, the MIMO has considerably more degrees of freedom.
 
-    See {paper_link("Allpass_Feedback_Delay_Networks")}.
+    See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
     """)
     return

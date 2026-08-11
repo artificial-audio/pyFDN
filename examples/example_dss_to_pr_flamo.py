@@ -1,4 +1,5 @@
 # gallery_category: Translation Examples
+# gallery_description: Convert a FLAMO feedback model with an SOS loop filter into poles and residues, including iterative pole refinement.
 
 import marimo
 

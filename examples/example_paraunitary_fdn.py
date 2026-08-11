@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Paraunitary filter feedback delay network
+# gallery_description: Build an FDN with a lossless FIR scattering matrix and verify its time-domain and modal responses.
 
 import marimo
 
@@ -10,13 +12,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Filter feedback delay network (FFDN) with paraunitary feedback matrix
 
@@ -25,7 +25,7 @@ def _(mo, paper_link):
     modal decomposition, and verifies that the system is lossless (all poles
     on the unit circle).
 
-    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}.*
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}.*
 
     """)
     return

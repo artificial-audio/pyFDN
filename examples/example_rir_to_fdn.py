@@ -1,4 +1,6 @@
 # gallery_category: Absorption & Filters
+# gallery_title: Convert a room impulse response into an FDN
+# gallery_description: Estimate octave-band decay and level from a measured room response, then design an FDN that matches both.
 # references: Concert_Hall_Impulse_Responses
 
 import marimo
@@ -11,13 +13,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Converting a room impulse response into an FDN
 
@@ -31,7 +31,7 @@ def _(mo, paper_link):
 
     The impulse response is from the Promenadikeskus concert hall in Pori,
     Finland, published at
-    {paper_link("Concert_Hall_Impulse_Responses")}.
+    {pyFDN.paper_link("Concert_Hall_Impulse_Responses")}.
 
     Decay parameters are estimated with `estimate_rt_bands` (Schroeder backward integration per
     octave band) and `estimate_initial_level_bands` (band energy matched to an
@@ -67,7 +67,7 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    rir, fs = pyFDN.load_audio("s3_r4_o.wav")
+    rir, fs = pyFDN.load_audio("s3_r4_o")
     _onset = int(np.argmax(np.abs(rir)))
     rir = rir[_onset:]
     rir = rir / np.linalg.norm(rir)

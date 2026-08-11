@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Scattering feedback matrices
+# gallery_description: Compare dense, velvet-noise, elemental, and static feedback matrices by their echo-density buildup.
 
 import marimo
 
@@ -10,13 +12,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # Scattering feedback matrices
 
@@ -32,7 +32,7 @@ def _(mo, paper_link):
     (Abel & Huang 2006): scattering matrices build up echo density much faster
     than the static matrix.
 
-    Reference: *{paper_link("Scattering_in_Feedback_Delay_Networks")}*.
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
     """)
 

@@ -14,6 +14,9 @@ from scipy.signal import sosfilt, sosfilt_zi
 class SOSFilterBank:
     """Apply one SOS filter cascade per channel, block by block.
 
+    Filter state persists across calls to :meth:`filter`, so a long signal
+    can be processed in consecutive blocks.
+
     Parameters
     ----------
     sos : array
@@ -26,8 +29,12 @@ class SOSFilterBank:
     num_channels : int
         Number of channels N.
 
-    Filter state persists across calls to :meth:`filter`, so a long signal
-    can be processed in consecutive blocks.
+    Notes
+    -----
+    Pass an instance as ``post_delay`` to :func:`pyFDN.process_fdn` to apply
+    frequency-dependent absorption inside the feedback loop.
+    :func:`pyFDN.dss_to_impz` also constructs this class internally when an
+    :class:`pyFDN.FDNBuild` contains per-delay-line ``filters``.
     """
 
     def __init__(self, sos: ArrayLike, num_channels: int):

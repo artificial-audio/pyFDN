@@ -185,9 +185,27 @@ General Utilities
    pyFDN.mulaw_decode
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
-   pyFDN.load_audio
    pyFDN.pole_boundaries
    pyFDN.skew
+
+Build Files, Packaged Examples & References
+--------------------------------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.available_audio
+   pyFDN.audio_metadata
+   pyFDN.load_audio
+   pyFDN.available_fdn_presets
+   pyFDN.load_fdn_preset
+   pyFDN.fdn_build_to_dict
+   pyFDN.fdn_build_from_dict
+   pyFDN.save_fdn_build
+   pyFDN.load_fdn_build
+   pyFDN.paper_reference
+   pyFDN.paper_link
 
 State-Space Translators
 -----------------------

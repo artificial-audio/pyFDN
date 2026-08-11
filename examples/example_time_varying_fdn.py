@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Process music through an FDN whose orthogonal feedback matrix changes over time at selectable modulation rates.
 
 import marimo
 
@@ -10,9 +11,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -24,14 +23,14 @@ def _(mo):
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     Example for time-varying matrices. <br/>
     Process a musical sound with a time-varying FDN reverberation. Different
     options include slow and fast time-variation.
 
-    Reference: *{paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
-    Reference: *{paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
+    Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
+    Reference: *{pyFDN.paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
 
     """)
     return
@@ -98,7 +97,9 @@ def _(mo, np, pyFDN, sound_selection):
         synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
-        synth, fs = pyFDN.load_audio("synth_dry.wav")
+        # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
+        synth, fs = pyFDN.load_audio("synth_dry")
+
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))

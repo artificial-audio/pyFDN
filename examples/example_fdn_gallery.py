@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: FDN matrix and system gallery
+# gallery_description: Explore pyFDN's catalog of feedback matrices and complete FDN systems while checking their lossless and allpass properties.
 
 import marimo
 
@@ -10,13 +12,11 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell
-def _(mo, paper_link):
+def _(mo, pyFDN):
     mo.md(f"""
     # FDN Gallery
 
@@ -32,7 +32,7 @@ def _(mo, paper_link):
     series allpass, nested allpass, and the Schroeder reverberator. These are
     checked for the stronger uniallpass condition.
 
-    Reference: *{paper_link("Schlecht2020FDNTBFeedbackDelay")}*
+    Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
     """)
     return
