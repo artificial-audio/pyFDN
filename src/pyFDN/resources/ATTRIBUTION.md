@@ -24,7 +24,8 @@ small example resources listed below retain their own terms.
   with citation; commercial use requires written permission from the copyright
   owners. See http://legacy.spa.aalto.fi/projects/poririrs/ for the complete
   terms. This file is **not** covered by pyFDN's MIT license.
-- The colorless-FDN coefficient files originate from the companion material to
+- The colorless-FDN builds were converted from coefficient files in the
+  companion material to
   *Differentiable Feedback Delay Network For Colorless Reverberation*:
   https://github.com/gdalsanto/diff-fdn-colorless. They are distributed under
   Gloria Dal Santo's MIT license, reproduced in

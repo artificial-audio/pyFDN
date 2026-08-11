@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Compute and visualize FDN mode shapes from the left and right eigenvectors of the loop polynomial.
 
 import marimo
 

@@ -1,4 +1,6 @@
 # gallery_category: Special FDNs
+# gallery_title: Coupled rooms FDN
+# gallery_description: Model two rooms with different decay characteristics and join their delay networks through an acoustic coupling matrix.
 
 import marimo
 

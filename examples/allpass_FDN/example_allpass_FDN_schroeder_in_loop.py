@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Schroeder allpass in a feedback loop
+# gallery_description: Place a Schroeder allpass cascade inside a recursive loop and examine the resulting reverberator.
 
 import marimo
 

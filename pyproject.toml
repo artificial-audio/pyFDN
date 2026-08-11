@@ -97,7 +97,7 @@ include = ["pyFDN*"]
     "licenses/*.txt",
     "audio/metadata.json",
     "audio/*/*.wav",
-    "presets/colorless_FDN/*.mat",
+    "presets/colorless_FDN/*.json",
 ]
 
 # Bump My Version

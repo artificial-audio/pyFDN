@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Contrast homogeneous modal decay with a rotated absorption design that spreads reverberation times across modes.
 
 import marimo
 

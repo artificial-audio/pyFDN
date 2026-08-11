@@ -1,4 +1,5 @@
 # gallery_category: Special FDNs
+# gallery_description: Derive a scattering delay network from room geometry and wall absorption, then render its impulse response with FLAMO.
 
 import marimo
 

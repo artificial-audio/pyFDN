@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Allpass but not uniallpass FDN
+# gallery_description: Demonstrate an FDN that is allpass for one delay configuration but loses that property when its delays change.
 
 import marimo
 

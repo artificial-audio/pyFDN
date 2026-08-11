@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Interpolate orthogonal matrices
+# gallery_description: Follow a geodesic between two orthogonal feedback matrices and listen to representative interpolated FDNs.
 
 import marimo
 

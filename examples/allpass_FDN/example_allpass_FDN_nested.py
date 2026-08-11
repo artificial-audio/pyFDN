@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Gardner's nested allpass FDN
+# gallery_description: Recreate Gardner's SISO reverberator by iteratively nesting feedforward and feedback allpass sections.
 
 import marimo
 

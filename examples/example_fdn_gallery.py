@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: FDN matrix and system gallery
+# gallery_description: Explore pyFDN's catalog of feedback matrices and complete FDN systems while checking their lossless and allpass properties.
 
 import marimo
 

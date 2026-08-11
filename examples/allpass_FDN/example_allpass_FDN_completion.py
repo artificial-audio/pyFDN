@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Allpass FDN completion
+# gallery_description: Complete the input, output, and direct-path coefficients that turn a given feedback matrix into a uniallpass FDN.
 
 import marimo
 

@@ -44,6 +44,10 @@ __all__ = [
     "paper_reference",
     "available_fdn_presets",
     "load_fdn_preset",
+    "fdn_build_from_dict",
+    "fdn_build_to_dict",
+    "load_fdn_build",
+    "save_fdn_build",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -298,6 +302,12 @@ from .auxiliary.utils import (
     rad_to_hertz,
     skew,
     sq_to_db,
+)
+from .build_io import (
+    fdn_build_from_dict,
+    fdn_build_to_dict,
+    load_fdn_build,
+    save_fdn_build,
 )
 
 # dsp components

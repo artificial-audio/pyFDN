@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Scattering feedback matrices
+# gallery_description: Compare dense, velvet-noise, elemental, and static feedback matrices by their echo-density buildup.
 
 import marimo
 

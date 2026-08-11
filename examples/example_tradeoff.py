@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Visualize how delay count and delay length trade computational cost against modal and echo density.
 
 import marimo
 

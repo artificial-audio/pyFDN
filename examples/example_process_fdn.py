@@ -1,4 +1,5 @@
 # gallery_category: Getting Started
+# gallery_description: Process dry audio directly through a static delay state-space FDN using the NumPy time-domain simulator.
 
 import marimo
 

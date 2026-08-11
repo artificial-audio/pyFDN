@@ -188,8 +188,8 @@ General Utilities
    pyFDN.pole_boundaries
    pyFDN.skew
 
-Packaged Examples & References
-------------------------------
+Build Files, Packaged Examples & References
+--------------------------------------------
 
 .. autosummary::
    :toctree: generated/
@@ -200,6 +200,10 @@ Packaged Examples & References
    pyFDN.load_audio
    pyFDN.available_fdn_presets
    pyFDN.load_fdn_preset
+   pyFDN.fdn_build_to_dict
+   pyFDN.fdn_build_from_dict
+   pyFDN.save_fdn_build
+   pyFDN.load_fdn_build
    pyFDN.paper_reference
    pyFDN.paper_link
 

@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Compare three feedback-path topologies to show how delay feedback matrices accelerate echo-density buildup.
 
 import marimo
 

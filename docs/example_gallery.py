@@ -60,27 +60,18 @@ def _plain_text(markdown: str) -> str:
     return text.strip()
 
 
-def _title_and_description(path: Path) -> tuple[str, str]:
+def _inferred_title(path: Path) -> str:
     blocks = _markdown_blocks(path)
     for block in blocks:
         lines = block.splitlines()
-        for index, line in enumerate(lines):
+        for line in lines:
             if not line.startswith("# "):
                 continue
             title = _plain_text(line[2:])
-            paragraphs = "\n".join(lines[index + 1 :]).strip().split("\n\n")
-            description = next(
-                (
-                    _plain_text(paragraph)
-                    for paragraph in paragraphs
-                    if paragraph.strip() and not paragraph.lstrip().startswith("#")
-                ),
-                "Open the rendered marimo notebook.",
-            )
-            return title, description
+            return title
 
     fallback = path.stem.removeprefix("example_").replace("_", " ").title()
-    return fallback, "Open the rendered marimo notebook."
+    return fallback
 
 
 def _metadata(path: Path) -> dict[str, str]:
@@ -93,25 +84,25 @@ def _metadata(path: Path) -> dict[str, str]:
     return metadata
 
 
-def _required_category(path: Path) -> str:
-    metadata = _metadata(path)
-    category = metadata.get("category")
-    if category:
-        return category
+def _required_metadata(path: Path, metadata: dict[str, str], key: str) -> str:
+    value = metadata.get(key)
+    if value:
+        return value
     relative = path.relative_to(PROJECT_ROOT)
-    raise ValueError(f"{relative} is missing a required '# gallery_category: ...' tag")
+    raise ValueError(f"{relative} is missing a required '# gallery_{key}: ...' tag")
 
 
 def discover_examples() -> list[Example]:
     examples = []
     for path in sorted(EXAMPLES_DIR.rglob("example_*.py")):
-        title, description = _title_and_description(path)
+        metadata = _metadata(path)
+        inferred_title = _inferred_title(path)
         examples.append(
             Example(
                 path,
-                title,
-                description,
-                _required_category(path),
+                metadata.get("title", inferred_title),
+                _required_metadata(path, metadata, "description"),
+                _required_metadata(path, metadata, "category"),
             )
         )
     return examples

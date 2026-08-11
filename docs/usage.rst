@@ -32,3 +32,8 @@ public API, independent of the current working directory::
 Use ``pyFDN.available_audio()`` and ``pyFDN.available_fdn_presets()`` to list
 the bundled choices. Attribution and license information for audio is returned
 by ``pyFDN.audio_metadata(name)``.
+
+FDN builds can also be exchanged as readable, versioned JSON files::
+
+    pyFDN.save_fdn_build("reverberator.json", reverberator)
+    restored = pyFDN.load_fdn_build("reverberator.json")

@@ -65,6 +65,11 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/examples
+docs/generated/
+docs/modules.rst
+docs/pyFDN*.rst
+docs/audio_gallery.rst
+docs/examples_gallery.rst
 
 # PyBuilder
 target/
