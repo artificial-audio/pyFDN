@@ -21,15 +21,13 @@ The feedback ``Recursion`` is the only non-trivial piece; see
 from __future__ import annotations
 
 from pyFDN.td.compiler import compile_flamo_graph, process
+from pyFDN.td.connectors import Parallel, Recursion, Series
 from pyFDN.td.operators import (
     Delay,
     Gain,
     Identity,
     MatrixConvolver,
     MatrixFIR,
-    Parallel,
-    Recursion,
-    Series,
     SOSBank,
     TimeOperator,
     TimeVaryingMatrix,

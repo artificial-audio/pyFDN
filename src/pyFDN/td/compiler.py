@@ -26,14 +26,12 @@ from pyFDN.auxiliary.flamo_graph import (
     _module_value,
     flamo_model_to_nodes,
 )
+from pyFDN.td.connectors import Parallel, Recursion, Series
 from pyFDN.td.operators import (
     Delay,
     Gain,
     Identity,
     MatrixFIR,
-    Parallel,
-    Recursion,
-    Series,
     SOSBank,
     TimeOperator,
 )
@@ -149,5 +147,5 @@ def process(model: Any, signal: np.ndarray, *, squeeze: bool = True) -> np.ndarr
     x = np.asarray(signal, dtype=float)
     if x.ndim == 1:
         x = x[:, np.newaxis]
-    out = op.process(x)
+    out = op.filter(x)
     return out.squeeze() if squeeze else out
