@@ -111,16 +111,29 @@ Graphic EQ
    pyFDN.shelving_filter
    pyFDN.bandpass_filter
 
-DSP Components
---------------
+Time-Domain Graph (``pyFDN.td``)
+--------------------------------
+
+Stateful block-processing operators, wired into a graph by the connectors and
+rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.FeedbackDelay
-   pyFDN.FIRMatrixFilter
-   pyFDN.SOSFilterBank
+   pyFDN.td.TimeOperator
+   pyFDN.td.Identity
+   pyFDN.td.Gain
+   pyFDN.td.Delay
+   pyFDN.td.AbsoluteValue
+   pyFDN.td.SOSBank
+   pyFDN.td.MatrixFIR
+   pyFDN.td.MatrixConvolver
+   pyFDN.td.TimeVaryingMatrix
+   pyFDN.td.RecursionState
+   pyFDN.td.Series
+   pyFDN.td.Parallel
+   pyFDN.td.Recursion
 
 Delay Utilities
 ---------------

@@ -7,9 +7,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
-from pyFDN.dsp.feedback_delay import FeedbackDelay
-from pyFDN.dsp.sos_filter_bank import SOSFilterBank
+from pyFDN.td.operators import MatrixFIR, RecursionState, SOSBank
 
 
 def process_fdn(
@@ -20,7 +18,7 @@ def process_fdn(
     C: ArrayLike,
     D: ArrayLike,
     *,
-    absorption: SOSFilterBank | None = None,
+    absorption: SOSBank | None = None,
     extra_matrix: Any | None = None,
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
@@ -41,11 +39,11 @@ def process_fdn(
     B, C, D : array
         Static input, output, and direct gains.
     absorption : object, optional
-        Per-delay-line SOS filters; see :class:`pyFDN.dsp.SOSFilterBank` for
+        Per-delay-line SOS filters; see :class:`pyFDN.td.SOSBank` for
         accepted shapes. Applied to the delay outputs inside the loop.
     extra_matrix : object, optional
         Object with a ``filter(block) -> block`` method applied after the
-        feedback matrix (e.g. ``TimeVaryingMatrix``).
+        feedback matrix (e.g. :class:`pyFDN.td.TimeVaryingMatrix`).
 
     Returns
     -------
@@ -68,14 +66,14 @@ def process_fdn(
         raise ValueError("Delays must be positive integers")
 
     if A_mat.ndim == 3:
-        feedback_filter: FIRMatrixFilter | None = FIRMatrixFilter(A_mat)
+        feedback_filter: MatrixFIR | None = MatrixFIR(A_mat)
     elif A_mat.ndim == 2:
         feedback_filter = None
     else:
         raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
 
     max_block_size = min(int(2**12), int(np.min(delays_arr)))
-    delay_bank = FeedbackDelay(delays_arr, max_block_size)
+    delay_bank = RecursionState(delays_arr, max_block_size)
 
     num_samples = x.shape[0]
     num_outputs = C_mat.shape[0]

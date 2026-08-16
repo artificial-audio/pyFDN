@@ -58,10 +58,9 @@ def _():
 
     import pyFDN
     from pyFDN import td
-    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
     pio.renderers.default = "sphinx_gallery"
-    return TimeVaryingMatrix, go, np, pyFDN, td
+    return go, np, pyFDN, td
 
 
 @app.cell(hide_code=True)
@@ -231,13 +230,14 @@ def _(mo):
     The reverberator maps the 6 microphones to the 6 loudspeakers through an
     8-line FDN with frequency-dependent absorption (its own ~1.2 s decay). The
     feedback path is either the static mixing matrix `A`, or `Series([Gain(A),
-    TimeVaryingMatrix])` — the only change needed to make the loop time-varying.
+    td.TimeVaryingMatrix(...)])` — the only change needed to make the loop
+    time-varying.
     """)
     return
 
 
 @app.cell
-def _(TimeVaryingMatrix, fs, np, pyFDN, td):
+def _(fs, np, pyFDN, td):
     n_lines = 8
     fdn_delays = np.array([557, 619, 691, 757, 821, 887, 953, 1021])
     np.random.seed(1)
@@ -248,6 +248,7 @@ def _(TimeVaryingMatrix, fs, np, pyFDN, td):
         n_lines
     )  # lines -> loudspeakers
     fdn_absorption = pyFDN.first_order_absorption(1.2, 0.6, fdn_delays, fs, None)
+    fdn_block = 64  # Recursion block size; must be at most half the shortest delay
 
     def make_reverberator(time_varying, g):
         """6-in/6-out FDN operator tree.
@@ -255,17 +256,25 @@ def _(TimeVaryingMatrix, fs, np, pyFDN, td):
         The loop gain ``g`` is folded into the output gain ``C``, and the
         feedback path is optionally made time-varying.
         """
-        forward = td.Series([td.Delay(fdn_delays), td.SOSBank(fdn_absorption)])
+        # The Recursion inserts fdn_block samples of delay into the loop, so the
+        # delay lines are shortened by that much to keep the loop delays exact.
+        forward = td.Series(
+            [td.Delay(fdn_delays - fdn_block), td.SOSBank(fdn_absorption)]
+        )
         if time_varying:
             np.random.seed(3)  # deterministic modulation across rebuilds
-            tvm = TimeVaryingMatrix(
+            tvm = td.TimeVaryingMatrix(
                 N=n_lines, cycles_per_second=1.2, amplitude=0.7, fs=fs, spread=0.2
             )
-            feedback = td.Series([td.Gain(A), td.TimeVaryingMatrix(tvm)])
+            feedback = td.Series([td.Gain(A), tvm])
         else:
             feedback = td.Gain(A)
         return td.Series(
-            [td.Gain(B_fdn), td.Recursion(forward, feedback), td.Gain(g * C_fdn)]
+            [
+                td.Gain(B_fdn),
+                td.Recursion(forward, feedback, block_size=fdn_block),
+                td.Gain(g * C_fdn),
+            ]
         )
 
     return (make_reverberator,)
@@ -285,6 +294,7 @@ def _(mo):
             Recursion(                             # the electroacoustic loop
                 fF = Series(Delay(latency), FDN),  #   mics → loudspeakers
                 fB = MatrixConvolver(coupling),    #   loudspeakers → mics
+                block_size = loop_block,
             ),
             MatrixConvolver(loudspeakers → listener),
         ),
@@ -295,8 +305,11 @@ def _(mo):
     The feedback loop `loudspeaker → room → mic → FDN → loudspeaker` is literally
     a `td.Recursion`. A short `Delay` (the RES processing latency, ~5 ms) leads
     its forward path, which is what lets the block recursion break the loop — the
-    same role the FDN's own delays play inside the FDN. One `.process(source)`
-    runs the whole system.
+    same role the FDN's own delays play inside the FDN. A `Recursion` processes
+    `block_size` samples at a time and so inserts that many samples of delay into
+    its loop, which is why the latency delay (and, inside the FDN, the delay
+    lines) is shortened by exactly one block. One `.process(source)` runs the
+    whole system.
     """)
     return
 
@@ -313,14 +326,20 @@ def _(
     td,
 ):
     latency = 256  # RES processing latency (~5.3 ms); breaks the electroacoustic loop
+    loop_block = 64  # Recursion block size of the electroacoustic loop
 
     def build_res(time_varying, g):
         """Assemble the whole reverberation enhancement system as a td tree."""
         electroacoustic_loop = td.Recursion(
             td.Series(
-                [td.Delay(np.full(6, latency)), make_reverberator(time_varying, g)]
+                [
+                    # shortened by loop_block, which the Recursion adds back
+                    td.Delay(np.full(6, latency - loop_block)),
+                    make_reverberator(time_varying, g),
+                ]
             ),
             td.MatrixConvolver(coupling),  # loudspeakers -> mics (closes the loop)
+            block_size=loop_block,
         )
         res_path = td.Series(
             [

@@ -15,8 +15,17 @@ import pytest
 
 import pyFDN
 from pyFDN import td
-from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix as _DSPTimeVaryingMatrix
-from pyFDN.td.connectors import _RECURSION_BLOCK_SIZE
+
+# Every Recursion warns that its block processing inserts block_size samples of
+# delay into the loop; that reminder is asserted in test_td_connectors.py, and
+# these tests compensate for the delay (or deliberately do not) on purpose.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Recursion block processing inserts:UserWarning"
+)
+
+# Block size used by every Recursion below, and therefore the amount of delay
+# each one inserts into its loop.
+BLOCK_SIZE = 1 << 6
 
 # ====================== AUXILIARY =====================
 
@@ -71,7 +80,7 @@ def test_series_filter() -> None:
     )
     B_ref = fdnbuild.B
     C_ref = fdnbuild.C
-    delays_ref = pyFDN.FeedbackDelay(
+    delays_ref = td.RecursionState(
         delays=fdnbuild.delays, max_block_size=max_block_size
     )
 
@@ -126,7 +135,7 @@ def test_parallel_filter() -> None:
     B_ref = fdnbuild.B
     C_ref = fdnbuild.C
     D_ref = fdnbuild.D
-    delays_ref = pyFDN.FeedbackDelay(
+    delays_ref = td.RecursionState(
         delays=fdnbuild.delays, max_block_size=max_block_size
     )
 
@@ -192,7 +201,10 @@ def test_recursion_filter_forward_delay() -> None:
     delays_td = td.Delay(delays=fdnbuild.delays)
     A_td = td.Gain(A_ref)
     recursion_conn = td.Recursion(
-        forward=delays_td, feedback=A_td, delay_position="forward"
+        forward=delays_td,
+        feedback=A_td,
+        block_size=BLOCK_SIZE,
+        delay_position="forward",
     )
 
     # filter signal
@@ -201,7 +213,7 @@ def test_recursion_filter_forward_delay() -> None:
 
     out_sig_ref = pyFDN.process_fdn(
         input_signal=in_sig,
-        delays=fdnbuild.delays + _RECURSION_BLOCK_SIZE,
+        delays=fdnbuild.delays + BLOCK_SIZE,
         A=A_ref,
         B=I_ref,
         C=I_ref,
@@ -230,10 +242,10 @@ def test_recursion_filter_forward_delay_in_block_processing() -> None:
     )
     A_ref = 0.2 * fdnbuild.A
     # reference with the inclusion of the Recursion inherent delay
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     total_delay = fdnbuild.delays + rec_inherent_delay
     max_block_size = int(np.min(total_delay))
-    delay_ref = pyFDN.FeedbackDelay(delays=total_delay, max_block_size=max_block_size)
+    delay_ref = td.RecursionState(delays=total_delay, max_block_size=max_block_size)
     print(fdnbuild.delays)
 
     # input signal
@@ -244,7 +256,10 @@ def test_recursion_filter_forward_delay_in_block_processing() -> None:
     delays_td = td.Delay(delays=fdnbuild.delays)
     A_td = td.Gain(A_ref)
     recursion_conn = td.Recursion(
-        forward=delays_td, feedback=A_td, delay_position="forward"
+        forward=delays_td,
+        feedback=A_td,
+        block_size=BLOCK_SIZE,
+        delay_position="forward",
     )
 
     # filter signal
@@ -288,12 +303,10 @@ def test_recursion_filter_feedback_delay_in_block_processing() -> None:
     )
     A_ref = 0.2 * fdnbuild.A
     # reference with the inclusion of the Recursion inherent delay
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     max_block_size = min([int(np.min(fdnbuild.delays)), rec_inherent_delay])
-    delay_ref = pyFDN.FeedbackDelay(
-        delays=fdnbuild.delays, max_block_size=max_block_size
-    )
-    add_delay_ref = pyFDN.FeedbackDelay(
+    delay_ref = td.RecursionState(delays=fdnbuild.delays, max_block_size=max_block_size)
+    add_delay_ref = td.RecursionState(
         delays=np.ones(N) * rec_inherent_delay, max_block_size=rec_inherent_delay
     )
     print(fdnbuild.delays)
@@ -305,13 +318,12 @@ def test_recursion_filter_feedback_delay_in_block_processing() -> None:
     # td engine
     delays_td = td.Delay(delays=fdnbuild.delays)
     A_td = td.Gain(A_ref)
-    with pytest.warns(
-        UserWarning,
-        match="Minimum delay in feedback path cannot be shorter than Recursion internal block size, and cannot be compensated",
-    ):
-        recursion_conn = td.Recursion(
-            forward=delays_td, feedback=A_td, delay_position="feedback"
-        )
+    recursion_conn = td.Recursion(
+        forward=delays_td,
+        feedback=A_td,
+        block_size=BLOCK_SIZE,
+        delay_position="feedback",
+    )
 
     # filter signal
     out_sig_ref = np.zeros((n_samples, N), dtype=float)
@@ -361,9 +373,7 @@ def test_recursion_filter_forward_delay_compensation() -> None:
     )
     A_ref = 0.2 * fdnbuild.A
     max_block_size = min(int(2**12), int(np.min(fdnbuild.delays)))
-    delay_ref = pyFDN.FeedbackDelay(
-        delays=fdnbuild.delays, max_block_size=max_block_size
-    )
+    delay_ref = td.RecursionState(delays=fdnbuild.delays, max_block_size=max_block_size)
     print(fdnbuild.delays)
 
     # input signal
@@ -371,11 +381,14 @@ def test_recursion_filter_forward_delay_compensation() -> None:
     in_sig = _impulse(length=n_samples, channels=N)
 
     # td engine
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     delays_td = td.Delay(delays=fdnbuild.delays - rec_inherent_delay)
     A_td = td.Gain(A_ref)
     recursion_conn = td.Recursion(
-        forward=delays_td, feedback=A_td, delay_position="forward"
+        forward=delays_td,
+        feedback=A_td,
+        block_size=BLOCK_SIZE,
+        delay_position="forward",
     )
 
     # filter signal
@@ -420,9 +433,7 @@ def test_recursion_filter_feedback_delay_compensation() -> None:
     )
     A_ref = 0.2 * fdnbuild.A
     max_block_size = min(int(2**12), int(np.min(fdnbuild.delays)))
-    delay_ref = pyFDN.FeedbackDelay(
-        delays=fdnbuild.delays, max_block_size=max_block_size
-    )
+    delay_ref = td.RecursionState(delays=fdnbuild.delays, max_block_size=max_block_size)
     print(fdnbuild.delays)
 
     # input signal
@@ -430,11 +441,14 @@ def test_recursion_filter_feedback_delay_compensation() -> None:
     in_sig = _impulse(length=n_samples, channels=N)
 
     # td engine
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     delays_td = td.Delay(delays=fdnbuild.delays - rec_inherent_delay)
     A_td = td.Gain(A_ref)
     recursion_conn = td.Recursion(
-        forward=A_td, feedback=delays_td, delay_position="feedback"
+        forward=A_td,
+        feedback=delays_td,
+        block_size=BLOCK_SIZE,
+        delay_position="feedback",
     )
 
     # filter signal
@@ -485,13 +499,13 @@ def test_res_mcr_block_process() -> None:
     # Physical room
     rir_len = 200
     rirs = rng.standard_normal((N, N, rir_len)) * 0.5  # small -> stable loop
-    feedback_ref = pyFDN.FIRMatrixFilter(rirs)
+    feedback_ref = td.MatrixFIR(rirs)
     # virtual room
     fdnbuild = pyFDN.fdn_build_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
     max_block_size = int(np.min(fdnbuild.delays + sys_latency))
-    delay_ref = pyFDN.FeedbackDelay(
+    delay_ref = td.RecursionState(
         delays=fdnbuild.delays + sys_latency, max_block_size=max_block_size
     )
     mixing_ref = 0.5 * fdnbuild.A
@@ -500,7 +514,7 @@ def test_res_mcr_block_process() -> None:
     # Physical room
     feedback_td = td.MatrixConvolver(rirs)
     # Virtual room
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     latency_td = td.Delay(np.ones_like(fdnbuild.delays) * sys_latency)
     delay_td = td.Delay(fdnbuild.delays - rec_inherent_delay)
     mixing_td = td.Gain(mixing_ref)
@@ -509,6 +523,7 @@ def test_res_mcr_block_process() -> None:
     res = td.Recursion(
         forward=forward_td,
         feedback=feedback_td,
+        block_size=BLOCK_SIZE,
     )
 
     # process signal
@@ -562,39 +577,39 @@ def test_res_tvfdn_block_process():
     # Physical room
     rir_len = 200
     rirs = rng.standard_normal((n_in, n_out, rir_len)) * 0.5  # small -> stable loop
-    acoustic_feedback_ref = pyFDN.FIRMatrixFilter(rirs)
+    acoustic_feedback_ref = td.MatrixFIR(rirs)
     # reference with the inclusion of the Recursion inherent delay
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     max_block_size = rec_inherent_delay
-    add_delay_ref = pyFDN.FeedbackDelay(
+    add_delay_ref = td.RecursionState(
         delays=np.ones(2) * rec_inherent_delay, max_block_size=rec_inherent_delay
     )
     # Virtual room
     fdnbuild = pyFDN.fdn_build_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    delay_ref = pyFDN.FeedbackDelay(
+    delay_ref = td.RecursionState(
         delays=fdnbuild.delays, max_block_size=np.min(fdnbuild.delays)
     )
     A_ref = fdnbuild.A
     B_ref = fdnbuild.B
     C_ref = fdnbuild.C
     sos = _absorption_sos(fdnbuild.delays, fs)
-    absorp_ref = pyFDN.SOSFilterBank(sos, N)
+    absorp_ref = td.SOSBank(sos)
 
     # Generate tv matrices
     # Identical modulation in both renders: seed the global RNG the TVM draws from.
     np.random.seed(7)
-    tvm_ref = _DSPTimeVaryingMatrix(**tvm_kwargs)
+    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs)
     np.random.seed(7)
-    tvm_td = td.TimeVaryingMatrix(_DSPTimeVaryingMatrix(**tvm_kwargs))
+    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs)
 
     # td engine
     # Physical room
     acoustic_feedback_td = td.MatrixConvolver(rirs)
     # Virtual room
     input_gains_td = td.Gain(fdnbuild.B)
-    rec_inherent_delay = _RECURSION_BLOCK_SIZE
+    rec_inherent_delay = BLOCK_SIZE
     delay_lines_td = td.Delay(fdnbuild.delays - rec_inherent_delay)
     absorp_filters_td = td.SOSBank(sos)
     output_gains_td = td.Gain(fdnbuild.C)
@@ -606,19 +621,19 @@ def test_res_tvfdn_block_process():
             td.Recursion(
                 forward=td.Series([delay_lines_td, absorp_filters_td]),
                 feedback=td.Series([feedback_matrix_td, tvm_td]),
+                block_size=BLOCK_SIZE,
                 delay_position="forward",
             ),
             output_gains_td,
         ]
     )
     # full RES system
-    with pytest.warns(
-        UserWarning,
-        match="Minimum delay in feedback path cannot be shorter than Recursion internal block size, and cannot be compensated",
-    ):
-        res = td.Recursion(
-            forward=res_dsp, feedback=acoustic_feedback_td, delay_position="feedback"
-        )
+    res = td.Recursion(
+        forward=res_dsp,
+        feedback=acoustic_feedback_td,
+        block_size=BLOCK_SIZE,
+        delay_position="feedback",
+    )
 
     # process signal
     out_sig_ref = np.zeros((n_samples, n_out))

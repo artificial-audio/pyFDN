@@ -126,8 +126,6 @@ FDN Design & Analysis
      - Open the rendered marimo notebook.
    * - `Time-domain FDN vs FLAMO with GEQ absorption <_static/marimo/notebooks/example_process_fdn_vs_flamo.html>`_
      - The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
-   * - `Time-domain graph engine vs FLAMO <_static/marimo/notebooks/example_td_vs_flamo.html>`_
-     - ``pyFDN.td`` renders an arbitrary FLAMO model structure directly in the time domain — no torch, no FFT. It walks the same Shell / Series / Parallel / Recursion / leaf tree that FLAMO builds and maps each node to a stateful NumPy operator, then streams the signal through block by block. The feedback ``Recursion`` is processed in blocks no larger than the shortest loop delay, so its read-before-write delay line lines up sample-for-sample with FLAMO's frequency-domain render.
 
 ----
 

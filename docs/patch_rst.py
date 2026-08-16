@@ -21,21 +21,3 @@ See :doc:`API Reference <api_reference>` for full documentation of all functions
         text,
     )
     pyfdn_rst.write_text(text)
-
-# Exclude FeedbackDelay from pyFDN.dsp (documented in api_reference)
-dsp_rst = DOCS / "pyFDN.dsp.rst"
-if dsp_rst.exists():
-    import re
-
-    text = dsp_rst.read_text()
-    for module, exclude in [
-        ("pyFDN.dsp.feedback_delay", "FeedbackDelay"),
-        ("pyFDN.dsp", "FeedbackDelay"),
-    ]:
-        pattern = rf"(\.\. automodule:: {re.escape(module)}\n(   :[^\n]+\n)+)(?=\n(?:\n|\S)|\Z)"
-        match = re.search(pattern, text)
-        if match and ":exclude-members:" not in match.group(1):
-            block = match.group(1).rstrip() + f"\n   :exclude-members: {exclude}\n"
-            text = text[: match.start()] + block + text[match.end() :]
-    text = re.sub(r"(   :exclude-members:[^\n]+)\n\s*\1\n?", r"\1\n", text)
-    dsp_rst.write_text(text)

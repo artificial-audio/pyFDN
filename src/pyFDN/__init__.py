@@ -6,10 +6,6 @@ __author__ = "Facundo Franchino"
 __version__ = "0.1.0"
 
 __all__ = [
-    # dsp
-    "FeedbackDelay",
-    "FIRMatrixFilter",
-    "SOSFilterBank",
     # acoustics
     "absorption_filters",
     "echo_density",
@@ -282,11 +278,6 @@ from .auxiliary.utils import (
     skew,
     sq_to_db,
 )
-
-# dsp components
-from .dsp.dfilt_matrix import FIRMatrixFilter
-from .dsp.feedback_delay import FeedbackDelay
-from .dsp.sos_filter_bank import SOSFilterBank
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -381,5 +372,5 @@ from .translate.pr_to_impz import pr_to_impz
 # Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
 allpass = import_module(".auxiliary.allpass", __name__)
 
-# Time-domain graph engine (pyFDN.td.process, operator classes).
+# Time-domain graph engine (pyFDN.td operators and connectors).
 from . import td  # noqa: E402

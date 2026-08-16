@@ -45,19 +45,19 @@ def _():
     import scipy.linalg as la
 
     import pyFDN
+    from pyFDN import td
     from pyFDN.auxiliary.acoustics import one_pole_absorption
-    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
     from pyFDN.generate.random_orthogonal import random_orthogonal
     from pyFDN.process import process_fdn
 
     return (
-        TimeVaryingMatrix,
         la,
         np,
         one_pole_absorption,
         process_fdn,
         pyFDN,
         random_orthogonal,
+        td,
     )
 
 
@@ -146,14 +146,14 @@ def _(mo):
 
 
 @app.cell
-def _(N, delays, fs, one_pole_absorption, pyFDN):
+def _(delays, fs, one_pole_absorption, td):
     RT_DC = 4  # seconds
     RT_NY = 1  # seconds
 
     coeffs = one_pole_absorption(RT_DC, RT_NY, delays, fs)
 
     # Constract the absorption
-    absorption = pyFDN.SOSFilterBank(coeffs, N)
+    absorption = td.SOSBank(coeffs)
     return (absorption,)
 
 
@@ -168,7 +168,6 @@ def _(mo):
 @app.cell
 def _(
     N,
-    TimeVaryingMatrix,
     absorption,
     delays,
     direct,
@@ -178,6 +177,7 @@ def _(
     output_gain,
     process_fdn,
     synth,
+    td,
 ):
     matrix_types = ["no_variation", "slow_variation", "fast_variation"]
 
@@ -199,7 +199,7 @@ def _(
             modulation_amplitude = 1.1
             spread = 0.7
 
-        tv_matrix = TimeVaryingMatrix(
+        tv_matrix = td.TimeVaryingMatrix(
             N, modulation_frequency, modulation_amplitude, fs, spread
         )
 

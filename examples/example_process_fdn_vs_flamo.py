@@ -22,8 +22,8 @@ def _(mo):
     independent implementations and the impulse responses are compared:
 
     1. **`process_fdn`** — block time-domain recursion; the per-delay-line
-       SOS cascades run in an `SOSFilterBank` and the FIR feedback matrix in
-       an `FIRMatrixFilter`, both with persistent state.
+       SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in
+       a `td.MatrixFIR`, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS
        cascades as `parallelSOSFilter` and the FIR feedback matrix as a
        `Filter` module in the loop.
@@ -49,9 +49,10 @@ def _():
     import torch
 
     import pyFDN
+    from pyFDN import td
 
     pio.renderers.default = "sphinx_gallery"
-    return go, np, pyFDN, torch
+    return go, np, pyFDN, td, torch
 
 
 @app.cell(hide_code=True)
@@ -109,12 +110,12 @@ def _(mo):
 
 
 @app.cell
-def _(delays, fs, go, np, num_delays, pyFDN, target_rt):
+def _(delays, fs, go, np, num_delays, pyFDN, target_rt, td):
     sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
 
     # constract the SOSFilter
-    absorption = pyFDN.SOSFilterBank(sos_absorption, len(delays))
+    absorption = td.SOSBank(sos_absorption)
 
     fig_mag = go.Figure()
     for _i in range(num_delays):
@@ -151,9 +152,9 @@ def _(mo):
     mo.md(r"""
     ## Render with both implementations
 
-    `process_fdn` filters the delay outputs block by block (`SOSFilterBank`)
+    `process_fdn` filters the delay outputs block by block (`td.SOSBank`)
     and runs the FIR feedback matrix in the time-domain recursion
-    (`FIRMatrixFilter`); the FLAMO model places the same cascades as a
+    (`td.MatrixFIR`); the FLAMO model places the same cascades as a
     `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter`
     feedback module. FLAMO renders circularly with period `nfft`, so `nfft`
     is chosen long enough for the tail to decay below numerical precision.

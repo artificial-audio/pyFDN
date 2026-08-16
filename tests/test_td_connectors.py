@@ -166,138 +166,123 @@ def test_parallel_flatten_ops() -> None:
 # ====================== TEST RECURSION ======================
 
 
-def test_recursion_find_min_loop_delay_no_delay() -> None:
-    """Test if Recursion connector creates the recursive graph
-    correctly also in case no delay line is involved"""
+def _loop_paths(N: int, delays: list[int]) -> tuple[td.TimeOperator, td.TimeOperator]:
+    """A minimal forward/feedback pair for Recursion construction tests."""
+    return td.Delay(delays), td.Gain(np.eye(N))
+
+
+def test_recursion_requires_block_size() -> None:
+    """Test that Recursion refuses to guess the block size:
+    it must be given explicitly, because the user has to compensate for it"""
 
     # parameters
-    n_in, n_out, N = 2, 3, 4
+    N = 4
+    forward, feedback = _loop_paths(N, [200, 250, 220, 190])
+
+    # Test
+    with pytest.raises(TypeError):
+        td.Recursion(forward, feedback)  # type: ignore[call-arg]
+
+
+def test_recursion_rejects_non_positive_block_size() -> None:
+    """Test that Recursion rejects a non-positive block size"""
+
+    # parameters
+    N = 4
+    forward, feedback = _loop_paths(N, [200, 250, 220, 190])
+
+    # Test
+    with pytest.raises(ValueError, match="block_size must be a positive integer"):
+        td.Recursion(forward, feedback, block_size=0)
+
+
+def test_recursion_rejects_invalid_delay_position() -> None:
+    """Test that Recursion rejects an unknown delay_position"""
+
+    # parameters
+    N = 4
+    forward, feedback = _loop_paths(N, [200, 250, 220, 190])
+
+    # Test
+    with pytest.raises(ValueError, match="delay_position value not valid"):
+        td.Recursion(forward, feedback, block_size=64, delay_position="sideways")
+
+
+@pytest.mark.parametrize("delay_position", ["forward", "feedback"])  # type: ignore[misc]
+def test_recursion_warns_about_inserted_block_delay(delay_position: str) -> None:
+    """Test that Recursion warns that its block processing inserts
+    block_size samples of delay that the user has to compensate for"""
+
+    # parameters
+    N = 4
+    block_size = 64
+    forward, feedback = _loop_paths(N, [200, 250, 220, 190])
+
+    # Test
+    with pytest.warns(
+        UserWarning,
+        match=(
+            f"Recursion block processing inserts {block_size} samples of delay "
+            f"into the loop, on the {delay_position} path"
+        ),
+    ):
+        td.Recursion(
+            forward, feedback, block_size=block_size, delay_position=delay_position
+        )
+
+
+def test_recursion_state_buffer_matches_block_size() -> None:
+    """Test that Recursion holds one block-long delay line per loop channel,
+    on the side named by delay_position"""
+
+    # parameters
+    n_in, N = 2, 4
+    block_size = 32
     rng = np.random.default_rng(seed=5)
-    fs = 48_000.0
-
-    # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
-        N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
-    )
 
     # td engine
-    A1_td = td.Gain(fdnbuild.A)
-    A2_td = td.Gain(fdnbuild.A)
-    A3_td = td.Gain(fdnbuild.A)
-    A4_td = td.Gain(fdnbuild.A)
+    forward = td.Series([td.Gain(rng.standard_normal((N, n_in))), td.Delay([64] * N)])
+    feedback = td.Gain(rng.standard_normal((n_in, N)))
 
-    forward = td.Parallel([A1_td, A2_td], sum_output=True)
-    feedback = td.Series([A3_td, A4_td])
-    recursion_conn = object.__new__(td.Recursion)
+    with pytest.warns(UserWarning, match="inserts 32 samples of delay"):
+        forward_delayed = td.Recursion(
+            forward, feedback, block_size=block_size, delay_position="forward"
+        )
+        feedback_delayed = td.Recursion(
+            forward, feedback, block_size=block_size, delay_position="feedback"
+        )
 
-    # Test
-    assert recursion_conn._find_min_delay(forward) == 0
-    assert recursion_conn._find_min_delay(feedback) == 0
+    # Test: the state sits on the loop output for "forward", on the loop input
+    # for "feedback", and every line is exactly one block long.
+    assert forward_delayed._state.num_delays == N
+    assert feedback_delayed._state.num_delays == n_in
+    for recursion in (forward_delayed, feedback_delayed):
+        np.testing.assert_array_equal(
+            recursion._state.delays,
+            np.full(recursion._state.num_delays, block_size),
+        )
 
 
-def test_recursion_find_min_loop_delay_forward_and_feedback_delays() -> None:
-    """Test if Recursion connector correctly finds the minimum
-    delay line in the architecture when there are delays
-    in both the forward and the feedback paths"""
+def test_recursion_reject_io_mismatch() -> None:
+    """Test that Recursion rejects forward/feedback paths
+    whose channel counts do not close the loop"""
 
     # parameters
-    n_in, n_out, N = 2, 3, 4
+    n_in, N = 2, 4
     rng = np.random.default_rng(seed=5)
-    fs = 48_000.0
-    delays_forward = [200, 250, 220, 190]
-    delays_feedback = [210, 175, 230, 245]
-
-    # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
-        N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
-    )
 
     # td engine
-    A_td = td.Gain(fdnbuild.A)
-    delay1_td = td.Delay(delays_forward)
-    delay2_td = td.Delay(delays_feedback)
-
-    forward = delay1_td
-    feedback = td.Series([delay2_td, A_td])
-    recursion_conn = object.__new__(td.Recursion)
+    forward = td.Gain(rng.standard_normal((N, n_in)))
 
     # Test
-    assert recursion_conn._find_min_delay(forward) == np.min(delays_forward)
-    assert recursion_conn._find_min_delay(feedback) == np.min(delays_feedback)
+    with pytest.raises(
+        ValueError,
+        match="Forward output-channel count does not match feedback input-channel count",
+    ):
+        td.Recursion(forward, td.Gain(np.eye(n_in)), block_size=64)
 
-
-def test_recursion_find_min_loop_delay_multiple_forward_delays() -> None:
-    """Test if Recursion connector correctly finds the minimum
-    delay line in the architecture when there are multiple delay-line
-    blocks in the forward path"""
-
-    # parameters
-    delays_forward_1 = [200, 250, 220, 190]
-    delays_forward_2 = [210, 175, 230, 245]
-
-    # td engine
-    delay1_td = td.Delay(delays_forward_1)
-    delay2_td = td.Delay(delays_forward_2)
-
-    forward = td.Series([delay1_td, delay2_td])
-    recursion_conn = object.__new__(td.Recursion)
-
-    # Test
-    assert recursion_conn._find_min_delay(forward) == np.min(delays_forward_1) + np.min(
-        delays_forward_2
-    )
-
-
-def test_recursion_find_min_loop_delay_nested_operators():
-    """Test if Recursion connector correctly finds the minimum
-    delay line in the architecture when the delay-line blocks
-    are nested in Parallel and Series connectors"""
-
-    # parameters
-    n_in, n_out, N = 2, 3, 4
-    rng = np.random.default_rng(seed=5)
-    fs = 48_000.0
-    delays_forward_1 = [200, 250, 220, 190]
-    delays_forward_2 = [210, 175, 230, 245]
-    delays_feedback = [310, 240, 205, 215]
-
-    # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
-        N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
-    )
-
-    # td engine
-    A1_td = td.Gain(fdnbuild.A)
-    A2_td = td.Gain(fdnbuild.A)
-    delay1_td = td.Delay(delays_forward_1)
-    delay2_td = td.Delay(delays_forward_2)
-    delay3_td = td.Delay(delays_feedback)
-
-    forward = td.Series(
-        [
-            A1_td,
-            td.Parallel(
-                [
-                    delay1_td,
-                    td.Series(
-                        [
-                            A2_td,
-                            delay2_td,
-                        ]
-                    ),
-                ]
-            ),
-        ]
-    )
-    feedback = td.Series(
-        [
-            delay3_td,
-        ]
-    )
-    recursion_conn = object.__new__(td.Recursion)
-
-    # Test
-    assert recursion_conn._find_min_delay(forward) == np.min(
-        [delays_forward_1, delays_forward_2]
-    )
-    assert recursion_conn._find_min_delay(feedback) == np.min(delays_feedback)
+    with pytest.raises(
+        ValueError,
+        match="Feedback output-channel count does not match forward input-channel count",
+    ):
+        td.Recursion(forward, td.Gain(np.eye(N)), block_size=64)

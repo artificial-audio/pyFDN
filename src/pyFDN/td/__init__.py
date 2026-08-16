@@ -1,49 +1,57 @@
-"""Time-domain rendering of FLAMO-style processing graphs.
+"""Time-domain rendering of block-based processing graphs.
 
-This subpackage mirrors a FLAMO model's Shell/Series/Parallel/Recursion/leaf
-structure as a tree of stateful NumPy operators and runs it block by block in
-the time domain -- no torch, no FFT. It is the time-domain analogue of
-:func:`pyFDN.process_fdn`, but takes its structure from an arbitrary FLAMO graph
-rather than a fixed FDN topology.
+This subpackage builds a processing graph as a tree of stateful NumPy
+operators and runs it block by block in the time domain -- no torch, no FFT.
+Leaves (:class:`Gain`, :class:`Delay`, :class:`SOSBank`, ...) are wired
+together by the connectors :class:`Series`, :class:`Parallel` and
+:class:`Recursion`.
 
 Typical use::
 
-    import pyFDN
+    import numpy as np
     from pyFDN import td
 
-    model = pyFDN.dss_to_flamo(A, B, C, D, delays, fs, sos_filter=absorption)
-    ir = td.process(model, impulse)
+    forward = td.Series([td.Delay(delays - block_size), td.SOSBank(absorption)])
+    fdn = td.Series([
+        td.Gain(B),
+        td.Recursion(forward, td.Gain(A), block_size=block_size),
+        td.Gain(C),
+    ])
+    ir = fdn.process(impulse)
 
-The feedback ``Recursion`` is the only non-trivial piece; see
-:class:`pyFDN.td.operators.Recursion`.
+The feedback :class:`Recursion` is the only non-trivial piece: it processes in
+blocks and therefore inserts ``block_size`` samples of delay into the loop,
+which the caller compensates for. See
+:class:`pyFDN.td.connectors.Recursion`.
 """
 
 from __future__ import annotations
 
-from pyFDN.td.compiler import compile_flamo_graph, process
 from pyFDN.td.connectors import Parallel, Recursion, Series
 from pyFDN.td.operators import (
+    AbsoluteValue,
     Delay,
     Gain,
     Identity,
     MatrixConvolver,
     MatrixFIR,
+    RecursionState,
     SOSBank,
     TimeOperator,
     TimeVaryingMatrix,
 )
 
 __all__ = [
-    "process",
-    "compile_flamo_graph",
     "TimeOperator",
     "Identity",
     "Gain",
     "Delay",
+    "AbsoluteValue",
     "SOSBank",
     "MatrixFIR",
     "MatrixConvolver",
     "TimeVaryingMatrix",
+    "RecursionState",
     "Series",
     "Parallel",
     "Recursion",

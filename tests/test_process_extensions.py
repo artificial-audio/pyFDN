@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 import pyFDN
+from pyFDN import td
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 
 FDNFixture = dict[str, np.ndarray]
 
@@ -87,13 +87,13 @@ def test_fir_matrix_filter_block_consistency() -> None:
     coeffs = np.random.randn(3, 2, 8)
     x = np.random.randn(200, 2)
 
-    one_shot = FIRMatrixFilter(coeffs).filter(x)
-    blockwise = FIRMatrixFilter(coeffs)
+    one_shot = td.MatrixFIR(coeffs).filter(x)
+    blockwise = td.MatrixFIR(coeffs)
     parts = [blockwise.filter(x[i : i + 32]) for i in range(0, 200, 32)]
     np.testing.assert_allclose(one_shot, np.vstack(parts), atol=1e-12)
 
     # order-1 (static) matrix degenerates to a matrix multiply
-    static = FIRMatrixFilter(coeffs[:, :, :1]).filter(x)
+    static = td.MatrixFIR(coeffs[:, :, :1]).filter(x)
     np.testing.assert_allclose(static, x @ coeffs[:, :, 0].T, atol=1e-12)
 
 
@@ -109,7 +109,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     x = np.random.randn(200, n)
 
     # block-wise filtering with persistent state matches one-shot sosfilt
-    bank = pyFDN.SOSFilterBank(sos, n)
+    bank = td.SOSBank(sos)
     parts = [bank.filter(x[i : i + 32]) for i in range(0, 200, 32)]
     blockwise = np.vstack(parts)
     for i in range(n):
@@ -122,7 +122,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     # only the canonical (n_sections, 6, N) layout is accepted; others raise
     for bad in (sos[0], sos.transpose(2, 0, 1), np.zeros((5, n))):
         with pytest.raises(ValueError, match="shape"):
-            pyFDN.SOSFilterBank(bad, n)
+            td.SOSBank(bad)
 
 
 def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
@@ -151,7 +151,7 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     sos = pyFDN.first_order_absorption(0.15, 0.05, delays, fs)  # (1, 6, N)
 
     # constract the SOSFilter
-    absorption = pyFDN.SOSFilterBank(sos=sos, num_channels=n)
+    absorption = td.SOSBank(sos)
 
     ir_len = 4096
     impulse = np.zeros(ir_len)

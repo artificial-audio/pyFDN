@@ -5,11 +5,7 @@ import warnings
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.td.operators import Delay, TimeOperator
-
-_RECURSION_BLOCK_SIZE = 1 << 6
-# NOTE: the minimum path delay supported by Recursion if
-#       twice as much in case of delay compensation
+from pyFDN.td.operators import RecursionState, TimeOperator
 
 
 def _as_2d(block: ArrayLike) -> np.ndarray:
@@ -137,60 +133,63 @@ class Parallel(TimeOperator):
         return flat
 
 
-class _RecursionState:
-    def __init__(
-        self, buffer_size: int, channels: int, position: str = "forward"
-    ) -> None:
-        if np.any(buffer_size <= 0):
-            raise ValueError("Block size must be positive integers")
-        self._position = position
-        self.buffer_size = buffer_size
-        self.channels = channels
-        self.buffers = np.zeros((self.channels, self.buffer_size), dtype=float)
-        self.pointers = np.zeros(self.channels, dtype=int)
-        self._last_indices: np.ndarray | None = None
-
-    def get_values(self, block_size: int) -> np.ndarray:
-        if block_size > self.buffer_size:
-            raise ValueError("Block size exceeds configured buffer size")
-        offsets = (
-            self.pointers[:, None] + np.arange(block_size)[None, :]
-        ) % self.buffer_size
-        self._last_indices = offsets
-        gathered = self.buffers[np.arange(self.channels)[:, None], offsets]
-        return gathered.T
-
-    def set_values(self, block: ArrayLike) -> None:
-        if self._last_indices is None:
-            raise RuntimeError("get_values must be called before set_values")
-        block_arr = np.asarray(block, dtype=float)
-        if block_arr.shape != (self._last_indices.shape[1], self.channels):
-            raise ValueError("Block shape mismatch when writing sample values")
-        self.buffers[np.arange(self.channels)[:, None], self._last_indices] = (
-            block_arr.T
-        )
-
-    def advance(self, block_size: int) -> None:
-        self.pointers = (self.pointers + block_size) % self.buffer_size
-        self._last_indices = None
-
-    def reset(self) -> None:
-        self.buffers[:] = 0.0
-        self.pointers[:] = 0
-        self._last_indices = None
-
-
 class Recursion(TimeOperator):
-    """Closed feedback loop with delay in the feedback path
-    ``y[n] = fF(x[n] + fB(y[n-d]))``.
-    Recursion processes audio in blocks, inherently adding one block-size
-    of delay inside the loop. Compensation is left to the user.
+    """Closed feedback loop, ``y[n] = fF(x[n] + fB(y[n - block_size]))``.
+
+    A feedback loop cannot be evaluated sample by sample without an algebraic
+    loop, so ``Recursion`` computes whole blocks of ``block_size`` samples at a
+    time: it reads the loop state written by the previous block, runs both paths
+    over the block, and writes the result back. That read-before-write is what
+    breaks the loop -- and it inserts **exactly ``block_size`` samples of delay
+    into the loop**, on top of whatever delay the operators themselves have.
+
+    The inserted delay is not compensated automatically; a warning is issued at
+    construction as a reminder. To compensate, shorten the delay lines on the
+    path named by ``delay_position`` by ``block_size`` samples, e.g.
+    ``Delay(delays - block_size)`` -- which requires every delay on that path to
+    be at least ``2 * block_size`` long, since the shortened line still has to
+    be at least one block long.
+
+    Parameters
+    ----------
+    forward
+        Forward path ``fF``, from the loop input to the loop output.
+    feedback
+        Feedback path ``fB``, from the loop output back to the loop input.
+    block_size
+        Processing block size in samples, and therefore the amount of delay
+        inserted into the loop. Required: it is a property of the loop the
+        caller has to choose and compensate for, not an implementation detail.
+        It must not exceed the shortest delay on the loop, or the loop would
+        run ahead of its own delay lines.
+    delay_position
+        Which side of the loop the inserted ``block_size`` delay lands on, i.e.
+        where the state buffer sits:
+
+        ``"forward"`` (default)
+            After the forward path: the loop output is read out of the state
+            buffer, so it is the forward output that arrives ``block_size``
+            samples late (``y[n] = fF(...)[n - block_size]``). Compensate on the
+            forward path. Use this when the delay lines are in the forward path
+            (the usual FDN layout: delays forward, mixing matrix feedback).
+        ``"feedback"``
+            After the feedback path: the forward output is returned immediately
+            and it is the signal fed back that is ``block_size`` samples late
+            (``y[n] = fF(x[n] + fB(y)[n - block_size])``). Compensate on the
+            feedback path. Use this when the delay lines are in the feedback
+            path, e.g. an outer acoustic-feedback loop around a whole system.
+
+        Both give the same total loop delay; they differ in where in the loop
+        that delay sits, hence in which path has to absorb the compensation and
+        whether the operator's own output is delayed.
     """
 
     def __init__(
         self,
         forward: TimeOperator,
         feedback: TimeOperator,
+        *,
+        block_size: int,
         delay_position: str = "forward",
     ) -> None:
         if forward.out_channels != feedback.in_channels:
@@ -202,7 +201,10 @@ class Recursion(TimeOperator):
                 "Feedback output-channel count does not match forward input-channel count"
             )
 
-        self._block_size = _RECURSION_BLOCK_SIZE
+        block_size = int(block_size)
+        if block_size <= 0:
+            raise ValueError("block_size must be a positive integer")
+        self._block_size = block_size
 
         self._forward = forward
         self._feedback = feedback
@@ -211,31 +213,27 @@ class Recursion(TimeOperator):
 
         match delay_position:
             case "forward":
-                min_path_delay = self._find_min_delay(forward)
-                if min_path_delay < self._block_size:
-                    warnings.warn(
-                        "Minimum delay in forward path cannot be shorter than Recursion internal block size, and cannot be compensated",
-                        UserWarning,
-                        stacklevel=2,
-                    )
                 self._filter_steps = self._filter_forward_delay
-                self._state = _RecursionState(
-                    self._block_size, self.out_channels, position=delay_position
-                )
+                state_channels = self.out_channels
             case "feedback":
-                min_path_delay = self._find_min_delay(feedback)
-                if min_path_delay < self._block_size:
-                    warnings.warn(
-                        "Minimum delay in feedback path cannot be shorter than Recursion internal block size, and cannot be compensated",
-                        UserWarning,
-                        stacklevel=2,
-                    )
                 self._filter_steps = self._filter_feedback_delay
-                self._state = _RecursionState(
-                    self._block_size, self.in_channels, position=delay_position
-                )
+                state_channels = self.in_channels
             case _:
                 raise ValueError("delay_position value not valid")
+
+        self.delay_position = delay_position
+        self._state = RecursionState(
+            np.full(state_channels, block_size, dtype=int), block_size
+        )
+
+        warnings.warn(
+            f"Recursion block processing inserts {block_size} samples of delay "
+            f"into the loop, on the {delay_position} path. It is not compensated "
+            f"automatically: shorten the delay lines on that path by "
+            f"{block_size} samples if the loop delay has to be exact.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     def filter(self, block: ArrayLike) -> np.ndarray:
         """Filter block of audio.
@@ -266,6 +264,9 @@ class Recursion(TimeOperator):
         return out
 
     def _filter_forward_delay(self, block_in: ArrayLike, block_size: int) -> np.ndarray:
+        """``delay_position="forward"``: the state buffer holds the forward-path
+        output, so the block returned is the forward output of the *previous*
+        block -- the inserted delay sits after ``fF``."""
         state = self._state.get_values(block_size)
 
         fb_out = self._feedback.filter(state)
@@ -279,6 +280,9 @@ class Recursion(TimeOperator):
     def _filter_feedback_delay(
         self, block_in: ArrayLike, block_size: int
     ) -> np.ndarray:
+        """``delay_position="feedback"``: the state buffer holds the feedback-path
+        output, so the current forward output is returned undelayed and the
+        inserted delay sits after ``fB``."""
         state = self._state.get_values(block_size)
 
         fw_out = self._forward.filter(block_in + state)
@@ -294,13 +298,3 @@ class Recursion(TimeOperator):
         self._forward.reset()
         self._feedback.reset()
         self._state.reset()
-
-    def _find_min_delay(self, op: TimeOperator) -> int:
-        """Returns the minimum input-to-output delay of a TimeOperator"""
-        if isinstance(op, Delay):
-            return int(np.min(op.delays))
-        if isinstance(op, Series):
-            return sum(self._find_min_delay(child) for child in op.ops)
-        if isinstance(op, Parallel):
-            return min(self._find_min_delay(child) for child in op.ops)
-        return 0

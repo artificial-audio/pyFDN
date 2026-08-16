@@ -1,17 +1,17 @@
-"""Stateful time-domain operators mirroring FLAMO's structural node types.
+"""Stateful time-domain operators.
 
 Each operator maps a block ``(num_samples, in_channels)`` to
 ``(num_samples, out_channels)`` and keeps whatever state it needs across
 calls, so a long signal can be streamed through in consecutive blocks. The
-composites (:class:`Series`, :class:`Parallel`, :class:`Recursion`) mirror the
-FLAMO ``Series`` / ``Parallel`` / ``Recursion`` modules; the leaves wrap the
-existing pyFDN DSP components (:class:`pyFDN.dsp.FeedbackDelay`,
-:class:`pyFDN.dsp.SOSFilterBank`, :class:`pyFDN.dsp.FIRMatrixFilter`).
+composites (:class:`~pyFDN.td.connectors.Series`,
+:class:`~pyFDN.td.connectors.Parallel`,
+:class:`~pyFDN.td.connectors.Recursion`) live in
+:mod:`pyFDN.td.connectors` and wire these leaves into a graph.
 
-The only subtle one is :class:`Recursion`: a feedback loop cannot be evaluated
-sample-by-sample without an algebraic loop, so it is processed in blocks no
-larger than the shortest loop delay, exactly as :func:`pyFDN.process_fdn` does.
-See that class for details.
+:class:`RecursionState` is not an operator but the delay-line buffer bank the
+graph is built on: it is what :class:`~pyFDN.td.connectors.Recursion` uses to
+break its feedback loop, and what :func:`pyFDN.process_fdn` uses for the FDN
+delay lines.
 """
 
 from __future__ import annotations
@@ -21,10 +21,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.fft import irfft, next_fast_len, rfft
-
-from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
-from pyFDN.dsp.sos_filter_bank import SOSFilterBank
-from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix as _DspTimeVaryingMatrix
+from scipy.signal import lfilter, sosfilt
 
 
 def _as_2d(block: ArrayLike) -> np.ndarray:
@@ -55,10 +52,34 @@ class TimeOperator(ABC):
     def reset(self) -> None:  # noqa: B027 -- intentional no-op default for stateless ops
         """Clear internal state (no-op for stateless operators)."""
 
+    def process(self, signal: ArrayLike, *, squeeze: bool = False) -> np.ndarray:
+        """Filter a whole signal in one call, from the current state.
+
+        Convenience wrapper around :meth:`filter` for the common case of
+        rendering an operator tree offline. Operators that process in blocks
+        internally (:class:`~pyFDN.td.connectors.Recursion`) do so regardless of
+        how the signal is handed to them, so this gives the same result as
+        streaming ``signal`` through :meth:`filter` block by block.
+
+        Parameters
+        ----------
+        signal
+            Input of shape ``(num_samples,)`` or ``(num_samples, in_channels)``.
+        squeeze
+            Squeeze singleton output channels (default ``False``).
+
+        Returns
+        -------
+        np.ndarray
+            Output of shape ``(num_samples, out_channels)``.
+        """
+        out = self.filter(_as_2d(signal))
+        return out.squeeze() if squeeze else out
+
 
 class Identity(TimeOperator):
     """Stateless pass-through.
-    Used for FFT/iFFT layers when converting to FLAMO and empty forward residuals."""
+    Used as a placeholder branch, e.g. an empty forward residual."""
 
     def __init__(self, channels: int) -> None:
         self.in_channels = self.out_channels = int(channels)
@@ -89,9 +110,31 @@ class Gain(TimeOperator):
         return x @ self.matrix.T
 
 
+class AbsoluteValue(TimeOperator):
+    """Stateless memoryless nonlinearity ``y[n, c] = |x[n, c]|``.
+
+    The one non-linear operator in the set: it has no transfer function and no
+    frequency-domain counterpart, so a graph containing it can only be rendered
+    in the time domain. Useful as a rectifier inside a loop (distortion,
+    envelope-style feedback) and as the simplest way to test that the block
+    engine stays sample-exact when superposition no longer holds -- note that a
+    non-linear operator makes the render depend on the input *level*.
+    """
+
+    def __init__(self, channels: int) -> None:
+        self.in_channels = self.out_channels = int(channels)
+
+    def filter(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"AbsoluteValue expects {self.in_channels} input channels")
+        return np.abs(x)
+
+
 class Delay(TimeOperator):
     """Stateful per-channel integer feed-forward delay line, ``y[n, c] = x[n - m_c, c]``.
-    It is not equivalent to FeedbackDelay class, as it does not accept direct feedback synchronization."""
+    It is not equivalent to :class:`RecursionState`, as it does not accept direct
+    feedback synchronization."""
 
     def __init__(self, delays: ArrayLike) -> None:
         d = np.asarray(delays, dtype=int).reshape(-1)
@@ -122,42 +165,97 @@ class Delay(TimeOperator):
 
 class SOSBank(TimeOperator):
     """Stateful per-channel SOS filter cascade (e.g. in-loop absorption).
-    Wrapper over :class:`pyFDN.dsp.SOSFilterBank`. ``sos`` has the
-    canonical ``(n_sections, 6, N)`` layout."""
+
+    One cascade of second-order sections per channel, filtered with
+    :func:`scipy.signal.sosfilt`. State persists across :meth:`filter` calls, so
+    a long signal can be processed in consecutive blocks.
+
+    Parameters
+    ----------
+    sos
+        Per-channel SOS bank of shape ``(n_sections, 6, N)`` where
+        ``N = num_channels``. Section rows are ``[b0, b1, b2, a0, a1, a2]``.
+        This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
+        ``parallelSOSFilter`` input and the output of
+        :func:`pyFDN.first_order_absorption`, :func:`pyFDN.one_pole_absorption`,
+        and :func:`pyFDN.absorption_geq`.
+
+    Attributes
+    ----------
+    sos
+        The same bank in the ``(N, n_sections, 6)`` layout :func:`scipy.signal.sosfilt`
+        expects, one cascade per row.
+    """
 
     def __init__(self, sos: ArrayLike) -> None:
         sos_arr = np.asarray(sos, dtype=float)
         if sos_arr.ndim != 3 or sos_arr.shape[1] != 6:
-            raise ValueError("sos must have shape (n_sections, 6, N)")
+            raise ValueError(
+                f"sos must have shape (n_sections, 6, N); got {sos_arr.shape}"
+            )
         self.in_channels = self.out_channels = sos_arr.shape[2]
-        self._sos = sos_arr
-        self._bank = SOSFilterBank(sos_arr, self.in_channels)
+        # Canonical (n_sections, 6, N) -> (N, n_sections, 6) for scipy sosfilt.
+        self.sos = np.ascontiguousarray(sos_arr.transpose(2, 0, 1))
+        self.num_sections = sos_arr.shape[0]
+        self._state = np.zeros((self.in_channels, self.num_sections, 2), dtype=float)
 
     def filter(self, block: ArrayLike) -> np.ndarray:
-        return self._bank.filter(_as_2d(block))
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"SOSBank expects {self.in_channels} input channels")
+        out = np.empty_like(x)
+        for i in range(self.in_channels):
+            out[:, i], self._state[i] = sosfilt(
+                self.sos[i], np.ascontiguousarray(x[:, i]), zi=self._state[i]
+            )
+        return out
 
     def reset(self) -> None:
-        self._bank = SOSFilterBank(self._sos, self.in_channels)
+        self._state[:] = 0.0
 
 
 class MatrixFIR(TimeOperator):
     """Stateful matrix of FIR filters (e.g. a paraunitary scattering feedback matrix).
-    Wrapper over :class:`pyFDN.dsp.FIRMatrixFilter`. ``coeffs`` has shape
-    ``(n_out, n_in, n_taps)`` in the ``z^{-1}`` convention."""
+
+    Every matrix entry is an FIR filter run with :func:`scipy.signal.lfilter`;
+    state persists across :meth:`filter` calls. For long impulse responses use
+    :class:`MatrixConvolver` instead, which computes the same convolution by FFT.
+
+    Parameters
+    ----------
+    coeffs
+        FIR coefficients of shape ``(n_out, n_in, n_taps)`` in the ``z^{-1}``
+        convention (``coeffs[i, j, k]`` is the tap of ``z^{-k}`` from input ``j``
+        to output ``i``).
+    """
 
     def __init__(self, coeffs: ArrayLike) -> None:
         c = np.asarray(coeffs, dtype=float)
         if c.ndim != 3:
             raise ValueError("coeffs must have shape (n_out, n_in, n_taps)")
-        self.out_channels, self.in_channels, _ = c.shape
-        self._coeffs = c
-        self._bank = FIRMatrixFilter(c)
+        self.out_channels, self.in_channels, self.num_taps = c.shape
+        self.coeffs = c
+        self._state = np.zeros(
+            (self.out_channels, self.in_channels, max(self.num_taps - 1, 1))
+        )
 
     def filter(self, block: ArrayLike) -> np.ndarray:
-        return self._bank.filter(_as_2d(block))
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"MatrixFIR expects {self.in_channels} input channels")
+        if self.num_taps == 1:
+            return x @ self.coeffs[:, :, 0].T
+        out = np.zeros((x.shape[0], self.out_channels))
+        for i in range(self.out_channels):
+            for j in range(self.in_channels):
+                y, self._state[i, j] = lfilter(
+                    self.coeffs[i, j], [1.0], x[:, j], zi=self._state[i, j]
+                )
+                out[:, i] += y
+        return out
 
     def reset(self) -> None:
-        self._bank = FIRMatrixFilter(self._coeffs)
+        self._state[:] = 0.0
 
 
 class MatrixConvolver(TimeOperator):
@@ -166,9 +264,10 @@ class MatrixConvolver(TimeOperator):
     coefficient layout, but built for **long** impulse responses (e.g. room
     RIRs) where time-domain ``lfilter`` would be prohibitively slow. State
     persists across :meth:`filter` calls, so it works both whole-signal and
-    block-by-block -- including as the feedback path of a :class:`Recursion`
-    (the loudspeaker -> microphone room coupling of a reverberation enhancement
-    system). Output equals the linear convolution to numerical precision."""
+    block-by-block -- including as the feedback path of a
+    :class:`~pyFDN.td.connectors.Recursion` (the loudspeaker -> microphone room
+    coupling of a reverberation enhancement system). Output equals the linear
+    convolution to numerical precision."""
 
     def __init__(self, coeffs: ArrayLike) -> None:
         c = np.asarray(coeffs, dtype=float)
@@ -211,29 +310,187 @@ class MatrixConvolver(TimeOperator):
 
 class TimeVaryingMatrix(TimeOperator):
     """Stateful sinusoidally modulated orthogonal mixing matrix (time-varying feedback).
-    Adapts :class:`pyFDN.dsp.time_varying_matrix.TimeVaryingMatrix` -- which
-    already rotates adjacent channel pairs by a per-sample modulated angle -- to
-    the operator protocol, so it can sit on a :class:`Recursion` feedback path,
-    e.g. ``Series([Gain(A), TimeVaryingMatrix(tvm)])``. This is the operator
-    analogue of the ``extra_matrix`` argument of :func:`pyFDN.process_fdn`.
-    Because the matrix changes every sample, the loop is genuinely time-varying
-    and has no static transfer function -- there is no equivalent in FLAMO.
+
+    Each adjacent channel pair is rotated by a sinusoidally modulated angle, so
+    the operator is orthogonal at every sample but never constant. Sitting on a
+    :class:`~pyFDN.td.connectors.Recursion` feedback path, e.g.
+    ``Series([Gain(A), TimeVaryingMatrix(N, 1.5, 0.35, fs, 0.1)])``, it makes the
+    loop genuinely time-varying -- there is no static transfer function. This is
+    the operator form of the ``extra_matrix`` argument of
+    :func:`pyFDN.process_fdn`.
+
+    Translation of the MATLAB implementation ``timeVaryingMatrix.m`` from
+    fdnToolbox. Original MATLAB code: (c) Sebastian Jiro Schlecht, 2019.
+    Python translation: Alma Hova, 2026.
 
     Parameters
     ----------
-    matrix
-        A built :class:`pyFDN.dsp.time_varying_matrix.TimeVaryingMatrix` (or any
-        object exposing ``N`` and a stateful ``filter((T, N)) -> (T, N)``).
+    N : int
+        Number of channels (the matrix is N x N). Must be a positive even integer.
+    cycles_per_second : float
+        Frequency of the time variation in Hz (controls oscillation speed).
+    amplitude : float
+        Maximum angle deflection in radians (strength of modulation).
+    fs : float
+        Sampling rate in Hz.
+    spread : float
+        Randomness factor (controls how differently each eigenmode behaves).
+
+    Attributes
+    ----------
+    num_pairs : int
+        Number of eigenmode pairs (``N // 2``), i.e. independent 2-D rotation planes.
+    phase, frequency, angle_amplitude : ndarray
+        Per-pair modulation parameters, drawn from the global NumPy RNG at
+        construction. Seed ``np.random.seed`` beforehand for a reproducible
+        modulation.
+    sample_index : int
+        Current sample index; the modulation clock.
     """
 
-    def __init__(self, matrix: _DspTimeVaryingMatrix) -> None:
-        self._tvm = matrix
-        self.in_channels = self.out_channels = int(matrix.N)
+    def __init__(
+        self,
+        N: int,
+        cycles_per_second: float,
+        amplitude: float,
+        fs: float,
+        spread: float,
+    ) -> None:
+        # Enforce N to be a positive, even integer.
+        N = int(N)
+        if N <= 0:
+            raise ValueError("N must be a positive integer")
+        if N % 2 != 0:
+            raise ValueError("N must be even")
+
+        self.N = N
+        self.in_channels = self.out_channels = N
+        self.cycles_per_second = cycles_per_second
+        self.amplitude = amplitude
+        self.fs = fs
+        self.spread = spread
+
+        # Number of independent 2-D rotation planes (conjugate eigenvalue pairs)
+        self.num_pairs = N // 2
+
+        # Random initial phase between 0 and 2*pi for each 2-D plane
+        self.phase = 2 * np.pi * np.random.rand(self.num_pairs)
+
+        # Unique modulation frequency for each pair, using the spread factor
+        self.frequency = self.cycles_per_second * (
+            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
+        )
+
+        # Modulation amplitude
+        self.angle_amplitude = self.amplitude * (
+            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
+        )
+
+        # Global time tracker index, initialized to 0
+        self.sample_index = 0
 
     def filter(self, block: ArrayLike) -> np.ndarray:
-        return self._tvm.filter(_as_2d(block))
+        """Apply the time-varying orthogonal transformation to one block.
+
+        The operation is equivalent to constructing the block-diagonal rotation
+        matrix from ``rotation_matrix_from_angles`` at every sample, but applies
+        the 2-D rotations directly to the whole input block.
+        """
+        x = _as_2d(block)
+        if x.shape[1] != self.N:
+            raise ValueError(f"TimeVaryingMatrix expects {self.N} input channels")
+
+        length = x.shape[0]
+        sample_indices = self.sample_index + np.arange(length)
+        time = sample_indices[:, np.newaxis] / self.fs
+        angles = self.angle_amplitude * np.sin(
+            2 * np.pi * self.frequency * time + self.phase
+        )
+        cos = np.cos(angles)
+        sin = np.sin(angles)
+
+        x_pairs = x.reshape(length, self.num_pairs, 2)
+        out = np.empty(x.shape, dtype=np.result_type(x, self.angle_amplitude, float))
+        out_pairs = out.reshape(length, self.num_pairs, 2)
+        out_pairs[..., 0] = cos * x_pairs[..., 0] - sin * x_pairs[..., 1]
+        out_pairs[..., 1] = sin * x_pairs[..., 0] + cos * x_pairs[..., 1]
+
+        self.sample_index += length
+
+        return out
 
     def reset(self) -> None:
         # Rewind the modulation clock without re-drawing the random modulation
         # parameters, so a reset render is reproducible.
-        self._tvm.sample_index = 0
+        self.sample_index = 0
+
+
+class RecursionState:
+    """Vectorised bank of block-addressable delay lines.
+
+    The state store a feedback loop is built on: :meth:`get_values` reads the
+    next ``block_size`` output samples of every line, :meth:`set_values` writes
+    the samples going back in, and :meth:`advance` moves the read/write
+    pointers. Reading before writing is what breaks the algebraic loop, so a
+    whole block can be computed at once.
+
+    Used by :class:`~pyFDN.td.connectors.Recursion` (all lines the length of one
+    processing block) and by :func:`pyFDN.process_fdn` (one line per FDN delay).
+
+    Parameters
+    ----------
+    delays
+        Length of each delay line in samples, shape ``(num_delays,)``. Must be
+        positive.
+    max_block_size
+        Largest block :meth:`get_values` will be asked for. Must not exceed the
+        shortest delay, otherwise a block would wrap around its own line.
+    """
+
+    def __init__(self, delays: ArrayLike, max_block_size: int) -> None:
+        delays_arr = np.asarray(delays, dtype=int).reshape(-1)
+        if delays_arr.ndim != 1:
+            raise ValueError("Delays must be a 1-D array")
+        if np.any(delays_arr <= 0):
+            raise ValueError("Delays must be positive integers")
+
+        self.delays = delays_arr
+        self.num_delays = delays_arr.size
+        self.max_block_size = int(max_block_size)
+        self.max_delay = int(np.max(delays_arr))
+        self.buffer = np.zeros((self.num_delays, self.max_delay), dtype=float)
+        self.pointers = np.zeros(self.num_delays, dtype=int)
+        self._last_indices: np.ndarray | None = None
+
+    def get_values(self, block_size: int) -> np.ndarray:
+        """Read the next ``block_size`` samples out of every delay line."""
+        if block_size > self.max_block_size:
+            raise ValueError("Block size exceeds configured maximum")
+        offsets = (
+            self.pointers[:, None] + np.arange(block_size)[None, :]
+        ) % self.delays[:, None]
+        self._last_indices = offsets
+        gathered = self.buffer[np.arange(self.num_delays)[:, None], offsets]
+        return gathered.T
+
+    def set_values(self, block: ArrayLike) -> None:
+        """Write a ``(block_size, num_delays)`` block into the slots just read."""
+        if self._last_indices is None:
+            raise RuntimeError("get_values must be called before set_values")
+        block_arr = np.asarray(block, dtype=float)
+        if block_arr.shape != (self._last_indices.shape[1], self.num_delays):
+            raise ValueError("Block shape mismatch when writing delay values")
+        self.buffer[np.arange(self.num_delays)[:, None], self._last_indices] = (
+            block_arr.T
+        )
+
+    def advance(self, block_size: int) -> None:
+        """Move the read/write pointers on by one block."""
+        self.pointers = (self.pointers + block_size) % self.delays
+        self._last_indices = None
+
+    def reset(self) -> None:
+        """Zero the buffers and rewind the pointers."""
+        self.buffer[:] = 0.0
+        self.pointers[:] = 0
+        self._last_indices = None
