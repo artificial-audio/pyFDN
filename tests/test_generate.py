@@ -449,10 +449,22 @@ def test_delay_lengths_sort_is_ascending():
     np.testing.assert_array_equal(delays, np.sort(delays))
 
 
+def _global_rng_state() -> tuple[np.ndarray, int]:
+    """Key array and position of the global MT19937 state.
+
+    Drawing from the global RNG advances ``pos`` and, every 624 draws, twists
+    the key, so comparing both detects any consumption.
+    """
+    state = np.random.get_state(legacy=False)["state"]
+    return np.asarray(state["key"]), int(state["pos"])
+
+
 def test_delay_lengths_does_not_mutate_global_rng():
-    state = np.random.get_state()
+    key_before, pos_before = _global_rng_state()
     sample_delay_lengths(8, rng=7)
-    np.testing.assert_array_equal(np.random.get_state()[1], state[1])
+    key_after, pos_after = _global_rng_state()
+    np.testing.assert_array_equal(key_after, key_before)
+    assert pos_after == pos_before
 
 
 def test_delay_lengths_invalid_distribution_raises():
