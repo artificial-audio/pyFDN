@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Bound the poles of an FDN with frequency-dependent absorption using loop-transfer singular values.
 
 import marimo
 
@@ -26,14 +27,15 @@ def _(mo):
     The loop here is $P(z) = \mathrm{diag}(z^{m}) - A\,\mathrm{diag}(h(z))$ with
     a two-tap FIR absorption filter $h(z) = 0.65 + 0.3 z^{-1}$ on every delay
     line and a non-orthogonal feedback matrix $A = Q/1.5$.
+    """)
+    return
 
-    Reference: *Schlecht, S., Habets, E. (2019). Modal Decomposition of Feedback
-    Delay Networks. IEEE Transactions on Signal Processing 67(20), 5340-5351.*
-    [doi:10.1109/tsp.2019.2937286](https://dx.doi.org/10.1109/tsp.2019.2937286)
 
-    Original MATLAB: `example_poleBoundaries.m`, Sebastian J. Schlecht,
-    23 April 2018. Delays are scaled down relative to MATLAB so the
-    root-finding stays fast.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}.*
+
     """)
     return
 

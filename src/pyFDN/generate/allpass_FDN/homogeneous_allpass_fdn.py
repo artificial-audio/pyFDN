@@ -12,16 +12,15 @@ def homogeneous_allpass_fdn(
     """
     Generate allpass FDN with homogeneous decay: V = [A,b;c,d] uniallpass, A = U @ G.
 
-    Assumptions (as in the Cauchy/CORDIC-style construction you are using):
-      - G is diagonal (N,N), real
-      - X is diagonal (N,N), real, positive
-      - Define R = G^2 X (diagonal). Build a Cauchy-like K_{ij} = 1/(p_i - r_j),
-        with p = diag(X), r = diag(R)
-      - Recover rank-1 factors beta, alpha such that
-            inv(K) = diag(beta) @ K.T @ diag(alpha)
-        and then set
-            U = diag(sqrt(beta)) @ K @ diag(sqrt(alpha))
-        (up to global sign conventions)
+    Assumptions (as in the Cauchy/CORDIC-style construction):
+
+    - G is diagonal (N,N), real
+    - X is diagonal (N,N), real, positive
+    - Define R = G^2 X (diagonal). Build a Cauchy-like K_{ij} = 1/(p_i - r_j),
+      with p = diag(X), r = diag(R)
+    - Recover rank-1 factors beta, alpha such that ``inv(K) = diag(beta) @ K.T
+      @ diag(alpha)`` and then set ``U = diag(sqrt(beta)) @ K @
+      diag(sqrt(alpha))`` (up to global sign conventions)
 
     Returns
     -------

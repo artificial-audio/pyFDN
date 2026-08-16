@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Homogeneous allpass FDN (SISO)
+# gallery_description: Build a single-input, single-output homogeneous allpass FDN and validate its allpass response.
 
 import marimo
 
@@ -13,16 +15,15 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Homogeneous allpass FDN (SISO)
 
     Example for an allpass FDN with **homogeneous decay** so that all poles have the same decay rate.
 
-    See *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    — Original MATLAB: Sebastian J. Schlecht, 10 June 2020
     """)
     return
 

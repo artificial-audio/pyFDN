@@ -124,7 +124,7 @@ def train_fdn(
     # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
     save_checkpoints = log and train_dir is not None
     if save_checkpoints:
-        assert train_dir is not None  # narrowing: implied by save_checkpoints
+        assert train_dir is not None  # implied by save_checkpoints
         os.makedirs(train_dir, exist_ok=True)
     trainer = EagerTrainer(
         model,

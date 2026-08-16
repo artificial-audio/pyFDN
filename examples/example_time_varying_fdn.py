@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Process music through an FDN whose orthogonal feedback matrix changes over time at selectable modulation rates.
 
 import marimo
 
@@ -21,20 +22,16 @@ def _(mo):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    Example for time-varying matrices.<br/>
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Example for time-varying matrices. <br/>
     Process a musical sound with a time-varying FDN reverberation. Different
     options include slow and fast time-variation.
 
+    Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
+    Reference: *{pyFDN.paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
 
-    Reference: *Schlecht and Habets 2015 : "Practical Considerations of Time-Varying
-    Feedback Delay Networks"* <br/>
-    Reference: *Schlecht and Habets 2015 : "Time-varying feedback matrices in feedback delay networks
-    and their application in artificial reverberation"*
-
-    Original MATLAB: Sebastian J. Schlecht, Saturday, 28 December 2019
     """)
     return
 
@@ -100,7 +97,9 @@ def _(mo, np, pyFDN, sound_selection):
         synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
-        synth, fs = pyFDN.load_audio("synth_dry.wav")
+        # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
+        synth, fs = pyFDN.load_audio("synth_dry")
+
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
 
         samples = np.arange(len(synth))
@@ -210,8 +209,8 @@ def _(
             input_gain,
             output_gain,
             direct,
-            absorption=absorption,
-            extra_matrix=tv_matrix,
+            post_delay=absorption,
+            post_matrix=tv_matrix,
         )
     return matrix_types, reverbed_synth
 

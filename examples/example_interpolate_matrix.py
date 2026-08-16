@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Interpolate orthogonal matrices
+# gallery_description: Follow a geodesic between two orthogonal feedback matrices and listen to representative interpolated FDNs.
 
 import marimo
 
@@ -13,17 +15,15 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Interpolate between two orthogonal matrices
 
     Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via `pyFDN.dss2impz`.
 
-    Reference: *Schlecht, S., Habets, E. (2015). Practical considerations of time-varying feedback delay networks.* Proc. Audio Eng. Soc. Conv.
+    Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
 
-    - Original version: Sebastian J. Schlecht, Friday, 10. April 2020
-    - Translation: Sebastian J. Schlecht, Thursday, 19. February 2026
     """)
     return
 
@@ -56,7 +56,7 @@ def _(mo):
 @app.cell
 def _(hadamard, math, np, pyFDN):
     N = 4
-    # Hadamard, normalized and sign-normalized on diagonal (match MATLAB fdnMatrixGallery)
+    # Hadamard, normalized and sign-normalized on diagonal
     A = hadamard(N) / math.sqrt(N)
     A = A @ np.diag(np.sign(np.diag(A)))
     B = np.eye(N)

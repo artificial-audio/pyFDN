@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Visualize how delay count and delay length trade computational cost against modal and echo density.
 
 import marimo
 
@@ -27,11 +28,15 @@ def _(mo):
     We compare a 3×3 grid of settings: FDN size $N \in \{4, 8, 16\}$ and
     short/medium/long delays. Echo density (Abel & Huang 2006) makes the
     tradeoff visible: small $N$ with long delays stays sparse for a long time.
+    """)
+    return
 
-    Reference: *Schlecht, S. (2020). FDNTB: The Feedback Delay Network Toolbox,
-    Proc. 23rd International Conference on Digital Audio Effects (DAFx-20).*
 
-    Original MATLAB: `example_tradeoff.m`, Sebastian J. Schlecht, 06 March 2023.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
+
     """)
     return
 

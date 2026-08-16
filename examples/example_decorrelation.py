@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Measure how a velvet-noise scattering feedback matrix decorrelates the input-output paths of an FDN.
 
 import marimo
 
@@ -27,12 +28,15 @@ def _(mo):
     the input-output paths: the more decorrelated its entries, the more
     decorrelated the FDN outputs.  Here we compute the adjugate, then the
     pairwise maximum cross-correlation between all of its entries.
+    """)
+    return
 
-    Reference: *Schlecht, S. J., Fagerström, J. & Välimäki, V. Decorrelation
-    in Feedback Delay Networks. IEEE/ACM Transactions on Audio, Speech and
-    Language Processing, 2023.*
 
-    Original MATLAB: `example_decorrelation.m`, Jon Fagerström, 28 April 2023.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Decorrelation_in_Feedback_Delay_Networks")}*
+
     """)
     return
 

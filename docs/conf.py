@@ -9,12 +9,14 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
+from audio_gallery import generate_audio_gallery
 from example_gallery import generate_gallery  # noqa: E402
 
 import pyFDN  # noqa: E402
 
-# Keep the gallery in sync with every marimo notebook before Sphinx reads it.
+# Keep the gallery in sync with every marimo notebook and audio file before Sphinx reads it.
 generate_gallery()
+generate_audio_gallery()
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"
@@ -45,6 +47,11 @@ autosummary_imported_members = True
 # Napoleon settings (Google / NumPy docstrings)
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render "Attributes" sections as :ivar: fields instead of standalone
+# ``.. attribute::`` directives. Without this, every documented attribute is
+# registered twice (once by napoleon, once by autodoc's member scan) and Sphinx
+# warns about duplicate object descriptions.
+napoleon_use_ivar = True
 
 
 # Intersphinx mapping
@@ -112,7 +119,9 @@ latex_documents = [
 marimo_notebook_dir = "../examples"
 marimo_default_height = "800px"
 marimo_default_width = "100%"
-marimo_click_to_load = "overlay"  # Use overlay mode for better performance
+# ``True`` is rendered as the extension's overlay mode. Keep this a boolean;
+# sphinx-marimo declares the setting as such and Sphinx warns on string values.
+marimo_click_to_load = True
 marimo_load_button_text = "Load Interactive Notebook"
 
 # Build notebooks serially in-process. The export-mode override below patches the

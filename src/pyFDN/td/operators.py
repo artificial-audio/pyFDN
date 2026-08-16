@@ -185,6 +185,13 @@ class SOSBank(TimeOperator):
     sos
         The same bank in the ``(N, n_sections, 6)`` layout :func:`scipy.signal.sosfilt`
         expects, one cascade per row.
+
+    Notes
+    -----
+    Pass an instance as ``post_delay`` to :func:`pyFDN.process_fdn` to apply
+    frequency-dependent absorption inside the feedback loop.
+    :func:`pyFDN.build_to_impz` also constructs this class internally when an
+    :class:`pyFDN.FDNBuild` contains per-delay-line ``filters``.
     """
 
     def __init__(self, sos: ArrayLike) -> None:
@@ -227,6 +234,11 @@ class MatrixFIR(TimeOperator):
         FIR coefficients of shape ``(n_out, n_in, n_taps)`` in the ``z^{-1}``
         convention (``coeffs[i, j, k]`` is the tap of ``z^{-k}`` from input ``j``
         to output ``i``).
+
+    Notes
+    -----
+    :func:`pyFDN.process_fdn` constructs this filter automatically when its
+    feedback matrix ``A`` has shape ``(n_out, n_in, n_taps)``.
     """
 
     def __init__(self, coeffs: ArrayLike) -> None:
@@ -316,7 +328,7 @@ class TimeVaryingMatrix(TimeOperator):
     :class:`~pyFDN.td.connectors.Recursion` feedback path, e.g.
     ``Series([Gain(A), TimeVaryingMatrix(N, 1.5, 0.35, fs, 0.1)])``, it makes the
     loop genuinely time-varying -- there is no static transfer function. This is
-    the operator form of the ``extra_matrix`` argument of
+    the operator form of the ``post_matrix`` argument of
     :func:`pyFDN.process_fdn`.
 
     Translation of the MATLAB implementation ``timeVaryingMatrix.m`` from

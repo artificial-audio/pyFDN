@@ -1,4 +1,6 @@
 # gallery_category: Special FDNs
+# gallery_title: Coupled rooms FDN
+# gallery_description: Model two rooms with different decay characteristics and join their delay networks through an acoustic coupling matrix.
 
 import marimo
 
@@ -13,9 +15,9 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Coupled Rooms FDN Example
 
     This example models **two acoustically coupled rooms** with a Feedback Delay Network (FDN): one small room with a short reverberation time (RT), one large room with a long RT. Each room is an independent FDN with **frequency-dependent RT** (first-order shelving absorption) and its own **output EQ**.
@@ -28,9 +30,8 @@ def _(mo):
     Translation of `example_coupledRooms.m` to Python using FLAMO.
 
     Based on:
-    > Das, O., Abel, J. S. & Canfield-Dafilou, E. K. *Delay Network Architectures For Room And Coupled Space Modeling*. DAFx2020 (2020).
+    > *{pyFDN.paper_link("Delay_Network_Architectures_for_Room_and_Coupled_Space_Modeling")}*.
 
-    **Original MATLAB:** (c) Sebastian Jiro Schlecht, 2020. **Python:** Facundo Franchino, 2025.
     """)
     return
 

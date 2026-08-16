@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Analyze the pole-angle and residue distributions of random FDNs and separate modal drive from undriven residue.
 
 import marimo
 
@@ -29,13 +30,16 @@ def _(mo):
 
     so we compare the distribution of total residues, undriven residues, and
     the input–output drive.
+    """)
+    return
 
-    Reference: *Schlecht, S., Habets, E. (2019). Modal Decomposition of Feedback
-    Delay Networks. IEEE Transactions on Signal Processing 67(20), 5340-5351.*
-    [doi:10.1109/tsp.2019.2937286](https://dx.doi.org/10.1109/tsp.2019.2937286)
 
-    Original MATLAB: `example_randomFDNstatistics.m`, Sebastian J. Schlecht, 23 April 2018.
-    Delays are scaled down relative to MATLAB to keep the eigendecomposition fast.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}*
+
+    Delays are scaled down to keep the eigendecomposition fast.
     """)
     return
 

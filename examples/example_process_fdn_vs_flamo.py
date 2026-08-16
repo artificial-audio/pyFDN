@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Time-domain FDN versus FLAMO
+# gallery_description: Render the same paraunitary FDN with GEQ absorption in two independent engines and verify sample-accurate agreement.
 
 import marimo
 
@@ -13,9 +15,9 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
 
     The same FDN with frequency-dependent absorption is rendered by two
@@ -34,9 +36,7 @@ def _(mo):
     frequency-dependent reverberation time. The two impulse responses must
     match to numerical precision.
 
-    Reference: *Schlecht, S., Habets, E. (2020). Accurate reverberation time
-    control in feedback delay networks. Proc. Int. Conf. Digital Audio Effects
-    (DAFx).*
+    Reference: *{pyFDN.paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
     return
 
@@ -186,7 +186,7 @@ def _(
         input_gain,
         output_gain,
         direct,
-        absorption=absorption,
+        post_delay=absorption,
     )
 
     model = pyFDN.dss_to_flamo(

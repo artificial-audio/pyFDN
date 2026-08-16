@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Compute and visualize FDN mode shapes from the left and right eigenvectors of the loop polynomial.
 
 import marimo
 
@@ -28,12 +29,15 @@ def _(mo):
     where $r_i$ and $l_i$ are the right/left null vectors of $P(\lambda_i)$.
     The eigenvectors live on the delay lines; expanding each entry along its
     delay line with $\lambda_i^k$ gives the mode shape over the full state.
+    """)
+    return
 
-    Reference: *Schlecht et al. (2024). Modal Excitation in Feedback Delay
-    Networks.*
 
-    Original MATLAB: `example_FDNEigenvectors.m`, Sebastian J. Schlecht,
-    27 February 2024.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Schlecht2024ModalExcitationFeedback")}.*
+
     """)
     return
 

@@ -93,8 +93,11 @@ Acoustics & Absorption
    pyFDN.absorption_to_rt
    pyFDN.estimate_initial_level_bands
    pyFDN.estimate_rt_bands
+   pyFDN.octave_bands
+   pyFDN.octave_band_filterbank
    pyFDN.rt_to_gain_per_sample
    pyFDN.rt_to_slope
+   pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
 Graphic EQ
@@ -185,6 +188,7 @@ General Utilities
    pyFDN.lin_to_db
    pyFDN.sq_to_db
    pyFDN.ensure_3d
+   pyFDN.fade_out
    pyFDN.hertz_to_unit
    pyFDN.hertz_to_rad
    pyFDN.rad_to_hertz
@@ -194,9 +198,27 @@ General Utilities
    pyFDN.mulaw_decode
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
-   pyFDN.load_audio
    pyFDN.pole_boundaries
    pyFDN.skew
+
+Build Files, Packaged Examples & References
+--------------------------------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.available_audio
+   pyFDN.audio_metadata
+   pyFDN.load_audio
+   pyFDN.available_fdn_presets
+   pyFDN.load_fdn_preset
+   pyFDN.fdn_build_to_dict
+   pyFDN.fdn_build_from_dict
+   pyFDN.save_fdn_build
+   pyFDN.load_fdn_build
+   pyFDN.paper_reference
+   pyFDN.paper_link
 
 State-Space Translators
 -----------------------
@@ -207,6 +229,7 @@ State-Space Translators
 
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
+   pyFDN.build_to_impz
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
@@ -238,7 +261,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
-   pyFDN.with_decay
+   pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
@@ -264,6 +287,15 @@ Plotting
    pyFDN.downsampled_scatter
    pyFDN.downsample_minmax
    pyFDN.downsample_plotly_trace
+
+Notebook Display
+----------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.labeled_audio
 
 FLAMO Graph
 -----------

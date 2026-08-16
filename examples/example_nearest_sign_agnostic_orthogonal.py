@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Nearest sign-agnostic orthogonal matrix
+# gallery_description: Fit an orthogonal matrix whose element magnitudes approximate a non-negative target matrix despite unknown signs.
 
 import marimo
 
@@ -13,9 +15,9 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Nearest Sign-Agnostic Orthogonal Matrix
 
     Given a non-negative matrix **B** (e.g., measured energy flow between delay
@@ -31,11 +33,8 @@ def _(mo):
     3. Alternate: (a) solve nearest-orthogonal via SVD, (b) update signs.
     4. Repeat from 2 with new random initialisations; keep best.
 
-    Reference: *Schlecht and Habets, "Sign-Agnostic Matrix Design for Spatial
-    Artificial Reverberation with Feedback Delay Networks," AES Conf. on Spatial
-    Reproduction, 2018.*
+    Reference: *{pyFDN.paper_link("Schlecht2018SignagnosticMatrixDesign")}.*
 
-    Original MATLAB: Sebastian J. Schlecht, 29. January 2020.
     """)
     return
 

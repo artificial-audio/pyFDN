@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Poletti allpass FDN
+# gallery_description: Construct Poletti's homogeneous allpass FDN topology and inspect its impulse and frequency responses.
 
 import marimo
 
@@ -13,18 +15,17 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Poletti's Allpass FDN (MIMO)
 
     Example for Poletti's unitary reverberator: a multi-input multi-output (MIMO) allpass feedback delay network with reduced colouration.
 
-    **Reference:** Poletti, M. A. (1995). *A unitary reverberator for reduced colouration in assisted reverberation systems.* INTER-NOISE and NOISE-CON, 5, 1223–1232.
+    **Reference:** *{pyFDN.paper_link("Poletti1995UnitaryReverberatorReduced")}*.
 
-    See also: *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See also: {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    — Original MATLAB: Sebastian J. Schlecht, 26 Dec 2020
     """)
     return
 

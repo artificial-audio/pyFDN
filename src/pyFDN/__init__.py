@@ -3,7 +3,7 @@
 from importlib import import_module
 
 __author__ = "Facundo Franchino"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # acoustics
@@ -15,9 +15,12 @@ __all__ = [
     "edc",
     "first_order_absorption",
     "first_order_shelving_eq",
+    "octave_band_filterbank",
+    "octave_bands",
     "one_pole_absorption",
     "rt_to_gain_per_sample",
     "rt_to_slope",
+    "slope_amplitude_to_level",
     "slope_to_rt",
     "sos_gain_per_sample_curves",
     # delay utilities
@@ -29,7 +32,18 @@ __all__ = [
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",
+    "audio_metadata",
+    "available_audio",
     "load_audio",
+    # packaged references and presets
+    "paper_link",
+    "paper_reference",
+    "available_fdn_presets",
+    "load_fdn_preset",
+    "fdn_build_from_dict",
+    "fdn_build_to_dict",
+    "load_fdn_build",
+    "save_fdn_build",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -85,6 +99,7 @@ __all__ = [
     "db_to_lin",
     "db_to_sq",
     "ensure_3d",
+    "fade_out",
     "hertz_to_unit",
     "hertz_to_rad",
     "rad_to_hertz",
@@ -99,6 +114,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_impz",
     "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
@@ -117,7 +133,7 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
-    "with_decay",
+    "build_set_decay",
     "Trainable",
     "train_fdn",
     "TrainLog",
@@ -136,6 +152,8 @@ __all__ = [
     "downsample_minmax",
     "downsample_plotly_trace",
     "downsampled_scatter",
+    # notebook display (marimo)
+    "labeled_audio",
     # FLAMO graph
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
@@ -182,9 +200,12 @@ from .auxiliary.acoustics import (
     estimate_rt_bands,
     first_order_absorption,
     first_order_shelving_eq,
+    octave_band_filterbank,
+    octave_bands,
     one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
+    slope_amplitude_to_level,
     slope_to_rt,
     sos_gain_per_sample_curves,
 )
@@ -196,7 +217,7 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .auxiliary.audio import load_audio
+from .auxiliary.audio import audio_metadata, available_audio, load_audio
 
 # delay utilities
 from .auxiliary.delay import (
@@ -213,6 +234,7 @@ from .auxiliary.flamo_graph import (
     flamo_nodes_flat,
     plot_flamo_graph,
 )
+from .auxiliary.marimo_utils import labeled_audio
 
 # polynomial and matrix maths
 from .auxiliary.math import (
@@ -264,6 +286,7 @@ from .auxiliary.utils import (
     db_to_lin,
     db_to_sq,
     ensure_3d,
+    fade_out,
     hertz_to_rad,
     hertz_to_unit,
     is_bounding_curve,
@@ -277,6 +300,12 @@ from .auxiliary.utils import (
     rad_to_hertz,
     skew,
     sq_to_db,
+)
+from .build_io import (
+    fdn_build_from_dict,
+    fdn_build_to_dict,
+    load_fdn_build,
+    save_fdn_build,
 )
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
@@ -339,23 +368,25 @@ from .graphicEQ import (
     probe_sos,
     shelving_filter,
 )
+from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing
 from .process import process_fdn
+from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
 from .train import (
     Trainable,
     TrainLog,
     build_fdn,
+    build_set_decay,
     train_fdn,
     trainable_from_build,
-    with_decay,
 )
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
-from .translate.dss_to_impz import dss_to_impz
+from .translate.dss_to_impz import build_to_impz, dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_tf import dss_to_tf

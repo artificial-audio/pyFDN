@@ -1,4 +1,5 @@
 # gallery_category: FDN Design & Analysis
+# gallery_description: Contrast homogeneous modal decay with a rotated absorption design that spreads reverberation times across modes.
 
 import marimo
 
@@ -28,14 +29,15 @@ def _(mo):
       gains $\Gamma = \mathrm{diag}(g^{m_i})$ → all modes decay with the same T60.
     - **Spread**: $A = Q_1\,\Gamma\,Q_2$ → the second rotation distributes the
       absorption unevenly over the modes, spreading their T60s.
+    """)
+    return
 
-    Reference: *Schlecht, S., Habets, E. (2019). Modal Decomposition of Feedback
-    Delay Networks. IEEE Transactions on Signal Processing 67(20), 5340-5351.*
-    [doi:10.1109/tsp.2019.2937286](https://dx.doi.org/10.1109/tsp.2019.2937286)
 
-    Original MATLAB: `example_spreadFDNpoles.m`, Sebastian J. Schlecht, 23 April 2018.
-    Delays are scaled down relative to the MATLAB script to keep the
-    eigendecomposition fast; the qualitative behaviour is unchanged.
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
+    Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}*.
+
     """)
     return
 

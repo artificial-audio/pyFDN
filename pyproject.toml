@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyFDN"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python library for Feedback Delay Networks"
 readme = "README.rst"
 authors = [
@@ -21,30 +21,37 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.14",
 ]
 requires-python = ">=3.10"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = [
+    "LICENSE",
+    "src/pyFDN/resources/ATTRIBUTION.md",
+    "src/pyFDN/resources/licenses/*.txt",
+]
 dependencies = [
   "numpy",
   "soundfile",
   "scipy",
   "flamo>=0.2.14",
   "flareverb",
-  "pyroomacoustics",
 ]
 
 [project.optional-dependencies]
 examples = [
     "marimo",  # the example notebooks are marimo apps
+    "adac",  # example_fdn_to_faust compiles a FLAMO model to FAUST
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
+    "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
+    "adac",
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
+    "multislope>=0.1.1",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
@@ -73,21 +80,53 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
+    "multislope>=0.1.1",  # rendered by the multi-slope example notebook
+    "adac",  # example_fdn_to_faust is rendered into the docs
 ]
 
 [project.urls]
 bugs = "https://github.com/artificial-audio/pyFDN/issues"
-changelog = "https://github.com/artificial-audio/pyFDN/blob/main/changelog.md"
+changelog = "https://github.com/artificial-audio/pyFDN/releases"
 homepage = "https://github.com/artificial-audio/pyFDN"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["pyFDN*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.*"]
+"pyFDN.resources" = [
+    "ATTRIBUTION.md",
+    "references.bib",
+    "licenses/*.txt",
+    "audio/metadata.json",
+    "audio/*/*.wav",
+    "presets/colorless_FDN/*.json",
+]
+
+# Bump My Version
+# ---------------
+# Keeps the two version strings (this file and src/pyFDN/__init__.py) in sync
+# and tags the release as v{new_version}, which .github/workflows/release.yml
+# triggers on. Usage: bump-my-version bump {major|minor|patch}
+
+[tool.bumpversion]
+current_version = "0.2.0"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Release v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/pyFDN/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
 
 # Pytest
 # ------
@@ -119,9 +158,10 @@ disable_error_code = ["no-any-return"]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
     "flamo.*",
+    "multislope.*",
     "plotly.*",
-    "pyroomacoustics.*",
     "scipy.*",
+    "soundfile",
 ]
 ignore_missing_imports = true
 
@@ -196,3 +236,6 @@ disable_error_code = ["operator", "index", "arg-type"]
 # Configure the max output size in Marimo notebooks
 [tool.marimo.runtime]
 output_max_bytes = 80_000_000
+# Allow notebooks launched directly from the repository to import the src-layout
+# package without relying on the repository's documentation package.
+pythonpath = ["src"]

@@ -1,4 +1,5 @@
 # gallery_category: Translation Examples
+# gallery_description: Convert delay state-space FDN parameters into a conventional state-space model and verify matching impulse responses.
 
 import marimo
 

@@ -1,4 +1,6 @@
 # gallery_category: Allpass FDN Examples
+# gallery_title: Allpass FDN completion
+# gallery_description: Complete the input, output, and direct-path coefficients that turn a given feedback matrix into a uniallpass FDN.
 
 import marimo
 
@@ -13,16 +15,15 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Allpass FDN completion
 
     For a given feedback matrix **A**, the goal is to construct **b**, **c**, and **d** such that the FDN is uniallpass.
 
-    See *Allpass Feedback Delay Networks*, Sebastian J. Schlecht (IEEE Trans. Signal Processing).
+    See *{pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.*
 
-    — Original MATLAB: Sebastian J. Schlecht, 9 June 2020
     """)
     return
 

@@ -1,4 +1,5 @@
 # gallery_category: Translation Examples
+# gallery_description: Convert a delay state-space FDN into a matrix transfer function and verify the result in the time domain.
 
 import marimo
 

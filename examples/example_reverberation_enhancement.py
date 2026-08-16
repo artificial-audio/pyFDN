@@ -1,4 +1,5 @@
 # gallery_category: Special FDNs
+# gallery_description: Reverberation enhancement system built with the pyFDN.td graph: an FDN inside an acoustic feedback loop, with a time-varying feedback matrix raising the stable gain before feedback.
 
 import marimo
 

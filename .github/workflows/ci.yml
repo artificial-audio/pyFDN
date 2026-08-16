@@ -14,7 +14,7 @@ jobs:
       PIP_NO_CACHE_DIR: 1
     strategy:
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ['3.10', '3.14']
 
     steps:
     - uses: actions/checkout@v4
@@ -52,30 +52,47 @@ jobs:
         path: coverage.xml
         retention-days: 7
 
-  deploy:
-    needs: test
+  # Guards the runtime dependency boundary: the library itself must work with
+  # only its mandatory dependencies installed. Decay estimation beyond a single
+  # slope (multislope/DecayFitNet) and the plotting stack belong to the example
+  # environment and are exercised by the tox job above, not here.
+  core-install:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     env:
       PIP_NO_CACHE_DIR: 1
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
+    - name: Set up Python 3.14
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.14'
 
-    - name: Install dependencies
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y libsndfile1
+
+    - name: Build and install pyFDN wheel without optional extras
       run: |
         python -m pip install --upgrade pip --no-cache-dir
-        pip install --no-cache-dir build twine
+        pip install --no-cache-dir build pytest
+        python -m build --wheel
+        python .github/scripts/check-wheel.py dist/*.whl
+        pip install --no-cache-dir dist/*.whl
 
-    - name: Build and publish
-      env:
-        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+    - name: Smoke-test installed wheel outside the repository
+      working-directory: /tmp
       run: |
-        python -m build
-        twine upload dist/* 
+        python -c "import pyFDN; assert pyFDN.load_audio('synth_dry')[0].size; assert pyFDN.load_fdn_preset('colorless_N4_d1').A.shape == (4, 4); assert pyFDN.paper_reference('Allpass_Feedback_Delay_Networks')['year'] == '2021'"
+
+    - name: Assert no decay-estimation extra was pulled in
+      run: |
+        for package in pyroomacoustics multislope; do
+          if python -c "import $package" 2>/dev/null; then
+            echo "::error::$package must not be a runtime dependency of pyFDN"
+            exit 1
+          fi
+        done
+
+    - name: Run core and packaged-resource tests on the bare install
+      run: pytest tests/test_auxiliary_acoustics.py tests/test_packaged_resources.py -q

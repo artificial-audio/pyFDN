@@ -1,4 +1,6 @@
 # gallery_category: FDN Design & Analysis
+# gallery_title: Scattering feedback matrices
+# gallery_description: Compare dense, velvet-noise, elemental, and static feedback matrices by their echo-density buildup.
 
 import marimo
 
@@ -13,9 +15,9 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     # Scattering feedback matrices
 
     Demonstration of different types of scattering (FIR paraunitary) feedback
@@ -30,13 +32,10 @@ def _(mo):
     (Abel & Huang 2006): scattering matrices build up echo density much faster
     than the static matrix.
 
-    Reference: *Schlecht, S., Habets, E. (2020). Scattering in Feedback Delay
-    Networks. IEEE/ACM Transactions on Audio, Speech, and Language Processing.*
-    [doi:10.1109/taslp.2020.3001395](https://dx.doi.org/10.1109/taslp.2020.3001395)
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
-    Original MATLAB: `example_scatteringFDN.m`, Sebastian J. Schlecht,
-    28 December 2019.
     """)
+
     return
 
 

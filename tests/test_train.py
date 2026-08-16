@@ -11,9 +11,9 @@ from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     Trainable,
     build_fdn,
+    build_set_decay,
     train_fdn,
     trainable_from_build,
-    with_decay,
 )
 
 # Tiny / CPU / fast optimization settings.
@@ -167,9 +167,7 @@ def test_match_spectrogram_runs_and_renders():
     assert np.isfinite(log.train_loss[-1])
     out_ir = np.asarray(
         pyFDN.flamo_time_response(
-            pyFDN.build_to_flamo(
-                pyFDN.extract_build(fresh), nfft=nfft, device="cpu"
-            ),
+            pyFDN.build_to_flamo(pyFDN.extract_build(fresh), nfft=nfft, device="cpu"),
             fs=48000,
         )
     ).reshape(-1)
@@ -204,23 +202,34 @@ def test_match_spectrogram_mimo_target():
     nfft, N, n_in, n_out = 2**11, 4, 2, 2
     rng = np.random.default_rng(0)
     ref = build_fdn(
-        N=N, rt=0.05, nfft=nfft,
+        N=N,
+        rt=0.05,
+        nfft=nfft,
         input_gain=rng.standard_normal((N, n_in)),
         output_gain=rng.standard_normal((n_out, N)),
-        device="cpu", rng=0,
+        device="cpu",
+        rng=0,
     )
     target = _mimo_ir(ref, nfft, n_in, n_out)
     assert target.shape == (nfft, n_out, n_in)
 
     fresh = build_fdn(
-        N=N, rt=0.05, nfft=nfft,
+        N=N,
+        rt=0.05,
+        nfft=nfft,
         input_gain=rng.standard_normal((N, n_in)),
         output_gain=rng.standard_normal((n_out, N)),
-        device="cpu", rng=9,
+        device="cpu",
+        rng=9,
     )
     log = train_fdn(
-        fresh, "match_spectrogram", target=target,
-        mss_nfft=(256, 512), max_steps=20, rng=0, **_FAST,
+        fresh,
+        "match_spectrogram",
+        target=target,
+        mss_nfft=(256, 512),
+        max_steps=20,
+        rng=0,
+        **_FAST,
     )
     assert np.isfinite(log.train_loss[-1])
     assert log.train_loss[-1] <= log.train_loss[0]
@@ -228,9 +237,13 @@ def test_match_spectrogram_mimo_target():
 
 def test_mimo_target_wrong_shape_raises():
     model = build_fdn(
-        N=4, rt=None, nfft=2**10,
-        input_gain=np.ones((4, 2)), output_gain=np.ones((2, 4)),
-        device="cpu", rng=0,
+        N=4,
+        rt=None,
+        nfft=2**10,
+        input_gain=np.ones((4, 2)),
+        output_gain=np.ones((2, 4)),
+        device="cpu",
+        rng=0,
     )
     bad = np.zeros((128, 3, 2))  # n_out=3 != model's 2
     with pytest.raises(ValueError, match="MIMO target must have shape"):
@@ -240,11 +253,11 @@ def test_mimo_target_wrong_shape_raises():
 # --- analytic decay (the exact RT path) ------------------------------------
 
 
-def test_with_decay_realizes_rt():
+def test_build_set_decay_realizes_rt():
     build = pyFDN.extract_build(
         build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     )
-    build = with_decay(build, 0.3)
+    build = build_set_decay(build, 0.3)
     assert build.filters is not None and build.filters.shape == (1, 6, 6)
 
     ir = np.asarray(
