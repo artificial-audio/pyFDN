@@ -39,6 +39,9 @@ __all__ = [
     "audio_metadata",
     "available_audio",
     "load_audio",
+    # feature extraction (torch-based, differentiable)
+    "stft_magnitude",
+    "stft_phase",
     # packaged references and presets
     "paper_link",
     "paper_reference",
@@ -376,6 +379,12 @@ from .graphicEQ import (
     shelving_filter,
 )
 from .presets import available_fdn_presets, load_fdn_preset
+
+# feature extraction (torch-based, differentiable)
+from .features.spectral import (
+    stft_magnitude,
+    stft_phase,
+)
 
 # fdn processing
 from .process import process_fdn
