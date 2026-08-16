@@ -546,10 +546,10 @@ def _db_per_sample_traces(
     import plotly.graph_objects as go
     from scipy.signal import sosfreqz
 
-    from pyFDN.dsp.sos_filter_bank import SOSFilterBank
+    from pyFDN.td.operators import SOSBank
 
     N = delays_arr.size
-    sos_bank = SOSFilterBank(sos, N).sos  # (N, n_sections, 6)
+    sos_bank = SOSBank(sos).sos  # (N, n_sections, 6)
     traces = []
     for i in range(N):
         w, h = sosfreqz(sos_bank[i], worN=nfft)
@@ -590,7 +590,7 @@ def plot_db_per_sample(
     ----------
     sos : array-like
         Per-delay-line SOS bank, same layout as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
+        :class:`pyFDN.td.SOSBank`: ``(n_sections, 6, N)``.
     delays : array-like
         Delay lengths in samples, shape (N,).
     fs : float, optional
@@ -667,7 +667,7 @@ def plot_fdn_parameter(
         Feedback matrix, input gains, output gains, direct gains.
     attenuation_sos : array-like, optional
         Per-delay-line SOS attenuation bank, same layout as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
+        :class:`pyFDN.td.SOSBank`: ``(n_sections, 6, N)``.
     post_eq_sos : array-like, optional
         Post EQ as an SOS cascade in scipy format, shape ``(n_sections, 6)``
         (or ``(6,)`` for one section) for a single output, or

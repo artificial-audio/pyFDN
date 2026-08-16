@@ -63,7 +63,7 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
     block simulation per input channel (a Dirac on that channel), with the
     build's per-delay-line absorption (``build.filters``, e.g. from
     :func:`pyFDN.build_set_decay`) applied inside the loop as a
-    :class:`pyFDN.SOSFilterBank`. Unlike the FFT-based FLAMO render this does
+    :class:`pyFDN.td.SOSBank`. Unlike the FFT-based FLAMO render this does
     not time-alias, so a long or near-lossless decay is rendered faithfully up
     to ``ir_len``.
 
@@ -90,7 +90,7 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
         :func:`process_fdn`. Use :func:`pyFDN.build_to_flamo` +
         :func:`pyFDN.flamo_time_response` for output-EQ builds.
     """
-    from pyFDN.dsp.sos_filter_bank import SOSFilterBank
+    from pyFDN.td import SOSBank
 
     if build.post_eq is not None:
         raise ValueError(
@@ -98,18 +98,13 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
             "use build_to_flamo + flamo_time_response for output-EQ builds."
         )
 
-    n = np.asarray(build.A).shape[0]
     num_inputs = np.asarray(build.B).shape[1]
 
     out_list = []
     for j in range(num_inputs):
         # A fresh filter bank per channel so absorption state does not leak
-        # between the per-input simulations (SOSFilterBank is stateful).
-        absorption = (
-            SOSFilterBank(sos=build.filters, num_channels=n)
-            if build.filters is not None
-            else None
-        )
+        # between the per-input simulations (SOSBank is stateful).
+        absorption = SOSBank(build.filters) if build.filters is not None else None
         input_signal = np.zeros((ir_len, num_inputs))
         input_signal[0, j] = 1.0
         out_j = process_fdn(

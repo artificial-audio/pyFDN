@@ -45,6 +45,7 @@ examples = [
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
+    "pyroomacoustics",  # shoebox image-source RIRs for example_reverberation_enhancement
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
@@ -52,6 +53,7 @@ test = [
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
     "multislope>=0.1.1",
+    "pyroomacoustics",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
@@ -81,6 +83,7 @@ docs = [
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
+    "pyroomacoustics",  # rendered by the reverberation-enhancement notebook
     "adac",  # example_fdn_to_faust is rendered into the docs
 ]
 

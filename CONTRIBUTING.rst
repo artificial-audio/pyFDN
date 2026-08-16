@@ -145,9 +145,10 @@ documentation sources, and tests:
   provide the main processing and persistence entry points.
 * ``src/pyFDN/generate/`` contains feedback-matrix and FDN construction
   algorithms, including the allpass and scattering-delay-network builders.
-* ``src/pyFDN/dsp/`` contains stateful block-processing components.
-  ``process_fdn`` uses ``FIRMatrixFilter`` for polynomial feedback matrices;
-  ``SOSFilterBank`` implements per-delay-line filter cascades used for
+* ``src/pyFDN/td/`` contains stateful block-processing operators and the
+  connectors (``Series``, ``Parallel``, ``Recursion``) that wire them into a
+  time-domain graph. ``process_fdn`` uses ``MatrixFIR`` for polynomial feedback
+  matrices; ``SOSBank`` implements per-delay-line filter cascades used for
   frequency-dependent absorption.
 * ``src/pyFDN/graphicEQ/`` contains graphic-EQ and absorption-filter design,
   while ``src/pyFDN/translate/`` converts between delay state-space, transfer
