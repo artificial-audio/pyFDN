@@ -24,6 +24,15 @@ small example resources listed below retain their own terms.
   with citation; commercial use requires written permission from the copyright
   owners. See http://legacy.spa.aalto.fi/projects/poririrs/ for the complete
   terms. This file is **not** covered by pyFDN's MIT license.
+- `audio/rir/mrtd_hallway_ls3_p34.wav` is the left-ear channel of receiver
+  position 34 in `hallways-lecturehall_kemar_ls_3.sofa` from the *Multi Room
+  Transition Dataset* by Philipp Götz, Georg Götz, Nils Meyer-Kahlen,
+  Kyung Yun Lee, Karolina Prawda, Emanuël A. P. Habets, and
+  Sebastian J. Schlecht: https://doi.org/10.5281/zenodo.13341566. It was
+  trimmed to 16 ms before the first arrival and peak normalised. The dataset is
+  licensed under Creative Commons Attribution 4.0 International, reproduced in
+  `licenses/mrtd-CC-BY-4.0.txt`. This file is **not** covered by pyFDN's MIT
+  license.
 - The colorless-FDN builds were converted from coefficient files in the
   companion material to
   *Differentiable Feedback Delay Network For Colorless Reverberation*:

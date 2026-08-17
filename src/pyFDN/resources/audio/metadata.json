@@ -33,6 +33,17 @@
     "modifications": "Cropped for use as a compact pyFDN example. Commercial use is prohibited without written permission from the copyright owners."
   },
   {
+    "name": "mrtd_hallway_ls3_p34",
+    "filename": "mrtd_hallway_ls3_p34.wav",
+    "category": "rir",
+    "creator": "Philipp Götz, Georg Götz, Nils Meyer-Kahlen, Kyung Yun Lee, Karolina Prawda, Emanuël A. P. Habets, and Sebastian J. Schlecht",
+    "source": "Multi Room Transition Dataset",
+    "source_url": "https://doi.org/10.5281/zenodo.13341566",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Left-ear channel of receiver position 34 from hallways-lecturehall_kemar_ls_3.sofa, trimmed to 16 ms before the first arrival and peak normalised."
+  },
+  {
     "name": "P1_Set1_8",
     "filename": "P1_Set1_8.wav",
     "category": "speech",
