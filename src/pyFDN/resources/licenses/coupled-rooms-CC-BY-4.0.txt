@@ -1,14 +1,16 @@
-This license covers audio/rir/mrtd_hallway_ls3_p34.wav, which is derived from:
+This license covers audio/rir/meetingroom_to_hallway_290cm.wav, which is
+derived from:
 
-  Multi Room Transition Dataset
-  Philipp Goetz, Georg Goetz, Nils Meyer-Kahlen, Kyung Yun Lee,
-  Karolina Prawda, Emanuel A. P. Habets, and Sebastian J. Schlecht
-  https://doi.org/10.5281/zenodo.13341566
+  A dataset of measured spatial room impulse responses for the transition
+  between coupled rooms
+  Thomas McKenzie, Sebastian J. Schlecht, and Ville Pulkki
+  https://doi.org/10.5281/zenodo.4636068
   Licensed under Creative Commons Attribution 4.0 International.
 
-The pyFDN copy is the left-ear channel of receiver position 34 in
-hallways-lecturehall_kemar_ls_3.sofa, trimmed to 16 ms before the first
-arrival and peak normalised. The full legal code follows.
+The pyFDN copy is the omnidirectional (W) component of the 4th-order
+ambisonic response at receiver position 290 cm in
+Meeting Room to Hallway / Source in Room / No Line of Sight, peak normalised.
+The full legal code follows.
 
 =======================================================================
 

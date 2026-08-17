@@ -22,7 +22,7 @@ def test_packaged_audio_manifest_and_files_agree() -> None:
         "P20_Set1_8",
         "Sommerhit2016_Taylor_DI",
         "drums",
-        "mrtd_hallway_ls3_p34",
+        "meetingroom_to_hallway_290cm",
         "s3_r4_o",
         "synth_dry",
     )
