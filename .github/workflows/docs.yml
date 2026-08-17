@@ -8,6 +8,9 @@ on:
     paths:
       - 'src/**'
       - 'docs/**'
+      # The marimo notebooks under examples/ are executed and baked into the
+      # site at build time, so editing one changes the published docs.
+      - 'examples/**'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [ main ]
