@@ -107,7 +107,7 @@ and ``tox.ini`` for multi-environment testing.
 
 
 Helpful links
------------
+-------------
 
 * `List of papers on Feedback Delay Networks <https://github.com/gdalsanto/delay-network-reverbs>`_ .
 * `Multislope Estimation library <https://github.com/artificial-audio/multislope>`_ .
