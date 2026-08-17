@@ -1,6 +1,6 @@
 # gallery_category: Absorption & Filters
 # gallery_description: Estimate two decay slopes per octave from a measured multi-room response and resynthesize them with parallel FDNs.
-# references: Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis, Coupled_Rooms_Transition_Dataset
+# references: Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis, Acoustic_Analysis_And_Dataset_Of_Transitions_Between_Coupled_Rooms
 # requires: multislope
 
 import marimo
@@ -61,14 +61,16 @@ def _(mo, pyFDN):
     mo.md(f"""
     ## A measured multi-room response
 
-    The response comes from
-    {pyFDN.paper_link("Coupled_Rooms_Transition_Dataset")}, measured at Aalto
-    University by walking an ambisonic microphone from a meeting room out into
-    the hallway it opens onto. The source stays inside the meeting room, and
-    this is the receiver 2.9 m along that walk, past the doorway and out of
-    line of sight — so what reaches it is the hallway's own quick decay riding
-    on the slower one leaking out of the meeting room. Only the omnidirectional
-    component of the ambisonic response is used here.
+    The response comes from the dataset accompanying
+    {pyFDN.paper_link("Acoustic_Analysis_And_Dataset_Of_Transitions_Between_Coupled_Rooms")},
+    measured at Aalto University by walking an ambisonic microphone from a
+    meeting room out into the hallway it opens onto, and published at
+    [doi.org/10.5281/zenodo.4636068](https://doi.org/10.5281/zenodo.4636068).
+    The source stays inside the meeting room, and this is the receiver 2.9 m
+    along that walk, past the doorway and out of line of sight — so what
+    reaches it is the hallway's own quick decay riding on the slower one
+    leaking out of the meeting room. Only the omnidirectional component of the
+    ambisonic response is used here.
 
     Measured responses set the terms of what can be recovered. This one carries
     roughly 40 dB of usable decay per octave band before it reaches the noise
