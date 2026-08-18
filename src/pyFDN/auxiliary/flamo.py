@@ -353,6 +353,7 @@ def sos_filter_module(
     *,
     device=None,
     dtype=None,
+    alias_decay_db: float = 0,
     requires_grad: bool = False,
 ):
     """
@@ -369,8 +370,11 @@ def sos_filter_module(
     dtype : torch.dtype or None
         Optional dtype for module parameters (e.g., torch.float64).
         If None, uses float32 to preserve previous behavior.
+    alias_decay_db : float
+        FLAMO alias decay in dB.
     requires_grad : bool
-        Whether the filter parameters are trainable.
+        Accepted for signature parity with the other module builders, but
+        ignored: flamo's ``parallelSOSFilter`` has no trainable-parameter flag.
 
     Returns
     -------
@@ -394,6 +398,7 @@ def sos_filter_module(
         size=(N,),
         n_sections=n_sections,
         nfft=nfft,
+        alias_decay_db=alias_decay_db,
         device=dev,
         dtype=torch_dtype,
     )

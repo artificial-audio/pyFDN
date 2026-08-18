@@ -133,6 +133,7 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
+    "LOSSLESS_ALIAS_DECAY_DB",
     "build_set_decay",
     "Trainable",
     "train_fdn",
@@ -376,6 +377,7 @@ from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
 from .train import (
+    LOSSLESS_ALIAS_DECAY_DB,
     Trainable,
     TrainLog,
     build_fdn,

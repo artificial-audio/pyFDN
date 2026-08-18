@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from .build import (
+    LOSSLESS_ALIAS_DECAY_DB,
     MatrixParam,
     Trainable,
     build_fdn,
@@ -28,6 +29,7 @@ __all__ = [
     "build_set_decay",
     "Trainable",
     "MatrixParam",
+    "LOSSLESS_ALIAS_DECAY_DB",
     # train
     "train_fdn",
     "Objective",

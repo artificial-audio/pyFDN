@@ -9,6 +9,7 @@ pytest.importorskip("flamo")
 import pyFDN  # noqa: E402
 from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
+    LOSSLESS_ALIAS_DECAY_DB,
     Trainable,
     build_fdn,
     build_set_decay,
@@ -37,6 +38,20 @@ def _magnitude(model, nfft, n_in=1):
     x[:, 0, :] = 1.0
     with torch.no_grad():
         return np.asarray(model(x).detach())[0].sum(axis=-1)
+
+
+def _decayed_flatness(build, rt=1.0, nfft=2**14):
+    """Flatness of |H| after homogeneous decay -- the well-posed colour measure.
+
+    A lossless FDN has its poles on the unit circle, so the flatness of its own
+    |H| is set by whichever bins land nearest a pole and swings with nfft.
+    Decay does not change colouration, so measuring the decayed response on a
+    fine grid is what actually tracks "colorless".
+    """
+    model = trainable_from_build(
+        build_set_decay(build, rt), nfft=nfft, output="magnitude", device="cpu"
+    )
+    return _flatness(_magnitude(model, nfft))
 
 
 def _leaf(model, name):
@@ -121,24 +136,72 @@ def test_det_negative_orthogonal_warns_and_projects():
 
 
 def test_colorless_improves_and_preserves_structure():
-    nfft = 2**10
-    model = build_fdn(N=4, rt=None, nfft=nfft, device="cpu", rng=0)
-    init_twin = trainable_from_build(
-        pyFDN.extract_build(model), nfft=nfft, output="magnitude", device="cpu"
-    )
-    init = _flatness(_magnitude(init_twin, nfft))
-    delays0 = pyFDN.extract_build(model).delays
+    model = build_fdn(N=6, rt=None, nfft=2**11, device="cpu", rng=0)
+    init_build = pyFDN.extract_build(model)
+    init = _decayed_flatness(init_build)
+    delays0 = init_build.delays
 
-    log = train_fdn(model, "colorless", max_steps=200, rng=0, **_FAST)
+    log = train_fdn(model, "colorless", max_steps=500, lr=1e-2, device="cpu", rng=0)
 
     assert log.train_loss[-1] < log.train_loss[0]
-    # the model now emits |H| (output-domain swap) -> flatter than init
-    assert _flatness(_magnitude(model, nfft)) > init
+    # the fit must flatten the FDN itself, not just the bins it was scored on
+    assert _decayed_flatness(pyFDN.extract_build(model)) > init + 0.1
     out = pyFDN.extract_build(model)
-    np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
+    np.testing.assert_allclose(out.A.T @ out.A, np.eye(6), atol=1e-4)
     np.testing.assert_array_equal(out.delays, delays0)  # delays frozen
     assert "_ColorlessSparsity" in log.loss_log and "mse_loss" in log.loss_log
     assert log.steps_run == len(log.train_loss)
+
+
+def test_lossless_build_defaults_to_alias_decay():
+    """rt=None puts the poles on the unit circle; the gamma envelope moves them in.
+
+    Without it |H| is unbounded and a magnitude fit just scales the gains down.
+    The envelope must not leak into the extracted build.
+    """
+    from pyFDN.auxiliary.flamo_graph import feedback_matrix_module
+
+    lossless = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    decaying = build_fdn(N=4, rt=2.0, nfft=2**10, device="cpu", rng=0)
+    opted_out = build_fdn(
+        N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0
+    )
+
+    assert float(feedback_matrix_module(lossless).gamma) < 1.0
+    assert float(feedback_matrix_module(decaying).gamma) == 1.0  # decay already inside
+    assert float(feedback_matrix_module(opted_out).gamma) == 1.0
+
+    # gamma enters get_freq_response, not the parameter map -> build is unchanged
+    damped, undamped = pyFDN.extract_build(lossless), pyFDN.extract_build(opted_out)
+    np.testing.assert_allclose(damped.A, undamped.A, atol=1e-6)
+    np.testing.assert_allclose(damped.B, undamped.B, atol=1e-6)
+    np.testing.assert_allclose(damped.C, undamped.C, atol=1e-6)
+
+    # ...but it does bound |H|, which is the whole point
+    assert (
+        _magnitude(
+            trainable_from_build(
+                undamped,
+                nfft=2**10,
+                output="magnitude",
+                alias_decay_db=LOSSLESS_ALIAS_DECAY_DB,
+                device="cpu",
+            ),
+            2**10,
+        ).max()
+        < _magnitude(
+            trainable_from_build(
+                undamped, nfft=2**10, output="magnitude", device="cpu"
+            ),
+            2**10,
+        ).max()
+    )
+
+
+def test_colorless_without_alias_decay_warns():
+    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    with pytest.warns(UserWarning, match="alias_decay_db=0"):
+        train_fdn(model, "colorless", max_steps=2, rng=0, **_FAST)
 
 
 def test_train_is_reproducible():

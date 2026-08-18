@@ -265,6 +265,7 @@ Training
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
+   pyFDN.LOSSLESS_ALIAS_DECAY_DB
 
 Plotting
 --------

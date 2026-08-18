@@ -8,9 +8,11 @@ returns a :class:`TrainLog`. Read the result back with :func:`pyFDN.extract_buil
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
+from .build import LOSSLESS_ALIAS_DECAY_DB
 from .objectives import Criterion, Objective, build_objective
 
 
@@ -117,6 +119,8 @@ def train_fdn(
         device=dev,
         dtype=torch_dtype,
     )
+    if output_domain == "magnitude":
+        _warn_if_no_alias_decay(model, mode)
     # Set the Shell's output layer to match the objective (time iFFT / magnitude
     # |.|); a deliberate, visible mutation of the model.
     model.set_outputLayer(output_layer(output_domain, nfft, torch_dtype))
@@ -149,6 +153,30 @@ def train_fdn(
         loss_log={k: [float(x) for x in v] for k, v in history.items() if k != "total"},
         steps_run=steps_run,
         stopped_early=steps_run < max_steps,
+    )
+
+
+def _warn_if_no_alias_decay(model: Any, mode: str) -> None:
+    """Warn when a magnitude objective is fit without anti-aliasing decay.
+
+    A lossless FDN puts every pole on the unit circle, so ``|H|`` is unbounded
+    and the MSE is dominated by whichever bins land nearest a pole -- the fit
+    then just scales the gains down instead of flattening the response. The
+    ``alias_decay_db`` envelope moves the poles inside the circle and makes the
+    objective well-posed. Cheap to check, easy to miss, so say so out loud.
+    """
+    from pyFDN.auxiliary.flamo_graph import feedback_matrix_module
+
+    gamma = getattr(feedback_matrix_module(model), "gamma", None)
+    if gamma is None or float(gamma) < 1.0:
+        return
+    warnings.warn(
+        f"{mode!r} fits a magnitude response but the model was built with "
+        "alias_decay_db=0, so the poles of a lossless FDN sit exactly on the "
+        "unit circle and |H| is unbounded; the fit will shrink the gains "
+        "instead of flattening the response. Rebuild with build_fdn(..., "
+        f"alias_decay_db={LOSSLESS_ALIAS_DECAY_DB}) (the default when rt=None).",
+        stacklevel=3,
     )
 
 

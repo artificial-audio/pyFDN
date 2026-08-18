@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App()
 
 
@@ -26,7 +26,12 @@ def _(mo, pyFDN):
     2. `pyFDN.train_fdn(model, "colorless")` -- optimize the feedback matrix and gains for a flat magnitude (magnitude MSE + a feedback-matrix sparsity penalty), in place.
     3. `pyFDN.extract_build` -- read both the initial and optimized FDNs back out.
 
-    Delays stay fixed. We then add homogeneous decay so the result is audible. Flatness is measured on the magnitude response at the **training** FFT bins -- the right colorless measure for a lossless FDN, whose time response never decays. Training is kept short so the example runs in a few seconds.
+    Delays stay fixed. We then add homogeneous decay so the result is audible.
+
+    Two details make or break this fit, both to do with the fact that a **lossless** FDN with an orthogonal feedback matrix has every pole *exactly* on the unit circle, so $|H(\\omega)|$ is unbounded:
+
+    * **Training.** `build_fdn(rt=None)` therefore defaults to `alias_decay_db=`{pyFDN.LOSSLESS_ALIAS_DECAY_DB}, flamo's $\\gamma^n$ envelope, which evaluates the system just *inside* the unit circle. Without it the MSE is dominated by whichever handful of bins land nearest a pole, and the optimizer flattens nothing -- it just scales `b` and `c` down. The envelope never reaches the extracted build: it enters flamo's `get_freq_response`, not the parameter map.
+    * **Measuring.** For the same reason, spectral flatness of the lossless $|H|$ is not a usable number -- its arithmetic mean is set by a couple of pole spikes, so it swings by orders of magnitude with the FFT size. We report flatness of the **decayed** response instead. Homogeneous decay does not change colouration, so this measures the thing we optimized, on a grid fine enough to resolve the modes.
 
     - pyFDN training pipeline: Jeremy B. Bai, 2026-06-19
     """)
@@ -39,6 +44,12 @@ def _():
 
     import pyFDN
 
+    # Measure the colour on the DECAYED response, on a grid fine enough to
+    # resolve the modes: the lossless |H| has poles on the unit circle, so its
+    # flatness is dominated by a few spikes and depends on the FFT size.
+    EVAL_NFFT = 2**16  # > 2 * sum(delays), so every mode gets its own bins
+    EVAL_RT = 1.0  # homogeneous decay does not change colouration
+
     def flatness(magnitude):
         # Spectral flatness (geometric/arithmetic mean of power, DC excluded);
         # 1.0 is perfectly flat. Inlined here so the example needs no metrics API.
@@ -48,57 +59,75 @@ def _():
             return 0.0
         return float(np.exp(np.mean(np.log(power))) / np.mean(power))
 
-    return flatness, np, pyFDN
+    def decayed_magnitude(build):
+        """|H| of `build` with homogeneous decay, on the fine evaluation grid."""
+        model = pyFDN.trainable_from_build(
+            pyFDN.build_set_decay(build, EVAL_RT), nfft=EVAL_NFFT, output="magnitude"
+        )
+        return np.abs(pyFDN.flamo_freq_response(model).squeeze())
+
+    return EVAL_NFFT, decayed_magnitude, flatness, np, pyFDN
 
 
 @app.cell
-def _(flatness, np, pyFDN):
+def _(decayed_magnitude, flatness, pyFDN):
     fs = 48000
     nfft = 2**12
 
-    # 1. build a small "tiny colorless" lossless skeleton.
+    # 1. build a small "tiny colorless" lossless skeleton. rt=None also switches
+    #    on the default anti-aliasing decay that keeps |H| bounded for training.
     delays = pyFDN.sample_delay_lengths(
-        8, (800, 3200), distribution="geometric", coprime=True, rng=1
+        8, (600, 1200), distribution="geometric", coprime=True, rng=2
     )
     model = pyFDN.build_fdn(
-        delays=delays, rt=None, nfft=nfft, output="magnitude", device="cpu", rng=1
+        delays=delays, rt=None, nfft=nfft, output="magnitude", device="cpu", rng=2
     )
     init_build = pyFDN.extract_build(model)  # random init, before training
-    mag_init = np.abs(pyFDN.flamo_freq_response(model, fs=fs).squeeze())
 
     # 2. train in place for a flat ("colorless") magnitude; then extract.
+    #    Adam, not L-BFGS: the magnitude objective is nonconvex and densely
+    #    modal, and L-BFGS's line search settles into the nearest stationary
+    #    point within a few dozen steps.
     log = pyFDN.train_fdn(
         model,
         "colorless",
-        optimizer="lbfgs",
+        optimizer="adam",
         max_steps=2000,
         lr=1e-2,
         device="cpu",
         rng=1,
     )
-    mag_opt = np.abs(pyFDN.flamo_freq_response(model, fs=fs).squeeze())
     opt_build = pyFDN.extract_build(model)
 
+    # 3. measure on the decayed response (see above), not on the lossless |H|.
+    mag_init = decayed_magnitude(init_build)
+    mag_opt = decayed_magnitude(opt_build)
+
+    print(
+        f"ran {log.steps_run} steps, loss {log.train_loss[0]:.3f} -> {log.train_loss[-1]:.3f}"
+    )
     print(
         f"spectral flatness  init {flatness(mag_init):.4f}"
         f"   colorless {flatness(mag_opt):.4f}"
     )
-    return fs, init_build, log, mag_init, mag_opt, nfft, opt_build
+    return fs, init_build, log, mag_init, mag_opt, opt_build
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ## Magnitude response and training loss
+
+    The magnitude response of each FDN *with decay applied* -- the lossless one is a forest of poles on the unit circle and plots as noise. Training pulls the peaks and notches in toward the mean; the flatness in the legend is the number that matters.
     """)
     return
 
 
 @app.cell
-def _(flatness, fs, log, mag_init, mag_opt, mo, nfft, np, pyFDN):
+def _(EVAL_NFFT, flatness, fs, log, mag_init, mag_opt, mo, np, pyFDN):
     import matplotlib.pyplot as plt
 
-    _freqs = np.fft.rfftfreq(nfft, 1.0 / fs)
+    _freqs = np.fft.rfftfreq(EVAL_NFFT, 1.0 / fs)
     _fig, _axes = plt.subplots(1, 2, figsize=(11, 3.2))
     _axes[0].plot(
         _freqs,
@@ -115,13 +144,13 @@ def _(flatness, fs, log, mag_init, mag_opt, mo, nfft, np, pyFDN):
         xlabel="frequency [Hz]",
         ylabel="magnitude [dB]",
         xscale="log",
-        title="Magnitude response (flatness in legend)",
+        title="Magnitude response with decay (flatness in legend)",
     )
     _axes[0].legend(fontsize=8)
     _axes[0].grid(True, alpha=0.3)
 
-    _axes[1].plot(log.train_loss, "-o", ms=2)
-    _axes[1].set(xlabel="epoch", ylabel="loss", yscale="log", title="Training loss")
+    _axes[1].plot(log.train_loss, lw=1)
+    _axes[1].set(xlabel="step", ylabel="loss", yscale="log", title="Training loss")
     _axes[1].grid(True, alpha=0.3)
     _fig.tight_layout()
     mo.as_html(_fig)

@@ -21,6 +21,13 @@ if TYPE_CHECKING:
 # training (the colorless choice); "random" trains it unconstrained.
 MatrixParam = Literal["orthogonal", "random"]
 
+# Default anti-time-aliasing decay for a LOSSLESS FDN (``rt=None``), whose poles
+# lie exactly on the unit circle. The gamma^n envelope moves them just inside, so
+# |H| stays bounded and a magnitude objective is dominated by the response shape
+# rather than by a handful of near-pole bins. 30 dB over nfft samples is gentle
+# enough to leave the modal structure intact.
+LOSSLESS_ALIAS_DECAY_DB = 30.0
+
 
 @dataclass(frozen=True)
 class Trainable:
@@ -46,6 +53,7 @@ def build_fdn(
     fs: float = 48000.0,
     nfft: int = 2**14,
     output: str = "time",
+    alias_decay_db: float | None = None,
     device: Any = None,
     dtype: Any = None,
     rng: np.random.Generator | int | None = None,
@@ -71,6 +79,13 @@ def build_fdn(
         Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
         Trainable parameter groups (default :class:`~pyFDN.Trainable`).
+    alias_decay_db : float or None
+        Anti-time-aliasing decay, see :func:`trainable_from_build`. ``None``
+        (default) picks it from ``rt``: :data:`LOSSLESS_ALIAS_DECAY_DB` when
+        ``rt is None``, else 0. A lossless FDN has every pole exactly on the
+        unit circle, so :math:`|H(\\omega)|` is unbounded and a magnitude
+        objective is ill-posed without it; a decaying FDN needs no such nudge.
+        Pass ``0.0`` to opt out.
     fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
         Seed for the sampled delays / default feedback matrix.
@@ -135,12 +150,15 @@ def build_fdn(
         filters=filters,
         post_eq=None,
     )
+    if alias_decay_db is None:
+        alias_decay_db = LOSSLESS_ALIAS_DECAY_DB if rt is None else 0.0
     return trainable_from_build(
         build,
         trainable=trainable,
         matrix=matrix,
         nfft=nfft,
         output=output,
+        alias_decay_db=alias_decay_db,
         device=device,
         dtype=dtype,
     )
@@ -153,6 +171,7 @@ def trainable_from_build(
     matrix: MatrixParam = "orthogonal",
     nfft: int = 2**14,
     output: str = "time",
+    alias_decay_db: float = 0.0,
     device: Any = None,
     dtype: Any = None,
 ) -> Any:
@@ -172,6 +191,17 @@ def trainable_from_build(
     output : str
         ``"time"`` or ``"magnitude"`` output layer (``train_fdn`` sets this to
         match the mode).
+    alias_decay_db : float
+        Anti-time-aliasing decay in dB over ``nfft`` samples. Applies a
+        :math:`\\gamma^n` envelope to every module, i.e. evaluates the system on
+        a circle of radius :math:`\\gamma < 1` instead of the unit circle. Leave
+        at 0 for a faithful response; set it (~30 dB) for a **lossless** FDN,
+        whose poles otherwise sit exactly on the unit circle and make
+        :math:`|H(\\omega)|` unbounded -- a magnitude objective is then dominated
+        by a handful of near-pole bins and cannot be fit. It does not affect the
+        extracted build: ``alias_decay_db`` enters ``get_freq_response``, not the
+        parameter ``map``, so :func:`pyFDN.extract_build` still returns the
+        undamped ``A``/``B``/``C``.
     device, dtype : optional
         Torch device / dtype (default cpu-or-cuda / float32).
 
@@ -197,11 +227,25 @@ def trainable_from_build(
         else np.zeros((c.shape[0], b.shape[1]))
     )
 
+    # The alias envelope must be identical on every module -- it is a change of
+    # evaluation radius for the whole system, not a per-module gain.
+    alias = float(alias_decay_db)
+
     input_gain = gain_module(
-        b, nfft, device=device, dtype=dtype, requires_grad=trainable.input_gain
+        b,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.input_gain,
     )
     output_gain = gain_module(
-        c, nfft, device=device, dtype=dtype, requires_grad=trainable.output_gain
+        c,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.output_gain,
     )
     feedback = matrix_module(
         build.A,
@@ -209,15 +253,26 @@ def trainable_from_build(
         matrix_type=matrix,
         device=device,
         dtype=dtype,
+        alias_decay_db=alias,
         requires_grad=trainable.feedback,
     )
     # Direct path is ALWAYS wired (zero by default) so the same model serves any
     # objective; the core is therefore a Parallel.
     direct_gain = gain_module(
-        d, nfft, device=device, dtype=dtype, requires_grad=trainable.direct
+        d,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.direct,
     )
     delays = _frozen_delays(
-        np.asarray(build.delays, dtype=np.float64).ravel(), fs, nfft, device, dtype
+        np.asarray(build.delays, dtype=np.float64).ravel(),
+        fs,
+        nfft,
+        device,
+        dtype,
+        alias_decay_db=alias,
     )
 
     # In-loop absorption (decay) is a frozen build property.
@@ -227,6 +282,7 @@ def trainable_from_build(
             nfft,
             device=device,
             dtype=dtype,
+            alias_decay_db=alias,
         )
         if build.filters is not None
         else None
@@ -237,6 +293,7 @@ def trainable_from_build(
             nfft,
             device=device,
             dtype=dtype,
+            alias_decay_db=alias,
             requires_grad=False,
         )
         if build.post_eq is not None
@@ -305,7 +362,12 @@ def _random_so_n(n: int, rng: np.random.Generator) -> np.ndarray:
 
 
 def _frozen_delays(
-    delay_samples: np.ndarray, fs: float, nfft: int, device: Any, dtype: Any
+    delay_samples: np.ndarray,
+    fs: float,
+    nfft: int,
+    device: Any,
+    dtype: Any,
+    alias_decay_db: float = 0.0,
 ) -> Any:
     """Frozen integer parallelDelay from delay lengths in samples."""
     from pyFDN.auxiliary.flamo import delay_module
@@ -317,5 +379,6 @@ def _frozen_delays(
         device=device,
         dtype=dtype,
         isint=True,
+        alias_decay_db=alias_decay_db,
         requires_grad=False,
     )
