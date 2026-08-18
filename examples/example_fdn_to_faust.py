@@ -13,7 +13,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
