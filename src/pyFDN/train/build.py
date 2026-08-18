@@ -22,11 +22,12 @@ if TYPE_CHECKING:
 MatrixParam = Literal["orthogonal", "random"]
 
 # Default anti-time-aliasing decay for a LOSSLESS FDN (``rt=None``), whose poles
-# lie exactly on the unit circle. The gamma^n envelope moves them just inside, so
-# |H| stays bounded and a magnitude objective is dominated by the response shape
-# rather than by a handful of near-pole bins. 30 dB over nfft samples is gentle
-# enough to leave the modal structure intact.
-LOSSLESS_ALIAS_DECAY_DB = 30.0
+# lie exactly on the unit circle -- so the FFT-domain evaluation of (I - A D(z))^-1
+# is near-singular without it. The value is the accuracy of the resulting impulse
+# response in dB (see ``trainable_from_build``); 60 dB is about the ceiling in
+# float32, where the reconstruction envelope amplifies round-off at the end of
+# the buffer by the same factor. Use float64 to go higher.
+LOSSLESS_ALIAS_DECAY_DB = 60.0
 
 
 @dataclass(frozen=True)
@@ -83,8 +84,8 @@ def build_fdn(
         Anti-time-aliasing decay, see :func:`trainable_from_build`. ``None``
         (default) picks it from ``rt``: :data:`LOSSLESS_ALIAS_DECAY_DB` when
         ``rt is None``, else 0. A lossless FDN has every pole exactly on the
-        unit circle, so :math:`|H(\\omega)|` is unbounded and a magnitude
-        objective is ill-posed without it; a decaying FDN needs no such nudge.
+        unit circle, where the FFT-domain evaluation breaks down entirely; a
+        decaying FDN damps itself within ``nfft`` samples and needs no nudge.
         Pass ``0.0`` to opt out.
     fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
@@ -189,17 +190,28 @@ def trainable_from_build(
     nfft : int
         FFT size.
     output : str
-        ``"time"`` or ``"magnitude"`` output layer (``train_fdn`` sets this to
-        match the mode).
+        ``"time"`` (the impulse response -- the default, and what training
+        needs) or ``"magnitude"`` (``|H|`` at the DFT bins, for inspection).
     alias_decay_db : float
-        Anti-time-aliasing decay in dB over ``nfft`` samples. Applies a
+        **The accuracy of the rendered impulse response, in dB.** Applies a
         :math:`\\gamma^n` envelope to every module, i.e. evaluates the system on
-        a circle of radius :math:`\\gamma < 1` instead of the unit circle. Leave
-        at 0 for a faithful response; set it (~30 dB) for a **lossless** FDN,
-        whose poles otherwise sit exactly on the unit circle and make
-        :math:`|H(\\omega)|` unbounded -- a magnitude objective is then dominated
-        by a handful of near-pole bins and cannot be fit. It does not affect the
-        extracted build: ``alias_decay_db`` enters ``get_freq_response``, not the
+        a circle of radius :math:`\\gamma < 1` instead of the unit circle; the
+        ``"time"`` output layer removes the envelope again, so the response is
+        the true one and what remains is the time-aliased wrap-around,
+        suppressed by exactly ``alias_decay_db``. Measured against
+        :func:`pyFDN.build_to_impz` (which cannot alias), the residual error of
+        a lossless FDN is -30 dB at 30, -60 dB at 60, -90 dB at 90 in float64.
+
+        In float32 the reconstruction envelope amplifies round-off by the same
+        factor, so ~60 dB is the practical ceiling (the last eighth of the
+        buffer degrades to about -38 dB, and 90 dB is worse than useless); use
+        ``dtype=torch.float64`` beyond that.
+
+        Leave at 0 for a decaying FDN, which damps itself within ``nfft``
+        samples. A **lossless** FDN needs it: with its poles exactly on the unit
+        circle the FFT-domain evaluation is near-singular and the response comes
+        out wrong, not merely aliased. It does not affect the extracted build:
+        ``alias_decay_db`` enters the frequency-domain evaluation, not the
         parameter ``map``, so :func:`pyFDN.extract_build` still returns the
         undamped ``A``/``B``/``C``.
     device, dtype : optional

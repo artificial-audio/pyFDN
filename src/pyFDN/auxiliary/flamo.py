@@ -594,13 +594,24 @@ def assemble_fdn_core(
     return fdn_branch
 
 
-def output_layer(output: str, nfft: int, dtype: Any = None) -> Any:
-    """Build the FLAMO output layer for an output domain.
+def output_layer(
+    output: str, nfft: int, dtype: Any = None, alias_decay_db: float = 0.0
+) -> Any:
+    r"""Build the FLAMO output layer for an output domain.
 
-    ``"time"`` -> ``iFFT`` (time response); ``"magnitude"`` -> ``|.|`` of the
-    frequency response. The single source of truth for the ``output``-string ->
-    layer mapping, shared by :func:`wrap_fdn_shell` (build time) and the training
-    output-domain swap (:func:`pyFDN.train_fdn`) so the two cannot disagree.
+    ``"time"`` -> the **true** impulse response; ``"magnitude"`` -> ``|.|`` of
+    the frequency response. The single source of truth for the
+    ``output``-string -> layer mapping, used by :func:`wrap_fdn_shell` so the
+    build-time and training-time views of a model cannot disagree.
+
+    ``alias_decay_db`` must match the value the core modules were built with.
+    The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
+    its time response carries a :math:`\gamma^n` envelope; the ``"time"`` layer
+    is an ``iFFTAntiAlias``, which removes it again. The layer therefore returns
+    the impulse response itself -- the same convention as FLAMO's
+    ``get_time_response`` -- and ``alias_decay_db`` is simply the accuracy of
+    that response in dB (see :func:`pyFDN.trainable_from_build`). At
+    ``alias_decay_db=0`` it is an ordinary ``iFFT``.
     """
     if not _HAS_FLAMO:
         raise ImportError("output_layer requires flamo (pip install flamo)")
@@ -608,10 +619,26 @@ def output_layer(output: str, nfft: int, dtype: Any = None) -> Any:
 
     torch_dtype = torch.float32 if dtype is None else dtype
     if output == "time":
-        return dsp.iFFT(nfft, dtype=torch_dtype)
+        return dsp.iFFTAntiAlias(
+            nfft, alias_decay_db=float(alias_decay_db), dtype=torch_dtype
+        )
     if output == "magnitude":
         return dsp.Transform(transform=torch.abs, dtype=torch_dtype)
     raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
+
+
+def core_alias_decay_db(core: Any) -> float:
+    """The anti-aliasing decay the FLAMO ``core`` was built with, in dB.
+
+    FLAMO containers (``Series``/``Parallel``/``Recursion``) assert that every
+    module agrees on ``alias_decay_db``, so the core is the single source of
+    truth -- reading it back beats threading the value through by hand and
+    risking a mismatch with the modules.
+    """
+    value = getattr(core, "alias_decay_db", None)
+    if value is None:
+        return 0.0
+    return abs(float(value))
 
 
 def wrap_fdn_shell(
@@ -631,8 +658,9 @@ def wrap_fdn_shell(
     output : str
         Output-domain layer:
 
-        * ``"time"`` -- ``iFFT`` time response (the render default, matching
-          :func:`pyFDN.dss_to_flamo`).
+        * ``"time"`` -- the impulse response (the render default, matching
+          :func:`pyFDN.dss_to_flamo`). Any anti-aliasing envelope the core was
+          built with is removed again, so this is the true impulse response.
         * ``"magnitude"`` -- ``|.|`` of the frequency response, for
           magnitude-domain losses (e.g. colorless training).
 
@@ -649,5 +677,7 @@ def wrap_fdn_shell(
     return system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-        output_layer=output_layer(output, nfft, torch_dtype),
+        output_layer=output_layer(
+            output, nfft, torch_dtype, alias_decay_db=core_alias_decay_db(core)
+        ),
     )

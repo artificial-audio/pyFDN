@@ -10,9 +10,16 @@ import pyFDN  # noqa: E402
 from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     LOSSLESS_ALIAS_DECAY_DB,
+    FlatMagnitude,
+    FlatSpectrogram,
+    MatchSpectrogram,
+    Sparsity,
     Trainable,
     build_fdn,
     build_set_decay,
+    model_response,
+    param,
+    params,
     train_fdn,
     trainable_from_build,
 )
@@ -149,7 +156,7 @@ def test_colorless_improves_and_preserves_structure():
     out = pyFDN.extract_build(model)
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(6), atol=1e-4)
     np.testing.assert_array_equal(out.delays, delays0)  # delays frozen
-    assert "_ColorlessSparsity" in log.loss_log and "mse_loss" in log.loss_log
+    assert "FlatMagnitude" in log.loss_log and "Sparsity[fB]" in log.loss_log
     assert log.steps_run == len(log.train_loss)
 
 
@@ -220,9 +227,7 @@ def test_match_spectrogram_runs_and_renders():
 
     log = train_fdn(
         fresh,
-        "match_spectrogram",
-        target=target_ir,
-        mss_nfft=(256, 512),
+        MatchSpectrogram(target_ir, nfft=(256, 512)),
         max_steps=20,
         rng=0,
         **_FAST,
@@ -249,7 +254,7 @@ def _mimo_ir(model, nfft, n_in, n_out):
 
     Each input is excited on its own batch row, so model(x)[i, :, j] is the IR
     from input i to output j; transpose to the (n_samples, n_out, n_in) layout
-    train_fdn expects.
+    a Response (and build_to_impz) uses.
     """
     import torch
 
@@ -287,9 +292,7 @@ def test_match_spectrogram_mimo_target():
     )
     log = train_fdn(
         fresh,
-        "match_spectrogram",
-        target=target,
-        mss_nfft=(256, 512),
+        MatchSpectrogram(target, nfft=(256, 512)),
         max_steps=20,
         rng=0,
         **_FAST,
@@ -309,7 +312,7 @@ def test_mimo_target_wrong_shape_raises():
         rng=0,
     )
     bad = np.zeros((128, 3, 2))  # n_out=3 != model's 2
-    with pytest.raises(ValueError, match="MIMO target must have shape"):
+    with pytest.raises(ValueError, match="target has 3 outputs"):
         train_fdn(model, "match_spectrogram", target=bad, max_steps=2, **_FAST)
 
 
@@ -330,3 +333,241 @@ def test_build_set_decay_realizes_rt():
     ).reshape(-1)
     rt, _ = pyFDN.estimate_rt_bands(ir, 48000.0)
     assert 0.3 * 0.7 < float(np.nanmean(rt)) < 0.3 * 1.3
+
+
+# --- the response contract --------------------------------------------------
+
+
+def test_response_is_the_true_ir_matrix():
+    """h is the impulse response itself, shaped like build_to_impz's."""
+    nfft, n_in, n_out = 2**12, 2, 3
+    model = build_fdn(
+        N=5,
+        rt=None,
+        nfft=nfft,
+        input_gain=np.eye(5, n_in),
+        output_gain=np.eye(n_out, 5),
+        device="cpu",
+        rng=4,
+    )
+    r = model_response(model)
+    assert r.h.shape == (nfft, n_out, n_in)
+    assert (r.n_samples, r.n_out, r.n_in) == (nfft, n_out, n_in)
+    assert r.spectrum.shape == (nfft // 2 + 1, n_out, n_in)
+
+    # the alias envelope is removed again, so h matches the exact (non-aliasing)
+    # block simulation. Compared in RMS, not pointwise: in float32 the
+    # reconstruction envelope amplifies round-off at the end of the buffer.
+    exact = pyFDN.build_to_impz(pyFDN.extract_build(model), nfft)
+    assert exact.shape == r.h.shape
+    error = r.h.detach().numpy() - exact
+    error_db = 20 * np.log10(np.sqrt(np.mean(error**2)) / np.sqrt(np.mean(exact**2)))
+    assert error_db < -40
+
+
+def test_alias_decay_db_is_the_response_accuracy_in_db():
+    """The residual against the exact IR is alias_decay_db, by construction."""
+    import torch
+
+    nfft = 2**13
+    for alias_db in (30.0, 60.0):
+        model = build_fdn(
+            N=6,
+            rt=None,
+            nfft=nfft,
+            alias_decay_db=alias_db,
+            dtype=torch.float64,
+            device="cpu",
+            rng=2,
+        )
+        h = model_response(model).h.detach().numpy().squeeze()
+        exact = pyFDN.build_to_impz(pyFDN.extract_build(model), nfft).squeeze()
+        error_db = 20 * np.log10(
+            np.sqrt(np.mean((h - exact) ** 2)) / np.sqrt(np.mean(exact**2))
+        )
+        assert -alias_db - 2 < error_db < -alias_db + 2
+
+
+def test_response_spectrum_is_computed_once():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    r = model_response(model)
+    assert r.spectrum is r.spectrum  # cached, so several losses share one FFT
+
+
+# --- parameter references ---------------------------------------------------
+
+
+def test_params_lists_every_parameter_with_trainability():
+    model = build_fdn(N=5, rt=None, nfft=2**10, device="cpu", rng=0)
+    by_name = {p.name: p for p in params(model)}
+    assert {"input_gain", "output_gain", "fB", "fF"} <= set(by_name)
+    assert by_name["fB"].shape == (5, 5)
+    assert by_name["fB"].trainable is True
+    assert by_name["fF"].trainable is False  # delays are always frozen
+
+
+def test_param_resolves_alias_and_returns_mapped_value():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    ref = param(model, "feedback")
+    assert ref.name == "fB"
+    assert ref is not None and ref.module is param(model, "fB").module
+
+    # the mapped value is the orthogonal matrix the system uses, still in the
+    # autograd graph -- not the raw (skew-symmetric) parameter.
+    value = ref.value()
+    assert value.requires_grad
+    np.testing.assert_allclose((value.T @ value).detach().numpy(), np.eye(4), atol=1e-5)
+    np.testing.assert_allclose(
+        value.detach().numpy(), pyFDN.extract_build(model).A, atol=1e-5
+    )
+
+
+def test_param_unknown_name_lists_what_is_available():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="no parameter named 'A'.*available"):
+        param(model, "A")
+
+
+def test_param_accepts_a_module_directly():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    module = param(model, "feedback").module
+    assert param(module).module is module
+
+
+# --- composition ------------------------------------------------------------
+
+
+def test_losses_compose_and_weights_reach_the_leaves():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    flat, sparse = FlatMagnitude(), Sparsity(param(model, "feedback"))
+    loss = 0.5 * (flat + 0.4 * sparse)
+
+    weights = {term.name: w for w, term in loss.terms()}
+    assert weights == {"FlatMagnitude": 0.5, "Sparsity[fB]": 0.2}
+
+    # the composed value is the weighted sum of the parts
+    r = model_response(model)
+
+    def value(objective):
+        return float(objective(r).detach())
+
+    np.testing.assert_allclose(
+        value(loss), 0.5 * value(flat) + 0.2 * value(sparse), rtol=1e-5
+    )
+
+
+def test_sparsity_rejects_a_non_square_parameter():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="square matrix"):
+        Sparsity(param(model, "input_gain"))
+
+
+def test_loss_object_and_preset_name_agree():
+    """train_fdn(model, "colorless") is shorthand for the preset expression."""
+
+    def run(objective):
+        model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
+        loss = objective(model) if callable(objective) else objective
+        return train_fdn(model, loss, max_steps=30, rng=0, **_FAST).train_loss
+
+    explicit = run(lambda m: FlatMagnitude() + 0.2 * Sparsity(param(m, "feedback")))
+    np.testing.assert_allclose(run("colorless"), explicit, rtol=1e-6)
+
+
+def test_a_loss_object_rejects_a_stray_target():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="loss object holds its own"):
+        train_fdn(model, FlatMagnitude(), target=np.zeros(16), max_steps=2, **_FAST)
+
+
+def test_one_objective_can_hold_two_different_references():
+    """Each loss owns its target, so an objective can fit more than one."""
+    nfft = 2**11
+    ref_a = np.asarray(
+        pyFDN.flamo_time_response(
+            build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7), fs=48000
+        )
+    ).reshape(-1)
+    ref_b = np.asarray(
+        pyFDN.flamo_time_response(
+            build_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8), fs=48000
+        )
+    ).reshape(-1)
+
+    model = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
+    loss = MatchSpectrogram(ref_a, nfft=(256,)) + 0.5 * pyFDN.MatchMagnitude(ref_b)
+    log = train_fdn(model, loss, max_steps=10, rng=0, **_FAST)
+    assert set(log.loss_log) == {"MatchSpectrogram", "MatchMagnitude"}
+    assert np.isfinite(log.train_loss[-1])
+
+
+# --- multi-scale flatness ---------------------------------------------------
+
+
+def test_flat_spectrogram_is_gain_invariant():
+    """Each scale is normalized by its own mean, so only shape is measured."""
+    from pyFDN.train import Response
+
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    loss, r = FlatSpectrogram(), model_response(model)
+    scaled = Response(h=r.h * 37.0, fs=r.fs)
+    np.testing.assert_allclose(
+        float(loss(r).detach()), float(loss(scaled).detach()), rtol=1e-5
+    )
+
+
+def test_flat_spectrogram_resolution_comes_from_its_own_windows():
+    """Its windows set its resolution, so the model's nfft barely moves it.
+
+    FlatMagnitude has no windows of its own: on a lossless FDN its value is the
+    spectrum of a rectangularly truncated, non-decaying IR, which grows steeply
+    with the truncation length. That is the sensitivity FlatSpectrogram removes.
+    """
+    build = pyFDN.extract_build(
+        build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    )
+
+    def spread(loss):
+        values = [
+            float(
+                loss(
+                    model_response(
+                        trainable_from_build(
+                            build, nfft=n, alias_decay_db=LOSSLESS_ALIAS_DECAY_DB
+                        )
+                    )
+                ).detach()
+            )
+            for n in (2**12, 2**13, 2**14)
+        ]
+        return max(values) / min(values)
+
+    assert spread(FlatSpectrogram(nfft=(256, 512))) < 2.0
+    assert spread(FlatMagnitude()) > 4.0
+
+
+def test_flat_spectrogram_rejects_a_window_longer_than_the_response():
+    model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="longer than the response"):
+        FlatSpectrogram(nfft=(2048,))(model_response(model))
+
+
+def test_flat_spectrogram_flattens_and_densifies():
+    """It reaches FlatMagnitude's flatness, and unlike it also improves density."""
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=0)
+    init = _decayed_flatness(pyFDN.extract_build(model))
+
+    log = train_fdn(
+        model,
+        FlatSpectrogram(nfft=(256, 512, 1024))
+        + 0.2 * Sparsity(param(model, "feedback")),
+        max_steps=500,
+        lr=1e-2,
+        patience=100,
+        device="cpu",
+        rng=0,
+    )
+
+    assert _decayed_flatness(pyFDN.extract_build(model)) > init + 0.1
+    sparsity = log.loss_log["Sparsity[fB]"]
+    assert sparsity[-1] < sparsity[0]  # the feedback matrix got denser

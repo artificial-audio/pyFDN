@@ -267,6 +267,34 @@ Training
    pyFDN.TrainLog
    pyFDN.LOSSLESS_ALIAS_DECAY_DB
 
+Training Objectives
+-------------------
+
+An objective is a weighted sum of losses, composed with ``+`` and ``*``. Losses
+on the impulse response read a :class:`pyFDN.Response`; losses on a model
+parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.Response
+   pyFDN.model_response
+   pyFDN.param
+   pyFDN.params
+   pyFDN.ParamRef
+   pyFDN.Loss
+   pyFDN.FlatMagnitude
+   pyFDN.FlatSpectrogram
+   pyFDN.MatchMagnitude
+   pyFDN.MatchSpectrogram
+   pyFDN.MatchMelSpectrogram
+   pyFDN.MatchImpulseResponse
+   pyFDN.Energy
+   pyFDN.Sparsity
+   pyFDN.L1
+   pyFDN.L2
+
 Plotting
 --------
 
