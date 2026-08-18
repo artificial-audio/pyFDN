@@ -14,22 +14,6 @@ def _():
     return (mo,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    # Denser Reverberation with Delay Feedback Matrix
-
-    This example compares three FDN topologies and their **echo density** (Abel & Huang 2006):
-
-    1. **Vanilla FDN** — Build a complete FDN with `pyFDN.fdn_build_gallery`, bake in broadband decay, and render it with `pyFDN.dss_to_flamo`.
-    2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
-    3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
-
-    Reference: *Schlecht, S., Habets, E. (2019). Dense Reverberation with Delay Feedback Matrices.* Proc. IEEE Workshop Applicat. Signal Process. Audio Acoust. (WASPAA).
-    """)
-    return
-
-
 @app.cell
 def _(mo, pyFDN):
     mo.md(f"""
@@ -64,9 +48,7 @@ def _(mo):
     mo.md(r"""
     ## Parameters
 
-    Set RNG seed, sampling rate, number of delay lines **N**, broadband RT,
-    and base delays plus extra **delays_in** / **delays_out** for the
-    delay+matrix+delay chain.
+    Set RNG seed, sampling rate, number of delay lines **N**, broadband RT, and base delays plus extra **delays_in** / **delays_out** for the delay+matrix+delay chain.
     """)
     return
 
@@ -100,8 +82,7 @@ def _(mo):
     mo.md(r"""
     ## Build vanilla FDN
 
-    Create the complete broadband FDN with `pyFDN.fdn_build_gallery`, then
-    render it with `pyFDN.dss_to_flamo`.
+    Create the complete broadband FDN with `pyFDN.fdn_build_gallery`, then render it with `pyFDN.dss_to_flamo`.
     """)
     return
 
@@ -139,9 +120,7 @@ def _(mo):
     mo.md(r"""
     ## Copy model and insert delay+matrix+delay in feedback
 
-    Deep-copy the vanilla model, split its total delays into a base delay and
-    **delay_in → matrix → delay_out**, then move the latter path into the
-    feedback branch.
+    Deep-copy the vanilla model, split its total delays into a base delay and **delay_in → matrix → delay_out**, then move the latter path into the feedback branch.
     """)
     return
 
@@ -166,8 +145,7 @@ def _(mo):
     mo.md(r"""
     ## Copy model and swap feedforward and feedback
 
-    Make another copy of the delay-matrix model and **swap** its two recursion
-    paths without changing any modules or parameter values.
+    Make another copy of the delay-matrix model and **swap** its two recursion paths without changing any modules or parameter values.
     """)
     return
 

@@ -5,7 +5,7 @@
 
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -21,22 +21,15 @@ def _(mo):
     mo.md(r"""
     # Multi-slope decay: from a coupled-space RIR to an FDN
 
-    A single room decays with one exponential slope per frequency band, and
-    ``pyFDN.estimate_rt_bands`` is built for exactly that case. Two coupled
-    rooms do not: energy leaks from the small room into the large one, so the
-    energy decay curve (EDC) bends — a fast slope early on, a slow one later,
-    and a single reverberation time fitted to it describes neither room.
+    A single room decays with one exponential slope per frequency band, and ``pyFDN.estimate_rt_bands`` is built for exactly that case. Two coupled rooms do not: energy leaks from the small room into the large one, so the energy decay curve (EDC) bends — a fast slope early on, a slow one later, and a single reverberation time fitted to it describes neither room.
 
     This example estimates a **multi-slope** decay and turns it into an FDN:
 
     1. Render a coupled-rooms RIR (two FDNs joined by a mixing matrix).
     2. Show that a single-slope RT lands between the two true decay times.
-    3. Fit two slopes per octave band with **DecayFitNet**, from the
-       [`multislope`](https://pypi.org/project/multislope/) package.
-    4. Convert the fitted slope amplitudes into per-slope initial levels with
-       `pyFDN.slope_amplitude_to_level`.
-    5. Build **one FDN per slope**, sum them, and compare the octave-band EDCs
-       with the original.
+    3. Fit two slopes per octave band with **DecayFitNet**, from the [`multislope`](https://pypi.org/project/multislope/) package.
+    4. Convert the fitted slope amplitudes into per-slope initial levels with `pyFDN.slope_amplitude_to_level`.
+    5. Build **one FDN per slope**, sum them, and compare the octave-band EDCs with the original.
     """)
     return
 
@@ -61,13 +54,7 @@ def _(mo):
     mo.md(r"""
     ## A coupled-space impulse response
 
-    Two single-room FDNs — a small bright room (RT 0.7 s at DC) and a large
-    reverberant one (RT 3.2 s) — are concatenated into one FDN with a
-    block-diagonal feedback matrix and coupled by an orthogonal block rotation,
-    as in the *Coupled Rooms* example.  The source sits in the small room, and
-    so does the receiver: it picks up the small room directly and the large
-    room only weakly, which is the geometry that produces a pronounced
-    double-slope decay.
+    Two single-room FDNs — a small bright room (RT 0.7 s at DC) and a large reverberant one (RT 3.2 s) — are concatenated into one FDN with a block-diagonal feedback matrix and coupled by anorthogonal block rotation, as in the *Coupled Rooms* example.  The source sits in the small room, and so does the receiver: it picks up the small room directly and the large room only weakly, which is the geometry that produces a pronounced double-slope decay.
     """)
     return
 
@@ -146,11 +133,7 @@ def _(fs, mo, pyFDN, rir):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The decay times of the two rooms *in isolation* are known here, because the
-    rooms were designed: the per-sample gain of each room's absorption filters
-    gives its reverberation time as a function of frequency.  They are the
-    reference below — but note that the coupled system does not decay at
-    exactly these rates, as the fit will show.
+    The decay times of the two rooms *in isolation* are known here, because the rooms were designed: the per-sample gain of each room's absorption filters gives its reverberation time as a function of frequency. They are the reference below — but note that the coupled system does not decay at exactly these rates, as the fit will show.
     """)
     return
 
@@ -175,10 +158,7 @@ def _(mo):
     mo.md(r"""
     ## One reverberation time per band is not enough
 
-    `pyFDN.estimate_rt_bands` fits a single line to the Schroeder decay curve
-    between -5 dB and -35 dB.  On a double-slope decay that line is a
-    compromise: the estimate sits between the two true decay times and follows
-    neither.
+    `pyFDN.estimate_rt_bands` fits a single line to the Schroeder decay curve between -5 dB and -35 dB. On a double-slope decay that line is a compromise: the estimate sits between the two true decay times and follows neither.
     """)
     return
 
@@ -196,18 +176,11 @@ def _(mo, pyFDN):
     mo.md(f"""
     ## Fitting two slopes with DecayFitNet
 
-    `multislope.DecayFitNet` filters the RIR into octave bands, backward
-    integrates each band, and predicts the decay times `T`, the slope
-    amplitudes `A` and the noise floor `N` of a multi-exponential decay model.
-    The network is described in
-    {pyFDN.paper_link("Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis")}.
+    `multislope.DecayFitNet` filters the RIR into octave bands, backward integrates each band, and predicts the decay times `T`, the slope amplitudes `A` and the noise floor `N` of a multi-exponential decay model. 
+    The network is described in {pyFDN.paper_link("Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis")}.
 
-    The network resamples every EDC to a fixed length, so the analysis window
-    sets the time resolution of the fit: a 0.6 s slope inside a 5.5 s window
-    occupies only a handful of samples and gets smeared into the late decay.
-    Trimming the RIR to roughly the range that carries useful decay — here 2 s,
-    below which the FDN response has fallen past -60 dB — keeps both slopes
-    resolvable.
+    The network resamples every EDC to a fixed length, so the analysis window sets the time resolution of the fit: a 0.6 s slope inside a 5.5 s window occupies only a handful of samples and gets smeared into the late decay.
+    Trimming the RIR to roughly the range that carries useful decay — here 2 s, below which the FDN response has fallen past -60 dB — keeps both slopes resolvable.
     """)
     return
 
@@ -305,35 +278,19 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The single-slope estimate runs between the two rooms, while the fitted
-    slopes track them individually.  The slow slope lands below the large
-    room's dotted curve, and that is the coupling rather than an estimation
-    error: the dotted curves are the decay times the two rooms would have in
-    isolation, but the coupling rotation mixes their feedback loops, so the
-    decay rates of the *coupled* system are pulled towards each other.  The
-    slow decay time of the coupled space therefore sits somewhere between the
-    two isolated ones, and moves further from the large room the larger the
-    coupling angle.
+    The single-slope estimate runs between the two rooms, while the fitted slopes track them individually.
+    The slow slope lands below the large room's dotted curve, and that is the coupling rather than an estimation error: the dotted curves are the decay times the two rooms would have in isolation, but the coupling rotation mixes their feedback loops, so the decay rates of the *coupled* system are pulled towards each other. The slow decay time of the coupled space therefore sits somewhere between the two isolated ones, and moves further from the large room the larger the coupling angle.
 
     ## One FDN per slope
 
-    Each slope becomes its own FDN.  A GEQ absorption filter per delay line
-    gives the FDN the decay time of that slope, and an output GEQ sets its
-    initial level.  The level target is the *difference* between the level the
-    slope should have and the level the unequalized FDN happens to produce, so
-    the design corrects itself.
+    Each slope becomes its own FDN. A GEQ absorption filter per delay line gives the FDN the decay time of that slope, and an output GEQ sets its initial level. The level target is the difference* between the level the slope should have and the level the unequalized FDN happens to produce, so the design corrects itself.
 
     The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
     the octave-band estimates are extended to it by repeating the edge bands.
 
-    `pyFDN.design_geq` returns its biquad sections in the unnormalised form
-    `[b0, b1, b2, a0, a1, a2]`, straight out of the analytic filter formulas,
-    so `a0` is not 1 (a peaking section, for instance, has `a0 = sqrt(g) + t`).
-    Filtering code expects the normalised form, so each section is divided by
-    its own `a0` — column 3 of the SOS matrix — which scales `b` and `a`
-    together and leaves the transfer function unchanged.
-    `pyFDN.absorption_geq` does this internally; `design_geq` leaves it to the
-    caller.
+    `pyFDN.design_geq` returns its biquad sections in the unnormalised form `[b0, b1, b2, a0, a1, a2]`, straight out of the analytic filter formulas, so `a0` is not 1 (a peaking section, for instance, has `a0 = sqrt(g) + t`).
+
+    Filtering code expects the normalised form, so each section is divided by its own `a0` — column 3 of the SOS matrix — which scales `b` and `a` together and leaves the transfer function unchanged. `pyFDN.absorption_geq` does this internally; `design_geq` leaves it to the caller.
     """)
     return
 
@@ -418,9 +375,7 @@ def _(mo):
     mo.md(r"""
     ## Energy decay curves
 
-    The comparison that matters is the octave-band EDC: the sum of the two
-    FDNs should bend the same way as the coupled-rooms response.  Both curves
-    are normalised to 0 dB at the onset.
+    The comparison that matters is the octave-band EDC: the sum of the two FDNs should bend the same way as the coupled-rooms response. Both curves are normalised to 0 dB at the onset.
     """)
     return
 
@@ -481,9 +436,7 @@ def _(mo):
     mo.md(r"""
     ## Test: the FDNs realise the estimated decay
 
-    Two checks.  Each per-slope FDN must reproduce the decay time it was
-    designed for, and the sum of the two must follow the coupled-rooms EDC
-    over its first 40 dB — the range the two-slope model describes.
+    Two checks. Each per-slope FDN must reproduce the decay time it was designed for, and the sum of the two must follow the coupled-rooms EDC over its first 40 dB — the range the two-slope model describes.
     """)
     return
 

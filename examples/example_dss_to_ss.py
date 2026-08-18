@@ -97,8 +97,7 @@ def _(mo):
     mo.md(r"""
     ## Equivalent state-space system
 
-    The single state-space matrices `(A, b, c, d)` returned by `pyFDN.dss_to_ss`,
-    expanding the delay lines into unit-delay states.
+    The single state-space matrices `(A, b, c, d)` returned by `pyFDN.dss_to_ss`, expanding the delay lines into unit-delay states.
     """)
     return
 

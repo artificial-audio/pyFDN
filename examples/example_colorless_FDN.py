@@ -97,8 +97,7 @@ def _(mo):
     mo.md(r"""
     ## Load the packaged preset
 
-    `pyFDN.load_fdn_preset` returns the coefficients as an `FDNBuild`. We add
-    the desired decay with `pyFDN.build_set_decay` and render it directly.
+    `pyFDN.load_fdn_preset` returns the coefficients as an `FDNBuild`. We add the desired decay with `pyFDN.build_set_decay` and render it directly.
     """)
     return
 

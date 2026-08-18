@@ -25,9 +25,9 @@ def _(mo):
 @app.cell
 def _(mo, pyFDN):
     mo.md(f"""
-    Example for time-varying matrices. <br/>
-    Process a musical sound with a time-varying FDN reverberation. Different
-    options include slow and fast time-variation.
+    Example for time-varying matrices.
+
+    Process a musical sound with a time-varying FDN reverberation. Different options include slow and fast time-variation.
 
     Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
     Reference: *{pyFDN.paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.

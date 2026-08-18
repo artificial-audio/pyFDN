@@ -19,16 +19,13 @@ def _(mo):
     mo.md(r"""
     # FDN eigenvectors (mode shapes)
 
-    Demonstrates how to compute the mode shapes of an FDN from the left and
-    right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
+    Demonstrates how to compute the mode shapes of an FDN from the left and right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
 
     Each residue factors into the input/output drive and an undriven part:
 
     $$\rho_i = \frac{(c\, r_i)\,(l_i^H b)}{l_i^H P'(\lambda_i)\, r_i},$$
 
-    where $r_i$ and $l_i$ are the right/left null vectors of $P(\lambda_i)$.
-    The eigenvectors live on the delay lines; expanding each entry along its
-    delay line with $\lambda_i^k$ gives the mode shape over the full state.
+    where $r_i$ and $l_i$ are the right/left null vectors of $P(\lambda_i)$. The eigenvectors live on the delay lines; expanding each entry along its delay line with $\lambda_i^k$ gives the mode shape over the full state.
     """)
     return
 
@@ -97,8 +94,7 @@ def _(mo):
     mo.md(r"""
     ## Residues from eigenvectors
 
-    Reassemble the residues from the eigenvectors and the undriven part; the
-    result matches the residues returned by the modal decomposition.
+    Reassemble the residues from the eigenvectors and the undriven part; the result matches the residues returned by the modal decomposition.
     """)
     return
 
@@ -150,9 +146,7 @@ def _(mo):
     mo.md(r"""
     ## Mode shapes over the full state space
 
-    Expand the eigenvectors along each delay line: state $k$ of delay line $j$
-    carries $r_{j,i}\,\lambda_i^k$. Horizontal lines mark the delay-line
-    boundaries.
+    Expand the eigenvectors along each delay line: state $k$ of delay line $j$ carries $r_{j,i}\,\lambda_i^k$. Horizontal lines mark the delay-line boundaries.
     """)
     return
 

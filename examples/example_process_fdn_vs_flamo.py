@@ -20,21 +20,12 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
 
-    The same FDN with frequency-dependent absorption is rendered by two
-    independent implementations and the impulse responses are compared:
+    The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
 
-    1. **`process_fdn`** — block time-domain recursion; the per-delay-line
-       SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in
-       a `td.MatrixFIR`, both with persistent state.
-    2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS
-       cascades as `parallelSOSFilter` and the FIR feedback matrix as a
-       `Filter` module in the loop.
+    1. **`process_fdn`** — block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
+    2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
-    The feedback matrix is a paraunitary scattering matrix from
-    `filter_matrix_gallery`; the absorption is a 10-band graphic EQ
-    (`absorption_geq`, 11 biquad sections per delay line) targeting a
-    frequency-dependent reverberation time. The two impulse responses must
-    match to numerical precision.
+    The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the absorption is a 10-band graphic EQ (`absorption_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
 
     Reference: *{pyFDN.paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
@@ -102,9 +93,7 @@ def _(mo):
     mo.md(r"""
     ## Design GEQ absorption filters
 
-    `absorption_geq` converts the target T60 to a per-sample dB slope, fits a
-    graphic EQ, and returns one SOS cascade per delay line, shape
-    (N, 11, 6).
+    `absorption_geq` converts the target T60 to a per-sample dB slope, fits a graphic EQ, and returns one SOS cascade per delay line, shape (N, 11, 6).
     """)
     return
 
@@ -152,12 +141,7 @@ def _(mo):
     mo.md(r"""
     ## Render with both implementations
 
-    `process_fdn` filters the delay outputs block by block (`td.SOSBank`)
-    and runs the FIR feedback matrix in the time-domain recursion
-    (`td.MatrixFIR`); the FLAMO model places the same cascades as a
-    `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter`
-    feedback module. FLAMO renders circularly with period `nfft`, so `nfft`
-    is chosen long enough for the tail to decay below numerical precision.
+    `process_fdn` filters the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
     """)
     return
 
@@ -215,8 +199,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse responses
 
-    The two impulse responses overlap to numerical precision (mu-law encoded
-    for visibility of the tail).
+    The two impulse responses overlap to numerical precision (mu-law encoded for visibility of the tail).
     """)
     return
 

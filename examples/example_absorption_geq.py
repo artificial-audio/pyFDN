@@ -20,9 +20,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
 
-    Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed
-    as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation
-    time curve.
+    Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
 
     The absorption filters are applied per delay line.  Here we:
 
@@ -93,8 +91,7 @@ def _(mo):
     mo.md(r"""
     ## Design absorption filters
 
-    `absorption_geq` converts T60 to a per-sample dB slope, fits a GEQ, and returns
-    SOS coefficients for each delay line.
+    `absorption_geq` converts T60 to a per-sample dB slope, fits a GEQ, and returns SOS coefficients for each delay line.
     """)
     return
 
@@ -114,9 +111,7 @@ def _(mo):
     mo.md(r"""
     ## Absorption filter magnitude responses
 
-    Plot the cascaded per-delay absorption filter response for each of the 8 delay
-    lines.  The curves should decay toward lower dB at higher frequencies (shorter
-    T60 = more attenuation per sample at HF).
+    Plot the cascaded per-delay absorption filter response for each of the 8 delay lines. The curves should decay toward lower dB at higher frequencies (shorter T60 = more attenuation per sample at HF).
     """)
     return
 
@@ -138,8 +133,7 @@ def _(mo):
     mo.md(r"""
     ## Compute impulse response
 
-    Build a FLAMO FDN with the GEQ absorption filters in the loop via `dss_to_flamo`.
-    Signal path: input → B → [delays → SOS → A] → C → output.
+    Build a FLAMO FDN with the GEQ absorption filters in the loop via `dss_to_flamo`. Signal path: input → B → [delays → SOS → A] → C → output.
     """)
     return
 
@@ -216,8 +210,7 @@ def _(mo):
     mo.md(r"""
     ## RT estimate vs target
 
-    Estimate RT in octave bands (63–8000 Hz) by Butterworth bandpass filtering
-    and compare with the design target.
+    Estimate RT in octave bands (63–8000 Hz) by Butterworth bandpass filtering and compare with the design target.
     """)
     return
 
