@@ -76,8 +76,7 @@ def dss_to_flamo(
         Optional SOS filter in the loop after delays.
     output_filter : (n_sections, 6, num_out) array or None
         Optional SOS filter cascade applied per output channel after the
-        output gain C (e.g. an output equalizer), matching the output
-        filters of the MATLAB ``dss2impz``.
+        output gain C (e.g. an output equalizer).
     post_delay_module : FLAMO module or None
         Optional module to append after the delay in the recursion (e.g. a Schroeder allpass core).
         Must have input/output size N. Loop becomes: delay -> post_delay_module -> A.

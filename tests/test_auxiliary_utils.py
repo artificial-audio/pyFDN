@@ -259,7 +259,7 @@ def test_max_corr_shifted_negated_copy():
 
 
 def test_max_corr_unfolds_column_major():
-    # signal k corresponds to entry (k % N1, k // N1), as in MATLAB maxCorr.m
+    # signal k corresponds to entry (k % N1, k // N1).
     signals = np.zeros((2, 2, 16))
     signals[1, 0, 3] = 1.0  # column-major index 1
     signals[0, 1, 7] = 1.0  # column-major index 2
