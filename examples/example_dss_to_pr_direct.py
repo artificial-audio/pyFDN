@@ -19,9 +19,8 @@ def _(mo):
     mo.md(r"""
     # DSS→PR example
 
-    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and
-    ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the
-    time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
+    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with
+    the modal reconstruction from each mode.
     """)
     return
 

@@ -19,15 +19,9 @@ def _(mo):
     mo.md(r"""
     # Decorrelation in feedback delay networks
 
-    Analyses the decorrelation properties of an FDN with a velvet-noise
-    scattering feedback matrix.
+    Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
 
-    The MIMO transfer function of an FDN factorises as
-    $H(z) = C \, \mathrm{adj}(P(z)) B \,/\, \det(P(z)) + D$ with the characteristic matrix $P(z) = \mathrm{diag}(z^{m}) - A(z)$.  The adjugate
-    matrix $\mathrm{adj}(P(z))$ collects the FIR filters that differentiate
-    the input-output paths: the more decorrelated its entries, the more
-    decorrelated the FDN outputs.  Here we compute the adjugate, then the
-    pairwise maximum cross-correlation between all of its entries.
+    The MIMO transfer function of an FDN factorises as $H(z) = C \, \mathrm{adj}(P(z)) B \,/\, \det(P(z)) + D$ with the characteristic matrix $P(z) = \mathrm{diag}(z^{m}) - A(z)$.  The adjugate matrix $\mathrm{adj}(P(z))$ collects the FIR filters that differentiate the input-output paths: the more decorrelated its entries, the more decorrelated the FDN outputs.  Here we compute the adjugate, then the pairwise maximum cross-correlation between all of its entries.
     """)
     return
 
@@ -59,8 +53,7 @@ def _(mo):
     mo.md(r"""
     ## Define FDN
 
-    A small FDN ($N = 4$) with random delays and a sparse velvet-noise
-    paraunitary feedback matrix (3 cascaded stages, sparsity 3).
+    A small FDN ($N = 4$) with random delays and a sparse velvet-noise paraunitary feedback matrix (3 cascaded stages, sparsity 3).
     """)
     return
 
@@ -88,9 +81,7 @@ def _(mo):
     mo.md(r"""
     ## Adjugate of the characteristic matrix
 
-    `loop_tf` constructs the polynomial matrix $P(z)$; `adj_poly` computes its
-    adjugate by evaluating $P$ on a DFT grid, taking the scalar adjugate at
-    every bin, and transforming back.
+    `loop_tf` constructs the polynomial matrix $P(z)$; `adj_poly` computes its adjugate by evaluating $P$ on a DFT grid, taking the scalar adjugate at every bin, and transforming back.
     """)
     return
 
@@ -145,10 +136,7 @@ def _(mo):
     mo.md(r"""
     ## Correlation analysis
 
-    `max_corr` computes the maximum normalized cross-correlation over all lags
-    between every pair of adjugate entries (16 signals for $N = 4$, i.e. a
-    $16 \times 16$ matrix).  The median and interquartile range of the
-    off-diagonal correlations summarise how decorrelated the paths are.
+    `max_corr` computes the maximum normalized cross-correlation over all lags between every pair of adjugate entries (16 signals for $N = 4$, i.e. a $16 \times 16$ matrix).  The median and interquartile range of the off-diagonal correlations summarise how decorrelated the paths are.
     """)
     return
 
@@ -174,10 +162,7 @@ def _(mo):
     mo.md(r"""
     ## Inter-channel maximum correlation matrix
 
-    Heatmap of $|\rho_{\max}|$ between all pairs of adjugate entries.  Axis
-    label $ij$ denotes the adjugate entry in row $i$, column $j$.  The
-    diagonal is the autocorrelation (1 by construction); low off-diagonal
-    values indicate good decorrelation.
+    Heatmap of $|\rho_{\max}|$ between all pairs of adjugate entries. Axis label $ij$ denotes the adjugate entry in row $i$, column $j$. The diagonal is the autocorrelation (1 by construction); low off-diagonal values indicate good decorrelation.
     """)
     return
 
@@ -215,12 +200,7 @@ def _(mo):
     mo.md(r"""
     ## Single input distributed to all delays
 
-    With a single source distributed equally to all delay lines
-    ($B = \mathbf{1}$), the numerator of the transfer function collapses to
-    the vector $\mathrm{adj}(P(z))\,\mathbf{1}$ — one FIR filter per output
-    channel.  The pairwise maximum correlation among these $N$ filters
-    indicates the decorrelation among the FDN output channels for a single
-    source.
+    With a single source distributed equally to all delay lines ($B = \mathbf{1}$), the numerator of the transfer function collapses to the vector $\mathrm{adj}(P(z))\,\mathbf{1}$ — one FIR filter per output channel. The pairwise maximum correlation among these $N$ filters indicates the decorrelation among the FDN output channels for a single source.
     """)
     return
 

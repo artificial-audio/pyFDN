@@ -17,7 +17,7 @@ from pyFDN.auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
 def create_coupled_rooms_fdn():
     """
-    Create a coupled rooms FDN matching the MATLAB implementation.
+    Create a coupled rooms FDN.
 
     This function builds a 12-delay-line FDN modeling two acoustically
     coupled rooms with different reverberation characteristics.
@@ -35,7 +35,7 @@ def create_coupled_rooms_fdn():
         >>> ir.shape
         (96000, 2)
     """
-    # Parameters (matching MATLAB exactly)
+    # Parameters
     fs = 48000
     impulse_response_length = fs * 2  # 2 seconds
     nfft = 16384
@@ -50,14 +50,14 @@ def create_coupled_rooms_fdn():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     alias_decay_db = 0  # No anti-aliasing for exact reproduction
 
-    # Exact delay values from MATLAB with rng(5)
+    # Exact delay values
     delays_room1 = torch.tensor([411, 736, 403, 760, 544, 606], dtype=torch.float32)
     delays_room2 = torch.tensor(
         [2532, 2037, 1593, 1375, 1161, 2477], dtype=torch.float32
     )
     delay_lengths = torch.cat([delays_room1, delays_room2])
 
-    # Coupling parameter (exact from MATLAB)
+    # Coupling parameter
     coupling = 0.3
 
     # Generate feedback matrices using tinyRotationMatrix
@@ -130,7 +130,7 @@ def create_coupled_rooms_fdn():
     )
     mixing_matrix.assign_value(feedback_matrix)
 
-    # T60 values from MATLAB (at 1kHz)
+    # T60 values
     short_rt = torch.tensor(
         [0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175]
     )

@@ -20,9 +20,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Filter feedback delay network (FFDN) with paraunitary feedback matrix
 
-    An FDN with a *paraunitary* (FIR, lossless) scattering matrix in the loop.
-    The example computes the impulse response by time-domain recursion and by
-    modal decomposition, and verifies that the system is lossless (all poles
+    An FDN with a *paraunitary* (FIR, lossless) scattering matrix in the loop. The example computes the impulse response by time-domain recursion and by modal decomposition, and verifies that the system is lossless (all poles
     on the unit circle).
 
     Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}.*
@@ -102,8 +100,7 @@ def _(mo):
     mo.md(r"""
     ## Verify paraunitarity
 
-    A paraunitary matrix satisfies $A^T(z^{-1})\,A(z) = I$; in the time domain
-    the matrix impulse response is lossless.
+    A paraunitary matrix satisfies $A^T(z^{-1})\,A(z) = I$; in the time domain the matrix impulse response is lossless.
     """)
     return
 
@@ -123,12 +120,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse response and modal decomposition
 
-    The FIR feedback matrix runs directly in the time-domain recursion.
-    For the modal decomposition the FIR matrix is placed as a FLAMO Filter
-    module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles
-    with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the
-    delay count, so the number of root seeds is set to the degree of the
-    generalized characteristic polynomial.
+    The FIR feedback matrix runs directly in the time-domain recursion. For the modal decomposition the FIR matrix is placed as a FLAMO Filter module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the delay count, so the number of root seeds is set to the degree of the generalized characteristic polynomial.
     """)
     return
 
@@ -210,8 +202,7 @@ def _(mo):
     mo.md(r"""
     ## Poles and residues
 
-    The FFDN is lossless: all pole magnitudes are 0 dB. The residue magnitudes
-    spread over a wide range.
+    The FFDN is lossless: all pole magnitudes are 0 dB. The residue magnitudes spread over a wide range.
     """)
     return
 

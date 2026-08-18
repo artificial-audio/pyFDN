@@ -20,13 +20,9 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Nearest Sign-Agnostic Orthogonal Matrix
 
-    Given a non-negative matrix **B** (e.g., measured energy flow between delay
-    lines), find the orthogonal matrix **U** that minimises ``‖B − |U|‖_F`` where
-    ``|·|`` is element-wise absolute value.
+    Given a non-negative matrix **B** (e.g., measured energy flow between delay lines), find the orthogonal matrix **U** that minimises ``‖B − |U|‖_F`` where ``|·|`` is element-wise absolute value.
 
-    The challenge is assigning the right ±1 sign to each element.  A naive
-    approach (just solving the ordinary Procrustes problem with `nearest_orthogonal`)
-    ignores the freedom in signs.  The sign-agnostic algorithm does:
+    The challenge is assigning the right ±1 sign to each element. A naive approach (just solving the ordinary Procrustes problem with `nearest_orthogonal`) ignores the freedom in signs. The sign-agnostic algorithm does:
 
     1. Normalise **B** to doubly stochastic via Sinkhorn-Knopp.
     2. Initialise with a random sign pattern.
@@ -55,8 +51,7 @@ def _(mo):
     mo.md(r"""
     ## Setup
 
-    Generate a random orthogonal matrix **A** and strip its signs to get **B = |A|**.
-    The goal is to recover a matrix close to **A** from **B** alone.
+    Generate a random orthogonal matrix **A** and strip its signs to get **B = |A|**. The goal is to recover a matrix close to **A** from **B** alone.
     """)
     return
 
@@ -78,8 +73,7 @@ def _(mo):
     mo.md(r"""
     ## Solve
 
-    Compare the naive **nearest_orthogonal** (ignores sign freedom) against the
-    **sign-agnostic** solution.
+    Compare the naive **nearest_orthogonal** (ignores sign freedom) against the **sign-agnostic** solution.
     """)
     return
 

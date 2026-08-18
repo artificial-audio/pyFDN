@@ -19,17 +19,14 @@ def _(mo):
     mo.md(r"""
     # Random FDN statistics
 
-    Statistics of the modal decomposition of a random FDN. The pole angles are
-    almost equidistributed on the unit circle, while the residue magnitudes are
-    spread across a large range.
+    Statistics of the modal decomposition of a random FDN. The pole angles are almost equidistributed on the unit circle, while the residue magnitudes are spread across a large range.
 
     The residue of each mode factors into
 
     $$\rho_i = \underbrace{\frac{1}{l_i^H P'(\lambda_i)\, r_i}}_{\text{undriven}}
       \cdot \underbrace{(c\, r_i)(l_i^H b)}_{\text{input/output drive}},$$
 
-    so we compare the distribution of total residues, undriven residues, and
-    the input–output drive.
+    so we compare the distribution of total residues, undriven residues, and the input–output drive.
     """)
     return
 
@@ -189,8 +186,7 @@ def _(mo):
     mo.md(r"""
     ## Residue magnitude distribution
 
-    Total residues split into the undriven part (system-intrinsic) and the
-    input/output drive. The total residue magnitudes span a wide dB range.
+    Total residues split into the undriven part (system-intrinsic) and the input/output drive. The total residue magnitudes span a wide dB range.
     """)
     return
 
