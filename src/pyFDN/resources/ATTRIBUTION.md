@@ -24,6 +24,15 @@ small example resources listed below retain their own terms.
   with citation; commercial use requires written permission from the copyright
   owners. See http://legacy.spa.aalto.fi/projects/poririrs/ for the complete
   terms. This file is **not** covered by pyFDN's MIT license.
+- `audio/rir/meetingroom_to_hallway_290cm.wav` is the omnidirectional (W)
+  component of the 4th-order ambisonic response at receiver position 290 cm in
+  *Meeting Room to Hallway / Source in Room / No Line of Sight*, from *A dataset
+  of measured spatial room impulse responses for the transition between coupled
+  rooms* by Thomas McKenzie, Sebastian J. Schlecht, and Ville Pulkki:
+  https://doi.org/10.5281/zenodo.4636068. It was peak normalised. The dataset is
+  licensed under Creative Commons Attribution 4.0 International, reproduced in
+  `licenses/coupled-rooms-CC-BY-4.0.txt`. This file is **not** covered by
+  pyFDN's MIT license.
 - The colorless-FDN builds were converted from coefficient files in the
   companion material to
   *Differentiable Feedback Delay Network For Colorless Reverberation*:
