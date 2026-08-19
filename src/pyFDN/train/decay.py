@@ -13,7 +13,9 @@ notebook plots. The map is the graphic-EQ design of :func:`pyFDN.absorption_geq`
 (Schlecht and Habets, DAFx 2017), rewritten in closed form so it is
 differentiable:
 
-1. ``rt`` (per band) -> attenuation in dB per delay line, ``-60 d_i / (rt fs)``.
+1. ``rt`` (per band) -> attenuation in dB per delay line, ``-60 d_i / (rt fs)``,
+   with ``rt`` held above a floor of one round trip so a step across zero does
+   not turn the attenuation into a gain (see ``DecayGEQ._floored``).
 2. that target, interpolated onto the control grid and least-squares-fitted to
    the prototype band responses, gives the GEQ command gains. Both steps are
    linear, so they collapse into one constant matrix (:func:`geq_design_matrix`)
@@ -37,6 +39,13 @@ _CENTER_FREQUENCIES = np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000], floa
 _SHELVING_CROSSOVER = np.array([46.0, 11360.0])
 _R = 2.7
 _NUM_CONTROL = 100
+
+#: Most attenuation, in dB per delay-line round trip, a single band may ask for.
+#: Not a stability bound -- any negative dB is contractive -- but a numerical
+#: one: a band demanding several hundred dB more than its neighbours overflows
+#: the graphic-EQ design in float32. 60 dB per round trip is already an
+#: instantaneous decay, and stays four orders of magnitude clear of that.
+MAX_ATTENUATION_DB = 60.0
 
 
 def geq_design_matrix(fs: float) -> np.ndarray:
@@ -277,6 +286,11 @@ def _decay_geq_class() -> Any:
             )
             torch_dtype, dev = self.param.dtype, self.param.device  # type: ignore[has-type]
             self.fs_hz = float(fs)
+            # One round trip of the longest delay line, the RT below which the
+            # GEQ is asked for more than MAX_ATTENUATION_DB in a single band.
+            self.rt_floor = (
+                60.0 / MAX_ATTENUATION_DB * float(delays_arr.max()) / float(fs)
+            )
             self.register_buffer(
                 "delays_samples",
                 torch.tensor(delays_arr, dtype=torch_dtype, device=dev),
@@ -300,9 +314,36 @@ def _decay_geq_class() -> Any:
         def rt_to_sos(self, rt: Any) -> Any:
             """Reverberation time in seconds to an ``(11, 6, N)`` SOS bank."""
             # dB of attenuation per sample, then per delay-line round trip.
-            slope = -60.0 / (rt.clamp_min(1e-3) * self.fs_hz)
+            slope = -60.0 / (self._floored(rt) * self.fs_hz)
             target_db = torch.outer(slope, self.delays_samples)  # (10, N)
             return geq_sos_torch(self.geq_matrix @ target_db, self.fs_hz)
+
+        def _floored(self, rt: Any) -> Any:
+            """``rt`` held above :attr:`rt_floor`, smoothly.
+
+            A gradient step can put a band's RT at or below zero, where
+            ``-60 d / (rt fs)`` is meaningless. Flooring it *hard* is worse than
+            the crossing: the floored band then asks the GEQ for hundreds of dB
+            of attenuation while its neighbours ask for none, and the design
+            overflows float32 into NaN -- which is what actually breaks such a
+            run. So the floor is one round trip of the longest delay line
+            (:data:`MAX_ATTENUATION_DB` per round trip, four orders of
+            magnitude below where the design overflows), and the softplus knee
+            is one floor wide: the identity to float precision for every RT
+            above ~20 floors (0.9 s for a 43 ms round trip), a few percent long
+            just above the floor, and never below it.
+
+            The knee leaves a usable gradient for a band that dips across zero,
+            which is enough to pull it back. A band driven *far* under -- many
+            knees -- has a gradient that underflows and stays at the floor,
+            which is the right mapped value for it anyway: an RT below one round
+            trip is an instantaneous decay however far below it goes.
+            """
+            import torch
+
+            return self.rt_floor + torch.nn.functional.softplus(
+                rt - self.rt_floor, beta=1.0 / self.rt_floor
+            )
 
     _DECAY_GEQ = DecayGEQ
     return _DECAY_GEQ

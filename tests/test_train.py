@@ -244,7 +244,12 @@ def test_absorption_rt_parameter_is_the_rt_and_trains():
 
 
 def test_a_trained_rt_still_decays():
-    """The RT parametrization is why the fit cannot leave the stable region."""
+    """The RT parametrization is why the fit cannot leave the stable region.
+
+    Run long enough that a band's RT is driven across zero -- the crossing the
+    floor in ``DecayGEQ._floored`` exists for, and where a hard floor overflowed
+    the GEQ design into NaN.
+    """
     fs = 48000.0
     delays = np.array([809, 1153, 1583, 2069])
     build = FDNBuild(
@@ -267,12 +272,17 @@ def test_a_trained_rt_still_decays():
     train_fdn(
         model,
         MatchSpectrogram(20 * _impulse_target(2**13)),
-        max_steps=25,
+        max_steps=150,
         lr=1e-1,
+        patience=150,
         device="cpu",
     )
+    rt = param(model, "absorption").raw().detach().numpy()
+    assert np.all(np.isfinite(rt))
+    assert rt.min() < 0.0, "the run never crossed zero, so it tested nothing"
     out = pyFDN.extract_build(model)
     assert out.filters is not None
+    assert np.all(np.isfinite(out.filters))
     ir = pyFDN.build_to_impz(out, 2**15).squeeze()
     assert np.all(np.isfinite(ir))
     # a decaying system: the last eighth is quieter than the first
