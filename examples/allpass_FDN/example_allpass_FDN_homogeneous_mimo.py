@@ -147,10 +147,5 @@ def _(Fs, impulse_response, mo, pyFDN):
     return
 
 
-@app.cell
-def _():
-    return
-
-
 if __name__ == "__main__":
     app.run()

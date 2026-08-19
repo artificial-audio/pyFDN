@@ -22,15 +22,9 @@ def _(mo, pyFDN):
 
     Overview of feedback matrices and full FDN systems available in pyFDN.
 
-    `fdn_matrix_gallery` provides pure feedback matrices — each is an N×N matrix
-    used as the recirculation matrix in a delay network. Losslessness properties are
-    characterised by orthogonality (`A @ A.T ≈ I`) and unilosslessness (diagonal
-    similarity to an orthogonal matrix).
+    `fdn_matrix_gallery` provides pure feedback matrices — each is an N×N matrix used as the recirculation matrix in a delay network. Losslessness properties are characterised by orthogonality (`A @ A.T ≈ I`) and unilosslessness (diagonal similarity to an orthogonal matrix).
 
-    `fdn_system_gallery` provides complete state-space systems `(A, B, C, D)` —
-    structures where the input/output coupling is part of the design, such as
-    series allpass, nested allpass, and the Schroeder reverberator. These are
-    checked for the stronger uniallpass condition.
+    `fdn_system_gallery` provides complete state-space systems `(A, B, C, D)` — structures where the input/output coupling is part of the design, such as series allpass, nested allpass, and the Schroeder reverberator. These are checked for the stronger uniallpass condition.
 
     Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
 
@@ -75,8 +69,7 @@ def _(mo):
     mo.md(r"""
     ## Build matrices and check losslessness
 
-    A matrix is orthogonal if `A @ A.T ≈ I`.  A matrix is spectrally lossless if
-    all eigenvalues lie on the unit circle.  The table below shows both checks.
+    A matrix is orthogonal if `A @ A.T ≈ I`.  A matrix is spectrally lossless if all eigenvalues lie on the unit circle.  The table below shows both checks.
     """)
     return
 
@@ -132,18 +125,17 @@ def _(mo, pyFDN, results):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
+@app.cell
+def _(mo, pyFDN):
+    mo.md(f"""
     ---
 
     # Filter Matrix Gallery
 
-    `filter_matrix_gallery` provides FIR *filter* feedback matrices — each
-    entry of the N×N matrix is an FIR filter, so the matrix scatters energy
-    over time as well as across delay lines (Schlecht & Habets 2020,
-    *Scattering in Feedback Delay Networks*). All types are paraunitary
-    (lossless): $A^T(z^{-1})\,A(z) = I$.
+    `filter_matrix_gallery` provides FIR *filter* feedback matrices — each entry of the N×N matrix is an FIR filter, so the matrix scatters energy over time as well as across delay lines. All types are paraunitary (lossless): $A^T(z^{-1})\,A(z) = I$.
+
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*. 
+
     """)
     return
 
@@ -162,8 +154,7 @@ def _(mo):
     mo.md(r"""
     ## Matrix impulse responses
 
-    Each subplot grid shows the FIR of every matrix entry; the paraunitarity
-    check is printed in the title.
+    Each subplot grid shows the FIR of every matrix entry; the paraunitarity check is printed in the title.
     """)
     return
 
@@ -192,8 +183,7 @@ def _(mo):
 
     # Complete FDN Build Gallery
 
-    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback,
-    input/output/direct matrices, delays, sample rate, and optional loop filters.
+    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback, input/output/direct matrices, delays, sample rate, and optional loop filters.
     """)
     return
 
@@ -258,9 +248,7 @@ def _(mo):
 
     # FDN System Gallery
 
-    Overview of full FDN system types available in `pyFDN.fdn_system_gallery`.
-    Each type returns a complete state-space system `(A, B, C, D)` visualised
-    as the block matrix `[A  b; c  d]`.
+    Overview of full FDN system types available in `pyFDN.fdn_system_gallery`. Each type returns a complete state-space system `(A, B, C, D)` visualised as the block matrix `[A  b; c  d]`.
     """)
     return
 

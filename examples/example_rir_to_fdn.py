@@ -21,23 +21,16 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Converting a room impulse response into an FDN
 
-    Estimates the frequency-dependent decay of a measured room impulse
-    response and designs an FDN to match it:
+    Estimates the frequency-dependent decay of a measured room impulse response and designs an FDN to match it:
 
     1. Estimate RT and initial level in octave bands from the RIR.
     2. Design per-delay-line GEQ absorption filters matching the decay.
     3. Design an output GEQ matching the initial spectral level.
     4. Compare the FDN impulse response with the target RIR.
 
-    The impulse response is from the Promenadikeskus concert hall in Pori,
-    Finland, published at
-    {pyFDN.paper_link("Concert_Hall_Impulse_Responses")}.
+    The impulse response is from the Promenadikeskus concert hall in Pori, Finland, published at {pyFDN.paper_link("Concert_Hall_Impulse_Responses")}.
 
-    Decay parameters are estimated with `estimate_rt_bands` (Schroeder backward integration per
-    octave band) and `estimate_initial_level_bands` (band energy matched to an
-    exponential decay model).  The output EQ is designed from the *difference*
-    between the target and the unequalized FDN band levels, which makes the
-    level match self-correcting.
+    Decay parameters are estimated with `estimate_rt_bands` (Schroeder backward integration per octave band) and `estimate_initial_level_bands` (band energy matched to an exponential decay model). The output EQ is designed from the *difference* between the target and the unequalized FDN band levels, which makes the level match self-correcting.
 
     """)
     return
@@ -109,10 +102,7 @@ def _(mo):
     mo.md(r"""
     ## Define FDN and absorption filters
 
-    A 16-delay FDN with a random orthogonal feedback matrix.  The target RT
-    at the 10 GEQ design bands (DC, 63 Hz … 8 kHz, Nyquist) extends the octave
-    band estimates, shortening the lowest and the two highest bands (air and
-    boundary absorption shortens the decay at the spectral edges).
+    A 16-delay FDN with a random orthogonal feedback matrix. The target RT at the 10 GEQ design bands (DC, 63 Hz … 8 kHz, Nyquist) extends the octave band estimates, shortening the lowest and the two highest bands (air and boundary absorption shortens the decay at the spectral edges).
     """)
     return
 
@@ -155,10 +145,7 @@ def _(mo):
     mo.md(r"""
     ## Compute the unequalized FDN impulse response
 
-    The absorption filters sit in the recursion loop of a FLAMO model
-    (input → B → [delays → SOS → A] → C → output).  This first model has no
-    output equalizer yet; its impulse response provides the reference level
-    for the EQ design.
+    The absorption filters sit in the recursion loop of a FLAMO model (input → B → [delays → SOS → A] → C → output). This first model has no output equalizer yet; its impulse response provides the reference level for the EQ design.
     """)
     return
 
@@ -198,14 +185,9 @@ def _(mo):
     mo.md(r"""
     ## Output equalization
 
-    The initial level of the unequalized FDN is roughly flat; an output GEQ
-    shapes it to the spectral envelope of the target RIR.  The GEQ target is
-    the band-wise dB difference between target and FDN initial levels, with
-    extra attenuation at the extrapolated DC and Nyquist bands.
+    The initial level of the unequalized FDN is roughly flat; an output GEQ shapes it to the spectral envelope of the target RIR. The GEQ target is the band-wise dB difference between target and FDN initial levels, with extra attenuation at the extrapolated DC and Nyquist bands.
 
-    The equalizer is placed at the end of the FLAMO graph (`output_filter`),
-    so the final model renders the complete RIR in one pass:
-    input → B → [delays → SOS → A] → C → GEQ → output.
+    The equalizer is placed at the end of the FLAMO graph (`output_filter`), so the final model renders the complete RIR in one pass: input → B → [delays → SOS → A] → C → GEQ → output.
     """)
     return
 
@@ -322,8 +304,7 @@ def _(mo):
     mo.md(r"""
     ## Reverberation time and initial level match
 
-    Estimate the decay parameters of the FDN impulse response with the same
-    estimator and compare with the target RIR.
+    Estimate the decay parameters of the FDN impulse response with the same estimator and compare with the target RIR.
     """)
     return
 
@@ -388,8 +369,7 @@ def _(mo):
     mo.md(r"""
     ## Test: reverberation time accuracy
 
-    The FDN reverberation time should be within 20% of the target in every
-    octave band (the two highest bands were deliberately shortened by design).
+    The FDN reverberation time should be within 20% of the target in every octave band (the two highest bands were deliberately shortened by design).
     """)
     return
 

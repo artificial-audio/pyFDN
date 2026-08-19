@@ -20,34 +20,17 @@ def _(mo):
     mo.md(r"""
     # Reverberation enhancement with a time-varying FDN
 
-    A **reverberation enhancement system** (RES) makes a room sound more
-    reverberant electroacoustically: microphones pick up the room, a reverberator
-    processes the signal, and loudspeakers play it back — adding energy to the
-    reverberant field. The catch is that the loudspeakers leak back into the
-    microphones, so the reverberator sits *inside* an acoustic feedback loop. Too
-    much loop gain and the system colours (rings) or howls; the usable gain before
-    that happens is the **maximum stable gain** (MSG).
+    A **reverberation enhancement system** (RES) makes a room sound more reverberant electroacoustically: microphones pick up the room, a reverberator processes the signal, and loudspeakers play it back — adding energy to the reverberant field. The catch is that the loudspeakers leak back into the microphones, so the reverberator sits *inside* an acoustic feedback loop. Too much loop gain and the system colours (rings) or howls; the usable gain before that happens is the **maximum stable gain** (MSG).
 
-    A **time-varying FDN** raises the MSG: by continuously modulating the feedback
-    matrix it stops any single loop mode from building up, so the same enhancement
-    can be driven harder before it rings.
+    A **time-varying FDN** raises the MSG: by continuously modulating the feedback matrix it stops any single loop mode from building up, so the same enhancement can be driven harder before it rings.
 
     This example wires up a real RES:
 
-    * `pyroomacoustics` places a performer, a listener, **6 microphones** over the
-      stage and **6 loudspeakers** over the audience, and computes every room
-      impulse response — including the loudspeaker→microphone coupling that closes
-      the loop.
-    * the reverberator is a 6-in/6-out FDN built from `pyFDN.td` operators, with
-      an optional `td.TimeVaryingMatrix` on its feedback path.
-    * the **entire** system — room paths, coupling and FDN — is assembled as a
-      single `td` operator tree and run by one `.process(source)` call. The
-      whole electroacoustic feedback loop is just a `td.Recursion` whose feedback
-      path is the room coupling and whose forward path is the FDN.
+    * `pyroomacoustics` places a performer, a listener, **6 microphones** over the stage and **6 loudspeakers** over the audience, and computes every room impulse response — including the loudspeaker→microphone coupling that closes the loop.
+    * the reverberator is a 6-in/6-out FDN built from `pyFDN.td` operators, with an optional `td.TimeVaryingMatrix` on its feedback path.
+    * the **entire** system — room paths, coupling and FDN — is assembled as a single `td` operator tree and run by one `.process(source)` call. The whole electroacoustic feedback loop is just a `td.Recursion` whose feedback path is the room coupling and whose forward path is the FDN.
 
-    We then (1) confirm the RES enhances reverberation and (2) show the
-    time-varying FDN stays stable at a loop gain where the static one already
-    rings.
+    We then (1) confirm the RES enhances reverberation and (2) show the time-varying FDN stays stable at a loop gain where the static one already rings.
     """)
     return
 
@@ -70,11 +53,7 @@ def _(mo):
     mo.md(r"""
     ## Room, stage and audience layout
 
-    A 24 × 18 × 9 m hall (≈0.6 s natural reverberation). The performer is at the
-    front of the stage and the listener sits in the audience. The 6 microphones
-    hang low over the stage apron; the 6 loudspeakers are high over the audience —
-    a separation that keeps the loudspeaker→microphone coupling modest, as a real
-    install would.
+    A 24 × 18 × 9 m hall (≈0.6 s natural reverberation). The performer is at the front of the stage and the listener sits in the audience. The 6 microphone hang low over the stage apron; the 6 loudspeakers are high over the audience — a separation that keeps the loudspeaker→microphone coupling modest, as a real install would.
     """)
     return
 
@@ -186,13 +165,7 @@ def _(mo):
     mo.md(r"""
     ## Extract the room transfer paths
 
-    From the impulse responses we pull out four filter matrices the tree needs:
-    performer→microphones (the excitation), performer→listener (dry direct),
-    loudspeaker→listener (what the RES delivers), and the 6 × 6
-    loudspeaker→microphone **coupling** that closes the loop. Each becomes a
-    `td.MatrixConvolver`. The coupling is truncated to its first ~43 ms — the
-    early part that dominates feedback colouration — because it runs inside the
-    loop, once per block; the rest use the full room responses.
+    From the impulse responses we pull out four filter matrices the tree needs: performer→microphones (the excitation), performer→listener (dry direct), loudspeaker→listener (what the RES delivers), and the 6 × 6 loudspeaker→microphone **coupling** that closes the loop. Each becomes a `td.MatrixConvolver`. The coupling is truncated to its first ~43 ms — the early part that dominates feedback colouration — because it runs inside the loop, once per block; the rest use the full room responses.
     """)
     return
 
@@ -221,7 +194,13 @@ def _(fs, np, room):
     sig_len = int(0.8 * fs)
     print(f"Peak loudspeaker->mic coupling: {np.abs(coupling).max():.3f}")
     print(f"Room RIRs: {room_taps} taps; coupling truncated to {coupling_taps} taps")
-    return coupling, sig_len, source_to_listener, source_to_mic, speaker_to_listener
+    return (
+        coupling,
+        sig_len,
+        source_to_listener,
+        source_to_mic,
+        speaker_to_listener,
+    )
 
 
 @app.cell(hide_code=True)
@@ -229,11 +208,7 @@ def _(mo):
     mo.md(r"""
     ## The reverberator: a 6×6 FDN
 
-    The reverberator maps the 6 microphones to the 6 loudspeakers through an
-    8-line FDN with frequency-dependent absorption (its own ~1.2 s decay). The
-    feedback path is either the static mixing matrix `A`, or `Series([Gain(A),
-    td.TimeVaryingMatrix(...)])` — the only change needed to make the loop
-    time-varying.
+    The reverberator maps the 6 microphones to the 6 loudspeakers through an 8-line FDN with frequency-dependent absorption (its own ~1.2 s decay). The feedback path is either the static mixing matrix `A`, or `Series([Gain(A), td.TimeVaryingMatrix(...)])` — the only change needed to make the loop time-varying.
     """)
     return
 
@@ -304,14 +279,8 @@ def _(mo):
     )
     ```
 
-    The feedback loop `loudspeaker → room → mic → FDN → loudspeaker` is literally
-    a `td.Recursion`. A short `Delay` (the RES processing latency, ~5 ms) leads
-    its forward path, which is what lets the block recursion break the loop — the
-    same role the FDN's own delays play inside the FDN. A `Recursion` processes
-    `block_size` samples at a time and so inserts that many samples of delay into
-    its loop, which is why the latency delay (and, inside the FDN, the delay
-    lines) is shortened by exactly one block. One `.process(source)` runs the
-    whole system.
+    The feedback loop `loudspeaker → room → mic → FDN → loudspeaker` is literally a `td.Recursion`. A short `Delay` (the RES processing latency, ~5 ms) leads its forward path, which is what lets the block recursion break the loop — the same role the FDN's own delays play inside the FDN. A `Recursion` processes `block_size` samples at a time and so inserts that many samples of delay into
+    its loop, which is why the latency delay (and, inside the FDN, the delay lines) is shortened by exactly one block. One `.process(source)` runs the whole system.
     """)
     return
 
@@ -369,9 +338,7 @@ def _(mo):
     mo.md(r"""
     ## 1. Reverberation enhancement
 
-    At a comfortable loop gain the RES adds a long reverberant tail to the dry
-    response — the energy decay curve at the listener decays far more slowly with
-    the system on.
+    At a comfortable loop gain the RES adds a long reverberant tail to the dry response — the energy decay curve at the listener decays far more slowly with the system on.
     """)
     return
 
@@ -415,7 +382,7 @@ def _(fs, go, np, render):
         height=380,
     )
     fig_edc.show()
-    return (edc_db,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -423,11 +390,7 @@ def _(mo):
     mo.md(r"""
     ## 2. Maximum stable gain: static vs time-varying
 
-    Now push the loop gain up. We track the short-time energy envelope of the
-    listener response: a stable (well-enhanced) system **decays**, an
-    over-driven one **grows** as a loop mode regenerates. At the same high gain
-    the static FDN is already growing (ringing), while the time-varying FDN still
-    decays — its modulation breaks up the runaway mode.
+    Now push the loop gain up. We track the short-time energy envelope of the listener response: a stable (well-enhanced) system **decays**, an over-driven one **grows** as a loop mode regenerates. At the same high gain the static FDN is already growing (ringing), while the time-varying FDN still decays — its modulation breaks up the runaway mode.
     """)
     return
 
@@ -477,7 +440,7 @@ def _(fs, go, np, render):
         height=380,
     )
     fig_msg.show()
-    return (g_challenge,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -485,10 +448,7 @@ def _(mo):
     mo.md(r"""
     ## 3. The stability margin
 
-    Sweeping the loop gain makes the gain in maximum stable gain explicit: the
-    growth ratio crosses 1 (the stability boundary) at a higher gain for the
-    time-varying FDN. The horizontal distance between the two crossings is the
-    extra gain — a few dB — that time variation buys.
+    Sweeping the loop gain makes the gain in maximum stable gain explicit: the growth ratio crosses 1 (the stability boundary) at a higher gain for the time-varying FDN. The horizontal distance between the two crossings is the extra gain — a few dB — that time variation buys.
     """)
     return
 

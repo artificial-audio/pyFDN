@@ -24,7 +24,7 @@ def process_fdn(
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
 
-    Recursion per block (same ordering as the MATLAB ``processFDN``):
+    Recursion per block:
     delay output -> optional post-delay filter -> output gains C, and in the feedback
     path: absorbed delay output -> feedback matrix A -> optional post-matrix filter -> + B input.
     The wet signal is processed with an optional post-output filter before being added to the direct signal.

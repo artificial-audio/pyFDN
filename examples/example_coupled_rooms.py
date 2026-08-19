@@ -51,9 +51,7 @@ def _(mo):
     mo.md(r"""
     ## Single-room FDNs
 
-    Build each room with `pyFDN.fdn_build_gallery`. Both rooms have
-    frequency-dependent reverberation (RT at DC and at Nyquist, realised as
-    per-line first-order shelving absorption) and a different per-room output EQ.
+    Build each room with `pyFDN.fdn_build_gallery`. Both rooms have frequency-dependent reverberation (RT at DC and at Nyquist, realised as per-line first-order shelving absorption) and a different per-room output EQ.
     """)
     return
 
@@ -107,10 +105,7 @@ def _(mo):
     mo.md(r"""
     ## Concatenate and couple
 
-    The coupled FDN is the concatenation of the two rooms — block-diagonal
-    feedback matrix, stacked delays and absorption filters, source in room 1,
-    one output per room — composed with a single orthogonal **mixing matrix**
-    that couples the rooms by a coupling angle.
+    The coupled FDN is the concatenation of the two rooms — block-diagonal feedback matrix, stacked delays and absorption filters, source in room 1, one output per room — composed with a single orthogonal **mixing matrix** that couples the rooms by a coupling angle.
     """)
     return
 
