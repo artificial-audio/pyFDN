@@ -23,6 +23,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "feedback": ("mixing_matrix", "fB"),
     "delay": ("delay", "fF"),
     "direct": ("direct_gain", "brB"),
+    "absorption": ("attenuation", "filter"),
 }
 
 
@@ -59,6 +60,16 @@ class ParamRef:
         the mapped value (the actual feedback matrix), not the raw parameter.
         """
         return self.module.map(self.module.param)
+
+    def raw(self) -> torch.Tensor:
+        """The parameter *before* the map -- what the optimizer actually steps.
+
+        Usually the mapped :meth:`value` is what you want. The pre-image is,
+        when the map is the point: the RT in seconds behind an absorption
+        filter (:mod:`pyFDN.train.decay`), where the mapped value is the SOS
+        bank designed from it.
+        """
+        return self.module.param
 
     def __repr__(self) -> str:
         state = "trainable" if self.trainable else "frozen"
@@ -97,8 +108,8 @@ def param(model: Any, name: str | None = None) -> ParamRef:
         graph whose leaf names you do not control.
     name : str, optional
         A leaf name, or one of the semantic aliases ``"feedback"`` (the feedback
-        matrix, FLAMO's ``fB``), ``"delay"`` (``fF``) and ``"direct"``
-        (``brB``).
+        matrix, FLAMO's ``fB``), ``"delay"`` (``fF``), ``"direct"`` (``brB``)
+        and ``"absorption"`` (the in-loop filter, ``filter``).
 
     Raises
     ------

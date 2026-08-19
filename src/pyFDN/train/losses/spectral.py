@@ -27,6 +27,28 @@ def _reduce_channels(magnitude: torch.Tensor, how: ChannelReduction) -> torch.Te
     raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")
 
 
+def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -> None:
+    """Warn when a flatness loss is asked to fit an unrenderable :math:`|H|`.
+
+    A lossless FDN built with ``alias_decay_db=0`` has its poles exactly on the
+    unit circle, where the FFT-domain evaluation is near-singular: ``|H|`` is
+    unbounded and the fit chases numerical noise instead of the response.
+    """
+    from pyFDN.auxiliary.flamo import core_alias_decay_db
+    from pyFDN.train.build import LOSSLESS_ALIAS_DECAY_DB
+
+    if core_alias_decay_db(model.get_core()) > 0.0:
+        return
+    warnings.warn(
+        f"{loss_name} fits |H| but the model was built with alias_decay_db=0. "
+        "A lossless FDN then has its poles exactly on the unit circle, |H| is "
+        f"unbounded, and {consequence} Rebuild with "
+        f"build_fdn(..., alias_decay_db={LOSSLESS_ALIAS_DECAY_DB}) (the default "
+        "when rt=None).",
+        stacklevel=4,
+    )
+
+
 class FlatMagnitude(ResponseLoss):
     """Mean squared error of :math:`|H|` against a flat target -- *colorless*.
 
@@ -85,19 +107,143 @@ class FlatMagnitude(ResponseLoss):
         )
 
     def check(self, model: Any) -> None:
-        from pyFDN.auxiliary.flamo import core_alias_decay_db
-        from pyFDN.train.build import LOSSLESS_ALIAS_DECAY_DB
+        _warn_if_magnitude_unbounded(
+            model,
+            "FlatMagnitude",
+            "the fit shrinks the gains instead of flattening the response.",
+        )
 
-        if core_alias_decay_db(model.get_core()) > 0.0:
-            return
-        warnings.warn(
-            "FlatMagnitude fits |H| but the model was built with "
-            "alias_decay_db=0. A lossless FDN then has its poles exactly on the "
-            "unit circle, |H| is unbounded, and the fit shrinks the gains "
-            "instead of flattening the response. Rebuild with "
-            f"build_fdn(..., alias_decay_db={LOSSLESS_ALIAS_DECAY_DB}) (the "
-            "default when rt=None).",
-            stacklevel=3,
+
+class AsymmetricFlatMagnitude(ResponseLoss):
+    r"""Flatness that punishes **peaks** far harder than dips -- *colorless*.
+
+    The asymmetric sibling of :class:`FlatMagnitude`, and a sharper statement of
+    what "colorless" should mean. A resonant peak in a reverberator rings
+    audibly at its own pitch; a dip of the same size is largely inaudible. This
+    loss says so, by measuring :math:`|H|` against the response's own RMS level
+    and raising the two sides of that deviation to **different powers**:
+
+    .. math::
+
+        d[f] = \frac{|H[f]|}{\sqrt{\langle |H|^2 \rangle_f}} - 1,
+        \qquad
+        \mathcal{L} = \Big\langle
+            \big(d^{+}\big)^{p} + \big(d^{-}\big)^{2}
+        \Big\rangle_f,
+        \qquad
+        d^{+} = \max(d, 0), \; d^{-} = \min(d, 0)
+
+    with ``peak_power`` :math:`p \ge 2`. The exponent, not a weight, is what
+    makes this bite: a weight multiplies every peak alike, whereas :math:`p = 4`
+    makes a peak twice as tall cost *sixteen* times as much, so the fit spends
+    its capacity on the few tallest modes -- the ones that are actually heard.
+
+    Three properties are worth knowing:
+
+    * **Flat is still the unique minimum**, at every ``peak_power`` --
+      :math:`\mathcal{L} \ge 0` and it vanishes only at :math:`d \equiv 0`.
+      Normalizing by the RMS forces :math:`\langle (1 + d)^2 \rangle = 1`, so
+      even the peak term *on its own* cannot be zeroed by anything but a flat
+      response: there is no way to buy a peak-free spectrum except by
+      flattening it.
+    * **Gain-invariant.** :math:`d` is built from a ratio, so this fits spectral
+      *shape* only and never touches the overall level -- unlike
+      :class:`FlatMagnitude`, which fits :math:`|H|` to an absolute constant and
+      so anchors the gain as well. Add :class:`~pyFDN.Energy` if you want the
+      level pinned too.
+    * **Deliberately not in decibels.** dB is the obvious way to put a peak and
+      a dip on equal footing before tilting between them, and it does not work:
+      :math:`\partial\,\mathrm{dB}/\partial|H| \propto 1/|H|`, so the deepest
+      nulls dominate the gradient however lightly they are weighted. A dB
+      version of this loss stalls on a plateau within ~300 steps at *higher*
+      peaks than :class:`FlatMagnitude` reaches. In the linear magnitude the
+      gradient is :math:`\propto p\,(d^{+})^{p-1}`, largest exactly at the
+      tallest peaks, and a dip is bounded at :math:`d = -1` on its own.
+
+    Parameters
+    ----------
+    peak_power : float
+        Exponent on the peak side; dips are always quadratic. Must be at least
+        2, which is the symmetric-shape reference (still peak-biased, since a
+        peak is unbounded and a dip is not). 4 is the default and the sweet
+        spot; 6 is slower but steadier.
+
+    Notes
+    -----
+    Measured on four 8-line lossless FDNs like the one in
+    ``example_train_colorless_FDN``, at ``nfft=2**14``, each trained for up to
+    2000 Adam steps at ``lr=1e-2``, ``patience=400``, then given homogeneous
+    decay so the colouration can be measured on a fine grid. The number is the
+    **tallest mode**, in dB above the response's own median, and the spectral
+    flatness:
+
+    ==================  =============  =========
+    objective           tallest mode   flatness
+    ==================  =============  =========
+    ``FlatMagnitude``   17.5 dB        0.32
+    ``peak_power=2``    17.1 dB        0.32
+    ``peak_power=3``    15.9 dB        0.35
+    ``peak_power=4``    13.7 dB        0.46
+    ``peak_power=6``    14.2 dB        0.36
+    ==================  =============  =========
+
+    So the asymmetry is not simply trading peak height for deeper nulls. Over
+    these four the mean 1st-percentile dip was *shallower* at ``peak_power=4``
+    (-12.2 dB against -19.9 dB at 2) and plain spectral flatness improved -- but
+    that average hides a lot of scatter, and on the single FDN of
+    ``example_train_colorless_FDN`` the dip goes marginally the other way. The
+    reliable claim is about the peak; treat the rest as FDN-dependent.
+
+    What the exponent costs is steps and steadiness. The gradient vanishes like
+    :math:`(d^{+})^{p-1}` near the optimum, so the fit runs long and needs the
+    room to: raise ``max_steps`` and ``patience`` (``peak_power=4`` averaged
+    1600 steps against 640 at 2, and 6 used the full 2000-step budget on every
+    run). The seed-to-seed spread also grows with :math:`p` -- +-2.1 dB at 4
+    against +-1.1 dB at 2, so a single run proves little.
+
+    And the advantage is **not** unconditional: repeating the same comparison at
+    ``nfft=2**13`` it disappears (16.5 dB at ``peak_power=4`` against 18.5 dB at
+    2 with ``nfft=2**14``; 12.4 against 12.3 at ``2**13``, and running four
+    times longer does not recover it). Measure your own case before assuming
+    a higher exponent helps it.
+
+    The loss value is **not** comparable across different ``peak_power`` -- the
+    two terms have different units -- nor with :class:`FlatMagnitude`. Compare
+    the responses, not the numbers.
+
+    A lossless FDN has every pole exactly on the unit circle, where the
+    frequency-domain evaluation breaks down; :meth:`check` warns if the model
+    was built without the ``alias_decay_db`` that avoids it.
+    """
+
+    def __init__(self, *, peak_power: float = 4.0) -> None:
+        self.peak_power = float(peak_power)
+        if self.peak_power < 2.0:
+            raise ValueError(
+                "peak_power must be at least 2 (2 is the symmetric reference); "
+                f"got {self.peak_power}"
+            )
+
+    def __call__(self, response: Response) -> torch.Tensor:
+        import torch
+
+        # Every input/output path is fitted on its own, each against its own
+        # RMS: summing |H| across channels first, as FlatMagnitude does by
+        # default, would measure the flatness of a sum rather than of the
+        # transfer paths that carry the colouration.
+        magnitude = response.magnitude
+        rms = (magnitude**2).mean(dim=0, keepdim=True).sqrt()
+        deviation = magnitude / rms.clamp_min(torch.finfo(magnitude.dtype).tiny) - 1.0
+
+        peaks = deviation.clamp_min(0.0) ** self.peak_power
+        dips = deviation.clamp_max(0.0) ** 2
+        return (peaks + dips).mean()
+
+    def check(self, model: Any) -> None:
+        _warn_if_magnitude_unbounded(
+            model,
+            "AsymmetricFlatMagnitude",
+            "its peaks are numerical artefacts rather than modes.",
         )
 
 

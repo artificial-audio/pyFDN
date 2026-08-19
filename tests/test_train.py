@@ -12,6 +12,7 @@ from pyFDN.train import (  # noqa: E402
     LOSSLESS_ALIAS_DECAY_DB,
     FlatMagnitude,
     FlatSpectrogram,
+    MatchEnergyDecay,
     MatchSpectrogram,
     Sparsity,
     Trainable,
@@ -26,6 +27,19 @@ from pyFDN.train import (  # noqa: E402
 
 # Tiny / CPU / fast optimization settings.
 _FAST = {"lr": 3e-3, "device": "cpu"}
+
+
+def _as_h(ir):
+    """A 1-D impulse response as a Response's (n_samples, n_out, n_in) tensor."""
+    import torch
+
+    return torch.as_tensor(np.asarray(ir, dtype=np.float32))[:, None, None]
+
+
+def _impulse_target(n):
+    """A short decaying reference IR, enough to give a spectral loss something."""
+    t = np.arange(n)
+    return 0.05 * np.exp(-t / (n / 8)) * np.cos(2 * np.pi * 0.01 * t)
 
 
 def _flatness(magnitude):
@@ -59,6 +73,22 @@ def _decayed_flatness(build, rt=1.0, nfft=2**14):
         build_set_decay(build, rt), nfft=nfft, output="magnitude", device="cpu"
     )
     return _flatness(_magnitude(model, nfft))
+
+
+# The delay set of ``example_train_colorless_FDN``, so the peak/dip numbers the
+# losses are documented with are measured on the same FDN.
+_COLORLESS_DELAYS = pyFDN.sample_delay_lengths(
+    8, (200, 600), distribution="uniform", coprime=True, sort=True, rng=2
+)
+
+
+def _decayed_db(build, rt=1.0, nfft=2**14):
+    """|H| in dB relative to its own median, after decay -- see _decayed_flatness."""
+    model = trainable_from_build(
+        build_set_decay(build, rt), nfft=nfft, output="magnitude", device="cpu"
+    )
+    db = 20 * np.log10(np.maximum(_magnitude(model, nfft).ravel()[1:], 1e-12))
+    return db - np.median(db)
 
 
 def _leaf(model, name):
@@ -137,6 +167,118 @@ def test_det_negative_orthogonal_warns_and_projects():
     out = pyFDN.extract_build(model)
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(out.A) > 0
+
+
+def test_absorption_rt_reproduces_the_designed_absorption_filters():
+    """The differentiable GEQ design agrees with pyFDN.absorption_geq."""
+    from scipy.signal import sosfreqz
+
+    fs = 48000.0
+    delays = np.array([809, 1153, 1583, 2069])
+    rt = np.linspace(2.5, 1.0, 10)
+    build = FDNBuild(
+        A=np.eye(4),
+        B=np.ones((4, 1)),
+        C=np.ones((1, 4)),
+        D=np.zeros((1, 1)),
+        delays=delays,
+        fs=fs,
+    )
+    model = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
+    designed = pyFDN.absorption_geq(rt, delays, fs)
+    trained = param(model, "absorption").value().detach().numpy().astype(float)
+    assert trained.shape == designed.shape
+
+    for channel in range(len(delays)):
+        _, h_designed = sosfreqz(designed[:, :, channel], worN=256, fs=fs)
+        _, h_trained = sosfreqz(trained[:, :, channel], worN=256, fs=fs)
+        db = 20 * np.log10(np.abs(h_designed)) - 20 * np.log10(np.abs(h_trained))
+        assert np.abs(db).max() < 0.1
+
+
+def test_absorption_rt_parameter_is_the_rt_and_trains():
+    fs = 48000.0
+    delays = np.array([809, 1153, 1583, 2069])
+    rt = np.full(10, 2.0)
+    build = FDNBuild(
+        A=pyFDN.fdn_build_gallery(N=4, rt=None, rng=0).A,
+        B=np.ones((4, 1)) / 2,
+        C=np.ones((1, 4)) / 2,
+        D=np.zeros((1, 1)),
+        delays=delays,
+        fs=fs,
+    )
+    frozen = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
+    assert param(frozen, "absorption").trainable is False
+
+    model = trainable_from_build(
+        build,
+        trainable=Trainable(absorption=True),
+        absorption_rt=rt,
+        nfft=2**12,
+        device="cpu",
+    )
+    ref = param(model, "absorption")
+    assert ref.trainable is True
+    np.testing.assert_allclose(ref.raw().detach().numpy(), rt, atol=1e-5)
+
+    train_fdn(model, MatchSpectrogram(_impulse_target(2**12)), max_steps=3, **_FAST)
+    assert not np.allclose(ref.raw().detach().numpy(), rt)
+
+    # The parameter is a copy of the caller's array, not a view of it. In
+    # float64 torch.as_tensor would have shared its memory, and every optimizer
+    # step would have rewritten the argument.
+    import torch
+
+    float64 = trainable_from_build(
+        build,
+        trainable=Trainable(absorption=True),
+        absorption_rt=rt,
+        nfft=2**12,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    with torch.no_grad():
+        param(float64, "absorption").raw().add_(1.0)
+    np.testing.assert_allclose(rt, 2.0)
+
+
+def test_a_trained_rt_still_decays():
+    """The RT parametrization is why the fit cannot leave the stable region."""
+    fs = 48000.0
+    delays = np.array([809, 1153, 1583, 2069])
+    build = FDNBuild(
+        A=pyFDN.fdn_build_gallery(N=4, rt=None, rng=0).A,
+        B=np.ones((4, 1)) / 2,
+        C=np.ones((1, 4)) / 2,
+        D=np.zeros((1, 1)),
+        delays=delays,
+        fs=fs,
+    )
+    model = trainable_from_build(
+        build,
+        trainable=Trainable(absorption=True),
+        absorption_rt=np.full(10, 1.0),
+        nfft=2**13,
+        device="cpu",
+    )
+    # a target louder than the model everywhere: the direction that would raise
+    # the loop gain past 1 if the parameter allowed it.
+    train_fdn(
+        model,
+        MatchSpectrogram(20 * _impulse_target(2**13)),
+        max_steps=25,
+        lr=1e-1,
+        device="cpu",
+    )
+    out = pyFDN.extract_build(model)
+    assert out.filters is not None
+    ir = pyFDN.build_to_impz(out, 2**15).squeeze()
+    assert np.all(np.isfinite(ir))
+    # a decaying system: the last eighth is quieter than the first
+    head = float(np.sqrt(np.mean(ir[: 2**12] ** 2)))
+    tail = float(np.sqrt(np.mean(ir[-(2**12) :] ** 2)))
+    assert tail < head
 
 
 # --- train -----------------------------------------------------------------
@@ -571,3 +713,168 @@ def test_flat_spectrogram_flattens_and_densifies():
     assert _decayed_flatness(pyFDN.extract_build(model)) > init + 0.1
     sparsity = log.loss_log["Sparsity[fB]"]
     assert sparsity[-1] < sparsity[0]  # the feedback matrix got denser
+
+
+# --- asymmetric flatness ----------------------------------------------------
+
+
+def _asymmetric_reference(magnitude, peak_power):
+    """AsymmetricFlatMagnitude, written out again in numpy."""
+    rms = np.sqrt(np.mean(magnitude**2, axis=0, keepdims=True))
+    deviation = magnitude / rms - 1.0
+    peaks = np.maximum(deviation, 0.0) ** peak_power
+    dips = np.minimum(deviation, 0.0) ** 2
+    return float(np.mean(peaks + dips))
+
+
+def test_asymmetric_flat_magnitude_matches_its_definition():
+    """The peak/dip split, spelled out independently."""
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=1)
+    magnitude = model_response(model).magnitude.detach().numpy()
+
+    for peak_power in (2.0, 3.0, 4.0, 6.0):
+        value = float(
+            pyFDN.AsymmetricFlatMagnitude(peak_power=peak_power)(
+                model_response(model)
+            ).detach()
+        )
+        np.testing.assert_allclose(
+            value, _asymmetric_reference(magnitude, peak_power), rtol=1e-4
+        )
+
+
+def test_asymmetric_flat_magnitude_is_zero_only_on_a_flat_response():
+    """Flat stays the global minimum -- the exponent changes the route, not it."""
+    import torch
+
+    from pyFDN.train import Response
+
+    loss = pyFDN.AsymmetricFlatMagnitude(peak_power=6.0)
+    dirac = torch.zeros(64, 1, 1)
+    dirac[0, 0, 0] = 1.0  # |H| = 1 at every bin
+    assert float(loss(Response(h=dirac, fs=48000.0)).detach()) == pytest.approx(
+        0.0, abs=1e-9
+    )
+    peaky = model_response(build_fdn(N=4, rt=None, nfft=2**10, rng=0))
+    assert float(loss(peaky).detach()) > 0.0
+
+
+def test_asymmetric_flat_magnitude_is_gain_invariant():
+    """The reference is the response's own RMS, so the overall level cancels."""
+    from pyFDN.train import Response
+
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    loss, r = pyFDN.AsymmetricFlatMagnitude(), model_response(model)
+    np.testing.assert_allclose(
+        float(loss(r).detach()),
+        float(loss(Response(h=r.h * 37.0, fs=r.fs)).detach()),
+        rtol=1e-5,
+    )
+
+
+def test_peak_power_raises_the_cost_of_tall_peaks_only():
+    """A taller peak costs disproportionately more; the dip term never moves."""
+    import torch
+
+    from pyFDN.train import Response
+
+    def value(peak_height, peak_power):
+        # flat except for one bin, built via irfft so |H| is exactly this array.
+        # Many bins keep the RMS -- and so the deviation of the peak bin --
+        # essentially unchanged as the peak grows.
+        magnitude = torch.ones(1025, 1, 1, dtype=torch.float64)
+        magnitude[7] = peak_height
+        response = Response(h=torch.fft.irfft(magnitude, dim=0), fs=48000.0)
+        return float(
+            pyFDN.AsymmetricFlatMagnitude(peak_power=peak_power)(response).detach()
+        )
+
+    # doubling the excursion costs 2**peak_power
+    np.testing.assert_allclose(value(1.2, 2.0) / value(1.1, 2.0), 4.0, rtol=0.1)
+    np.testing.assert_allclose(value(1.2, 4.0) / value(1.1, 4.0), 16.0, rtol=0.15)
+
+
+def test_peak_power_lowers_the_tallest_mode():
+    """What the loss exists to do, against its own peak_power=2 reference.
+
+    A fixed-seed reproduction of one row of the loss's docstring table, at the
+    settings that table was measured with. Both parts of that matter: the
+    quartic fit runs out the whole step budget rather than converging inside
+    `patience`, and at nfft=2**13 the advantage is absent however long it runs.
+    """
+
+    def train(peak_power):
+        model = build_fdn(
+            delays=_COLORLESS_DELAYS, rt=None, nfft=2**14, device="cpu", rng=2
+        )
+        train_fdn(
+            model,
+            pyFDN.AsymmetricFlatMagnitude(peak_power=peak_power),
+            max_steps=2000,
+            lr=1e-2,
+            patience=400,
+            device="cpu",
+            rng=1,
+        )
+        return _decayed_db(pyFDN.extract_build(model))
+
+    # measured: 18.5 dB above the median at p=2, 16.5 dB at p=4
+    assert train(4.0).max() < train(2.0).max() - 1.0
+
+
+def test_asymmetric_flat_magnitude_rejects_a_peak_power_below_two():
+    with pytest.raises(ValueError, match="peak_power must be at least 2"):
+        pyFDN.AsymmetricFlatMagnitude(peak_power=1.5)
+
+
+def test_asymmetric_flat_magnitude_warns_without_alias_decay():
+    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    with pytest.warns(UserWarning, match="AsymmetricFlatMagnitude fits"):
+        train_fdn(model, pyFDN.AsymmetricFlatMagnitude(), max_steps=2, rng=0, **_FAST)
+
+
+# --- the decay, as a loss ---------------------------------------------------
+
+
+def _decaying_noise(n, fs, rt, rng):
+    """White noise under an exponential envelope: a known energy decay."""
+    t = np.arange(n) / fs
+    return rng.standard_normal(n) * 10 ** (-3 * t / rt)
+
+
+def test_match_energy_decay_reads_the_decay_and_not_the_level():
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(0)
+    reference = _decaying_noise(n, fs, 0.4, rng)
+    loss = MatchEnergyDecay(reference, window=2048)
+
+    def score(ir):
+        return float(loss(Response(h=_as_h(ir), fs=fs)))
+
+    same_decay = _decaying_noise(n, fs, 0.4, np.random.default_rng(1))
+    assert score(same_decay) < 3.0
+    # ten times louder, same decay: the curves are normalized, so nothing moves
+    assert score(10 * same_decay) == pytest.approx(score(same_decay), rel=1e-4)
+    # half the decay time: a large error
+    assert score(_decaying_noise(n, fs, 0.2, rng)) > 3 * score(same_decay)
+
+
+def test_match_energy_decay_is_minimized_at_the_reference_decay():
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(2)
+    loss = MatchEnergyDecay(_decaying_noise(n, fs, 0.4, rng), window=2048)
+    scores = {
+        rt: float(loss(Response(h=_as_h(_decaying_noise(n, fs, rt, rng)), fs=fs)))
+        for rt in (0.2, 0.3, 0.4, 0.6, 0.9)
+    }
+    assert min(scores, key=scores.get) == 0.4
+
+
+def test_match_energy_decay_rejects_a_window_longer_than_the_response():
+    model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="longer than"):
+        MatchEnergyDecay(np.zeros(2**10), window=2**12).check(model)

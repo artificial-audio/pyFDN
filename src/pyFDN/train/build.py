@@ -32,12 +32,23 @@ LOSSLESS_ALIAS_DECAY_DB = 60.0
 
 @dataclass(frozen=True)
 class Trainable:
-    """Which FDN parameter groups are trained. Delays are always fixed."""
+    """Which FDN parameter groups are trained. Delays are always fixed.
+
+    ``absorption`` trains the in-loop filter, i.e. the decay itself. It is off
+    by default because the decay is usually *designed*, from a measured RT.
+    What it trains depends on how the filter was built: pass ``absorption_rt``
+    to :func:`trainable_from_build` and the parameter is the reverberation time
+    per band, which keeps the loop contractive for every value it can take.
+    Without it the parameter is the raw SOS coefficients of ``build.filters``,
+    which nothing keeps inside the unit circle -- a fit that wants more energy
+    raises the loop gain past 1 and the network diverges.
+    """
 
     feedback: bool = True
     input_gain: bool = True
     output_gain: bool = True
     direct: bool = False
+    absorption: bool = False
 
 
 def build_fdn(
@@ -170,6 +181,7 @@ def trainable_from_build(
     *,
     trainable: Trainable | None = None,
     matrix: MatrixParam = "orthogonal",
+    absorption_rt: np.ndarray | None = None,
     nfft: int = 2**14,
     output: str = "time",
     alias_decay_db: float = 0.0,
@@ -187,6 +199,14 @@ def trainable_from_build(
         Trainable parameter groups (default :class:`~pyFDN.Trainable`).
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
+    absorption_rt : np.ndarray, optional
+        Reverberation time in seconds at the 10 GEQ design bands (DC, 63 Hz …
+        8 kHz, Nyquist). Replaces ``build.filters`` with the equivalent graphic
+        EQ (:func:`pyFDN.absorption_geq`) built as a differentiable function of
+        the RT, so ``Trainable(absorption=True)`` trains *the reverberation
+        time itself* rather than raw filter coefficients -- see
+        :mod:`pyFDN.train.decay`. Without it the in-loop filter is
+        ``build.filters`` as given.
     nfft : int
         FFT size.
     output : str
@@ -287,18 +307,31 @@ def trainable_from_build(
         alias_decay_db=alias,
     )
 
-    # In-loop absorption (decay) is a frozen build property.
-    loop_filter = (
-        sos_filter_module(
+    # In-loop absorption: the decay. Frozen unless trainable.absorption.
+    if absorption_rt is not None:
+        from .decay import make_decay_geq
+
+        loop_filter = make_decay_geq(
+            absorption_rt,
+            np.asarray(build.delays, dtype=np.float64).ravel(),
+            fs,
+            nfft,
+            alias_decay_db=alias,
+            device=device,
+            dtype=dtype,
+            requires_grad=trainable.absorption,
+        )
+    elif build.filters is not None:
+        loop_filter = sos_filter_module(
             np.asarray(build.filters, dtype=np.float64),
             nfft,
             device=device,
             dtype=dtype,
             alias_decay_db=alias,
+            requires_grad=trainable.absorption,
         )
-        if build.filters is not None
-        else None
-    )
+    else:
+        loop_filter = None
     output_filter = (
         sos_filter_module(
             np.asarray(build.post_eq, dtype=np.float64),

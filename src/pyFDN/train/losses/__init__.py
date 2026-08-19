@@ -7,13 +7,14 @@ from __future__ import annotations
 from .base import Loss, ParameterLoss, ResponseLoss, Scaled, Sum
 from .parameter import L1, L2, Sparsity
 from .spectral import (
+    AsymmetricFlatMagnitude,
     FlatMagnitude,
     FlatSpectrogram,
     MatchMagnitude,
     MatchMelSpectrogram,
     MatchSpectrogram,
 )
-from .temporal import Energy, MatchImpulseResponse
+from .temporal import Energy, MatchEnergyDecay, MatchImpulseResponse
 
 __all__ = [
     # composition
@@ -24,11 +25,13 @@ __all__ = [
     "Scaled",
     # response losses
     "FlatMagnitude",
+    "AsymmetricFlatMagnitude",
     "FlatSpectrogram",
     "MatchMagnitude",
     "MatchSpectrogram",
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
+    "MatchEnergyDecay",
     "Energy",
     # parameter losses
     "Sparsity",

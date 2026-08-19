@@ -285,11 +285,13 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.ParamRef
    pyFDN.Loss
    pyFDN.FlatMagnitude
+   pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
    pyFDN.MatchMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
+   pyFDN.MatchEnergyDecay
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1

@@ -21,7 +21,7 @@ except ImportError:
     _HAS_FLAMO = False
 
 
-def _get_device(device):
+def _get_device(device: Any) -> Any:
     if device is None and _HAS_FLAMO:
         import torch
 
@@ -373,8 +373,10 @@ def sos_filter_module(
     alias_decay_db : float
         FLAMO alias decay in dB.
     requires_grad : bool
-        Accepted for signature parity with the other module builders, but
-        ignored: flamo's ``parallelSOSFilter`` has no trainable-parameter flag.
+        Whether the SOS coefficients are trainable. The sections are normalized
+        to ``a0 = 1`` here rather than by flamo's ``normalize_a0`` map, whose
+        in-place writes break autograd; ``a0`` is then held at 1 by masking its
+        gradient, so the trained coefficients stay a valid SOS array.
 
     Returns
     -------
@@ -392,6 +394,11 @@ def sos_filter_module(
     if N == 0:
         raise ValueError("sos must have at least one channel")
 
+    a0 = sos_pad[:, 3:4, :]
+    if np.any(a0 == 0):
+        raise ValueError("sos has a section with a0 = 0")
+    sos_pad = sos_pad / a0
+
     dev = _get_device(device)
     torch_dtype = torch.float32 if dtype is None else dtype
     filt = dsp.parallelSOSFilter(
@@ -401,8 +408,18 @@ def sos_filter_module(
         alias_decay_db=alias_decay_db,
         device=dev,
         dtype=torch_dtype,
+        # normalization already done above, in numpy: flamo's normalize_a0 map
+        # writes in place, which autograd refuses to differentiate through.
+        normalize_a0=False,
     )
     filt.assign_value(torch.as_tensor(sos_pad, dtype=torch_dtype, device=dev))
+    if requires_grad:
+        filt.param.requires_grad_(True)
+        # a0 is redundant with the section's overall scale; with the normalizing
+        # map gone, hold it at 1 by dropping its gradient.
+        mask = torch.ones_like(filt.param)
+        mask[:, 3, :] = 0.0
+        filt.param.register_hook(lambda grad, mask=mask: grad * mask)
     return filt
 
 

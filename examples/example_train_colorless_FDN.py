@@ -41,6 +41,8 @@ def _(mo, pyFDN):
 
     `train_fdn(model, "colorless")` is shorthand for exactly this sum -- see `pyFDN.train.presets`.
 
+    `FlatMagnitude` weighs a peak and a dip by whatever the squared error happens to make of them. The last section of this notebook swaps it for `pyFDN.AsymmetricFlatMagnitude`, which weighs them on purpose.
+
     ## Two details that make or break the fit
 
     * **Rendering.** A **lossless** FDN has every pole *exactly* on the unit circle, where the FFT-domain evaluation is near-singular and the impulse response comes out wrong. `build_fdn(rt=None)` therefore defaults to `alias_decay_db=`{pyFDN.LOSSLESS_ALIAS_DECAY_DB}: flamo evaluates the system on a slightly smaller circle, and the `"time"` output layer removes that $\\gamma^n$ envelope again. What a loss sees is the impulse response *itself*, accurate to {pyFDN.LOSSLESS_ALIAS_DECAY_DB:.0f} dB -- which is all `alias_decay_db` means. It never reaches the extracted build.
@@ -72,7 +74,7 @@ def _(pyFDN):
     #    on the default anti-aliasing decay, without which a lossless FDN's
     #    impulse response cannot be rendered at all.
     delays = pyFDN.sample_delay_lengths(
-        8, (200, 600), distribution="geometric", coprime=True, sort=True, rng=2
+        16, (200, 600), distribution="geometric", coprime=True, sort=True, rng=2
     )
     model = pyFDN.build_fdn(delays=delays, rt=None, nfft=nfft, device="cpu", rng=2)
     init_build = pyFDN.extract_build(model)  # random init, before training
@@ -80,26 +82,18 @@ def _(pyFDN):
     # |H| exactly as the loss sees it: the rfft of the model's impulse response.
     mag_init = pyFDN.model_response(model).magnitude.detach().numpy().squeeze()
 
-    # 2. write the objective out: a flat magnitude response, plus a density
-    #    reward on this model's feedback matrix.
+    # 2. write the objective out: a flat magnitude response, plus a density reward on this model's feedback matrix.
     loss = pyFDN.FlatMagnitude() + 0.2 * pyFDN.Sparsity(pyFDN.param(model, "feedback"))
-    # loss = pyFDN.FlatSpectrogram(nfft=(256, 512, 1024, 2048)) + 0.2 * pyFDN.Sparsity(
-    # pyFDN.param(model, "feedback")
-    # )
+    # loss = pyFDN.AsymmetricFlatMagnitude(peak_power=8)
 
-    # 3. train in place; then extract. Adam, not L-BFGS: the magnitude objective
-    #    is nonconvex and densely modal, and L-BFGS's line search settles into
-    #    the nearest stationary point within a few dozen steps.
+    # 3. train in place; then extract.
     log = pyFDN.train_fdn(
         model,
         loss,
         optimizer="adam",
-        max_steps=2000,
-        lr=1e-2,
-        # This objective crosses long flat stretches before improving again;
-        # the default patience of 10 stops inside one of them (at nfft=2**14
-        # that ends the fit after 24 steps, at more than twice the loss).
-        patience=100,
+        max_steps=200,
+        lr=8 * 1e-2,
+        patience=50,
         device="cpu",
         rng=1,
     )
