@@ -292,6 +292,7 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
    pyFDN.MatchEnergyDecay
+   pyFDN.MatchCumulativeEnergy
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1

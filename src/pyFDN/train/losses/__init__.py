@@ -14,7 +14,12 @@ from .spectral import (
     MatchMelSpectrogram,
     MatchSpectrogram,
 )
-from .temporal import Energy, MatchEnergyDecay, MatchImpulseResponse
+from .temporal import (
+    Energy,
+    MatchCumulativeEnergy,
+    MatchEnergyDecay,
+    MatchImpulseResponse,
+)
 
 __all__ = [
     # composition
@@ -32,6 +37,7 @@ __all__ = [
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
     "MatchEnergyDecay",
+    "MatchCumulativeEnergy",
     "Energy",
     # parameter losses
     "Sparsity",

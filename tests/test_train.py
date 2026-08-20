@@ -12,6 +12,7 @@ from pyFDN.train import (  # noqa: E402
     LOSSLESS_ALIAS_DECAY_DB,
     FlatMagnitude,
     FlatSpectrogram,
+    MatchCumulativeEnergy,
     MatchEnergyDecay,
     MatchSpectrogram,
     Sparsity,
@@ -888,3 +889,418 @@ def test_match_energy_decay_rejects_a_window_longer_than_the_response():
     model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than"):
         MatchEnergyDecay(np.zeros(2**10), window=2**12).check(model)
+
+
+# --- the doubly-cumulated energy loss --------------------------------------
+
+
+def _colored_noise(n, fs, rt_low, rt_high, rng, split=64):
+    """Noise with one decay below ~fs/split and another above it."""
+    t = np.arange(n) / fs
+    noise = rng.standard_normal(n)
+    low = np.convolve(noise, np.ones(split) / split, mode="same")
+    high = noise - low
+    return low * 10 ** (-3 * t / rt_low) + high * 10 ** (-3 * t / rt_high)
+
+
+def test_cumulative_energy_surface_is_cumulative_in_both_directions():
+    fs, n = 48000.0, 2**14
+    rng = np.random.default_rng(0)
+    ir = _decaying_noise(n, fs, 0.4, rng)
+    loss = MatchCumulativeEnergy(ir, window=512)
+    (tensor,) = loss._surfaces(_as_h(ir).double())
+    surface = tensor.numpy()
+
+    # non-increasing towards later times and towards higher frequencies
+    assert np.all(np.diff(surface, axis=-1) <= 1e-9)
+    assert np.all(np.diff(surface, axis=-2) <= 1e-9)
+    # the corner is the total energy: everything after frame 0, above bin 0
+    assert surface[..., 0, 0] == pytest.approx(
+        surface.reshape(surface.shape[0], -1).max()
+    )
+
+
+def test_cumulative_energy_is_minimized_at_the_reference():
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(2)
+    loss = MatchCumulativeEnergy(_decaying_noise(n, fs, 0.4, rng), window=1024)
+    scores = {
+        rt: float(loss(Response(h=_as_h(_decaying_noise(n, fs, rt, rng)), fs=fs)))
+        for rt in (0.2, 0.3, 0.4, 0.6, 0.9)
+    }
+    assert min(scores, key=scores.get) == 0.4
+
+
+def test_cumulative_energy_sees_colour_as_well_as_decay():
+    """A per-band decay error the full-band energy curve alone would miss."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(3)
+    reference = _colored_noise(n, fs, 0.6, 0.3, rng)
+    loss = MatchCumulativeEnergy(reference, window=1024)
+
+    def score(ir):
+        return float(loss(Response(h=_as_h(ir), fs=fs)))
+
+    same = score(_colored_noise(n, fs, 0.6, 0.3, np.random.default_rng(4)))
+    # swapped: the same total energy decay, the wrong way round in frequency
+    swapped = score(_colored_noise(n, fs, 0.3, 0.6, np.random.default_rng(4)))
+    assert swapped > 3 * same
+
+
+def test_cumulative_energy_level_error_is_an_error():
+    """Unlike MatchEnergyDecay, this loss is not blind to overall level."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**14
+    rng = np.random.default_rng(5)
+    ir = _decaying_noise(n, fs, 0.4, rng)
+    loss = MatchCumulativeEnergy(ir, window=512)
+    exact = float(loss(Response(h=_as_h(ir), fs=fs)))
+    louder = float(loss(Response(h=_as_h(2 * ir), fs=fs)))
+    assert exact < 1e-6
+    assert louder > 0.1
+
+
+def test_stronger_compression_weights_the_quiet_end():
+    """Lower ``power`` moves weight from the loud head onto the quiet tail."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(6)
+    reference = _decaying_noise(n, fs, 0.4, rng)
+
+    head_error = reference.copy()
+    head_error[: n // 8] *= 1.05  # a small error where the energy is
+    tail_error = reference.copy()
+    tail_error[-(n // 8) :] *= 4.0  # a large error where there is none left
+
+    def ratio(power):
+        loss = MatchCumulativeEnergy(reference, window=1024, power=power)
+
+        def score(ir):
+            return float(loss(Response(h=_as_h(ir), fs=fs)))
+
+        return score(tail_error) / score(head_error)
+
+    ratios = [ratio(power) for power in (1.0, 0.5, 0.25)]
+    assert ratios[0] < ratios[1] < ratios[2]
+
+
+def test_cumulative_energy_rejects_a_power_outside_the_unit_interval():
+    for power in (0.0, -0.5, 1.5):
+        with pytest.raises(ValueError, match="power must be"):
+            MatchCumulativeEnergy(np.zeros(16), power=power)
+
+
+def test_cumulative_energy_rejects_a_window_longer_than_the_response():
+    model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="longer than"):
+        MatchCumulativeEnergy(np.zeros(2**10), window=2**12).check(model)
+
+
+# --- the trainable output EQ -----------------------------------------------
+
+
+def _post_eq_db(model, fs, freqs):
+    """Magnitude of the model's output filter, in dB at ``freqs``."""
+    from scipy.signal import sosfreqz
+
+    sos = param(model, "post_eq").value().detach().numpy().astype(float)
+    _, h = sosfreqz(sos[:, :, 0], worN=freqs, fs=fs)
+    return 20 * np.log10(np.abs(h))
+
+
+def _plain_build(n=4, fs=48000.0, post_eq=None):
+    delays = np.array([809, 1153, 1583, 2069])[:n]
+    return FDNBuild(
+        A=pyFDN.fdn_build_gallery(N=n, rt=None, rng=0).A,
+        B=np.ones((n, 1)) / 2,
+        C=np.ones((1, n)) / 2,
+        D=np.zeros((1, 1)),
+        delays=delays,
+        fs=fs,
+        post_eq=post_eq,
+    )
+
+
+def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
+    fs = 48000.0
+    model = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(post_eq=True),
+        nfft=2**12,
+        device="cpu",
+    )
+    ref = param(model, "post_eq")
+    assert ref.trainable is True
+    # ten bands, one output channel -- and flat, because nothing said otherwise
+    np.testing.assert_allclose(ref.raw().detach().numpy(), np.zeros((10, 1)), atol=1e-6)
+    freqs = np.array([100.0, 500.0, 1000.0, 4000.0, 10000.0])
+    np.testing.assert_allclose(_post_eq_db(model, fs, freqs), 0.0, atol=0.05)
+
+    # a 6 dB parameter is 6 dB of filter
+    lifted = trainable_from_build(
+        _plain_build(), post_eq_db=6.0, nfft=2**12, device="cpu"
+    )
+    np.testing.assert_allclose(_post_eq_db(lifted, fs, freqs), 6.0, atol=0.2)
+
+    # and a per-band parameter reaches the band it names
+    tilt = np.zeros(10)
+    tilt[4] = 12.0  # the 500 Hz band (index 0 is DC, then 63, 125, 250, 500 …)
+    tilted = trainable_from_build(
+        _plain_build(), post_eq_db=tilt, nfft=2**12, device="cpu"
+    )
+    db = _post_eq_db(tilted, fs, np.array([500.0, 8000.0]))
+    # a single-band spike is the hardest target for a graphic EQ, so it lands a
+    # little short of 12 dB -- what matters is that it lands on the right band
+    assert 10.0 < db[0] < 12.5
+    assert abs(db[1]) < 1.0
+
+
+def test_post_eq_is_frozen_unless_asked_for():
+    sos = pyFDN.design_geq(np.linspace(-6, 6, 10), fs=48000.0)[0]
+    build = _plain_build(post_eq=(sos / sos[:, 3:4])[:, :, np.newaxis])
+
+    frozen = trainable_from_build(build, nfft=2**12, device="cpu")
+    assert param(frozen, "post_eq").trainable is False
+    # given as coefficients, it stays coefficients -- (n_sections, 6, n_out)
+    assert param(frozen, "post_eq").shape == build.post_eq.shape
+
+    thawed = trainable_from_build(
+        build, trainable=Trainable(post_eq=True), nfft=2**12, device="cpu"
+    )
+    assert param(thawed, "post_eq").trainable is True
+
+    # no post EQ at all, and not asked to train one: no output filter
+    assert not any(p.name == "output_filter" for p in params(_plain_model()))
+
+
+def _plain_model():
+    return trainable_from_build(_plain_build(), nfft=2**12, device="cpu")
+
+
+def test_post_eq_trains_and_survives_extraction():
+    model = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(post_eq=True),
+        absorption_rt=np.full(10, 0.5),
+        nfft=2**13,
+        device="cpu",
+    )
+    gains = param(model, "post_eq")
+    before = gains.raw().detach().numpy().copy()
+    train_fdn(
+        model,
+        MatchCumulativeEnergy(_impulse_target(2**13), window=512),
+        max_steps=10,
+        lr=1e-1,
+        patience=10,
+        device="cpu",
+    )
+    after = gains.raw().detach().numpy()
+    assert not np.allclose(before, after)
+
+    out = pyFDN.extract_build(model)
+    assert out.post_eq is not None
+    assert out.post_eq.shape == (11, 6, 1)
+    assert np.all(np.isfinite(out.post_eq))
+    np.testing.assert_allclose(out.post_eq[:, 3, :], 1.0, atol=1e-6)
+
+
+def test_cumulative_frequency_direction_moves_the_weight_across_the_spectrum():
+    """Which end of the spectrum the loss defends is the cumulation's direction.
+
+    A band's error moves every row of the surface the cumulation reaches it
+    from, and those rows are the *largest* -- the ones compression weights
+    least. So cumulating downwards defends the top of the spectrum, upwards the
+    bottom, and averaging both sits in between.
+    """
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**15
+    rng = np.random.default_rng(7)
+    reference = _colored_noise(n, fs, 0.6, 0.6, rng)
+    low_wrong = _colored_noise(n, fs, 0.3, 0.6, np.random.default_rng(8))
+    high_wrong = _colored_noise(n, fs, 0.6, 0.3, np.random.default_rng(8))
+
+    def bias(frequency):
+        loss = MatchCumulativeEnergy(reference, window=1024, frequency=frequency)
+
+        def score(ir):
+            return float(loss(Response(h=_as_h(ir), fs=fs)))
+
+        return score(high_wrong) / score(low_wrong)
+
+    assert bias("descending") > bias("both") > bias("ascending")
+
+
+def test_cumulative_energy_rejects_an_unknown_frequency_direction():
+    with pytest.raises(ValueError, match="frequency must be"):
+        MatchCumulativeEnergy(np.zeros(16), frequency="upwards")
+
+
+# --- first-order shelves: the two-endpoint decay and output EQ ---------------
+
+
+def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
+    """A ``(2,)`` absorption_rt is first_order_absorption, differentiably."""
+    import torch
+
+    fs = 48000.0
+    build = _plain_build()
+    rt = (2.5, 0.8)
+    model = trainable_from_build(
+        build,
+        trainable=Trainable(absorption=True),
+        absorption_rt=rt,
+        nfft=2**12,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    ref = param(model, "absorption")
+    assert ref.trainable is True
+    # the parameter is the RT pair itself, not 6 coefficients per section
+    np.testing.assert_allclose(ref.raw().detach().numpy(), rt, rtol=1e-6)
+
+    # and the filter it maps onto is the numpy design, to float64
+    expected = pyFDN.first_order_absorption(rt[0], rt[1], build.delays, fs)
+    np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
+
+    out = pyFDN.extract_build(model)
+    assert out.filters is not None and out.filters.shape == (1, 6, len(build.delays))
+    np.testing.assert_allclose(out.filters, expected, atol=1e-8)
+
+
+def test_shelf_post_eq_is_the_numpy_design():
+    """A ``(2,)`` post_eq_db is first_order_shelving_eq, differentiably."""
+    import torch
+
+    fs = 48000.0
+    gains = (3.0, -6.0)
+    model = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(post_eq=True),
+        post_eq_db=gains,
+        nfft=2**12,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    ref = param(model, "post_eq")
+    assert ref.trainable is True
+    np.testing.assert_allclose(ref.raw().detach().numpy(), [[3.0], [-6.0]], rtol=1e-6)
+
+    expected = pyFDN.first_order_shelving_eq(gains[0], gains[1], fs)
+    np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-10)
+
+    # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter
+    db = _post_eq_db(model, fs, np.array([1.0, 23999.0]))
+    np.testing.assert_allclose(db, [3.0, -6.0], atol=0.05)
+
+
+def test_shelf_crossover_moves_the_transition():
+    """The fixed crossover is where the shelf sits, and it is not trained."""
+    import torch
+
+    fs = 48000.0
+    kwargs = {
+        "trainable": Trainable(post_eq=True),
+        "post_eq_db": (0.0, -12.0),
+        "nfft": 2**12,
+        "device": "cpu",
+        "dtype": torch.float64,
+    }
+    low = trainable_from_build(_plain_build(), shelf_crossover=1000.0, **kwargs)
+    high = trainable_from_build(_plain_build(), shelf_crossover=8000.0, **kwargs)
+    probe = np.array([3000.0])
+    # at 3 kHz the 1 kHz shelf has already fallen and the 8 kHz one has not
+    assert _post_eq_db(low, fs, probe)[0] < _post_eq_db(high, fs, probe)[0] - 6.0
+
+
+def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
+    from pyFDN.train.shelf import make_decay_shelf, make_output_shelf
+
+    with pytest.raises(ValueError, match="2 endpoints"):
+        make_decay_shelf(np.ones(3), np.array([100.0, 150.0]), 48000.0, 2**10)
+    with pytest.raises(ValueError, match="2 endpoints"):
+        make_output_shelf(np.ones(3), 1, 48000.0, 2**10)
+
+
+def test_shelf_decay_trains_and_stays_contractive():
+    """The RT floor holds even when the fit is pushed hard at both endpoints."""
+    model = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(absorption=True, post_eq=True),
+        absorption_rt=(1.0, 1.0),
+        post_eq_db=(0.0, 0.0),
+        nfft=2**13,
+        device="cpu",
+    )
+    rt = param(model, "absorption")
+    eq = param(model, "post_eq")
+    before = rt.raw().detach().numpy().copy()
+
+    log = train_fdn(
+        model,
+        MatchCumulativeEnergy(_impulse_target(2**13), window=512),
+        max_steps=20,
+        lr=1e-1,
+        patience=20,
+        device="cpu",
+    )
+    assert np.all(np.isfinite(log.train_loss))
+    after = rt.raw().detach().numpy()
+    assert not np.allclose(before, after)
+    assert not np.allclose(eq.raw().detach().numpy(), 0.0)
+
+    # the target decays in a fraction of the buffer, so the fit is pushed
+    # towards zero RT -- and the mapped filter must still be contractive
+    sos = rt.value().detach().numpy()
+    assert np.all(np.isfinite(sos))
+    assert np.max(np.abs(np.roots([1.0, sos[0, 4, 0]]))) < 1.0
+    gain_dc = sos[0, 0, :] + sos[0, 1, :]
+    assert np.all(np.abs(gain_dc) < 1.0)
+
+
+def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
+    """A negative RT is an amplifying loop; the floor maps it to fast decay."""
+    import torch
+
+    from pyFDN.train.shelf import make_decay_shelf
+
+    delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
+    module = make_decay_shelf(
+        np.array([-5.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    )
+    sos = module.map(module.param).detach().numpy()
+    assert np.all(np.isfinite(sos))
+    # at DC the shelf is |b0 + b1| -- an attenuation, not a gain
+    assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) < 1.0)
+    # and it saturates: many knees below zero is the same filter as -5 s, the
+    # floor's own, rather than an ever-faster decay
+    deeper = make_decay_shelf(
+        np.array([-50.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    )
+    np.testing.assert_allclose(
+        sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
+    )
+    # the floor is one round trip of the longest line, i.e. MAX_ATTENUATION_DB
+    # of attenuation there -- an instantaneous decay, not a silent one
+    assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) > 1e-4)
+
+
+def test_ten_bands_still_mean_the_graphic_eq():
+    """The length picks the design, and 10 is unchanged by the shelf dispatch."""
+    model = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(absorption=True, post_eq=True),
+        absorption_rt=np.full(10, 1.0),
+        nfft=2**12,
+        device="cpu",
+    )
+    assert param(model, "absorption").raw().shape == (10,)
+    assert param(model, "post_eq").raw().shape == (10, 1)
+    assert param(model, "absorption").shape == (11, 6, 4)

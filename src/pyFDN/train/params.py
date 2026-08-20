@@ -24,6 +24,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "delay": ("delay", "fF"),
     "direct": ("direct_gain", "brB"),
     "absorption": ("attenuation", "filter"),
+    "post_eq": ("output_filter",),
 }
 
 
@@ -109,7 +110,8 @@ def param(model: Any, name: str | None = None) -> ParamRef:
     name : str, optional
         A leaf name, or one of the semantic aliases ``"feedback"`` (the feedback
         matrix, FLAMO's ``fB``), ``"delay"`` (``fF``), ``"direct"`` (``brB``)
-        and ``"absorption"`` (the in-loop filter, ``filter``).
+        ``"absorption"`` (the in-loop filter, ``filter``) and ``"post_eq"``
+        (the output filter).
 
     Raises
     ------

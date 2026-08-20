@@ -29,6 +29,12 @@ MatrixParam = Literal["orthogonal", "random"]
 # the buffer by the same factor. Use float64 to go higher.
 LOSSLESS_ALIAS_DECAY_DB = 60.0
 
+# Length of an ``absorption_rt`` / ``post_eq_db`` that means "first-order shelf"
+# rather than "graphic EQ": a shelf has exactly two degrees of freedom once its
+# crossover is fixed, its value at DC and its value at Nyquist. See
+# ``trainable_from_build`` and :mod:`pyFDN.train.shelf`.
+N_SHELF_ENDPOINTS = 2
+
 
 @dataclass(frozen=True)
 class Trainable:
@@ -38,10 +44,19 @@ class Trainable:
     by default because the decay is usually *designed*, from a measured RT.
     What it trains depends on how the filter was built: pass ``absorption_rt``
     to :func:`trainable_from_build` and the parameter is the reverberation time
-    per band, which keeps the loop contractive for every value it can take.
-    Without it the parameter is the raw SOS coefficients of ``build.filters``,
-    which nothing keeps inside the unit circle -- a fit that wants more energy
-    raises the loop gain past 1 and the network diverges.
+    itself -- ten bands driving a graphic EQ, or two endpoints driving a
+    first-order shelf -- which keeps the loop contractive for every value it can
+    take. Without it the parameter is the raw SOS coefficients of
+    ``build.filters``, which nothing keeps inside the unit circle -- a fit that
+    wants more energy raises the loop gain past 1 and the network diverges.
+
+    ``post_eq`` trains the output filter, which sits *outside* the recursion and
+    is therefore the only part of an FDN that can shape the response's spectral
+    envelope without touching the decay: the gains ``b`` and ``c`` are single
+    numbers per delay line and have no frequency dependence at all. Its
+    parameter is the gain in dB, per band (:mod:`pyFDN.train.geq`) or at the
+    two shelf endpoints (:mod:`pyFDN.train.shelf`), and it starts flat unless
+    ``build.post_eq`` or ``post_eq_db`` says otherwise.
     """
 
     feedback: bool = True
@@ -49,6 +64,7 @@ class Trainable:
     output_gain: bool = True
     direct: bool = False
     absorption: bool = False
+    post_eq: bool = False
 
 
 def build_fdn(
@@ -182,6 +198,8 @@ def trainable_from_build(
     trainable: Trainable | None = None,
     matrix: MatrixParam = "orthogonal",
     absorption_rt: np.ndarray | None = None,
+    post_eq_db: np.ndarray | float | None = None,
+    shelf_crossover: float | None = None,
     nfft: int = 2**14,
     output: str = "time",
     alias_decay_db: float = 0.0,
@@ -200,13 +218,33 @@ def trainable_from_build(
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
     absorption_rt : np.ndarray, optional
-        Reverberation time in seconds at the 10 GEQ design bands (DC, 63 Hz …
-        8 kHz, Nyquist). Replaces ``build.filters`` with the equivalent graphic
-        EQ (:func:`pyFDN.absorption_geq`) built as a differentiable function of
-        the RT, so ``Trainable(absorption=True)`` trains *the reverberation
-        time itself* rather than raw filter coefficients -- see
-        :mod:`pyFDN.train.decay`. Without it the in-loop filter is
-        ``build.filters`` as given.
+        Reverberation time in seconds, replacing ``build.filters`` with a
+        differentiable function of the RT so ``Trainable(absorption=True)``
+        trains *the reverberation time itself* rather than raw filter
+        coefficients. **Its length picks the filter design**, because the
+        parameter is the design:
+
+        * ``(10,)`` -- one RT per GEQ design band (DC, 63 Hz … 8 kHz, Nyquist),
+          giving the ten-band graphic EQ of :func:`pyFDN.absorption_geq`
+          (:mod:`pyFDN.train.decay`).
+        * ``(2,)`` -- RT at DC and at Nyquist, giving the one-biquad first-order
+          shelf of :func:`pyFDN.first_order_absorption`
+          (:mod:`pyFDN.train.shelf`).
+
+        Without it the in-loop filter is ``build.filters`` as given.
+    post_eq_db : np.ndarray or float, optional
+        Initial gain in dB for the *output* filter, replacing ``build.post_eq``
+        with a differentiable design whose parameter is that gain. As with
+        ``absorption_rt``, the length picks the design: ``(10,)`` (or
+        ``(10, n_out)``, or a scalar) is the graphic EQ of
+        :func:`pyFDN.train.geq.make_output_geq`, ``(2,)`` (or ``(2, n_out)``)
+        the first-order shelf of :func:`pyFDN.train.shelf.make_output_shelf`.
+        ``Trainable(post_eq=True)`` on a build with no ``post_eq`` implies
+        ``post_eq_db=0.0``: a flat graphic EQ, there to be trained.
+    shelf_crossover : float, optional
+        Crossover in Hz of the first-order shelves, fixed rather than trained.
+        Default ``fs/8``; ignored by the graphic-EQ designs, whose band layout
+        is fixed instead.
     nfft : int
         FFT size.
     output : str
@@ -309,18 +347,34 @@ def trainable_from_build(
 
     # In-loop absorption: the decay. Frozen unless trainable.absorption.
     if absorption_rt is not None:
-        from .decay import make_decay_geq
+        delays_samples = np.asarray(build.delays, dtype=np.float64).ravel()
+        if np.asarray(absorption_rt, dtype=np.float64).size == N_SHELF_ENDPOINTS:
+            from .shelf import make_decay_shelf
 
-        loop_filter = make_decay_geq(
-            absorption_rt,
-            np.asarray(build.delays, dtype=np.float64).ravel(),
-            fs,
-            nfft,
-            alias_decay_db=alias,
-            device=device,
-            dtype=dtype,
-            requires_grad=trainable.absorption,
-        )
+            loop_filter = make_decay_shelf(
+                absorption_rt,
+                delays_samples,
+                fs,
+                nfft,
+                crossover_frequency=shelf_crossover,
+                alias_decay_db=alias,
+                device=device,
+                dtype=dtype,
+                requires_grad=trainable.absorption,
+            )
+        else:
+            from .decay import make_decay_geq
+
+            loop_filter = make_decay_geq(
+                absorption_rt,
+                delays_samples,
+                fs,
+                nfft,
+                alias_decay_db=alias,
+                device=device,
+                dtype=dtype,
+                requires_grad=trainable.absorption,
+            )
     elif build.filters is not None:
         loop_filter = sos_filter_module(
             np.asarray(build.filters, dtype=np.float64),
@@ -332,18 +386,50 @@ def trainable_from_build(
         )
     else:
         loop_filter = None
-    output_filter = (
-        sos_filter_module(
+    # Output EQ: outside the recursion, so unlike the decay it constrains
+    # nothing and a flat one costs only the sections it adds.
+    if post_eq_db is None and trainable.post_eq and build.post_eq is None:
+        post_eq_db = 0.0
+    if post_eq_db is not None:
+        gains = np.asarray(post_eq_db, dtype=np.float64)
+        if gains.ndim > 0 and gains.shape[0] == N_SHELF_ENDPOINTS:
+            from .shelf import make_output_shelf
+
+            output_filter = make_output_shelf(
+                post_eq_db,
+                int(c.shape[0]),
+                fs,
+                nfft,
+                crossover_frequency=shelf_crossover,
+                alias_decay_db=alias,
+                device=device,
+                dtype=dtype,
+                requires_grad=trainable.post_eq,
+            )
+        else:
+            from .geq import make_output_geq
+
+            output_filter = make_output_geq(
+                post_eq_db,
+                int(c.shape[0]),
+                fs,
+                nfft,
+                alias_decay_db=alias,
+                device=device,
+                dtype=dtype,
+                requires_grad=trainable.post_eq,
+            )
+    elif build.post_eq is not None:
+        output_filter = sos_filter_module(
             np.asarray(build.post_eq, dtype=np.float64),
             nfft,
             device=device,
             dtype=dtype,
             alias_decay_db=alias,
-            requires_grad=False,
+            requires_grad=trainable.post_eq,
         )
-        if build.post_eq is not None
-        else None
-    )
+    else:
+        output_filter = None
 
     core = assemble_fdn_core(
         input_gain=input_gain,
