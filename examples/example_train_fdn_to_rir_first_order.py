@@ -1,6 +1,6 @@
 # gallery_category: FDN Design & Analysis
 # gallery_title: Train an FDN to a room with four numbers
-# gallery_description: The same gradient fit as "Train an FDN to match a room impulse response", with one first-order shelf for the decay and one for the output EQ -- four trained filter parameters instead of twenty.
+# gallery_description: Fit a 16-line FDN to a measured concert hall by gradient descent, with one first-order shelf for the decay and one for the output EQ -- four trained filter parameters, one biquad each.
 # references: Concert_Hall_Impulse_Responses
 
 import marimo
@@ -21,22 +21,21 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Training an FDN to a room with first-order filters
 
-    **Train an FDN to match a room impulse response** fits the same measurement
-    with a ten-band graphic EQ for the decay and another for the output EQ:
-    twenty trained filter parameters. This notebook keeps everything else
-    identical -- the same target, the same generic 1 s starting point, the same
-    doubly-cumulated energy loss, the same 300 Adam steps -- and replaces both
-    filters with **one first-order shelf each**.
+    A 16-line feedback delay network is fitted to a measured room by gradient
+    descent: the feedback matrix, the input and output gains, the dry path, the
+    in-loop absorption and the output EQ all move together under a single loss
+    on the doubly-cumulated energy. Both filters are **one first-order shelf**.
 
-    That is four numbers: a reverberation time at DC and one at Nyquist, and an
-    output gain at DC and one at Nyquist. The target is again the Promenadikeskus
-    concert hall in Pori, Finland, published at
+    That is four numbers for everything the FDN does with frequency: a
+    reverberation time at DC and one at Nyquist, and an output gain at DC and
+    one at Nyquist. The starting point knows nothing about the room -- a flat
+    1 s decay and a random orthogonal matrix -- and the target is the
+    Promenadikeskus concert hall in Pori, Finland, published at
     {pyFDN.paper_link("Concert_Hall_Impulse_Responses")}.
 
-    The interesting part is that it does not do worse. On the metrics the fit
-    never saw, four parameters land where twenty do -- and the twenty reach a
-    visibly lower *loss* while getting there, which is the part worth thinking
-    about.
+    The interesting part is how little those four numbers give up. The decay
+    they can describe is a monotone tilt and nothing else, which is a real
+    restriction; it is also most of what an absorptive room has to say.
     """)
     return
 
@@ -92,24 +91,33 @@ def _(mo):
 
     What the RT still needs a floor for is the *sign*: a gradient step that puts
     an endpoint at or below zero turns $-60 d_i / (\mathrm{RT} f_s)$ from an
-    attenuation into a gain. `pyFDN.train.shelf` floors it exactly as
-    `pyFDN.train.decay` does -- softplus, one round trip of the longest delay
+    attenuation into a gain. `pyFDN.train.filters` floors it the same way
+    for every design -- softplus, one round trip of the longest delay
     line, a knee one floor wide -- so a band that dips across zero still has a
     gradient to come back on. The last cell tests that the trained endpoints came
     out positive.
 
-    ## The loss is the sibling notebook's
+    ## The loss
 
-    `pyFDN.MatchCumulativeEnergy(rir, window=1024, power=0.5, frequency="both")`:
-    short-time energy cumulated backwards in time (Schroeder integration, i.e.
-    the decay) and along frequency (which does the job of splitting into octave
-    bands, without band edges). Why a spectrogram distance cannot see a decay at
-    all, why the compression is a power rather than a logarithm, and why the
-    frequency cumulation has to run both ways, are all worked through in **Train
-    an FDN to match a room impulse response** and not repeated here. The same
-    `dtype=torch.float64` and `alias_decay_db=60` apply, for the same reason:
-    backward integration reads the quietest samples in the buffer, and in float32
-    those samples are the anti-aliasing reconstruction's rounding noise.
+    `pyFDN.MatchCumulativeEnergy(rir, window=1024, power=0.5, frequency="both")`
+    takes the short-time energy of both signals and integrates it twice:
+    backwards in time, which is Schroeder integration and therefore the decay,
+    and along frequency, which does the job of splitting into octave bands
+    without having to put edges anywhere. A plain spectrogram distance will not
+    do, because two rooms with the same decay have uncorrelated fine structure:
+    against detail a fit cannot predict, silence scores better than the right
+    amount of the wrong detail. Cumulating closes that trap in both axes.
+
+    `power=0.5` compresses a surface that spans the whole dynamic range of the
+    decay, by comparing amplitudes rather than energies. A logarithm is the
+    obvious alternative and is worse here -- it turns the silence *below* the
+    response into an unbounded penalty. `frequency="both"` averages the two
+    cumulation directions; cumulating one way only leaves the bottom octave with
+    almost no gradient, and the fit abandons it.
+
+    `dtype=torch.float64` throughout, because backward integration reads the
+    quietest samples in the buffer, and in float32 those samples are rounding
+    noise rather than signal.
     """)
     return
 
@@ -131,8 +139,7 @@ def _(mo):
     mo.md(r"""
     ## The target
 
-    Trimmed to the onset and normalized to unit energy, exactly as in the two
-    sibling notebooks so all three are comparable.
+    Trimmed to the onset and normalized to unit energy.
     """)
     return
 
@@ -156,9 +163,9 @@ def _(mo):
 
     Octave-band RT and initial level of the *target*, by Schroeder backward
     integration -- computed after the fit and fed to nothing. Note the shape: 2.8 s
-    at the bottom, 1.2 s at 8 kHz, and a monotone fall in between apart from a
-    single 63/125 Hz plateau. That is a shelf's shape, which is the reason this
-    notebook works.
+    at the bottom, 1.2 s at 8 kHz, and a fall in between that never reverses,
+    with a plateau across 63/125 Hz and another across 500 Hz/1 kHz. That is a
+    shelf's shape, which is the reason this notebook works.
     """)
     return
 
@@ -184,15 +191,14 @@ def _(mo):
     `rt_nyquist=` absorption is `pyFDN.first_order_absorption`, the very filter
     this notebook trains, so `init_build` is a complete FDN rather than a
     scaffold: nothing has to be patched onto it afterwards, and the untrained
-    render further down is just this build with the energy match applied.
+    render below is this FDN with only the energy match applied.
 
     Only the delays are sampled separately, because the gallery's own delay
     sampling does not expose `distribution="geometric"` or `coprime=True`; they
     are passed straight in.
 
-    The one number this notebook hands the trainer that the ten-band notebook
-    spells differently: `init_rt` is `(1.0, 1.0)`, two shelf endpoints, rather
-    than `np.full(10, 1.0)`.
+    `init_rt` is `(1.0, 1.0)` -- the two shelf endpoints, both at 1 s, which is
+    that same flat decay written in the form the trainer takes.
     """)
     return
 
@@ -246,21 +252,41 @@ def _(mo):
     `pyFDN.first_order_absorption` made differentiable in the RT, and
     `post_eq_db=(0.0, 0.0)` builds the output filter as a flat
     `pyFDN.first_order_shelving_eq`. Both map onto a **one-section**
-    `(1, 6, N)` SOS bank, which is what `extract_build` reads back out.
+    `(1, 6, N)` SOS bank -- that mapped value is the filter the FDN actually
+    runs, and `pyFDN.param(model, ...).value()` reads it back out.
+
+    `nfft = 2**17` is 2.73 s at 48 kHz, and it is chosen once and used for
+    everything. Both jobs it has to do put a floor under it. The loss compares
+    this window against the target, so it has to hold the decay being fitted;
+    and the *same* render is what the octave-band estimators at the bottom
+    measure, where Schroeder integration over a window shorter than the decay
+    under-reads it. 2.73 s clears both: the target has only -72 dB of its energy
+    left after it, and the band RTs come out equal to three decimals against a
+    render four times as long.
+
+    That is what lets the trained model be measured directly, rather than
+    exported to an `FDNBuild` and re-rendered at some larger `nfft`. The reason
+    such a round trip is otherwise needed is that `nfft` is **structural** in
+    FLAMO -- it fixes the frequency grid, the delay phase ramps and the alias
+    envelope of every module at construction, and there is no setter -- so a
+    render at a different length means rebuilding. Sizing it correctly once
+    costs a factor of two on every training step and removes the rebuild.
 
     Then the single adjustment the measurement is allowed to make before the
     optimizer starts: **the overall energy**, one scalar on the output gain, so
     the initial FDN and the target hold the same total energy in the training
-    window. It is a level match, not a decay match.
+    window. It is a level match, not a decay match. The untrained render is
+    taken immediately after it, in this same cell, because `train_fdn` steps
+    `model` in place -- once the next cell has run there is no "before" left.
     """)
     return
 
 
 @app.cell
-def _(fs, init_build, init_rt, np, pyFDN, rir):
+def _(fs, init_build, init_rt, np, pyFDN, rir, rir_len):
     import torch
 
-    nfft = 2**16  # 1.37 s at 48 kHz -- longer than the decay being fitted
+    nfft = 2**17  # 2.73 s at 48 kHz -- long enough for the loss and the metrics
 
     model = pyFDN.trainable_from_build(
         init_build,
@@ -271,22 +297,30 @@ def _(fs, init_build, init_rt, np, pyFDN, rir):
         nfft=nfft,
         device="cpu",
         # no alias_decay_db: this FDN decays, so its poles are well inside the
-        # unit circle and the FFT evaluation is sound -- see the note below
+        # unit circle and the FFT evaluation is sound
         dtype=torch.float64,
     )
 
+    def render(m):
+        """The FDN's impulse response, straight out of the FLAMO model."""
+        return np.asarray(pyFDN.model_response(m).h.detach()).reshape(-1)[:rir_len]
+
     # the only thing the target tells the initial model: how loud it is
-    _ir = np.asarray(pyFDN.model_response(model).h.detach()).reshape(-1)
-    energy_gain = float(np.linalg.norm(rir[:nfft]) / np.linalg.norm(_ir))
+    energy_gain = float(np.linalg.norm(rir[:nfft]) / np.linalg.norm(render(model)))
     with torch.no_grad():
         pyFDN.param(model, "output_gain").raw().mul_(energy_gain)
+
+    # the untrained FDN, before the optimizer touches it -- and the flat 1 s
+    # absorption it starts from, as the SOS bank the model runs
+    ir_init = render(model)
+    init_sos = pyFDN.param(model, "absorption").value().detach().numpy().copy()
 
     # ParamRef.shape is the MAPPED value -- the SOS bank the system runs. What
     # the optimizer steps is .raw(), and for the two filters that is the pair.
     for _p in pyFDN.params(model):
         print(f"{_p}  raw {tuple(_p.raw().shape)}")
     print(f"\nenergy match: output gain x {energy_gain:.2f}")
-    return energy_gain, model, nfft, torch
+    return energy_gain, init_sos, ir_init, model, nfft, render, torch
 
 
 @app.cell(hide_code=True)
@@ -294,13 +328,16 @@ def _(mo):
     mo.md(r"""
     ## Step 3 -- train
 
-    Identical to the ten-band notebook, down to the seed.
+    300 Adam steps at `lr=3e-2`. The trained response is rendered at the end of
+    the same cell, out of the same model, through the same `render` the
+    untrained one went through: two FDNs being compared on a metric should not
+    be reaching it by two different routes.
     """)
     return
 
 
 @app.cell
-def _(model, pyFDN, rir, torch):
+def _(model, pyFDN, render, rir, torch):
     loss = pyFDN.MatchCumulativeEnergy(rir, window=1024, power=0.5, frequency="both")
 
     log = pyFDN.train_fdn(
@@ -316,7 +353,9 @@ def _(model, pyFDN, rir, torch):
     )
     trained_rt = pyFDN.param(model, "absorption").raw().detach().numpy().copy()
     trained_eq_db = pyFDN.param(model, "post_eq").raw().detach().numpy().copy().ravel()
-    trained_build = pyFDN.extract_build(model)
+    trained_sos = pyFDN.param(model, "absorption").value().detach().numpy().copy()
+    trained_eq_sos = pyFDN.param(model, "post_eq").value().detach().numpy().copy()
+    ir_trained = render(model)
 
     print(
         f"ran {log.steps_run} steps, loss {log.train_loss[0]:.4g} -> "
@@ -330,11 +369,17 @@ def _(model, pyFDN, rir, torch):
         f"output EQ: {trained_eq_db[0]:+.1f} dB at DC, "
         f"{trained_eq_db[1]:+.1f} dB at Nyquist"
     )
-    print(
-        f"\nin-loop filter: {trained_build.filters.shape} -- one biquad per delay line"
+    print(f"\nin-loop filter: {trained_sos.shape} -- one biquad per delay line")
+    print(f"output filter:  {trained_eq_sos.shape} -- one biquad")
+    return (
+        ir_trained,
+        log,
+        loss,
+        trained_eq_db,
+        trained_eq_sos,
+        trained_rt,
+        trained_sos,
     )
-    print(f"output filter:  {trained_build.post_eq.shape} -- one biquad")
-    return log, loss, trained_build, trained_eq_db, trained_rt
 
 
 @app.cell
@@ -363,35 +408,33 @@ def _(mo):
     $\mathrm{RT}(f) = -60 / (f_s \cdot 20\log_{10} g(f))$, which is
     delay-line-independent because the decay is homogeneous.
 
-    The shelf's low plateau settles at 2.4 s, which is where the *middle* of the
+    The shelf's low plateau settles at 2.5 s, which is where the *middle* of the
     spectrum is; the room's 2.8 s bottom octave pulls at it but cannot bend it,
     because a shelf that reached 2.8 s at DC would have to pass through 2.8 s at
     250 Hz too, and the loss would pay for that everywhere. So the trained
     endpoint is a compromise the parametrization forced, and it is the honest one.
 
-    At the top the endpoint reads 0.21 s against a measured 1.2 s at 8 kHz, which
+    At the top the endpoint reads 0.20 s against a measured 1.2 s at 8 kHz, which
     looks alarming until you notice that the endpoint is at **24 kHz** -- an
     octave and a half above the highest band the estimator reports, and well into
     where the recording has nothing left. What the FDN actually does at 8 kHz is
-    the curve, not the endpoint: 0.66 s there, and the rendered FDN measures
-    0.89 s in that octave. As in the ten-band notebook: at the edges of the
-    design, read the filter, not the parameter.
+    the curve, not the endpoint: 0.65 s there, and the rendered FDN measures
+    0.89 s in that octave. At the edges of the design, read the filter, not the
+    parameter.
     """)
     return
 
 
 @app.cell
-def _(delays, est_rt, f_centre, fs, go, init_rt, np, pyFDN, trained_build):
+def _(delays, est_rt, f_centre, fs, go, init_sos, np, pyFDN, trained_sos):
     def _rt_curve(sos):
         """Reverberation time vs frequency implied by a homogeneous decay filter."""
         angles, magnitude = pyFDN.sos_gain_per_sample_curves(sos, delays, 512)
         freqs = angles / np.pi * (fs / 2)
         return freqs, -60.0 / (fs * 20.0 * np.log10(magnitude[:, 0]))
 
-    _f, _rt_trained_curve = _rt_curve(trained_build.filters)
-    _, _rt_init_curve = _rt_curve(
-        pyFDN.first_order_absorption(init_rt[0], init_rt[1], delays, fs)
-    )
+    _f, _rt_trained_curve = _rt_curve(trained_sos)
+    _, _rt_init_curve = _rt_curve(init_sos)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -439,9 +482,9 @@ def _(delays, est_rt, f_centre, fs, go, init_rt, np, pyFDN, trained_build):
 
 
 @app.cell
-def _(fs, go, np, pyFDN, trained_build, trained_eq_db):
+def _(fs, go, np, pyFDN, trained_eq_db, trained_eq_sos):
     _probe = np.logspace(0, np.log10(fs / 2), 400)
-    _db, _, _ = pyFDN.probe_sos(trained_build.post_eq[:, :, 0], _probe, 2**14, fs)
+    _db, _, _ = pyFDN.probe_sos(trained_eq_sos[:, :, 0], _probe, 2**14, fs)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -482,146 +525,77 @@ def _(fs, go, np, pyFDN, trained_build, trained_eq_db):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Render both FDNs
+    ## Measuring both FDNs
 
-    Both down the **same** path -- `build_to_flamo` then `flamo_time_response` at
-    `nfft = 2**19` (10.9 s, nearly three times the target, so the FFT
-    wrap-around the training render had to be protected against is not a factor
-    here) -- and both measured with the same estimators. Two FDNs being compared
-    on a metric should not be reaching it through two different renderers.
-
-    Why the round trip through `FDNBuild` rather than just rendering the trained
-    model? Because `nfft` is **structural** in FLAMO -- it fixes the frequency
-    grid, the delay phase ramps and the alias envelope of every module at
-    construction, and there is no setter. The model was deliberately built at
-    `nfft = 2**16`, 1.37 s: that is the window the loss looks at, and 2**19 would
-    have been eight times the FFT work on every one of the 300 steps. But the
-    estimators below have to see the whole 3.9 s tail, and Schroeder integration
-    over a 1.37 s window under-reads a 2.4 s decay -- on this FDN by up to 10 %
-    in the bottom two octaves, which is larger than the error the table is trying
-    to measure. So the render has to happen at a different `nfft`, and that means
-    rebuilding.
-
-    `extract_build` -> `build_to_flamo` **is** that rebuild; `FDNBuild` is just
-    the plain-numpy description in the middle of it. That it is also the
-    deliverable -- the thing `process_fdn` or `build_to_faust` would take -- is
-    the bonus: rendering through it is what makes the last cell's assertions a
-    test of the FDN you would actually ship, rather than of a torch graph.
+    Both responses already exist: `ir_init` from the model before the optimizer
+    ran, `ir_trained` from the same model after. Both left FLAMO through the
+    same `render` at the same `nfft`, so what follows compares two FDNs rather
+    than two renderers.
 
     Worth being clear about one thing, because "outside the recursion" invites
     the wrong reading: the output EQ **is** an ordinary member of the FLAMO
     graph. `assemble_fdn_core` wires it in after the output gain as a leaf named
-    `output_filter`, the same optimizer steps it as steps the feedback matrix,
-    and `extract_build` reads it back out as `build.post_eq`. Outside the
-    *recursion* is a statement about where it sits in the signal flow -- which is
-    exactly why it can shape the spectrum without touching the decay -- not about
+    `output_filter`, and the same optimizer steps it as steps the feedback
+    matrix -- so it is in the render above with everything else. Outside the
+    *recursion* is a statement about where it sits in the signal flow, which is
+    exactly why it can shape the spectrum without touching the decay, not about
     it being applied separately afterwards.
-
-    What cannot render it is `build_to_impz`, whose `process_fdn` block
-    simulation has no output-filter slot; it raises on a build with `post_eq`
-    rather than silently dropping it. On this FDN the two renderers agree to
-    -69 dB and to three decimals on every band metric below, so using the FLAMO
-    one for both costs nothing.
     """)
     return
 
 
 @app.cell
-def _(energy_gain, fs, init_build, np, pyFDN, rir_len, trained_build):
-    import dataclasses
-
-    # the untrained FDN: init_build already carries the flat 1 s absorption, so
-    # "untrained" is that build plus the energy match -- exactly what the
-    # optimizer was handed, with nothing reconstructed by hand
-    start_build = dataclasses.replace(init_build, C=init_build.C * energy_gain)
-
-    def _render(build):
-        """One render path for both FDNs, output EQ included."""
-        model = pyFDN.build_to_flamo(build, nfft=2**19, device="cpu")
-        return np.asarray(pyFDN.flamo_time_response(model, fs=fs)).reshape(-1)[:rir_len]
-
-    ir_init = _render(start_build)
-    ir_trained = _render(trained_build)
-
+def _(fs, ir_init, ir_trained, pyFDN):
     rt_init, _ = pyFDN.estimate_rt_bands(ir_init, fs)
     rt_trained, _ = pyFDN.estimate_rt_bands(ir_trained, fs)
     level_init, _ = pyFDN.estimate_initial_level_bands(ir_init, rt_init, fs)
     level_trained, _ = pyFDN.estimate_initial_level_bands(ir_trained, rt_trained, fs)
-    return (
-        dataclasses,
-        ir_init,
-        ir_trained,
-        level_init,
-        level_trained,
-        rt_init,
-        rt_trained,
-        start_build,
-    )
+    return level_init, level_trained, rt_init, rt_trained
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Four parameters against twenty
+    ## How close four numbers get
 
-    The same two estimators, applied to the rendered FDNs, and the ten-band
-    notebook's own row for comparison -- same target, same delays, same matrix,
-    same loss, same 300 steps, only the filter design differing:
+    The two estimators applied to the rendered FDNs, against the measurement
+    neither of them saw:
 
     | | mean RT error | level offset | level shape | final loss |
     |---|---|---|---|---|
-    | untrained | 52.4 % | -1.3 dB | 1.71 dB | 0.1319 |
-    | ten-band graphic EQ | 9.6 % | +0.3 dB | 0.77 dB | **0.00373** |
-    | first-order shelves | 10.7 % | +0.3 dB | 0.82 dB | 0.00555 |
+    | untrained (flat 1 s) | 52.4 % | -1.3 dB | 1.71 dB | 0.0932 |
+    | trained | **9.9 %** | +0.3 dB | 0.80 dB | **0.00392** |
 
-    **Read those two rows as a tie, not a ranking.** A single pair of numbers
-    invites the conclusion that ten bands are worth about a point of RT error,
-    and that conclusion does not survive changing one thing that has nothing to
-    do with the filters: the random feedback matrix. Re-running both fits with a
-    different `rng=` on `fdn_build_gallery`, everything else fixed:
+    That figure is a property of the fit rather than of one lucky matrix:
+    re-running with a different seed on the random orthogonal feedback matrix,
+    everything else fixed, gives 9.9 %, 10.2 % and 10.0 % on seeds 0, 1 and 4 of
+    `fdn_build_gallery`.
 
-    | matrix seed | shelf RT error | ten-band RT error |
-    |---|---|---|
-    | 0 (the fit above) | 10.7 % | 9.6 % |
-    | 1 | 9.3 % | 12.3 % |
-    | 4 | 10.1 % | -- |
-
-    The ordering flips between seed 0 and seed 1, and the shelf's own spread
-    across three seeds (9.3-10.7 %) is as wide as its gap from the ten-band fit
-    on either one. So the honest statement is that **two numbers per filter reach
-    the same accuracy as ten**, not that they beat them.
-
-    What does *not* move with the seed is the **loss**: the graphic EQ lands at
-    0.0036-0.0037 on both seeds it was run on and the shelf at 0.0055-0.0074 on
-    all three. So the eighteen
-    extra parameters reliably fit the training objective better while landing no
-    closer to the room. That is the finding worth keeping, and it is the ordinary
-    one: the extra freedom goes into the fine structure of one particular
-    measurement, which is the part of a room that does not generalize. The shelf
-    cannot chase it, so it does not.
-
-    Per band the two designs fail in different places, and that part is
-    structural rather than seed noise:
+    Per band it fails where the design says it must:
 
     | | 63 | 125 | 250 | 500 | 1k | 2k | 4k | 8k |
     |---|---|---|---|---|---|---|---|---|
-    | ten-band RT error | 24 % | 6 % | 14 % | 3 % | 7 % | 5 % | 9 % | 8 % |
-    | shelf RT error | 14 % | 9 % | 9 % | 3 % | 4 % | 6 % | 16 % | 26 % |
+    | RT error | 10 % | 6 % | 13 % | 4 % | 0 % | 5 % | 15 % | 26 % |
 
-    The graphic EQ's worst band is the bottom octave, where the cumulated loss
-    has the least to say and ten free bands can drift. The shelf's worst is the
-    top, where its Nyquist endpoint is extrapolating past anything the recording
-    contains -- a restriction, not a drift, and one you can read off the design.
+    The middle comes out almost exact and both ends carry the error, which is
+    what a monotone tilt pinned at two endpoints has to do. At the bottom the
+    room holds a 2.8 s plateau across 63 and 125 Hz and has already dropped to
+    2.5 s by 250 Hz; a shelf cannot hold a plateau and then step down, so it
+    splits the difference. The top octave is worse, for a different reason: its
+    Nyquist endpoint is extrapolating an octave and a half past the highest band
+    the estimator reports, into a part of the spectrum the recording barely
+    contains. Both are restrictions you can read off the design rather than
+    drift the optimizer fell into.
 
-    One thing that is not an achievement in either column: the level *offset* was
+    One thing in that table which is not an achievement: the level *offset* was
     set by the energy match before the optimizer ran. The level *shape* is,
     because nothing in the FDN proper can bend it -- that is the trained output
-    EQ, and here it is two numbers rather than ten.
+    EQ, and here it is two numbers.
 
-    Where the shelf wins outright is cost. One biquad in the loop instead of
-    eleven, and one on the output instead of eleven: on the machine these notes
-    were written on, the whole notebook runs in about 80 s against about 300 s
-    for the ten-band one, almost all of it the 300 training steps.
+    The cost side is where a shelf is unambiguously ahead. One biquad in the
+    loop per delay line and one on the output, designed in closed form from two
+    numbers each, against the eleven-section least-squares design a ten-band
+    graphic EQ needs in the same slots.
     """)
     return
 
@@ -747,12 +721,11 @@ def _(mo):
     trained numbers, so the same residual is a test of it: whatever a `design_geq`
     call would still be asked to correct is what the fit did not manage.
 
-    It comes out at 0.82 dB of shape -- and the ten-band fit's residual is
-    0.77 dB, which is the same answer reached from two numbers instead of ten.
-    A designed GEQ on what is left would still buy that 0.8 dB in either case,
-    and nothing stops you from running one afterwards. What the fit buys is that
-    the EQ was chosen *while* the decay and the matrix were still moving, rather
-    than as a correction applied to something already fixed.
+    It comes out at 0.80 dB of shape -- what a two-parameter shelf cannot
+    reach, and what a designed GEQ on top would still buy. Nothing stops you
+    from running one afterwards. What the fit buys is that the EQ was chosen
+    *while* the decay and the matrix were still moving, rather than as a
+    correction applied to something already fixed.
     """)
     return
 
@@ -799,8 +772,8 @@ def _(mo):
     ## Test: four numbers, one biquad each, and most of the room's decay
 
     Six assertions. The first three are what the parametrization exists for: the
-    extracted FDN still renders, both RT endpoints stayed positive (a negative
-    one is an amplifying loop), and each filter really is a single biquad. The
+    trained FDN still renders, both RT endpoints stayed positive (a negative one
+    is an amplifying loop), and each filter really is a single biquad. The
     last three are the fit -- a decay that started flat and knew nothing about the
     room ends up substantially closer to it, in the mean and in every band the
     loss can resolve.
@@ -809,11 +782,11 @@ def _(mo):
 
 
 @app.cell
-def _(est_rt, np, rt_init, rt_trained, trained_build, trained_rt):
+def _(est_rt, np, rt_init, rt_trained, trained_eq_sos, trained_rt, trained_sos):
     assert np.all(np.isfinite(rt_trained)), "trained FDN did not render"
     assert np.all(trained_rt > 0), "an RT endpoint left the stable region"
-    assert trained_build.filters.shape[0] == 1, "the decay is not one biquad"
-    assert trained_build.post_eq.shape[0] == 1, "the output EQ is not one biquad"
+    assert trained_sos.shape[0] == 1, "the decay is not one biquad"
+    assert trained_eq_sos.shape[0] == 1, "the output EQ is not one biquad"
 
     _err_init = np.abs(rt_init / est_rt - 1)
     _err = np.abs(rt_trained / est_rt - 1)

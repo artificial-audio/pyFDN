@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -241,7 +241,7 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, delays, fs, ir_len_seconds, mo, np, pyFDN):
+def _(A, B, C, D, delays, fs, ir_len_seconds, mo, pyFDN):
     ir_lossless = pyFDN.dss_to_impz(
         int(ir_len_seconds * fs), delays, A, B, C, D
     ).squeeze()

@@ -12,6 +12,26 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 
+def _channel_major(signal: ArrayLike) -> np.ndarray:
+    """Orient a 2-D audio array as ``(channels, samples)`` for ``mo.audio``.
+
+    ``mo.audio`` reads a 2-D array as ``[NCHAN, NSAMPLES]``, while pyFDN renders
+    are time-major -- ``dss_to_impz`` / ``build_to_impz`` return
+    ``(ir_len, num_outputs, num_inputs)`` and ``process_fdn`` returns
+    ``(num_samples, num_outputs)``. Handing a stereo ``(num_samples, 2)`` render
+    straight to ``mo.audio`` therefore declares ``num_samples`` channels of two
+    samples each, and the player plays garbage.
+
+    An audio buffer always has far more samples than channels, so the longer
+    axis is the time axis: a 2-D input with more rows than columns is
+    transposed, anything else is passed through untouched.
+    """
+    x = np.asarray(signal)
+    if x.ndim == 2 and x.shape[0] > x.shape[1]:
+        return x.T
+    return x
+
+
 def labeled_audio(
     label: str,
     signal: ArrayLike,
@@ -29,7 +49,10 @@ def labeled_audio(
 
     Args:
         label: HTML/text shown above the player.
-        signal: Audio samples passed to ``mo.audio``.
+        signal: Audio samples. 1-D for mono; a 2-D array is treated as
+            multi-channel and oriented for ``mo.audio``, so either
+            ``(samples, channels)`` (the pyFDN render convention) or
+            ``(channels, samples)`` plays correctly.
         fs: Sample rate in Hz.
         label_size: CSS ``font-size`` for the label (default ``"1.1em"``).
         gap: Vertical gap between the label and the player (default 0).
@@ -42,7 +65,7 @@ def labeled_audio(
     return mo.vstack(
         [
             mo.Html(label).style({"font-size": label_size}),
-            mo.audio(np.asarray(signal), rate=int(fs)),
+            mo.audio(_channel_major(signal), rate=int(fs)),
         ],
         gap=gap,
     )
