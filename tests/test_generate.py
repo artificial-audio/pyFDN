@@ -345,9 +345,7 @@ def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
         captured["crossover"] = crossover
         return np.ones((1, 6, len(delays)))
 
-    monkeypatch.setattr(
-        "pyFDN.auxiliary.acoustics.first_order_absorption", fake_absorption
-    )
+    monkeypatch.setattr("pyFDN.eq.first_order.first_order_absorption", fake_absorption)
 
     build = fdn_build_gallery(3, rt_crossover=750.0, rng=7)
 

@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from ..eq.designs import EQDesign, GraphicEQ, default_design
+from .filters import make_decay_filter, make_output_filter
+
 if TYPE_CHECKING:
     from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
@@ -29,11 +32,23 @@ MatrixParam = Literal["orthogonal", "random"]
 # the buffer by the same factor. Use float64 to go higher.
 LOSSLESS_ALIAS_DECAY_DB = 60.0
 
-# Length of an ``absorption_rt`` / ``post_eq_db`` that means "first-order shelf"
-# rather than "graphic EQ": a shelf has exactly two degrees of freedom once its
-# crossover is fixed, its value at DC and its value at Nyquist. See
-# ``trainable_from_build`` and :mod:`pyFDN.train.shelf`.
-N_SHELF_ENDPOINTS = 2
+# Which design a target of a given length means when none is named lives with
+# the designs themselves, in :func:`pyFDN.eq.default_design`.
+
+
+def _design_for(target: Any, shelf_crossover: float | None) -> EQDesign:
+    """The design an ``absorption_rt`` / ``post_eq_db`` implies by its length.
+
+    The first axis is the design's parameter count; a scalar carries no length
+    at all and means the graphic EQ, the design a flat ``post_eq_db=0.0`` has
+    always given. Pass ``absorption_design`` / ``post_eq_design`` to choose
+    instead of being dispatched -- the only way to reach
+    :class:`~pyFDN.eq.OnePole`, which shares the shelf's two parameters.
+    """
+    arr = np.asarray(target, dtype=np.float64)
+    if arr.ndim == 0:
+        return default_design(GraphicEQ.n_params, crossover_frequency=shelf_crossover)
+    return default_design(arr.shape[0], crossover_frequency=shelf_crossover)
 
 
 @dataclass(frozen=True)
@@ -45,8 +60,8 @@ class Trainable:
     What it trains depends on how the filter was built: pass ``absorption_rt``
     to :func:`trainable_from_build` and the parameter is the reverberation time
     itself -- ten bands driving a graphic EQ, or two endpoints driving a
-    first-order shelf -- which keeps the loop contractive for every value it can
-    take. Without it the parameter is the raw SOS coefficients of
+    first-order shelf or one-pole, shared across delay lines or one per line --
+    which keeps the loop contractive for every value it can take. Without it the parameter is the raw SOS coefficients of
     ``build.filters``, which nothing keeps inside the unit circle -- a fit that
     wants more energy raises the loop gain past 1 and the network diverges.
 
@@ -54,9 +69,9 @@ class Trainable:
     is therefore the only part of an FDN that can shape the response's spectral
     envelope without touching the decay: the gains ``b`` and ``c`` are single
     numbers per delay line and have no frequency dependence at all. Its
-    parameter is the gain in dB, per band (:mod:`pyFDN.train.geq`) or at the
-    two shelf endpoints (:mod:`pyFDN.train.shelf`), and it starts flat unless
-    ``build.post_eq`` or ``post_eq_db`` says otherwise.
+    parameter is the gain in dB at the bands of whichever
+    :class:`~pyFDN.eq.EQDesign` it uses (:mod:`pyFDN.train.filters`), and it
+    starts flat unless ``build.post_eq`` or ``post_eq_db`` says otherwise.
     """
 
     feedback: bool = True
@@ -163,7 +178,7 @@ def build_fdn(
 
     filters = None
     if rt is not None:
-        from pyFDN.auxiliary.acoustics import first_order_absorption
+        from pyFDN.eq.first_order import first_order_absorption
 
         rt_dc, rt_ny = _rt_pair(rt)
         filters = first_order_absorption(rt_dc, rt_ny, delays_arr, float(fs))
@@ -198,7 +213,9 @@ def trainable_from_build(
     trainable: Trainable | None = None,
     matrix: MatrixParam = "orthogonal",
     absorption_rt: np.ndarray | None = None,
+    absorption_design: EQDesign | None = None,
     post_eq_db: np.ndarray | float | None = None,
+    post_eq_design: EQDesign | None = None,
     shelf_crossover: float | None = None,
     nfft: int = 2**14,
     output: str = "time",
@@ -225,22 +242,32 @@ def trainable_from_build(
         parameter is the design:
 
         * ``(10,)`` -- one RT per GEQ design band (DC, 63 Hz … 8 kHz, Nyquist),
-          giving the ten-band graphic EQ of :func:`pyFDN.absorption_geq`
-          (:mod:`pyFDN.train.decay`).
+          giving the ten-band graphic EQ of :func:`pyFDN.absorption_geq`.
         * ``(2,)`` -- RT at DC and at Nyquist, giving the one-biquad first-order
-          shelf of :func:`pyFDN.first_order_absorption`
-          (:mod:`pyFDN.train.shelf`).
+          shelf of :func:`pyFDN.first_order_absorption`.
+
+        A second axis makes the decay per delay line rather than shared:
+        ``(10, n_delays)`` or ``(2, n_delays)`` gives every line its own
+        reverberation time, trading the homogeneous decay of an ideal room for
+        ``n_delays`` times the freedom to place energy in time. See
+        :mod:`pyFDN.train.filters`.
 
         Without it the in-loop filter is ``build.filters`` as given.
+    absorption_design : EQDesign, optional
+        The design to drive with ``absorption_rt``, overriding the choice its
+        length would make. The only way to reach :class:`~pyFDN.eq.OnePole`,
+        which takes the same two parameters as the shelf.
     post_eq_db : np.ndarray or float, optional
         Initial gain in dB for the *output* filter, replacing ``build.post_eq``
         with a differentiable design whose parameter is that gain. As with
         ``absorption_rt``, the length picks the design: ``(10,)`` (or
-        ``(10, n_out)``, or a scalar) is the graphic EQ of
-        :func:`pyFDN.train.geq.make_output_geq`, ``(2,)`` (or ``(2, n_out)``)
-        the first-order shelf of :func:`pyFDN.train.shelf.make_output_shelf`.
+        ``(10, n_out)``, or a scalar) is the graphic EQ, ``(2,)`` (or
+        ``(2, n_out)``) the first-order shelf.
         ``Trainable(post_eq=True)`` on a build with no ``post_eq`` implies
         ``post_eq_db=0.0``: a flat graphic EQ, there to be trained.
+    post_eq_design : EQDesign, optional
+        The design to drive with ``post_eq_db``, overriding the choice its
+        length would make.
     shelf_crossover : float, optional
         Crossover in Hz of the first-order shelves, fixed rather than trained.
         Default ``fs/8``; ignored by the graphic-EQ designs, whose band layout
@@ -348,33 +375,17 @@ def trainable_from_build(
     # In-loop absorption: the decay. Frozen unless trainable.absorption.
     if absorption_rt is not None:
         delays_samples = np.asarray(build.delays, dtype=np.float64).ravel()
-        if np.asarray(absorption_rt, dtype=np.float64).size == N_SHELF_ENDPOINTS:
-            from .shelf import make_decay_shelf
-
-            loop_filter = make_decay_shelf(
-                absorption_rt,
-                delays_samples,
-                fs,
-                nfft,
-                crossover_frequency=shelf_crossover,
-                alias_decay_db=alias,
-                device=device,
-                dtype=dtype,
-                requires_grad=trainable.absorption,
-            )
-        else:
-            from .decay import make_decay_geq
-
-            loop_filter = make_decay_geq(
-                absorption_rt,
-                delays_samples,
-                fs,
-                nfft,
-                alias_decay_db=alias,
-                device=device,
-                dtype=dtype,
-                requires_grad=trainable.absorption,
-            )
+        loop_filter = make_decay_filter(
+            absorption_design or _design_for(absorption_rt, shelf_crossover),
+            absorption_rt,
+            delays_samples,
+            fs,
+            nfft,
+            alias_decay_db=alias,
+            device=device,
+            dtype=dtype,
+            requires_grad=trainable.absorption,
+        )
     elif build.filters is not None:
         loop_filter = sos_filter_module(
             np.asarray(build.filters, dtype=np.float64),
@@ -391,34 +402,17 @@ def trainable_from_build(
     if post_eq_db is None and trainable.post_eq and build.post_eq is None:
         post_eq_db = 0.0
     if post_eq_db is not None:
-        gains = np.asarray(post_eq_db, dtype=np.float64)
-        if gains.ndim > 0 and gains.shape[0] == N_SHELF_ENDPOINTS:
-            from .shelf import make_output_shelf
-
-            output_filter = make_output_shelf(
-                post_eq_db,
-                int(c.shape[0]),
-                fs,
-                nfft,
-                crossover_frequency=shelf_crossover,
-                alias_decay_db=alias,
-                device=device,
-                dtype=dtype,
-                requires_grad=trainable.post_eq,
-            )
-        else:
-            from .geq import make_output_geq
-
-            output_filter = make_output_geq(
-                post_eq_db,
-                int(c.shape[0]),
-                fs,
-                nfft,
-                alias_decay_db=alias,
-                device=device,
-                dtype=dtype,
-                requires_grad=trainable.post_eq,
-            )
+        output_filter = make_output_filter(
+            post_eq_design or _design_for(post_eq_db, shelf_crossover),
+            post_eq_db,
+            int(c.shape[0]),
+            fs,
+            nfft,
+            alias_decay_db=alias,
+            device=device,
+            dtype=dtype,
+            requires_grad=trainable.post_eq,
+        )
     elif build.post_eq is not None:
         output_filter = sos_filter_module(
             np.asarray(build.post_eq, dtype=np.float64),
@@ -455,7 +449,7 @@ def build_set_decay(
     for ``rt`` (a single value, or ``(rt_dc, rt_nyquist)``). Decay does not change
     colouration, so this is the natural way to add a tail to a colorless build.
     """
-    from pyFDN.auxiliary.acoustics import first_order_absorption
+    from pyFDN.eq.first_order import first_order_absorption
 
     rt_dc, rt_ny = _rt_pair(rt)
     filters = first_order_absorption(

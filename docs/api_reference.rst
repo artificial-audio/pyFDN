@@ -84,9 +84,6 @@ Acoustics & Absorption
    :nosignatures:
 
    pyFDN.absorption_filters
-   pyFDN.first_order_absorption
-   pyFDN.first_order_shelving_eq
-   pyFDN.one_pole_absorption
    pyFDN.sos_gain_per_sample_curves
    pyFDN.echo_density
    pyFDN.edc
@@ -100,16 +97,31 @@ Acoustics & Absorption
    pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
-Graphic EQ
-----------
+EQ & Absorption Design (``pyFDN.eq``)
+--------------------------------------
+
+Three designs of the same two filters -- an FDN's in-loop absorption and its
+output EQ -- behind one interface. :class:`pyFDN.EQDesign` maps targets in dB to
+biquad sections in numpy or in torch from a single implementation, which is what
+:func:`pyFDN.trainable_from_build` trains against.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.EQDesign
+   pyFDN.GraphicEQ
+   pyFDN.FirstOrderShelf
+   pyFDN.OnePole
+   pyFDN.default_design
    pyFDN.design_geq
+   pyFDN.geq_sos
+   pyFDN.geq_design_matrix
    pyFDN.graphic_eq
    pyFDN.absorption_geq
+   pyFDN.first_order_absorption
+   pyFDN.first_order_shelving_eq
+   pyFDN.one_pole_absorption
    pyFDN.probe_sos
    pyFDN.shelving_filter
    pyFDN.bandpass_filter

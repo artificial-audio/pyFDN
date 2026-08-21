@@ -70,10 +70,17 @@ __all__ = [
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
-    # graphicEQ
+    # eq
     "absorption_geq",
     "bandpass_filter",
+    "EQDesign",
+    "FirstOrderShelf",
+    "GraphicEQ",
+    "OnePole",
+    "default_design",
     "design_geq",
+    "geq_design_matrix",
+    "geq_sos",
     "graphic_eq",
     "probe_sos",
     "shelving_filter",
@@ -223,11 +230,8 @@ from .auxiliary.acoustics import (
     edc,
     estimate_initial_level_bands,
     estimate_rt_bands,
-    first_order_absorption,
-    first_order_shelving_eq,
     octave_band_filterbank,
     octave_bands,
-    one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
     slope_amplitude_to_level,
@@ -332,6 +336,24 @@ from .build_io import (
     load_fdn_build,
     save_fdn_build,
 )
+from .eq import (
+    EQDesign,
+    FirstOrderShelf,
+    GraphicEQ,
+    OnePole,
+    absorption_geq,
+    bandpass_filter,
+    default_design,
+    design_geq,
+    first_order_absorption,
+    first_order_shelving_eq,
+    geq_design_matrix,
+    geq_sos,
+    graphic_eq,
+    one_pole_absorption,
+    probe_sos,
+    shelving_filter,
+)
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -385,14 +407,6 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .graphicEQ import (
-    absorption_geq,
-    bandpass_filter,
-    design_geq,
-    graphic_eq,
-    probe_sos,
-    shelving_filter,
-)
 from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing

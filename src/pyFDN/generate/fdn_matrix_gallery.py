@@ -169,7 +169,7 @@ def _build_post_eq(
             raise ValueError(f"{name} must be scalar or length num_outputs")
         return arr
 
-    from ..auxiliary.acoustics import first_order_shelving_eq
+    from ..eq.first_order import first_order_shelving_eq
 
     return first_order_shelving_eq(
         _per_output(db_dc, "post_eq_db_dc"),
@@ -285,7 +285,7 @@ def fdn_build_gallery(
 
     filters: np.ndarray | None = None
     if rt is not None:
-        from ..auxiliary.acoustics import first_order_absorption
+        from ..eq.first_order import first_order_absorption
 
         rt_ny = rt if rt_nyquist is None else rt_nyquist
         filters = first_order_absorption(

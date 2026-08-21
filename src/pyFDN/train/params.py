@@ -67,7 +67,7 @@ class ParamRef:
 
         Usually the mapped :meth:`value` is what you want. The pre-image is,
         when the map is the point: the RT in seconds behind an absorption
-        filter (:mod:`pyFDN.train.decay`), where the mapped value is the SOS
+        filter (:mod:`pyFDN.train.filters`), where the mapped value is the SOS
         bank designed from it.
         """
         return self.module.param

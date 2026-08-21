@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..auxiliary.acoustics import rt_to_slope
-from .design_geq import design_geq
+from .design_geq import N_SECTIONS, design_geq
 
 
 def absorption_geq(
@@ -36,16 +35,17 @@ def absorption_geq(
         canonical SOS bank layout) where ``num_bands = 11`` (flat + low-shelf
         + 8 bandpass + high-shelf). All sections are normalised so ``a[0] = 1``.
     """
+    # lazy: auxiliary.acoustics re-exports the designs in this package for
+    # backwards compatibility, so importing it at module level would cycle.
+    from ..auxiliary.acoustics import rt_to_slope
+
     rt = np.asarray(rt, dtype=float).ravel()
     delays = np.asarray(delays, dtype=float).ravel()
 
     target_g = rt_to_slope(rt, fs)  # dB / sample (negative)
 
     num_delays = len(delays)
-    prototype_sos, _ = design_geq(target_g * delays[0], fs=fs)
-    num_bands = prototype_sos.shape[0]
-
-    sos_out = np.zeros((num_bands, 6, num_delays))
+    sos_out = np.zeros((N_SECTIONS, 6, num_delays))
     for i, delay in enumerate(delays):
         opt_sos, _ = design_geq(target_g * delay, fs=fs)
         opt_sos = opt_sos / opt_sos[:, 3:4]  # normalise a0 = 1

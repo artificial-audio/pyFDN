@@ -1221,12 +1221,14 @@ def test_shelf_crossover_moves_the_transition():
 
 
 def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
-    from pyFDN.train.shelf import make_decay_shelf, make_output_shelf
+    from pyFDN.eq import FirstOrderShelf
+    from pyFDN.train.filters import make_decay_filter, make_output_filter
 
+    shelf = FirstOrderShelf()
     with pytest.raises(ValueError, match="2 endpoints"):
-        make_decay_shelf(np.ones(3), np.array([100.0, 150.0]), 48000.0, 2**10)
+        make_decay_filter(shelf, np.ones(3), np.array([100.0, 150.0]), 48000.0, 2**10)
     with pytest.raises(ValueError, match="2 endpoints"):
-        make_output_shelf(np.ones(3), 1, 48000.0, 2**10)
+        make_output_filter(shelf, np.ones(3), 1, 48000.0, 2**10)
 
 
 def test_shelf_decay_trains_and_stays_contractive():
@@ -1269,11 +1271,13 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     """A negative RT is an amplifying loop; the floor maps it to fast decay."""
     import torch
 
-    from pyFDN.train.shelf import make_decay_shelf
+    from pyFDN.eq import FirstOrderShelf
+    from pyFDN.train.filters import make_decay_filter
 
+    shelf = FirstOrderShelf()
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
-    module = make_decay_shelf(
-        np.array([-5.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    module = make_decay_filter(
+        shelf, np.array([-5.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1281,8 +1285,8 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) < 1.0)
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
-    deeper = make_decay_shelf(
-        np.array([-50.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    deeper = make_decay_filter(
+        shelf, np.array([-50.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1304,3 +1308,84 @@ def test_ten_bands_still_mean_the_graphic_eq():
     assert param(model, "absorption").raw().shape == (10,)
     assert param(model, "post_eq").raw().shape == (10, 1)
     assert param(model, "absorption").shape == (11, 6, 4)
+
+
+def test_per_line_rt_gives_every_delay_line_its_own_decay():
+    """A (bands, n_delays) absorption_rt trains one reverberation time per line."""
+    fs = 48000.0
+    delays = np.array([809, 1153, 1583, 2069])
+    build = FDNBuild(
+        A=np.eye(4),
+        B=np.ones((4, 1)),
+        C=np.ones((1, 4)),
+        D=np.zeros((1, 1)),
+        delays=delays,
+        fs=fs,
+    )
+    # line 0 decays fast, line 3 slowly -- a decay no shared RT can produce
+    rt = np.tile(np.linspace(0.4, 3.0, 4), (10, 1))
+    model = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
+
+    absorption = param(model, "absorption")
+    assert absorption.raw().shape == (10, 4)
+    sos = absorption.value().detach().numpy()
+    assert sos.shape == (11, 6, 4)
+
+    # each line's round-trip attenuation follows its own RT, not a shared one
+    from scipy.signal import sosfreqz
+
+    attenuation_db = [
+        20 * np.log10(np.abs(sosfreqz(sos[:, :, ch], worN=64, fs=fs)[1])).mean()
+        for ch in range(4)
+    ]
+    expected = -60.0 * delays / (np.linspace(0.4, 3.0, 4) * fs)
+    np.testing.assert_allclose(attenuation_db, expected, rtol=0.05)
+
+
+def test_per_line_rt_floor_is_each_line_s_own_round_trip():
+    """The shared floor is the longest line's; a per-line floor is each line's."""
+    import torch
+
+    from pyFDN.eq import GraphicEQ
+    from pyFDN.train.filters import make_decay_filter
+
+    fs, nfft = 48000.0, 2**10
+    delays = np.array([809.0, 4096.0])
+    shared = make_decay_filter(
+        GraphicEQ(), np.full(10, 1.0), delays, fs, nfft, dtype=torch.float64
+    )
+    per_line = make_decay_filter(
+        GraphicEQ(), np.full((10, 2), 1.0), delays, fs, nfft, dtype=torch.float64
+    )
+    assert shared.rt_floor.ndim == 0
+    np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
+    np.testing.assert_allclose(per_line.rt_floor.numpy(), delays / fs)
+
+    # a negative RT saturates at the floor for both, and stays contractive
+    for module, rt in ((shared, np.full(10, -5.0)), (per_line, np.full((10, 2), -5.0))):
+        floored = module.map(torch.tensor(rt, dtype=torch.float64)).detach().numpy()
+        assert np.all(np.isfinite(floored))
+
+
+def test_one_pole_is_reachable_as_an_explicit_design():
+    """OnePole shares the shelf's two parameters, so it must be named."""
+    from pyFDN.eq import FirstOrderShelf, OnePole
+
+    build = _plain_build()
+    shelf_model = trainable_from_build(
+        build, absorption_rt=(1.5, 0.6), nfft=2**12, device="cpu"
+    )
+    one_pole_model = trainable_from_build(
+        build,
+        absorption_rt=(1.5, 0.6),
+        absorption_design=OnePole(),
+        nfft=2**12,
+        device="cpu",
+    )
+    # the default for two numbers is still the shelf
+    assert isinstance(param(shelf_model, "absorption").module.design, FirstOrderShelf)
+    assert isinstance(param(one_pole_model, "absorption").module.design, OnePole)
+
+    designed = pyFDN.one_pole_absorption(1.5, 0.6, build.delays, build.fs)
+    trained = param(one_pole_model, "absorption").value().detach().numpy()
+    np.testing.assert_allclose(trained, designed, atol=1e-6)

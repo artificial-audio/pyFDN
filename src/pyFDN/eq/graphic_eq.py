@@ -12,8 +12,12 @@ References:
 
 from __future__ import annotations
 
+import math
+from typing import Any
+
 import numpy as np
 
+from ._backend import array_namespace
 from .bandpass_filter import bandpass_filter
 from .shelving_filter import shelving_filter
 
@@ -22,8 +26,8 @@ def graphic_eq(
     center_omega: np.ndarray,
     shelving_omega: np.ndarray,
     R: float,
-    gain_db: np.ndarray,
-) -> np.ndarray:
+    gain_db: Any,
+) -> Any:
     """Build a graphic EQ as a bank of independent biquad sections.
 
     Band layout (total ``len(center_omega) + len(shelving_omega) + 1`` sections):
@@ -39,36 +43,41 @@ def graphic_eq(
         shelving_omega: Cut-off frequencies of shelving bands in radians,
                         shape ``(2,)`` — ``[low_crossover, high_crossover]``.
         R: Bandwidth parameter; quality factor is ``sqrt(R) / (R - 1)``.
-        gain_db: Command gains in dB for each section, shape
-                 ``(num_center + 3,)`` (flat + low shelf + bandpass + high shelf).
+        gain_db: Command gains in dB, one per section: shape
+                 ``(num_center + 3,)``, or ``(num_center + 3, ...)`` to design
+                 that many EQs at once. A torch tensor designs the bank
+                 differentiably -- see :mod:`._backend`.
 
     Returns:
-        SOS matrix of shape ``(num_bands, 6)`` with columns
-        ``[b0, b1, b2, a0, a1, a2]``.
+        SOS bank of shape ``(num_bands, 6) + gain_db.shape[1:]``, the section
+        coefficients ``[b0, b1, b2, a0, a1, a2]`` along axis 1. Sections are
+        *not* normalized to ``a0 = 1``.
     """
+    xp = array_namespace(gain_db)
+    if xp is np:
+        gain_db = np.asarray(gain_db, dtype=float)
     center_omega = np.asarray(center_omega, dtype=float)
     shelving_omega = np.asarray(shelving_omega, dtype=float)
-    gain_db = np.asarray(gain_db, dtype=float)
 
     num_freq = len(center_omega) + len(shelving_omega) + 1
-    if len(gain_db) != num_freq:
-        raise ValueError(f"Expected {num_freq} gains, got {len(gain_db)}")
+    if gain_db.shape[0] != num_freq:
+        raise ValueError(f"Expected {num_freq} gains, got {gain_db.shape[0]}")
 
-    sos = np.zeros((num_freq, 6))
-    Q = np.sqrt(R) / (R - 1)
+    Q = math.sqrt(R) / (R - 1)
+    gains = 10.0 ** (gain_db / 20.0)  # dB → linear
 
+    sections = []
     for band in range(num_freq):
-        g = 10.0 ** (gain_db[band] / 20.0)  # dB → linear
+        g = gains[band]
         if band == 0:
-            b = np.array([g, 0.0, 0.0])
-            a = np.array([1.0, 0.0, 0.0])
+            zero, one = xp.zeros_like(g), xp.ones_like(g)
+            b, a = xp.stack([g, zero, zero], 0), xp.stack([one, zero, zero], 0)
         elif band == 1:
             b, a = shelving_filter(shelving_omega[0], g, "low")
         elif band == num_freq - 1:
             b, a = shelving_filter(shelving_omega[1], g, "high")
         else:
             b, a = bandpass_filter(center_omega[band - 2], g, Q)
-        sos[band, :3] = b
-        sos[band, 3:] = a
+        sections.append(xp.concatenate([b, a], 0))
 
-    return sos
+    return xp.stack(sections, 0)
