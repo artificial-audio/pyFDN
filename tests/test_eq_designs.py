@@ -7,12 +7,15 @@ import pytest
 
 import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
-from pyFDN.eq.absorption_geq import absorption_geq
-from pyFDN.eq.bandpass_filter import bandpass_filter
-from pyFDN.eq.design_geq import design_geq, geq_sos
-from pyFDN.eq.graphic_eq import graphic_eq
-from pyFDN.eq.probe_sos import probe_sos
-from pyFDN.eq.shelving_filter import shelving_filter
+from pyFDN.eq import (
+    absorption_geq,
+    bandpass_filter,
+    design_geq,
+    geq_sos,
+    probe_sos,
+    shelving_filter,
+)
+from pyFDN.eq.graphic_eq import _geq_sections
 
 
 @pytest.fixture()
@@ -59,31 +62,31 @@ def test_bandpass_filter_unity_gain():
     np.testing.assert_allclose(b, a, atol=1e-12)
 
 
-def test_graphic_eq_shape(geq_setup):
+def test_geq_shape(geq_setup):
     center_omega, shelving_omega, R, _ = geq_setup
-    sos = graphic_eq(center_omega, shelving_omega, R, np.zeros(11))
+    sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     assert sos.shape == (11, 6)
 
 
-def test_graphic_eq_zero_gains_flat(geq_setup):
+def test_geq_zero_gains_flat(geq_setup):
     """Zero dB command gains should give a flat (all-pass) response."""
     center_omega, shelving_omega, R, fs = geq_setup
-    sos = graphic_eq(center_omega, shelving_omega, R, np.zeros(11))
+    sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(200, 8000, 20)
     G, _, _ = probe_sos(sos, ctrl, 2**14, fs)
     # Each section at 0 dB should contribute ≈ 0 dB
     np.testing.assert_allclose(G.sum(axis=1), np.zeros(len(ctrl)), atol=0.5)
 
 
-def test_graphic_eq_wrong_gain_length(geq_setup):
+def test_geq_wrong_gain_length(geq_setup):
     center_omega, shelving_omega, R, _ = geq_setup
     with pytest.raises(ValueError):
-        graphic_eq(center_omega, shelving_omega, R, np.zeros(9))
+        _geq_sections(center_omega, shelving_omega, R, np.zeros(9))
 
 
 def test_probe_sos_shapes(geq_setup):
     center_omega, shelving_omega, R, fs = geq_setup
-    sos = graphic_eq(center_omega, shelving_omega, R, np.zeros(11))
+    sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(100, 10000, 30)
     G, H, W = probe_sos(sos, ctrl, 512, fs)
     assert G.shape == (30, 11)
@@ -162,7 +165,7 @@ def test_geq_sos_is_the_same_design_in_torch():
     assert torch.any(tensor_target.grad != 0)
 
 
-def test_graphic_eq_designs_a_batch_of_gains_at_once():
+def test_geq_designs_a_batch_of_gains_at_once():
     """A trailing axis on the gains is a bank of EQs, designed together."""
     fs = 48000.0
     center_omega = hertz_to_rad(
@@ -171,119 +174,139 @@ def test_graphic_eq_designs_a_batch_of_gains_at_once():
     shelving_omega = hertz_to_rad(np.array([46.0, 11360.0]), fs)
     gains = np.stack([np.linspace(-6, 6, 11), np.zeros(11)], axis=1)
 
-    banked = graphic_eq(center_omega, shelving_omega, 2.7, gains)
+    banked = _geq_sections(center_omega, shelving_omega, 2.7, gains)
     assert banked.shape == (11, 6, 2)
     for channel in range(gains.shape[1]):
         np.testing.assert_allclose(
             banked[:, :, channel],
-            graphic_eq(center_omega, shelving_omega, 2.7, gains[:, channel]),
+            _geq_sections(center_omega, shelving_omega, 2.7, gains[:, channel]),
         )
 
 
-# ---------------------------------------------------------------- EQDesign ---
+# ------------------------------------------------------ target-to-EQ API ---
 
 
 @pytest.mark.parametrize(
-    "design",
-    [pyFDN.GraphicEQ(0.0), pyFDN.FirstOrderShelf(0.0), pyFDN.OnePole(0.0)],
-    ids=lambda d: type(d).__name__,
+    ("design", "n_parameters", "n_sections"),
+    [
+        ("graphic_eq", 10, 11),
+        ("first_order_shelf", 2, 1),
+        ("one_pole", 2, 1),
+    ],
 )
-def test_every_design_honours_the_same_contract(design):
-    """n_params targets in, (n_sections, 6) biquads out, normalized to a0 = 1."""
+def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
     fs = 48000.0
-    target = np.linspace(-6.0, -1.0, design.n_params)
-
-    sos = design.sos(target, fs, **design.buffers(fs))
-    assert sos.shape == (design.n_sections, 6)
+    gain = np.linspace(-6.0, -1.0, n_parameters)
+    if design == "graphic_eq":
+        sos = pyFDN.gain_to_geq(gain, fs)
+    elif design == "first_order_shelf":
+        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], 3000.0, fs)
+    else:
+        sos = pyFDN.gain_to_one_pole(gain[0], gain[1])
+    assert sos.shape == (n_sections, 6)
     np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
 
-    banked = design.sos(
-        np.stack([target, target * 0.5], axis=1), fs, **design.buffers(fs)
-    )
-    assert banked.shape == (design.n_sections, 6, 2)
-    np.testing.assert_allclose(banked[:, :, 0], sos, atol=1e-12)
-
 
 @pytest.mark.parametrize(
-    "design",
-    [pyFDN.GraphicEQ(0.0), pyFDN.FirstOrderShelf(0.0), pyFDN.OnePole(0.0)],
-    ids=lambda d: type(d).__name__,
+    ("design_fn", "args"),
+    [
+        (pyFDN.gain_to_geq, (np.linspace(-6.0, -1.0, 10), 48000.0)),
+        (
+            pyFDN.gain_to_first_order_shelf,
+            (-6.0, -1.0, 3000.0, 48000.0),
+        ),
+        (pyFDN.gain_to_one_pole, (-6.0, -1.0)),
+    ],
 )
-def test_every_design_runs_in_torch_from_the_same_source(design):
-    """One implementation per design, two array namespaces, no drift."""
+def test_gain_designs_run_differentiably_in_torch(design_fn, args):
     torch = pytest.importorskip("torch")
-    fs = 48000.0
-    target = np.linspace(-6.0, -1.0, design.n_params)
-
-    tensor_target = torch.tensor(target, dtype=torch.float64, requires_grad=True)
-    buffers = {
-        k: torch.tensor(v, dtype=torch.float64) for k, v in design.buffers(fs).items()
-    }
-    tensor_sos = design.sos(tensor_target, fs, **buffers)
-
-    np.testing.assert_allclose(
-        tensor_sos.detach().numpy(),
-        design.sos(target, fs, **design.buffers(fs)),
-        atol=1e-12,
-    )
+    if design_fn is pyFDN.gain_to_geq:
+        tensor_args = [
+            torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
+            args[1],
+        ]
+    elif design_fn is pyFDN.gain_to_first_order_shelf:
+        tensor_args = [
+            torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
+            torch.tensor(args[1], dtype=torch.float64, requires_grad=True),
+            args[2],
+            args[3],
+        ]
+    else:
+        tensor_args = [
+            torch.tensor(value, dtype=torch.float64, requires_grad=True)
+            for value in args
+        ]
+    tensor_sos = design_fn(*tensor_args)
+    assert torch.all(torch.isfinite(tensor_sos))
     tensor_sos.sum().backward()
-    assert torch.all(torch.isfinite(tensor_target.grad))
+    target_args = [value for value in tensor_args if hasattr(value, "grad")]
+    assert all(value.grad is not None for value in target_args)
+    assert all(torch.all(torch.isfinite(value.grad)) for value in target_args)
 
 
-def test_a_design_carries_its_target_and_checks_its_length():
-    """The target's length is the design's business, so it is an invariant."""
-    fs = 48000.0
-    shelf = pyFDN.FirstOrderShelf((-4.0, -9.0))
-    np.testing.assert_array_equal(shelf.target, [-4.0, -9.0])
-    # design() is sos() applied to the design's own target
-    np.testing.assert_allclose(
-        shelf.design(fs), shelf.sos(shelf.target, fs), atol=1e-12
-    )
-    # a scalar spreads across the design's parameters
-    np.testing.assert_array_equal(pyFDN.GraphicEQ(-3.0).target, np.full(10, -3.0))
-    # and a target of the wrong length fails where it is written
-    with pytest.raises(ValueError, match="FirstOrderShelf takes 2 values"):
-        pyFDN.FirstOrderShelf(np.zeros(10))
-    with pytest.raises(ValueError, match="GraphicEQ takes 10 values"):
-        pyFDN.GraphicEQ(np.zeros(2))
-
-
-def test_absorption_geq_is_the_same_closed_form_the_geq_design_maps():
-    """No second, offline-only design: numpy and torch bake the same numbers."""
+def test_decay_and_gain_geq_are_the_same_mapping():
     fs = 48000.0
     rt = np.linspace(2.0, 0.6, 10)
     delays = np.array([809.0, 1153.0])
-    slope = pyFDN.rt_to_slope(rt, fs)
+    gain_db = -60.0 * delays / (rt[:, None] * fs)
     np.testing.assert_allclose(
-        pyFDN.absorption_geq(rt, delays, fs),
-        pyFDN.GraphicEQ(rt).sos(slope[:, None] * delays[None, :], fs),
+        pyFDN.decay_to_geq(rt, delays, fs),
+        pyFDN.gain_to_geq(gain_db, fs),
         atol=1e-12,
     )
 
 
-def test_one_pole_design_matches_the_numpy_absorption_design():
-    """OnePole().sos is one_pole_absorption, given the same endpoint gains."""
+def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     fs = 48000.0
     delays = np.array([809.0, 1153.0])
-    rt_dc, rt_ny = 1.4, 0.7
-    designed = pyFDN.one_pole_absorption(rt_dc, rt_ny, delays, fs)
-
-    slope = np.array([pyFDN.rt_to_slope(rt_dc, fs), pyFDN.rt_to_slope(rt_ny, fs)])
-    target_db = slope[:, None] * delays[None, :]
+    rt_dc, rt_nyquist, crossover = 1.4, 0.7, 3500.0
     np.testing.assert_allclose(
-        pyFDN.OnePole(0.0).sos(target_db, fs), designed, atol=1e-12
+        pyFDN.decay_to_first_order_shelf(rt_dc, rt_nyquist, crossover, delays, fs),
+        pyFDN.gain_to_first_order_shelf(
+            -60.0 * delays / (rt_dc * fs),
+            -60.0 * delays / (rt_nyquist * fs),
+            crossover,
+            fs,
+        ),
+        atol=1e-12,
     )
+
+
+def test_decay_and_gain_one_pole_are_the_same_mapping():
+    fs = 48000.0
+    delays = np.array([809.0, 1153.0])
+    rt_dc, rt_nyquist = 1.4, 0.7
+    np.testing.assert_allclose(
+        pyFDN.decay_to_one_pole(rt_dc, rt_nyquist, delays, fs),
+        pyFDN.gain_to_one_pole(
+            -60.0 * delays / (rt_dc * fs),
+            -60.0 * delays / (rt_nyquist * fs),
+        ),
+        atol=1e-12,
+    )
+
+
+def test_geq_rejects_the_wrong_number_of_targets():
+    with pytest.raises(ValueError, match="takes 10 gains"):
+        pyFDN.gain_to_geq(np.zeros(2), 48000.0)
+    with pytest.raises(ValueError, match="expected 10 reverberation times"):
+        pyFDN.decay_to_geq(np.zeros(2), [100.0], 48000.0)
 
 
 @pytest.mark.parametrize(
-    "design_fn", [pyFDN.one_pole_absorption, pyFDN.first_order_absorption]
+    "design_fn",
+    [pyFDN.decay_to_one_pole, pyFDN.decay_to_first_order_shelf],
 )
-def test_absorption_designs_flatten_the_delays_they_are_given(design_fn):
-    """The SOS bank's channel axis is flat whatever shape `delays` arrives in."""
+def test_attenuation_designs_flatten_delays(design_fn):
     fs = 48000.0
     flat = np.array([100.0, 150.0, 200.0, 250.0])
+    if design_fn is pyFDN.decay_to_first_order_shelf:
+        args = (4.0, 1.0, None)
+    else:
+        args = (4.0, 1.0)
     np.testing.assert_allclose(
-        design_fn(4.0, 1.0, flat.reshape(2, 2), fs),
-        design_fn(4.0, 1.0, flat, fs),
+        design_fn(*args, flat.reshape(2, 2), fs),
+        design_fn(*args, flat, fs),
     )
-    assert design_fn(4.0, 1.0, flat.reshape(1, 4), fs).shape == (1, 6, 4)
+    assert design_fn(*args, flat.reshape(1, 4), fs).shape == (1, 6, 4)

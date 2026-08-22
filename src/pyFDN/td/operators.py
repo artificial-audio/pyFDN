@@ -177,8 +177,8 @@ class SOSBank(TimeOperator):
         ``N = num_channels``. Section rows are ``[b0, b1, b2, a0, a1, a2]``.
         This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
         ``parallelSOSFilter`` input and the output of
-        :func:`pyFDN.first_order_absorption`, :func:`pyFDN.one_pole_absorption`,
-        and :func:`pyFDN.absorption_geq`.
+        :func:`pyFDN.decay_to_first_order_shelf`,
+        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_geq`.
 
     Attributes
     ----------

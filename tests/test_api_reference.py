@@ -27,6 +27,15 @@ _REFERENCE = Path(__file__).resolve().parent.parent / "docs" / "api_reference.rs
 # To promote any of these to the headline docs, move it into a category in
 # ``docs/api_reference.rst`` and delete it from this set.
 INTENTIONALLY_UNDOCUMENTED = {
+    # compatibility spellings from the pre-refactor EQ API
+    "absorption_geq",
+    "bandpass_filter",
+    "design_geq",
+    "first_order_absorption",
+    "first_order_shelving_eq",
+    "geq_sos",
+    "one_pole_absorption",
+    "shelving_filter",
     # generate.allpass_FDN completion plumbing
     "apply_diagonal_similarity",
     "block_matrix",

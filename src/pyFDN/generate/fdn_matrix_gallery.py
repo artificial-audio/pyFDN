@@ -33,7 +33,7 @@ class FDNBuild:
     :func:`pyFDN.save_fdn_build` writes. Nothing here remembers how a filter was
     designed -- a reverberation time, an EQ curve -- because nothing that reads
     a build needs to know. That knowledge lives in the design
-    (:class:`~pyFDN.eq.EQDesign`) at the moment the filter is built, and in the
+    (:class:`~pyFDN.FilterDesign`) at the moment the filter is built, and in the
     trainable modules of :mod:`pyFDN.train`.
 
     The three optional filter fields are the three filter hooks of
@@ -194,13 +194,13 @@ def _build_post_output(
             raise ValueError(f"{name} must be scalar or length num_outputs")
         return arr
 
-    from ..eq.first_order import first_order_shelving_eq
+    from ..eq import gain_to_first_order_shelf
 
-    return first_order_shelving_eq(
+    return gain_to_first_order_shelf(
         _per_output(db_dc, "eq_db_dc"),
         _per_output(db_nyquist, "eq_db_nyquist"),
-        fs,
         crossover_frequency,
+        fs,
     )
 
 
@@ -311,11 +311,11 @@ def fdn_build_gallery(
 
     filters: np.ndarray | None = None
     if rt is not None:
-        from ..eq.first_order import first_order_absorption
+        from ..eq import decay_to_first_order_shelf
 
         rt_ny = rt if rt_nyquist is None else rt_nyquist
-        filters = first_order_absorption(
-            rt, rt_ny, delays_array, float(fs), rt_crossover
+        filters = decay_to_first_order_shelf(
+            rt, rt_ny, rt_crossover, delays_array, float(fs)
         )
 
     post_output = _build_post_output(

@@ -126,7 +126,7 @@ def _(est_rt, fs, np, pyFDN):
 
     target_rt = np.concatenate(([est_rt[0]], est_rt, [est_rt[-1]]))
     target_rt = target_rt * np.array([0.9, 1, 1, 1, 1, 1, 1, 1, 0.9, 0.5])
-    sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
 
     print(f"Delays: {delays}")
     print(f"Target RT at GEQ bands (s): {target_rt.round(2)}")

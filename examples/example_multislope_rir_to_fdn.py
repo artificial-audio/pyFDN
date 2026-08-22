@@ -292,7 +292,7 @@ def _(mo):
 
     `pyFDN.design_geq` returns its biquad sections in the unnormalised form `[b0, b1, b2, a0, a1, a2]`, straight out of the analytic filter formulas, so `a0` is not 1 (a peaking section, for instance, has `a0 = sqrt(g) + t`).
 
-    Filtering code expects the normalised form, so each section is divided by its own `a0` — column 3 of the SOS matrix — which scales `b` and `a` together and leaves the transfer function unchanged. `pyFDN.absorption_geq` does this internally; `design_geq` leaves it to the caller.
+    Filtering code expects the normalised form, so each section is divided by its own `a0` — column 3 of the SOS matrix — which scales `b` and `a` together and leaves the transfer function unchanged. `pyFDN.decay_to_geq` does this internally; the legacy bounded `design_geq` solver leaves it to the caller.
     """)
     return
 
@@ -316,7 +316,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
             rt=None,
             rng=10 + _slope,
         )
-        _absorption = pyFDN.absorption_geq(
+        _absorption = pyFDN.decay_to_geq(
             geq_grid(decay_time[:, _slope]), _build.delays, fs
         )
 

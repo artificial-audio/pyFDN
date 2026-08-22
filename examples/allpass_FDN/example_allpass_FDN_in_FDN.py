@@ -122,7 +122,7 @@ def _(Fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * Fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
-    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, main_delay_smp, fs=Fs)
+    sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, None, main_delay_smp, fs=Fs)
     attenuation = sos_filter_module(sos, nfft)
     return attenuation, input_delays, main_delays, output_delays
 
