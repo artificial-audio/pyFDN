@@ -11,6 +11,7 @@ from .allpass import (
 from .audio import load_audio
 from .flamo import (
     assemble_fdn_core,
+    core_alias_decay_db,
     delay_module,
     fir_matrix_module,
     flamo_freq_response,
@@ -41,6 +42,7 @@ __all__ = [
     "assemble_fdn_core",
     "wrap_fdn_shell",
     "output_layer",
+    "core_alias_decay_db",
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",

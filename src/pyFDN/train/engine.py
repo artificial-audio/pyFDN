@@ -1,8 +1,12 @@
-"""Train an FDN toward a target.
+"""Train an FDN toward an objective.
 
-:func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` toward a *mode*
-(``colorless`` / ``match_spectrogram`` / ``match_mel_spectrogram``) in place and
-returns a :class:`TrainLog`. Read the result back with :func:`pyFDN.extract_build`.
+:func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` to a loss built from
+:mod:`pyFDN.train.losses` (or a named preset), in place, and returns a
+:class:`TrainLog`. Read the result back with :func:`pyFDN.extract_build`.
+
+The engine knows nothing about any particular objective. Its whole job is: run
+the model on an impulse, hand the resulting :class:`~pyFDN.train.response.Response`
+to each loss term, and let the optimizer do the rest.
 """
 
 from __future__ import annotations
@@ -11,7 +15,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from .objectives import Criterion, Objective, build_objective
+from .losses import Loss
+from .presets import resolve
+from .response import Response, impulse_excitation, model_fs
 
 
 @dataclass
@@ -21,9 +27,10 @@ class TrainLog:
     Attributes
     ----------
     train_loss : list of float
-        Total loss at each step.
+        Total (weighted) loss at each step.
     loss_log : dict of str to list of float
-        Per-criterion loss history, keyed by criterion class name.
+        Per-term loss history, keyed by each term's name and stored
+        *unweighted*, so terms stay comparable to their own scale.
     steps_run : int
         Steps actually run.
     stopped_early : bool
@@ -38,12 +45,9 @@ class TrainLog:
 
 def train_fdn(
     model: Any,
-    mode: Objective,
+    loss: Loss | str,
     *,
     target: Any = None,
-    criteria: list[Criterion] | None = None,
-    sparsity_alpha: float = 0.2,
-    mss_nfft: tuple[int, ...] = (256, 512, 1024),
     max_steps: int = 2000,
     lr: float = 1e-3,
     optimizer: str = "adam",
@@ -55,7 +59,7 @@ def train_fdn(
     log: bool = False,
     train_dir: str | None = None,
 ) -> TrainLog:
-    """Train ``model`` for ``mode`` in place and return a :class:`TrainLog`.
+    """Train ``model`` on ``loss`` in place and return a :class:`TrainLog`.
 
     Read the trained result back with :func:`pyFDN.extract_build`.
 
@@ -63,19 +67,21 @@ def train_fdn(
     ----------
     model : flamo Shell
         A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_build``.
-    mode : str
-        ``"colorless"``, ``"match_spectrogram"`` or ``"match_mel_spectrogram"``.
-        ``"colorless"`` is single-input/single-output only.
-    target : np.ndarray, optional
-        Reference impulse response for the matching modes (unused for
-        ``colorless``). Shape ``(n_samples,)`` or ``(n_samples, n_out)``, or a 3-D
-        ``(n_samples, n_out, n_in)`` IR matrix to fit a full MIMO system.
-    criteria : list of (criterion, alpha, requires_model), optional
-        Replace the default loss list (primary loss + sparsity) with your own.
-    sparsity_alpha : float
-        Weight of the feedback-matrix sparsity penalty (default 0.2; 0 disables).
-    mss_nfft : tuple of int
-        STFT window sizes for the spectrogram modes.
+        Its output layer is set to ``"time"``: every loss is a function of the
+        impulse response, so there is one output domain and the model means the
+        same thing before, during and after training.
+    loss : Loss or str
+        The objective, e.g.::
+
+            pyFDN.FlatMagnitude() + 0.2 * pyFDN.Sparsity(pyFDN.param(model, "feedback"))
+
+        A string names a preset in :mod:`pyFDN.train.presets` (``"colorless"``,
+        ``"match_spectrogram"``, ``"match_mel_spectrogram"``) and is shorthand
+        for calling it on ``model``.
+    target : array_like, optional
+        Reference impulse response, for the presets that need one. Losses built
+        by hand hold their own reference data, so this is a preset-only
+        shorthand.
     max_steps, lr, patience : max gradient steps, learning rate, plateau patience.
     optimizer : str
         ``"adam"`` (default) or ``"lbfgs"``.
@@ -93,7 +99,7 @@ def train_fdn(
     import torch
     from flamo.optimize.trainer import EagerTrainer
 
-    from pyFDN.auxiliary.flamo import output_layer
+    from pyFDN.auxiliary.flamo import core_alias_decay_db, output_layer
 
     dev = "cpu" if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
@@ -101,25 +107,23 @@ def train_fdn(
     if rng is not None:
         torch.manual_seed(int(rng))
 
-    nfft = int(model.get_inputLayer().nfft)
-    n_in, n_out, fs = _model_info(model)
+    loss = resolve(loss, model, target=target)
+    loss.check(model)
 
-    inp, tgt, criteria, output_domain = build_objective(
-        mode,
-        target=target,
-        criteria=criteria,
-        sparsity_alpha=sparsity_alpha,
-        mss_nfft=tuple(mss_nfft),
-        fs=fs,
-        nfft=nfft,
-        n_in=n_in,
-        n_out=n_out,
-        device=dev,
-        dtype=torch_dtype,
+    nfft = int(model.nfft)
+    n_in = int(model.input_channels)
+    # Every loss reads the impulse response, so the output domain is fixed. This
+    # is the only mutation the trainer makes to the model, and it is idempotent:
+    # a model built by build_fdn already has exactly this layer.
+    model.set_outputLayer(
+        output_layer(
+            "time",
+            nfft,
+            torch_dtype,
+            alias_decay_db=core_alias_decay_db(model.get_core()),
+        )
     )
-    # Set the Shell's output layer to match the objective (time iFFT / magnitude
-    # |.|); a deliberate, visible mutation of the model.
-    model.set_outputLayer(output_layer(output_domain, nfft, torch_dtype))
+    excitation = impulse_excitation(n_in, nfft, device=dev, dtype=torch_dtype)
 
     # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
     save_checkpoints = log and train_dir is not None
@@ -138,9 +142,12 @@ def train_fdn(
         train_dir=train_dir,
         save_checkpoints=save_checkpoints,
     )
-    for criterion, alpha, requires_model in criteria:
-        trainer.register_criterion(criterion, alpha, requires_model)
-    history = trainer.optimize(inp, tgt)
+
+    factory = _ResponseFactory(model_fs(model))
+    for weight, term, name in _named_terms(loss):
+        trainer.register_criterion(_criterion(term, name, factory), weight, False)
+
+    history = trainer.optimize(excitation, _unused_target(torch, dev, torch_dtype))
 
     train_loss = [float(x) for x in history.get("total", [])]
     steps_run = len(train_loss)
@@ -152,31 +159,66 @@ def train_fdn(
     )
 
 
-def _model_info(model: Any) -> tuple[int, int, float]:
-    """``(n_in, n_out, fs)`` read from the model's gain and delay modules."""
-    from pyFDN.auxiliary.flamo_graph import flamo_model_to_nodes, flamo_nodes_flat
+def _unused_target(torch: Any, device: Any, dtype: Any) -> Any:
+    """Placeholder for FLAMO's fixed target tensor.
 
-    leaves = [
-        n for n in flamo_nodes_flat(flamo_model_to_nodes(model)) if n["type"] == "Leaf"
-    ]
+    ``EagerTrainer`` fits an ``(input, target)`` pair, but here every loss holds
+    whatever reference data it needs -- which is what lets one objective compare
+    against two different references. Nothing reads this tensor.
+    """
+    return torch.zeros(0, device=device, dtype=dtype)
 
-    def _gain(name: str) -> Any:
-        matches = [n["module"] for n in leaves if n["name"] == name]
-        if len(matches) != 1:
-            raise ValueError(
-                f"model must contain exactly one {name!r} module; found {len(matches)}"
-            )
-        return matches[0]
 
-    delay = next(
-        (n["module"] for n in leaves if "delay" in type(n["module"]).__name__.lower()),
-        None,
-    )
-    if delay is None:
-        raise ValueError("model has no delay module; check build again.")
-    fs = float(delay.fs)
-    return (
-        int(_gain("input_gain").param.shape[1]),
-        int(_gain("output_gain").param.shape[0]),
-        fs,
-    )
+class _ResponseFactory:
+    """Turns a model output into a :class:`Response`, once per step.
+
+    All terms in one step see the same model output tensor, so a single-entry
+    cache keyed on its identity means the ``Response``'s lazily computed
+    spectrum is shared by every spectral term instead of recomputed per term.
+    """
+
+    def __init__(self, fs: float) -> None:
+        self.fs = fs
+        self._cached_output: Any = None
+        self._cached_response: Response | None = None
+
+    def of(self, output: Any) -> Response:
+        if output is self._cached_output and self._cached_response is not None:
+            return self._cached_response
+        # model output is (n_in, nfft, n_out); Response is (nfft, n_out, n_in).
+        response = Response(h=output.permute(1, 2, 0), fs=self.fs)
+        self._cached_output, self._cached_response = output, response
+        return response
+
+
+def _named_terms(loss: Loss) -> list[tuple[float, Loss, str]]:
+    """``(weight, term, unique name)`` for every leaf of the objective."""
+    named: list[tuple[float, Loss, str]] = []
+    seen: dict[str, int] = {}
+    for weight, term in loss.terms():
+        name = term.name
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] > 1:
+            name = f"{name}#{seen[name]}"
+        named.append((weight, term, name))
+    return named
+
+
+def _criterion(term: Loss, name: str, factory: _ResponseFactory) -> Any:
+    """Wrap a loss term in the ``nn.Module`` criterion FLAMO's trainer expects.
+
+    The class is built per term because ``EagerTrainer`` keys its loss history
+    by the criterion's class name.
+    """
+    import torch.nn as nn
+
+    class _TermCriterion(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.term = term
+            self.factory = factory
+
+        def forward(self, y_pred: Any, y_target: Any) -> Any:
+            return self.term(self.factory.of(y_pred))
+
+    return type(name, (_TermCriterion,), {})()

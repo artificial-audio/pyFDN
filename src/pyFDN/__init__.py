@@ -7,11 +7,9 @@ __version__ = "0.3.0"
 
 __all__ = [
     # acoustics
-    "absorption_filters",
     "echo_density",
     "estimate_initial_level_bands",
     "estimate_rt_bands",
-    "absorption_to_rt",
     "edc",
     "first_order_absorption",
     "first_order_shelving_eq",
@@ -32,6 +30,17 @@ __all__ = [
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",
+    # building a FLAMO FDN graph from numpy values
+    "assemble_fdn_core",
+    "wrap_fdn_shell",
+    "gain_module",
+    "delay_module",
+    "matrix_module",
+    "fir_matrix_module",
+    "sos_filter_module",
+    "hook_module",
+    "DecayFilter",
+    "OutputEQ",
     "audio_metadata",
     "available_audio",
     "load_audio",
@@ -70,10 +79,16 @@ __all__ = [
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
-    # graphicEQ
+    # eq
     "absorption_geq",
     "bandpass_filter",
+    "EQDesign",
+    "FirstOrderShelf",
+    "GraphicEQ",
+    "OnePole",
     "design_geq",
+    "geq_design_matrix",
+    "geq_sos",
     "graphic_eq",
     "probe_sos",
     "shelving_filter",
@@ -133,10 +148,35 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
+    "LOSSLESS_ALIAS_DECAY_DB",
     "build_set_decay",
     "Trainable",
     "train_fdn",
     "TrainLog",
+    # training: what a loss sees
+    "Response",
+    "model_response",
+    "impulse_excitation",
+    "param",
+    "params",
+    "ParamRef",
+    # training: losses
+    "Loss",
+    "ResponseLoss",
+    "ParameterLoss",
+    "FlatMagnitude",
+    "AsymmetricFlatMagnitude",
+    "FlatSpectrogram",
+    "MatchMagnitude",
+    "MatchSpectrogram",
+    "MatchMelSpectrogram",
+    "MatchImpulseResponse",
+    "MatchEnergyDecay",
+    "MatchCumulativeEnergy",
+    "Energy",
+    "Sparsity",
+    "L1",
+    "L2",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -192,17 +232,12 @@ __all__ = [
 
 # acoustics and absorption
 from .auxiliary.acoustics import (
-    absorption_filters,
-    absorption_to_rt,
     echo_density,
     edc,
     estimate_initial_level_bands,
     estimate_rt_bands,
-    first_order_absorption,
-    first_order_shelving_eq,
     octave_band_filterbank,
     octave_bands,
-    one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
     slope_amplitude_to_level,
@@ -227,7 +262,21 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
+from .auxiliary.flamo import (
+    DecayFilter,
+    OutputEQ,
+    assemble_fdn_core,
+    delay_module,
+    fir_matrix_module,
+    flamo_freq_response,
+    flamo_process,
+    flamo_time_response,
+    gain_module,
+    hook_module,
+    matrix_module,
+    sos_filter_module,
+    wrap_fdn_shell,
+)
 from .auxiliary.flamo_graph import (
     extract_build,
     flamo_model_to_nodes,
@@ -307,6 +356,23 @@ from .build_io import (
     load_fdn_build,
     save_fdn_build,
 )
+from .eq import (
+    EQDesign,
+    FirstOrderShelf,
+    GraphicEQ,
+    OnePole,
+    absorption_geq,
+    bandpass_filter,
+    design_geq,
+    first_order_absorption,
+    first_order_shelving_eq,
+    geq_design_matrix,
+    geq_sos,
+    graphic_eq,
+    one_pole_absorption,
+    probe_sos,
+    shelving_filter,
+)
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -360,14 +426,6 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .graphicEQ import (
-    absorption_geq,
-    bandpass_filter,
-    design_geq,
-    graphic_eq,
-    probe_sos,
-    shelving_filter,
-)
 from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing
@@ -376,10 +434,33 @@ from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
 from .train import (
+    L1,
+    L2,
+    LOSSLESS_ALIAS_DECAY_DB,
+    AsymmetricFlatMagnitude,
+    Energy,
+    FlatMagnitude,
+    FlatSpectrogram,
+    Loss,
+    MatchCumulativeEnergy,
+    MatchEnergyDecay,
+    MatchImpulseResponse,
+    MatchMagnitude,
+    MatchMelSpectrogram,
+    MatchSpectrogram,
+    ParameterLoss,
+    ParamRef,
+    Response,
+    ResponseLoss,
+    Sparsity,
     Trainable,
     TrainLog,
     build_fdn,
     build_set_decay,
+    impulse_excitation,
+    model_response,
+    param,
+    params,
     train_fdn,
     trainable_from_build,
 )

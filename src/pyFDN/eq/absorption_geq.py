@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..auxiliary.acoustics import rt_to_slope
-from .design_geq import design_geq
+from .design_geq import geq_sos
 
 
 def absorption_geq(
@@ -25,6 +24,10 @@ def absorption_geq(
     Each delay line gets its own cascade of biquad sections whose combined
     attenuation per round trip matches the desired RT at each frequency band.
 
+    Uses the closed form of :func:`pyFDN.geq_sos` rather than the bounded solve
+    of :func:`pyFDN.design_geq`, so these are the same coefficients a trainable
+    :class:`~pyFDN.DecayFilter` maps the same reverberation time onto.
+
     Args:
         rt: Target reverberation time in seconds at 10 frequency bands,
             shape ``(10,)`` or broadcastable.
@@ -36,19 +39,14 @@ def absorption_geq(
         canonical SOS bank layout) where ``num_bands = 11`` (flat + low-shelf
         + 8 bandpass + high-shelf). All sections are normalised so ``a[0] = 1``.
     """
+    # lazy: auxiliary.acoustics re-exports the designs in this package, so
+    # importing it at module level would cycle.
+    from ..auxiliary.acoustics import rt_to_slope
+
     rt = np.asarray(rt, dtype=float).ravel()
     delays = np.asarray(delays, dtype=float).ravel()
 
-    target_g = rt_to_slope(rt, fs)  # dB / sample (negative)
-
-    num_delays = len(delays)
-    prototype_sos, _ = design_geq(target_g * delays[0], fs=fs)
-    num_bands = prototype_sos.shape[0]
-
-    sos_out = np.zeros((num_bands, 6, num_delays))
-    for i, delay in enumerate(delays):
-        opt_sos, _ = design_geq(target_g * delay, fs=fs)
-        opt_sos = opt_sos / opt_sos[:, 3:4]  # normalise a0 = 1
-        sos_out[:, :, i] = opt_sos
-
-    return sos_out
+    # dB / sample (negative), then dB per delay-line round trip: an outer
+    # product, one column per delay line, which geq_sos designs in one call.
+    target_db = rt_to_slope(rt, fs)[:, None] * delays[None, :]
+    return geq_sos(target_db, fs)

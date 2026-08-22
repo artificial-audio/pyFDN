@@ -68,8 +68,8 @@ def _(fs, n, pyFDN):
         direct_gain=1.0,
         rt=2.0,
         rt_nyquist=0.5,
-        post_eq_db_dc=0.0,
-        post_eq_db_nyquist=-6.0,
+        eq_db_dc=0.0,
+        eq_db_nyquist=-6.0,
         rng=42,
     )
     model = pyFDN.dss_to_flamo(
@@ -80,8 +80,8 @@ def _(fs, n, pyFDN):
         build.delays,
         build.fs,
         nfft=2**18,
-        sos_filter=build.filters,
-        output_filter=build.post_eq,
+        post_delay=build.post_delay,
+        post_output=build.post_output,
     )
     ir_original = pyFDN.flamo_time_response(model).flatten()
     return build, ir_original, model

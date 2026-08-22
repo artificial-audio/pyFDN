@@ -97,7 +97,9 @@ def _(block_diag, np, pyFDN):
 
     room_A = _mixing @ block_diag(room_small.A, room_large.A)
     room_delays = np.concatenate([room_small.delays, room_large.delays])
-    room_absorption = np.concatenate([room_small.filters, room_large.filters], axis=2)
+    room_absorption = np.concatenate(
+        [room_small.post_delay, room_large.post_delay], axis=2
+    )
 
     # source in the small room, receiver in the small room with weak coupling
     room_B = np.zeros((2 * num_delays_room, 1))
@@ -115,7 +117,7 @@ def _(block_diag, np, pyFDN):
             room_delays,
             fs,
             nfft=nfft,
-            sos_filter=room_absorption,
+            post_delay=room_absorption,
             shell=True,
         )
     ).squeeze()
@@ -143,7 +145,7 @@ def _(fs, np, pyFDN, room_large, room_small):
     def room_reference_rt(build):
         """Reverberation time per frequency from a room's absorption filters."""
         angles, magnitude = pyFDN.sos_gain_per_sample_curves(
-            build.filters, build.delays, nfft=256
+            build.post_delay, build.delays, nfft=256
         )
         frequency = angles / np.pi * fs / 2
         return frequency, pyFDN.slope_to_rt(pyFDN.lin_to_db(magnitude.mean(axis=1)), fs)
@@ -176,7 +178,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     ## Fitting two slopes with DecayFitNet
 
-    `multislope.DecayFitNet` filters the RIR into octave bands, backward integrates each band, and predicts the decay times `T`, the slope amplitudes `A` and the noise floor `N` of a multi-exponential decay model. 
+    `multislope.DecayFitNet` filters the RIR into octave bands, backward integrates each band, and predicts the decay times `T`, the slope amplitudes `A` and the noise floor `N` of a multi-exponential decay model.
     The network is described in {pyFDN.paper_link("Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis")}.
 
     The network resamples every EDC to a fixed length, so the analysis window sets the time resolution of the fit: a 0.6 s slope inside a 5.5 s window occupies only a handful of samples and gets smeared into the late decay.
@@ -328,7 +330,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 _build.delays,
                 fs,
                 nfft=nfft,
-                sos_filter=_absorption,
+                post_delay=_absorption,
                 shell=True,
             )
         ).squeeze()[: len(rir)]
@@ -350,8 +352,8 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 _build.delays,
                 fs,
                 nfft=nfft,
-                sos_filter=_absorption,
-                output_filter=_eq[:, :, np.newaxis],
+                post_delay=_absorption,
+                post_output=_eq[:, :, np.newaxis],
                 shell=True,
             )
         ).squeeze()[: len(rir)]

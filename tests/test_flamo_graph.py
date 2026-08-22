@@ -29,8 +29,8 @@ def test_extract_build_from_dss_model():
         delays,
         48_000,
         nfft=128,
-        sos_filter=attenuation,
-        output_filter=post_eq,
+        post_delay=attenuation,
+        post_output=post_eq,
     )
     parameters = pyFDN.extract_build(model)
 
@@ -39,6 +39,6 @@ def test_extract_build_from_dss_model():
     np.testing.assert_allclose(parameters.B, B)
     np.testing.assert_allclose(parameters.C, C)
     np.testing.assert_allclose(parameters.D, D)
-    np.testing.assert_allclose(parameters.filters, attenuation)
-    np.testing.assert_allclose(parameters.post_eq, post_eq)
+    np.testing.assert_allclose(parameters.post_delay, attenuation)
+    np.testing.assert_allclose(parameters.post_output, post_eq)
     assert parameters.fs == 48_000

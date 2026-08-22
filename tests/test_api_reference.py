@@ -41,6 +41,11 @@ INTENTIONALLY_UNDOCUMENTED = {
     "sqrtm_psd",
     # misc internal helper
     "is_almost_zero",
+    # loss taxonomy base classes (subclass to write a loss; not used directly)
+    "ResponseLoss",
+    "ParameterLoss",
+    # excitation plumbing (train_fdn builds this for you)
+    "impulse_excitation",
     # low-level FLAMO graph/recursion manipulation (advanced / plumbing)
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",

@@ -18,19 +18,29 @@ def test_fdn_build_json_round_trip(tmp_path) -> None:
         D=np.zeros((1, 1)),
         delays=np.array([101, 149]),
         fs=48_000.0,
-        filters=np.ones((1, 6, 2)),
-        post_eq=np.ones((1, 6, 1)),
+        post_delay=np.ones((1, 6, 2)),
+        post_matrix=np.full((1, 6, 2), 0.5),
+        post_output=np.ones((1, 6, 1)),
     )
     path = tmp_path / "build.json"
 
     pyFDN.save_fdn_build(path, build, metadata={"description": "Test build"})
     encoded = json.loads(path.read_text(encoding="utf-8"))
     assert encoded["format"] == "pyfdn-fdn-build"
-    assert encoded["version"] == 1
+    assert encoded["version"] == 2
     assert encoded["metadata"]["description"] == "Test build"
 
     restored = pyFDN.load_fdn_build(path)
-    for field in ("A", "B", "C", "D", "delays", "filters", "post_eq"):
+    for field in (
+        "A",
+        "B",
+        "C",
+        "D",
+        "delays",
+        "post_delay",
+        "post_matrix",
+        "post_output",
+    ):
         np.testing.assert_array_equal(getattr(restored, field), getattr(build, field))
     assert restored.fs == build.fs
 
@@ -40,6 +50,37 @@ def test_fdn_build_sample_rate_override() -> None:
     data = pyFDN.fdn_build_to_dict(build)
     restored = pyFDN.fdn_build_from_dict(data, fs=96_000)
     assert restored.fs == 96_000
+
+
+def test_version_1_files_still_load_under_their_old_hook_names() -> None:
+    """v1 spelled the hooks absorption_filters / output_filters."""
+    build = pyFDN.FDNBuild(
+        A=np.array([[0.0, 1.0], [1.0, 0.0]]),
+        B=np.array([[1.0], [0.5]]),
+        C=np.array([[0.25, 0.75]]),
+        D=np.zeros((1, 1)),
+        delays=np.array([101, 149]),
+        fs=48_000.0,
+        post_delay=np.ones((1, 6, 2)),
+        post_output=np.ones((1, 6, 1)),
+    )
+    data = pyFDN.fdn_build_to_dict(build)
+    legacy = {
+        "absorption_filters"
+        if k == "post_delay"
+        else "output_filters"
+        if k == "post_output"
+        else k: v
+        for k, v in data.items()
+    }
+    legacy["version"] = 1
+    # a real v1 file has no third hook at all, not a null one
+    del legacy["post_matrix"]
+    loaded = pyFDN.fdn_build_from_dict(legacy)
+    np.testing.assert_allclose(loaded.post_delay, build.post_delay)
+    np.testing.assert_allclose(loaded.post_output, build.post_output)
+    # v1 had no slot for the third hook, so it loads empty
+    assert loaded.post_matrix is None
 
 
 def test_fdn_build_rejects_unknown_version() -> None:

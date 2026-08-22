@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -20,7 +20,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     # FDN with Schroeder allpass filters in the loop
 
-    Schroeder allpass filters can be placed **behind the delays** in the FDN loop to increase echo density. The rendering is done with **FLAMO** (gain and delay modules).
+    Schroeder allpass filters can be placed **behind the delays** in the FDN loop to increase echo density. The allpass cascade on its own is rendered in the time domain; the recursive networks are rendered with **FLAMO** (gain and delay modules).
 
     Steps:
     1. Build a **MIMO parallel Schroeder allpass** (block-diagonal).
@@ -61,61 +61,82 @@ def _(mo):
     mo.md(r"""
     ## 1. MIMO parallel Schroeder allpass
 
-    Build N parallel SISO Schroeder allpasses (block-diagonal DSS), convert to FLAMO with **dss_to_flamo**, render and play.
+    Build N parallel SISO Schroeder allpasses (block-diagonal DSS), render the impulse response in the time domain with **dss_to_impz**, and play it.
     """)
     return
 
 
 @app.cell
-def _(Fs, nfft, np, pyFDN):
+def _(np, pyFDN):
     N = 4
-    sections_per = 2
-    gain_per_sample_sch = pyFDN.rt_to_gain_per_sample(0.2, Fs)
-    delays_per = np.random.randint(30, 200, size=(N, sections_per))
-    g_per = gain_per_sample_sch**delays_per * 0 + 0.7
+    sections_per_channel = 2
+    ir_len_schroeder = 2**10
+
+    allpass_delays = np.random.randint(30, 200, size=(N, sections_per_channel))
+    allpass_gains = np.full(allpass_delays.shape, 0.7)
 
     A_list, B_list, C_list, D_list, delays_list = [], [], [], [], []
     for i in range(N):
-        Ai, bi, ci, di = pyFDN.series_allpass(g_per[i])
+        Ai, bi, ci, di = pyFDN.series_allpass(allpass_gains[i])
         A_list.append(Ai)
         B_list.append(bi)
         C_list.append(ci)
         D_list.append(di)
-        delays_list.append(delays_per[i])  # 1 sample per section
+        delays_list.append(allpass_delays[i])
 
     from scipy.linalg import block_diag
 
-    A_sch = block_diag(*A_list)
-    B_sch = block_diag(*B_list)
-    C_sch = block_diag(*C_list)
-    D_sch = block_diag(*D_list)
-    delays_sch = np.concatenate(delays_list)
+    A_schroeder = block_diag(*A_list)
+    B_schroeder = block_diag(*B_list)
+    C_schroeder = block_diag(*C_list)
+    D_schroeder = block_diag(*D_list)
+    delays_schroeder = np.concatenate(delays_list)
 
-    model_sch = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft
+    ir_schroeder = pyFDN.dss_to_impz(
+        ir_len_schroeder,
+        delays_schroeder,
+        A_schroeder,
+        B_schroeder,
+        C_schroeder,
+        D_schroeder,
     )
-    ir_sch = pyFDN.flamo_time_response(model_sch)
-    return A_sch, B_sch, C_sch, D_sch, N, delays_sch, ir_sch
+    return (
+        A_schroeder,
+        B_schroeder,
+        C_schroeder,
+        D_schroeder,
+        N,
+        delays_schroeder,
+        ir_schroeder,
+    )
 
 
 @app.cell
-def _(A_sch, B_sch, C_sch, D_sch, delays_sch, ir_sch, pyFDN):
-    print(ir_sch.shape)
-    print(delays_sch)
-    pyFDN.plot_system_matrix(A_sch, B_sch, C_sch, D_sch)
+def _(
+    A_schroeder,
+    B_schroeder,
+    C_schroeder,
+    D_schroeder,
+    delays_schroeder,
+    ir_schroeder,
+    pyFDN,
+):
+    print(ir_schroeder.shape)
+    print(delays_schroeder)
+    pyFDN.plot_system_matrix(A_schroeder, B_schroeder, C_schroeder, D_schroeder)
     return
 
 
 @app.cell
-def _(Fs, ir_sch, mo, np, pyFDN):
-    ir_sch_channel = ir_sch[0, :, 1].squeeze()
+def _(Fs, ir_schroeder, mo, np, pyFDN):
+    ir_schroeder_channel = ir_schroeder[:, 0, 0]
     _fig = pyFDN.plot_impulse_response(
-        ir_sch_channel,
+        ir_schroeder_channel,
         fs=Fs,
         title="MIMO parallel Schroeder allpass — impulse response (in0→out0)",
     )
 
-    mo.vstack([_fig, mo.audio(np.asarray(ir_sch_channel), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_schroeder_channel), Fs)])
     return
 
 
@@ -124,32 +145,25 @@ def _(mo):
     mo.md(r"""
     ## 2. Vanilla FDN (SISO)
 
-    Random orthogonal feedback matrix, gains from delays, B/C/D identity-like. Build FLAMO with **dss_to_flamo**, render and play.
+    Let **fdn_build_gallery** assemble the whole thing -- random orthogonal feedback matrix, delays, B/C/D, and the per-delay-line absorption matching the requested reverberation time -- into a single **FDNBuild**. Render it with **build_to_flamo** and play.
     """)
     return
 
 
 @app.cell
-def _(Fs, N, nfft, np, pyFDN):
-    delays_fdn = np.random.randint(1200, 7900, size=N)
-    feedback_matrix = pyFDN.random_orthogonal(N)
-
-    B_fdn = np.ones((N, 1))
-    C_fdn = np.ones((1, N))
-    D_fdn = np.ones((1, 1))
-
-    rt_dc = 2.0
-    rt_ny = 0.7
-    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)
-
-    model_fdn = pyFDN.dss_to_flamo(
-        feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos
+def _(Fs, N, nfft, pyFDN):
+    fdn_build = pyFDN.fdn_build_gallery(
+        N,
+        fs=Fs,
+        delay_range=(600, 3900),
+        rt=2.0,
+        rt_nyquist=0.7,
+        rng=6,
     )
+
+    model_fdn = pyFDN.build_to_flamo(fdn_build, nfft=nfft)
     ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
-    print(ir_fdn.shape)
-    print(delays_fdn)
-    print(sos.shape)
-    return B_fdn, C_fdn, D_fdn, delays_fdn, feedback_matrix, ir_fdn, sos
+    return fdn_build, ir_fdn
 
 
 @app.cell
@@ -169,65 +183,54 @@ def _(mo):
     mo.md(r"""
     ## 3. FDN with Schroeder allpass behind the delays
 
-    Reuse the two models above: take the **vanilla FDN** (feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn) and the **MIMO Schroeder allpass** (A_sch, B_sch, C_sch, D_sch, delays_sch). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it as **post_delay_module** to append it to the FDN's forward path (after the FDN delays).
+    Reuse the two models above: take the **vanilla FDN** (the `fdn_build`) and the **MIMO Schroeder allpass** (A_schroeder, B_schroeder, C_schroeder, D_schroeder, delays_schroeder). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it in the **post_delay** hook of **build_to_flamo** -- extra hook modules are appended after whatever the build already carries, so the loop becomes delay -> absorption -> Schroeder.
     """)
     return
 
 
 @app.cell
 def _(
-    A_sch,
-    B_fdn,
-    B_sch,
-    C_fdn,
-    C_sch,
-    D_fdn,
-    D_sch,
+    A_schroeder,
+    B_schroeder,
+    C_schroeder,
+    D_schroeder,
     Fs,
-    delays_fdn,
-    delays_sch,
-    feedback_matrix,
+    delays_schroeder,
+    fdn_build,
     nfft,
     pyFDN,
-    sos,
 ):
     # Schroeder core (4-in, 4-out) from section 1; append to FDN forward path
     schroeder_core = pyFDN.dss_to_flamo(
-        A_sch,
-        B_sch,
-        C_sch,
-        D_sch,
-        delays_sch,
+        A_schroeder,
+        B_schroeder,
+        C_schroeder,
+        D_schroeder,
+        delays_schroeder,
         Fs,
         nfft=nfft,
         shell=False,
     )
-    model_fdn_ap = pyFDN.dss_to_flamo(
-        feedback_matrix,
-        B_fdn,
-        C_fdn,
-        D_fdn,
-        delays_fdn,
-        Fs,
+    model_fdn_allpass = pyFDN.build_to_flamo(
+        fdn_build,
         nfft=nfft,
-        sos_filter=sos,
-        post_delay_module=schroeder_core,
+        post_delay=schroeder_core,
     )
-    ir_fdn_ap = pyFDN.flamo_time_response(model_fdn_ap).squeeze()
+    ir_fdn_allpass = pyFDN.flamo_time_response(model_fdn_allpass).squeeze()
 
-    pyFDN.plot_flamo_graph(model_fdn_ap)
-    return (ir_fdn_ap,)
+    pyFDN.plot_flamo_graph(model_fdn_allpass)
+    return (ir_fdn_allpass,)
 
 
 @app.cell
-def _(Fs, ir_fdn_ap, mo, np, pyFDN):
+def _(Fs, ir_fdn_allpass, mo, np, pyFDN):
     _fig = pyFDN.plot_impulse_response(
-        ir_fdn_ap,
+        ir_fdn_allpass,
         fs=Fs,
         title="FDN with Schroeder allpass behind delays — impulse response",
     )
 
-    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn_ap), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn_allpass), Fs)])
     return
 
 

@@ -5,7 +5,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -120,8 +120,8 @@ def _(pyFDN, torch):
         build.delays,
         build.fs,
         nfft=2**18,
-        sos_filter=build.filters,
-        output_filter=build.post_eq,
+        post_delay=build.post_delay,
+        post_output=build.post_output,
     )
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
     ir_flamo = pyFDN.flamo_time_response(model)[0]
@@ -148,30 +148,8 @@ def _(mo):
 
 
 @app.cell
-def _(adac, fs, model):
+def _(adac, fs, json, mo, model):
     config = adac.flamo_to_json(model, fs, name="PyFDNReverb")
-
-    def graph_lines(node, depth=0, tag=""):
-        """Flatten the JSON IR into an indented outline of module types."""
-        label = node.get("module_type") or node["type"]
-        name = node.get("name")
-        shape = node.get("flamo", {}).get("size")
-        detail = f" {tuple(shape)}" if shape else ""
-        lines = [f"{'  ' * depth}{tag}{label}{f' [{name}]' if name else ''}{detail}"]
-        for child in node.get("children", []):
-            lines += graph_lines(child, depth + 1)
-        # A Recursion holds its forward path in fF and its feedback path in fB.
-        for key, marker in (("fF", "forward: "), ("fB", "feedback: ")):
-            if isinstance(node.get(key), dict):
-                lines += graph_lines(node[key], depth + 1, marker)
-        return lines
-
-    print("\n".join(graph_lines(config)))
-    return (config,)
-
-
-@app.cell
-def _(config, json, mo):
     _pretty = json.dumps(config, indent=1)
     mo.accordion(
         {
@@ -180,7 +158,7 @@ def _(config, json, mo):
             )
         }
     )
-    return
+    return (config,)
 
 
 @app.cell(hide_code=True)
@@ -466,26 +444,36 @@ def _(mo):
     mo.md(r"""
     ### Listen
 
-    A dry synth phrase through the FLAMO model and, when DawDreamer is available, through the compiled FAUST plugin. Same network, two runtimes.
+    A dry synth phrase through the FLAMO model and, when DawDreamer is available, through the compiled FAUST plugin. Same network, two runtimes. The phrase is trimmed to what fits in one `nfft` block alongside the 2 s tail, so both runtimes get the same excerpt.
     """)
     return
 
 
 @app.cell
 def _(HAS_DAWDREAMER, fs, mo, model, np, pyFDN, render_faust, work_dir):
+    _tail = 2 * fs
+    # FLAMO convolves inside a single nfft block, so only nfft minus the tail
+    # is usable input. Trim the phrase to that window: otherwise flamo_process
+    # silently drops whatever does not fit and the two runtimes are compared on
+    # different excerpts.
+    _usable = int(model.get_inputLayer().nfft) - _tail
     dry, _ = pyFDN.load_audio("synth_dry.wav", fs=fs)
-    wet_flamo = pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=2.0)
+    dry = np.asanyarray(dry, dtype=np.float32)[:_usable]
+    _n = len(dry) + _tail
+    wet_flamo = np.asarray(
+        pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=_tail / fs)
+    )[:_n]
 
     # mo.audio wants (n_channels, n_samples), the transpose of the plotting shape.
     _players = [
-        pyFDN.labeled_audio("Dry", np.asanyarray(dry), fs=fs),
-        pyFDN.labeled_audio("Wet — FLAMO", np.asarray(wet_flamo).T, fs=fs),
+        pyFDN.labeled_audio("Dry", dry, fs=fs),
+        pyFDN.labeled_audio("Wet — FLAMO", wet_flamo.T, fs=fs),
     ]
 
     if HAS_DAWDREAMER:
-        # Same 2 s of trailing silence as flamo_process, so the tail is not cut.
-        _padded = np.zeros(len(dry) + 2 * fs, dtype=np.float32)
-        _padded[: len(dry)] = np.asanyarray(dry, dtype=np.float32)
+        # Same trailing silence as flamo_process, so the tail is not cut.
+        _padded = np.zeros(_n, dtype=np.float32)
+        _padded[: len(dry)] = dry
         wet_faust = render_faust(work_dir / "PyFDNReverb_plain.dsp", _padded, fs)
         _players.append(pyFDN.labeled_audio("Wet — compiled FAUST", wet_faust.T, fs=fs))
 

@@ -83,14 +83,9 @@ Acoustics & Absorption
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.absorption_filters
-   pyFDN.first_order_absorption
-   pyFDN.first_order_shelving_eq
-   pyFDN.one_pole_absorption
    pyFDN.sos_gain_per_sample_curves
    pyFDN.echo_density
    pyFDN.edc
-   pyFDN.absorption_to_rt
    pyFDN.estimate_initial_level_bands
    pyFDN.estimate_rt_bands
    pyFDN.octave_bands
@@ -100,16 +95,31 @@ Acoustics & Absorption
    pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
-Graphic EQ
-----------
+EQ & Absorption Design (``pyFDN.eq``)
+--------------------------------------
+
+Three designs of the same two filters -- an FDN's in-loop absorption and its
+output EQ -- behind one interface. A design carries its own target and maps it
+to biquad sections in numpy or in torch from a single implementation, which is
+what a trainable :class:`pyFDN.DecayFilter` or :class:`pyFDN.OutputEQ` runs
+inside a training loop.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.EQDesign
+   pyFDN.GraphicEQ
+   pyFDN.FirstOrderShelf
+   pyFDN.OnePole
    pyFDN.design_geq
+   pyFDN.geq_sos
+   pyFDN.geq_design_matrix
    pyFDN.graphic_eq
    pyFDN.absorption_geq
+   pyFDN.first_order_absorption
+   pyFDN.first_order_shelving_eq
+   pyFDN.one_pole_absorption
    pyFDN.probe_sos
    pyFDN.shelving_filter
    pyFDN.bandpass_filter
@@ -150,6 +160,29 @@ Delay Utilities
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
    pyFDN.flamo_freq_response
+
+Building a FLAMO Graph
+----------------------
+
+An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
+``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
+``post_output`` on the wet signal -- are the same three
+:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.assemble_fdn_core
+   pyFDN.wrap_fdn_shell
+   pyFDN.gain_module
+   pyFDN.delay_module
+   pyFDN.matrix_module
+   pyFDN.fir_matrix_module
+   pyFDN.sos_filter_module
+   pyFDN.hook_module
+   pyFDN.DecayFilter
+   pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
 --------------------------
@@ -265,6 +298,38 @@ Training
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
+   pyFDN.LOSSLESS_ALIAS_DECAY_DB
+
+Training Objectives
+-------------------
+
+An objective is a weighted sum of losses, composed with ``+`` and ``*``. Losses
+on the impulse response read a :class:`pyFDN.Response`; losses on a model
+parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.Response
+   pyFDN.model_response
+   pyFDN.param
+   pyFDN.params
+   pyFDN.ParamRef
+   pyFDN.Loss
+   pyFDN.FlatMagnitude
+   pyFDN.AsymmetricFlatMagnitude
+   pyFDN.FlatSpectrogram
+   pyFDN.MatchMagnitude
+   pyFDN.MatchSpectrogram
+   pyFDN.MatchMelSpectrogram
+   pyFDN.MatchImpulseResponse
+   pyFDN.MatchEnergyDecay
+   pyFDN.MatchCumulativeEnergy
+   pyFDN.Energy
+   pyFDN.Sparsity
+   pyFDN.L1
+   pyFDN.L2
 
 Plotting
 --------
