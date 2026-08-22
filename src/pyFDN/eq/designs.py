@@ -1,39 +1,27 @@
 """The EQ designs of this package behind one interface.
 
 pyFDN designs the same two filters -- the in-loop absorption that sets an FDN's
-decay, and the output EQ that colours it -- at three different levels of detail:
-a ten-band graphic EQ, a first-order shelf, and a one-pole. They differ in how
-many numbers describe them and how many biquads they produce, and in nothing
-else that a caller cares about. :class:`EQDesign` is that shared shape:
+decay, and the output EQ that colours it -- at three levels of detail: a
+ten-band graphic EQ, a first-order shelf, and a one-pole. :class:`EQDesign` is
+their shared shape:
 
     ``(n_params,)`` targets in dB  ->  ``(n_sections, 6)`` biquads
 
 Every design implements it in whichever array namespace it is handed (see
 :mod:`._backend`), so one implementation serves both the numpy design path and
-the differentiable ``map`` of a trainable filter in :mod:`pyFDN.train`. There is
-no second, offline-only design: what a training loop evaluates and what a numpy
-caller bakes are the same closed form, so a trained FDN and the
-:class:`~pyFDN.FDNBuild` extracted from it hold the same coefficients.
+the differentiable ``map`` of a trainable filter in :mod:`pyFDN.train`: a
+training loop and a numpy caller bake the same closed form, so a trained FDN and
+the :class:`~pyFDN.FDNBuild` extracted from it hold the same coefficients.
 
-The target is part of the design
---------------------------------
-
-A design carries its own target, because how many numbers the target needs is a
-property of the design and nothing else: ``GraphicEQ`` takes ten, the shelf and
-the one-pole take two. Making it a constructor argument turns that into an
-invariant -- ``FirstOrderShelf(np.zeros(10))`` fails where you wrote it, rather
-than several frames into a training loop.
-
-What the design does *not* carry is anything about where the filter sits. The
-delay lengths that turn a reverberation time into decibels per round trip, the
-number of output channels, the sampling rate -- those belong to the *role*
-(:class:`~pyFDN.DecayFilter`, :class:`~pyFDN.OutputEQ`), which is why the same
-``FirstOrderShelf`` serves both an in-loop absorption and an output EQ.
-
-:attr:`EQDesign.target` is the **seed**: the value a trainable filter copies
-into its parameter at construction. :meth:`EQDesign.sos` still takes a target
-argument, because during training the live target is a tensor that changes every
-step -- the same contract as flamo's own ``assign_value``.
+A design carries its own target (``GraphicEQ`` ten numbers, the shelf and
+one-pole two), which makes the parameter count a constructor-time invariant --
+``FirstOrderShelf(np.zeros(10))`` fails where you wrote it. It carries nothing
+about where the filter sits (delays, channel count, ``fs``); that belongs to the
+*role* (:class:`~pyFDN.DecayFilter`, :class:`~pyFDN.OutputEQ`), which is why the
+same design serves both an in-loop absorption and an output EQ.
+:attr:`EQDesign.target` is the seed a trainable filter copies into its parameter;
+:meth:`EQDesign.sos` still takes a target argument because during training that
+is a tensor changing every step.
 """
 
 from __future__ import annotations

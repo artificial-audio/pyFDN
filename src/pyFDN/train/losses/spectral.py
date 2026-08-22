@@ -57,9 +57,10 @@ class FlatMagnitude(ResponseLoss):
 
     Fits the magnitude spectrum of the (rectangularly truncated) impulse
     response to a constant, after *Differentiable FDNs for Colorless
-    Reverberation* (Dal Santo et al.). The spectrum comes from
-    :attr:`Response.spectrum <pyFDN.train.response.Response.spectrum>`, so its
-    frequency resolution is the model's ``nfft`` and nothing else.
+    Reverberation* (Dal Santo et al.). Its frequency resolution is the model's
+    ``nfft``, which makes the fit sensitive to it; see :doc:`the design note
+    </training_losses>` and :class:`FlatSpectrogram` for a resolution-independent
+    alternative.
 
     Parameters
     ----------
@@ -70,26 +71,14 @@ class FlatMagnitude(ResponseLoss):
     channels : {"sum", "mean", "none"}
         How the output channels are combined before the comparison. ``"sum"``
         (default) reproduces FLAMO's ``mse_loss`` convention. ``"none"`` fits
-        each input/output pair to flat on its own, which is the well-posed
-        choice for a multi-output FDN.
+        each input/output pair to flat on its own, the well-posed choice for a
+        multi-output FDN.
 
     Notes
     -----
-    The frequency resolution of this loss is the model's ``nfft`` and nothing
-    else, which makes the fit sensitive to it -- on the 8-line lossless FDN of
-    ``example_train_colorless_FDN``, the flatness reached is 0.61 at
-    ``nfft=2**12``, 0.67 at ``2**13`` and 0.70 at ``2**14``. The truncation to
-    ``nfft`` samples is a rectangular window, so the peak-to-median range of
-    ``|H|`` also grows with ``nfft`` (13 dB at ``2**12``, 30 dB at ``2**15`` for
-    a lossless FDN) and the mean squared error weights the tallest modes ever
-    more heavily. A multi-resolution spectral loss, whose analysis windows set
-    its own resolution, is the way out of both.
-
     The optimization crosses long plateaus on this objective; ``train_fdn``'s
-    default ``patience=10`` stops inside one of them. Raise it (~100) for a fit
-    that has actually converged.
-
-    A lossless FDN also has every pole exactly on the unit circle, where the
+    default ``patience=10`` stops inside one. Raise it (~100) for a converged
+    fit. A lossless FDN has every pole exactly on the unit circle, where the
     frequency-domain evaluation breaks down; :meth:`check` warns if the model
     was built without the ``alias_decay_db`` that avoids it.
     """
@@ -120,11 +109,10 @@ class FlatMagnitude(ResponseLoss):
 class AsymmetricFlatMagnitude(ResponseLoss):
     r"""Flatness that punishes **peaks** far harder than dips -- *colorless*.
 
-    The asymmetric sibling of :class:`FlatMagnitude`, and a sharper statement of
-    what "colorless" should mean. A resonant peak in a reverberator rings
-    audibly at its own pitch; a dip of the same size is largely inaudible. This
-    loss says so, by measuring :math:`|H|` against the response's own RMS level
-    and raising the two sides of that deviation to **different powers**:
+    The asymmetric sibling of :class:`FlatMagnitude`: a resonant peak rings
+    audibly at its own pitch while a dip of the same size is largely inaudible,
+    so this measures :math:`|H|` against the response's own RMS and raises the
+    two sides of the deviation to different powers,
 
     .. math::
 
@@ -133,87 +121,26 @@ class AsymmetricFlatMagnitude(ResponseLoss):
         \mathcal{L} = \Big\langle
             \big(d^{+}\big)^{p} + \big(d^{-}\big)^{2}
         \Big\rangle_f,
-        \qquad
-        d^{+} = \max(d, 0), \; d^{-} = \min(d, 0)
 
-    with ``peak_power`` :math:`p \ge 2`. The exponent, not a weight, is what
-    makes this bite: a weight multiplies every peak alike, whereas :math:`p = 4`
-    makes a peak twice as tall cost *sixteen* times as much, so the fit spends
-    its capacity on the few tallest modes -- the ones that are actually heard.
-
-    Three properties are worth knowing:
-
-    * **Flat is still the unique minimum**, at every ``peak_power`` --
-      :math:`\mathcal{L} \ge 0` and it vanishes only at :math:`d \equiv 0`.
-      Normalizing by the RMS forces :math:`\langle (1 + d)^2 \rangle = 1`, so
-      even the peak term *on its own* cannot be zeroed by anything but a flat
-      response: there is no way to buy a peak-free spectrum except by
-      flattening it.
-    * **Gain-invariant.** :math:`d` is built from a ratio, so this fits spectral
-      *shape* only and never touches the overall level -- unlike
-      :class:`FlatMagnitude`, which fits :math:`|H|` to an absolute constant and
-      so anchors the gain as well. Add :class:`~pyFDN.Energy` if you want the
-      level pinned too.
-    * **Deliberately not in decibels.** dB is the obvious way to put a peak and
-      a dip on equal footing before tilting between them, and it does not work:
-      :math:`\partial\,\mathrm{dB}/\partial|H| \propto 1/|H|`, so the deepest
-      nulls dominate the gradient however lightly they are weighted. A dB
-      version of this loss stalls on a plateau within ~300 steps at *higher*
-      peaks than :class:`FlatMagnitude` reaches. In the linear magnitude the
-      gradient is :math:`\propto p\,(d^{+})^{p-1}`, largest exactly at the
-      tallest peaks, and a dip is bounded at :math:`d = -1` on its own.
+    with ``peak_power`` :math:`p \ge 2`. Flat stays the unique minimum at every
+    ``peak_power`` and the loss is gain-invariant (add :class:`~pyFDN.Energy` to
+    pin the level). The exponent, not a weight, is what makes it bite, and the
+    linear magnitude (not dB) is deliberate; see :doc:`the design note
+    </training_losses>` for why, and for what the exponent costs in steps and
+    seed-to-seed spread.
 
     Parameters
     ----------
     peak_power : float
         Exponent on the peak side; dips are always quadratic. Must be at least
-        2, which is the symmetric-shape reference (still peak-biased, since a
-        peak is unbounded and a dip is not). 4 is the default and the sweet
-        spot; 6 is slower but steadier.
+        2 (the symmetric-shape reference, still peak-biased since a peak is
+        unbounded and a dip is not). 4 is the default; 6 is slower but steadier.
+        The advantage over :class:`FlatMagnitude` is not unconditional -- measure
+        your own case. Loss values are not comparable across ``peak_power`` or
+        with :class:`FlatMagnitude`; compare the responses.
 
     Notes
     -----
-    Measured on four 8-line lossless FDNs like the one in
-    ``example_train_colorless_FDN``, at ``nfft=2**14``, each trained for up to
-    2000 Adam steps at ``lr=1e-2``, ``patience=400``, then given homogeneous
-    decay so the colouration can be measured on a fine grid. The number is the
-    **tallest mode**, in dB above the response's own median, and the spectral
-    flatness:
-
-    ==================  =============  =========
-    objective           tallest mode   flatness
-    ==================  =============  =========
-    ``FlatMagnitude``   17.5 dB        0.32
-    ``peak_power=2``    17.1 dB        0.32
-    ``peak_power=3``    15.9 dB        0.35
-    ``peak_power=4``    13.7 dB        0.46
-    ``peak_power=6``    14.2 dB        0.36
-    ==================  =============  =========
-
-    So the asymmetry is not simply trading peak height for deeper nulls. Over
-    these four the mean 1st-percentile dip was *shallower* at ``peak_power=4``
-    (-12.2 dB against -19.9 dB at 2) and plain spectral flatness improved -- but
-    that average hides a lot of scatter, and on the single FDN of
-    ``example_train_colorless_FDN`` the dip goes marginally the other way. The
-    reliable claim is about the peak; treat the rest as FDN-dependent.
-
-    What the exponent costs is steps and steadiness. The gradient vanishes like
-    :math:`(d^{+})^{p-1}` near the optimum, so the fit runs long and needs the
-    room to: raise ``max_steps`` and ``patience`` (``peak_power=4`` averaged
-    1600 steps against 640 at 2, and 6 used the full 2000-step budget on every
-    run). The seed-to-seed spread also grows with :math:`p` -- +-2.1 dB at 4
-    against +-1.1 dB at 2, so a single run proves little.
-
-    And the advantage is **not** unconditional: repeating the same comparison at
-    ``nfft=2**13`` it disappears (16.5 dB at ``peak_power=4`` against 18.5 dB at
-    2 with ``nfft=2**14``; 12.4 against 12.3 at ``2**13``, and running four
-    times longer does not recover it). Measure your own case before assuming
-    a higher exponent helps it.
-
-    The loss value is **not** comparable across different ``peak_power`` -- the
-    two terms have different units -- nor with :class:`FlatMagnitude`. Compare
-    the responses, not the numbers.
-
     A lossless FDN has every pole exactly on the unit circle, where the
     frequency-domain evaluation breaks down; :meth:`check` warns if the model
     was built without the ``alias_decay_db`` that avoids it.
@@ -268,7 +195,10 @@ class FlatSpectrogram(ResponseLoss):
     A short window smooths heavily and constrains the broad spectral tilt; a
     long one resolves individual modes. Because each scale is normalized by its
     own mean, the loss is invariant to overall gain -- it fits spectral *shape*
-    only, and needs no assumption that :math:`|H| \approx 1`.
+    only, and needs no assumption that :math:`|H| \approx 1`. Averaging over
+    frames *before* measuring flatness is the whole design (per-frame flatness
+    rewards an impulsive, comb-filtered IR); see :doc:`the design note
+    </training_losses>`.
 
     Parameters
     ----------
@@ -281,22 +211,9 @@ class FlatSpectrogram(ResponseLoss):
 
     Notes
     -----
-    Averaging over frames *before* measuring flatness is the whole design. The
-    obvious alternative -- asking each individual frame to have a flat spectrum
-    -- is actively harmful: an isolated echo inside a short frame already has a
-    perfectly flat frame spectrum, so that objective rewards an impulsive,
-    comb-filtered impulse response. Trained on the 8-line FDN of
-    ``example_train_colorless_FDN``, per-frame flatness drives the spectral
-    flatness of the result *below* its random starting point, while the
-    time-averaged form above reaches the same flatness as
-    :class:`FlatMagnitude` and a considerably denser feedback matrix.
-
-    The loss value is not comparable with :class:`FlatMagnitude`'s: the
-    smoothing removes most of the mode-to-mode fluctuation, so it starts and
-    ends an order of magnitude smaller. It is, however, far more stable against
-    the model's ``nfft`` -- scoring one lossless FDN at ``nfft`` of 2**12, 2**13
-    and 2**14 spreads this loss by 1.5x and :class:`FlatMagnitude` by 6.9x,
-    which is the point of giving the objective windows of its own.
+    The loss value is not comparable with :class:`FlatMagnitude`'s (the
+    smoothing removes most of the mode-to-mode fluctuation), but it is far more
+    stable against the model's ``nfft``.
     """
 
     def __init__(

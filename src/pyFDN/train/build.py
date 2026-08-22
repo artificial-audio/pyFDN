@@ -265,29 +265,22 @@ def trainable_from_build(
         needs) or ``"magnitude"`` (``|H|`` at the DFT bins, for inspection).
     alias_decay_db : float
         **The accuracy of the rendered impulse response, in dB.** Applies a
-        :math:`\\gamma^n` envelope to every module, i.e. evaluates the system on
-        a circle of radius :math:`\\gamma < 1` instead of the unit circle; the
-        ``"time"`` output layer removes the envelope again, so the response is
-        the true one and what remains is the time-aliased wrap-around,
-        suppressed by exactly ``alias_decay_db``. Measured against
-        :func:`pyFDN.build_to_impz` (which cannot alias), the residual error of
-        a lossless FDN is -30 dB at 30, -60 dB at 60, -90 dB at 90 in float64.
-
-        In float32 the reconstruction envelope amplifies round-off by the same
-        factor, so ~60 dB is the practical ceiling (the last eighth of the
-        buffer degrades to about -38 dB, and 90 dB is worse than useless); use
+        :math:`\\gamma^n` envelope to every module (evaluating the system on a
+        circle of radius :math:`\\gamma < 1`); the ``"time"`` output layer
+        removes it again, so the response is the true one and only the
+        time-aliased wrap-around remains, suppressed by exactly
+        ``alias_decay_db``. In float32 the reconstruction amplifies round-off by
+        the same factor, so ~60 dB is the practical ceiling; use
         ``dtype=torch.float64`` beyond that.
 
         Leave at 0 for a decaying FDN, which damps itself within ``nfft``
         samples. A **lossless** FDN needs it: with its poles exactly on the unit
         circle the FFT-domain evaluation is near-singular and the response comes
-        out wrong, not merely aliased. It does not affect the extracted build:
-        ``alias_decay_db`` enters the frequency-domain evaluation, not the
-        parameter ``map``, so :func:`pyFDN.extract_build` still returns the
-        undamped ``A``/``B``/``C``.
-
-        A module you pass into a hook must have been built with the same value:
-        it is a change of evaluation radius for the whole system, not a
+        out wrong, not merely aliased. It does not affect the extracted build
+        (it enters the frequency-domain evaluation, not the parameter ``map``,
+        so :func:`pyFDN.extract_build` still returns the undamped ``A``/``B``/
+        ``C``). A module you pass into a hook must have been built with the same
+        value: it is a change of evaluation radius for the whole system, not a
         per-module gain.
     device, dtype : optional
         Torch device / dtype (default cpu-or-cuda / float32).
