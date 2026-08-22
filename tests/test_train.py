@@ -124,7 +124,7 @@ def test_extract_roundtrip_with_direct_always_present():
     # direct path always exists, zero by default
     assert b.D.shape == (1, 1)
     np.testing.assert_allclose(b.D, 0.0, atol=1e-6)
-    assert b.filters is None  # lossless (rt=None)
+    assert b.post_delay is None  # lossless (rt=None)
 
 
 def test_build_rt_sets_absorption_and_renders():
@@ -132,7 +132,7 @@ def test_build_rt_sets_absorption_and_renders():
     ir = np.asarray(pyFDN.flamo_time_response(model, fs=48000)).reshape(-1)
     assert np.all(np.isfinite(ir))
     b = pyFDN.extract_build(model)
-    assert b.filters is not None and b.filters.shape[1] == 6
+    assert b.post_delay is not None and b.post_delay.shape[1] == 6
 
 
 def test_extracted_build_renders_through_build_to_flamo():
@@ -170,7 +170,7 @@ def test_det_negative_orthogonal_warns_and_projects():
     assert np.linalg.det(out.A) > 0
 
 
-def test_absorption_rt_reproduces_the_designed_absorption_filters():
+def test_a_decay_filter_reproduces_the_designed_absorption_filters():
     """The differentiable GEQ design agrees with pyFDN.absorption_geq."""
     from scipy.signal import sosfreqz
 
@@ -185,9 +185,11 @@ def test_absorption_rt_reproduces_the_designed_absorption_filters():
         delays=delays,
         fs=fs,
     )
-    model = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
+    model = trainable_from_build(
+        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+    )
     designed = pyFDN.absorption_geq(rt, delays, fs)
-    trained = param(model, "absorption").value().detach().numpy().astype(float)
+    trained = param(model, "post_delay").value().detach().numpy().astype(float)
     assert trained.shape == designed.shape
 
     for channel in range(len(delays)):
@@ -197,7 +199,7 @@ def test_absorption_rt_reproduces_the_designed_absorption_filters():
         assert np.abs(db).max() < 0.1
 
 
-def test_absorption_rt_parameter_is_the_rt_and_trains():
+def test_the_decay_parameter_is_the_rt_and_trains():
     fs = 48000.0
     delays = np.array([809, 1153, 1583, 2069])
     rt = np.full(10, 2.0)
@@ -209,17 +211,19 @@ def test_absorption_rt_parameter_is_the_rt_and_trains():
         delays=delays,
         fs=fs,
     )
-    frozen = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
-    assert param(frozen, "absorption").trainable is False
+    frozen = trainable_from_build(
+        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+    )
+    assert param(frozen, "post_delay").trainable is False
 
     model = trainable_from_build(
         build,
-        trainable=Trainable(absorption=True),
-        absorption_rt=rt,
+        trainable=Trainable(post_delay=True),
+        post_delay=_decay(build, pyFDN.GraphicEQ(rt)),
         nfft=2**12,
         device="cpu",
     )
-    ref = param(model, "absorption")
+    ref = param(model, "post_delay")
     assert ref.trainable is True
     np.testing.assert_allclose(ref.raw().detach().numpy(), rt, atol=1e-5)
 
@@ -233,14 +237,14 @@ def test_absorption_rt_parameter_is_the_rt_and_trains():
 
     float64 = trainable_from_build(
         build,
-        trainable=Trainable(absorption=True),
-        absorption_rt=rt,
+        trainable=Trainable(post_delay=True),
+        post_delay=_decay(build, pyFDN.GraphicEQ(rt), dtype=torch.float64),
         nfft=2**12,
         device="cpu",
         dtype=torch.float64,
     )
     with torch.no_grad():
-        param(float64, "absorption").raw().add_(1.0)
+        param(float64, "post_delay").raw().add_(1.0)
     np.testing.assert_allclose(rt, 2.0)
 
 
@@ -263,8 +267,8 @@ def test_a_trained_rt_still_decays():
     )
     model = trainable_from_build(
         build,
-        trainable=Trainable(absorption=True),
-        absorption_rt=np.full(10, 1.0),
+        trainable=Trainable(post_delay=True),
+        post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0)), nfft=2**13),
         nfft=2**13,
         device="cpu",
     )
@@ -278,12 +282,12 @@ def test_a_trained_rt_still_decays():
         patience=150,
         device="cpu",
     )
-    rt = param(model, "absorption").raw().detach().numpy()
+    rt = param(model, "post_delay").raw().detach().numpy()
     assert np.all(np.isfinite(rt))
     assert rt.min() < 0.0, "the run never crossed zero, so it tested nothing"
     out = pyFDN.extract_build(model)
-    assert out.filters is not None
-    assert np.all(np.isfinite(out.filters))
+    assert out.post_delay is not None
+    assert np.all(np.isfinite(out.post_delay))
     ir = pyFDN.build_to_impz(out, 2**15).squeeze()
     assert np.all(np.isfinite(ir))
     # a decaying system: the last eighth is quieter than the first
@@ -477,7 +481,7 @@ def test_build_set_decay_realizes_rt():
         build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     )
     build = build_set_decay(build, 0.3)
-    assert build.filters is not None and build.filters.shape == (1, 6, 6)
+    assert build.post_delay is not None and build.post_delay.shape == (1, 6, 6)
 
     ir = np.asarray(
         pyFDN.flamo_time_response(
@@ -1005,16 +1009,30 @@ def test_cumulative_energy_rejects_a_window_longer_than_the_response():
 # --- the trainable output EQ -----------------------------------------------
 
 
-def _post_eq_db(model, fs, freqs):
+def _post_output_db(model, fs, freqs):
     """Magnitude of the model's output filter, in dB at ``freqs``."""
     from scipy.signal import sosfreqz
 
-    sos = param(model, "post_eq").value().detach().numpy().astype(float)
+    sos = param(model, "post_output").value().detach().numpy().astype(float)
     _, h = sosfreqz(sos[:, :, 0], worN=freqs, fs=fs)
     return 20 * np.log10(np.abs(h))
 
 
-def _plain_build(n=4, fs=48000.0, post_eq=None):
+def _decay(build, design, *, nfft=2**12, **kw):
+    """The build's in-loop decay as a trainable module, on a named design."""
+    return pyFDN.DecayFilter(
+        design, build.delays, build.fs, nfft=nfft, device="cpu", **kw
+    )
+
+
+def _out_eq(build, design, *, nfft=2**12, **kw):
+    """The build's output EQ as a trainable module, on a named design."""
+    return pyFDN.OutputEQ(
+        design, np.shape(build.C)[0], build.fs, nfft=nfft, device="cpu", **kw
+    )
+
+
+def _plain_build(n=4, fs=48000.0, post_output=None):
     delays = np.array([809, 1153, 1583, 2069])[:n]
     return FDNBuild(
         A=pyFDN.fdn_build_gallery(N=n, rt=None, rng=0).A,
@@ -1023,38 +1041,57 @@ def _plain_build(n=4, fs=48000.0, post_eq=None):
         D=np.zeros((1, 1)),
         delays=delays,
         fs=fs,
-        post_eq=post_eq,
+        post_output=post_output,
     )
+
+
+def test_trainable_alone_does_not_conjure_a_filter():
+    """Trainable says whether a hook trains, not that it exists."""
+    empty = trainable_from_build(
+        _plain_build(),
+        trainable=Trainable(post_output=True),
+        nfft=2**12,
+        device="cpu",
+    )
+    assert not any(p.name == "post_output" for p in params(empty))
 
 
 def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     fs = 48000.0
+    build = _plain_build()
     model = trainable_from_build(
-        _plain_build(),
-        trainable=Trainable(post_eq=True),
+        build,
+        trainable=Trainable(post_output=True),
+        post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
         nfft=2**12,
         device="cpu",
     )
-    ref = param(model, "post_eq")
+    ref = param(model, "post_output")
     assert ref.trainable is True
     # ten bands, one output channel -- and flat, because nothing said otherwise
     np.testing.assert_allclose(ref.raw().detach().numpy(), np.zeros((10, 1)), atol=1e-6)
     freqs = np.array([100.0, 500.0, 1000.0, 4000.0, 10000.0])
-    np.testing.assert_allclose(_post_eq_db(model, fs, freqs), 0.0, atol=0.05)
+    np.testing.assert_allclose(_post_output_db(model, fs, freqs), 0.0, atol=0.05)
 
     # a 6 dB parameter is 6 dB of filter
     lifted = trainable_from_build(
-        _plain_build(), post_eq_db=6.0, nfft=2**12, device="cpu"
+        _plain_build(),
+        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(6.0)),
+        nfft=2**12,
+        device="cpu",
     )
-    np.testing.assert_allclose(_post_eq_db(lifted, fs, freqs), 6.0, atol=0.2)
+    np.testing.assert_allclose(_post_output_db(lifted, fs, freqs), 6.0, atol=0.2)
 
     # and a per-band parameter reaches the band it names
     tilt = np.zeros(10)
     tilt[4] = 12.0  # the 500 Hz band (index 0 is DC, then 63, 125, 250, 500 …)
     tilted = trainable_from_build(
-        _plain_build(), post_eq_db=tilt, nfft=2**12, device="cpu"
+        _plain_build(),
+        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(tilt)),
+        nfft=2**12,
+        device="cpu",
     )
-    db = _post_eq_db(tilted, fs, np.array([500.0, 8000.0]))
+    db = _post_output_db(tilted, fs, np.array([500.0, 8000.0]))
     # a single-band spike is the hardest target for a graphic EQ, so it lands a
     # little short of 12 dB -- what matters is that it lands on the right band
     assert 10.0 < db[0] < 12.5
@@ -1063,20 +1100,20 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
 
 def test_post_eq_is_frozen_unless_asked_for():
     sos = pyFDN.design_geq(np.linspace(-6, 6, 10), fs=48000.0)[0]
-    build = _plain_build(post_eq=(sos / sos[:, 3:4])[:, :, np.newaxis])
+    build = _plain_build(post_output=(sos / sos[:, 3:4])[:, :, np.newaxis])
 
     frozen = trainable_from_build(build, nfft=2**12, device="cpu")
-    assert param(frozen, "post_eq").trainable is False
+    assert param(frozen, "post_output").trainable is False
     # given as coefficients, it stays coefficients -- (n_sections, 6, n_out)
-    assert param(frozen, "post_eq").shape == build.post_eq.shape
+    assert param(frozen, "post_output").shape == build.post_output.shape
 
     thawed = trainable_from_build(
-        build, trainable=Trainable(post_eq=True), nfft=2**12, device="cpu"
+        build, trainable=Trainable(post_output=True), nfft=2**12, device="cpu"
     )
-    assert param(thawed, "post_eq").trainable is True
+    assert param(thawed, "post_output").trainable is True
 
     # no post EQ at all, and not asked to train one: no output filter
-    assert not any(p.name == "output_filter" for p in params(_plain_model()))
+    assert not any(p.name == "post_output" for p in params(_plain_model()))
 
 
 def _plain_model():
@@ -1086,12 +1123,15 @@ def _plain_model():
 def test_post_eq_trains_and_survives_extraction():
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(post_eq=True),
-        absorption_rt=np.full(10, 0.5),
+        trainable=Trainable(post_output=True),
+        post_delay=_decay(
+            _plain_build(), pyFDN.GraphicEQ(np.full(10, 0.5)), nfft=2**13
+        ),
+        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(0.0), nfft=2**13),
         nfft=2**13,
         device="cpu",
     )
-    gains = param(model, "post_eq")
+    gains = param(model, "post_output")
     before = gains.raw().detach().numpy().copy()
     train_fdn(
         model,
@@ -1105,10 +1145,10 @@ def test_post_eq_trains_and_survives_extraction():
     assert not np.allclose(before, after)
 
     out = pyFDN.extract_build(model)
-    assert out.post_eq is not None
-    assert out.post_eq.shape == (11, 6, 1)
-    assert np.all(np.isfinite(out.post_eq))
-    np.testing.assert_allclose(out.post_eq[:, 3, :], 1.0, atol=1e-6)
+    assert out.post_output is not None
+    assert out.post_output.shape == (11, 6, 1)
+    assert np.all(np.isfinite(out.post_output))
+    np.testing.assert_allclose(out.post_output[:, 3, :], 1.0, atol=1e-6)
 
 
 def test_cumulative_frequency_direction_moves_the_weight_across_the_spectrum():
@@ -1147,7 +1187,7 @@ def test_cumulative_energy_rejects_an_unknown_frequency_direction():
 
 
 def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
-    """A ``(2,)`` absorption_rt is first_order_absorption, differentiably."""
+    """A FirstOrderShelf decay is first_order_absorption, differentiably."""
     import torch
 
     fs = 48000.0
@@ -1155,13 +1195,13 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     rt = (2.5, 0.8)
     model = trainable_from_build(
         build,
-        trainable=Trainable(absorption=True),
-        absorption_rt=rt,
+        trainable=Trainable(post_delay=True),
+        post_delay=_decay(build, pyFDN.FirstOrderShelf(rt), dtype=torch.float64),
         nfft=2**12,
         device="cpu",
         dtype=torch.float64,
     )
-    ref = param(model, "absorption")
+    ref = param(model, "post_delay")
     assert ref.trainable is True
     # the parameter is the RT pair itself, not 6 coefficients per section
     np.testing.assert_allclose(ref.raw().detach().numpy(), rt, rtol=1e-6)
@@ -1171,25 +1211,31 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
 
     out = pyFDN.extract_build(model)
-    assert out.filters is not None and out.filters.shape == (1, 6, len(build.delays))
-    np.testing.assert_allclose(out.filters, expected, atol=1e-8)
+    assert out.post_delay is not None and out.post_delay.shape == (
+        1,
+        6,
+        len(build.delays),
+    )
+    np.testing.assert_allclose(out.post_delay, expected, atol=1e-8)
 
 
 def test_shelf_post_eq_is_the_numpy_design():
-    """A ``(2,)`` post_eq_db is first_order_shelving_eq, differentiably."""
+    """A FirstOrderShelf output EQ is first_order_shelving_eq, differentiably."""
     import torch
 
     fs = 48000.0
     gains = (3.0, -6.0)
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(post_eq=True),
-        post_eq_db=gains,
+        trainable=Trainable(post_output=True),
+        post_output=_out_eq(
+            _plain_build(), pyFDN.FirstOrderShelf(gains), dtype=torch.float64
+        ),
         nfft=2**12,
         device="cpu",
         dtype=torch.float64,
     )
-    ref = param(model, "post_eq")
+    ref = param(model, "post_output")
     assert ref.trainable is True
     np.testing.assert_allclose(ref.raw().detach().numpy(), [[3.0], [-6.0]], rtol=1e-6)
 
@@ -1197,7 +1243,7 @@ def test_shelf_post_eq_is_the_numpy_design():
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-10)
 
     # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter
-    db = _post_eq_db(model, fs, np.array([1.0, 23999.0]))
+    db = _post_output_db(model, fs, np.array([1.0, 23999.0]))
     np.testing.assert_allclose(db, [3.0, -6.0], atol=0.05)
 
 
@@ -1206,43 +1252,60 @@ def test_shelf_crossover_moves_the_transition():
     import torch
 
     fs = 48000.0
-    kwargs = {
-        "trainable": Trainable(post_eq=True),
-        "post_eq_db": (0.0, -12.0),
-        "nfft": 2**12,
-        "device": "cpu",
-        "dtype": torch.float64,
-    }
-    low = trainable_from_build(_plain_build(), shelf_crossover=1000.0, **kwargs)
-    high = trainable_from_build(_plain_build(), shelf_crossover=8000.0, **kwargs)
+
+    def shelved(crossover):
+        build = _plain_build()
+        return trainable_from_build(
+            build,
+            trainable=Trainable(post_output=True),
+            post_output=_out_eq(
+                build,
+                pyFDN.FirstOrderShelf((0.0, -12.0), crossover),
+                dtype=torch.float64,
+            ),
+            nfft=2**12,
+            device="cpu",
+            dtype=torch.float64,
+        )
+
+    low, high = shelved(1000.0), shelved(8000.0)
     probe = np.array([3000.0])
     # at 3 kHz the 1 kHz shelf has already fallen and the 8 kHz one has not
-    assert _post_eq_db(low, fs, probe)[0] < _post_eq_db(high, fs, probe)[0] - 6.0
+    assert (
+        _post_output_db(low, fs, probe)[0] < _post_output_db(high, fs, probe)[0] - 6.0
+    )
 
 
 def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
     from pyFDN.eq import FirstOrderShelf
-    from pyFDN.train.filters import make_decay_filter, make_output_filter
 
-    shelf = FirstOrderShelf()
     with pytest.raises(ValueError, match="2 endpoints"):
-        make_decay_filter(shelf, np.ones(3), np.array([100.0, 150.0]), 48000.0, 2**10)
-    with pytest.raises(ValueError, match="2 endpoints"):
-        make_output_filter(shelf, np.ones(3), 1, 48000.0, 2**10)
+        FirstOrderShelf(np.ones(3))
+
+    # what a role still checks is the channel axis, which is the role's business
+    shelf = FirstOrderShelf(np.ones((2, 3)))
+    with pytest.raises(ValueError, match="must have 2 columns"):
+        pyFDN.DecayFilter(shelf, np.array([100.0, 150.0]), 48000.0, nfft=2**10)
+    with pytest.raises(ValueError, match="must have 1 columns"):
+        pyFDN.OutputEQ(shelf, 1, 48000.0, nfft=2**10)
 
 
 def test_shelf_decay_trains_and_stays_contractive():
     """The RT floor holds even when the fit is pushed hard at both endpoints."""
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(absorption=True, post_eq=True),
-        absorption_rt=(1.0, 1.0),
-        post_eq_db=(0.0, 0.0),
+        trainable=Trainable(post_delay=True, post_output=True),
+        post_delay=_decay(
+            _plain_build(), pyFDN.FirstOrderShelf((1.0, 1.0)), nfft=2**13
+        ),
+        post_output=_out_eq(
+            _plain_build(), pyFDN.FirstOrderShelf((0.0, 0.0)), nfft=2**13
+        ),
         nfft=2**13,
         device="cpu",
     )
-    rt = param(model, "absorption")
-    eq = param(model, "post_eq")
+    rt = param(model, "post_delay")
+    eq = param(model, "post_output")
     before = rt.raw().detach().numpy().copy()
 
     log = train_fdn(
@@ -1272,12 +1335,10 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     import torch
 
     from pyFDN.eq import FirstOrderShelf
-    from pyFDN.train.filters import make_decay_filter
 
-    shelf = FirstOrderShelf()
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
-    module = make_decay_filter(
-        shelf, np.array([-5.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    module = pyFDN.DecayFilter(
+        FirstOrderShelf((-5.0, 1.0)), delays, 48000.0, nfft=2**10, dtype=torch.float64
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1285,8 +1346,8 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) < 1.0)
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
-    deeper = make_decay_filter(
-        shelf, np.array([-50.0, 1.0]), delays, 48000.0, 2**10, dtype=torch.float64
+    deeper = pyFDN.DecayFilter(
+        FirstOrderShelf((-50.0, 1.0)), delays, 48000.0, nfft=2**10, dtype=torch.float64
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1296,22 +1357,24 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) > 1e-4)
 
 
-def test_ten_bands_still_mean_the_graphic_eq():
-    """The length picks the design, and 10 is unchanged by the shelf dispatch."""
+def test_the_graphic_eq_keeps_its_ten_bands_through_both_roles():
+    """Ten numbers in, ten trained numbers out -- in both hooks at once."""
+    build = _plain_build()
     model = trainable_from_build(
-        _plain_build(),
-        trainable=Trainable(absorption=True, post_eq=True),
-        absorption_rt=np.full(10, 1.0),
+        build,
+        trainable=Trainable(post_delay=True, post_output=True),
+        post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0))),
+        post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
         nfft=2**12,
         device="cpu",
     )
-    assert param(model, "absorption").raw().shape == (10,)
-    assert param(model, "post_eq").raw().shape == (10, 1)
-    assert param(model, "absorption").shape == (11, 6, 4)
+    assert param(model, "post_delay").raw().shape == (10,)
+    assert param(model, "post_output").raw().shape == (10, 1)
+    assert param(model, "post_delay").shape == (11, 6, 4)
 
 
 def test_per_line_rt_gives_every_delay_line_its_own_decay():
-    """A (bands, n_delays) absorption_rt trains one reverberation time per line."""
+    """A (bands, n_delays) target trains one reverberation time per line."""
     fs = 48000.0
     delays = np.array([809, 1153, 1583, 2069])
     build = FDNBuild(
@@ -1324,9 +1387,11 @@ def test_per_line_rt_gives_every_delay_line_its_own_decay():
     )
     # line 0 decays fast, line 3 slowly -- a decay no shared RT can produce
     rt = np.tile(np.linspace(0.4, 3.0, 4), (10, 1))
-    model = trainable_from_build(build, absorption_rt=rt, nfft=2**12, device="cpu")
+    model = trainable_from_build(
+        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+    )
 
-    absorption = param(model, "absorption")
+    absorption = param(model, "post_delay")
     assert absorption.raw().shape == (10, 4)
     sos = absorption.value().detach().numpy()
     assert sos.shape == (11, 6, 4)
@@ -1347,15 +1412,14 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
     import torch
 
     from pyFDN.eq import GraphicEQ
-    from pyFDN.train.filters import make_decay_filter
 
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
-    shared = make_decay_filter(
-        GraphicEQ(), np.full(10, 1.0), delays, fs, nfft, dtype=torch.float64
+    shared = pyFDN.DecayFilter(
+        GraphicEQ(np.full(10, 1.0)), delays, fs, nfft=nfft, dtype=torch.float64
     )
-    per_line = make_decay_filter(
-        GraphicEQ(), np.full((10, 2), 1.0), delays, fs, nfft, dtype=torch.float64
+    per_line = pyFDN.DecayFilter(
+        GraphicEQ(np.full((10, 2), 1.0)), delays, fs, nfft=nfft, dtype=torch.float64
     )
     assert shared.rt_floor.ndim == 0
     np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
@@ -1367,25 +1431,26 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
         assert np.all(np.isfinite(floored))
 
 
-def test_one_pole_is_reachable_as_an_explicit_design():
-    """OnePole shares the shelf's two parameters, so it must be named."""
+def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
+    """Both take two endpoints, so only naming the design can distinguish them."""
     from pyFDN.eq import FirstOrderShelf, OnePole
 
     build = _plain_build()
     shelf_model = trainable_from_build(
-        build, absorption_rt=(1.5, 0.6), nfft=2**12, device="cpu"
-    )
-    one_pole_model = trainable_from_build(
         build,
-        absorption_rt=(1.5, 0.6),
-        absorption_design=OnePole(),
+        post_delay=_decay(build, FirstOrderShelf((1.5, 0.6))),
         nfft=2**12,
         device="cpu",
     )
-    # the default for two numbers is still the shelf
-    assert isinstance(param(shelf_model, "absorption").module.design, FirstOrderShelf)
-    assert isinstance(param(one_pole_model, "absorption").module.design, OnePole)
+    one_pole_model = trainable_from_build(
+        build,
+        post_delay=_decay(build, OnePole((1.5, 0.6))),
+        nfft=2**12,
+        device="cpu",
+    )
+    assert isinstance(param(shelf_model, "post_delay").module.design, FirstOrderShelf)
+    assert isinstance(param(one_pole_model, "post_delay").module.design, OnePole)
 
     designed = pyFDN.one_pole_absorption(1.5, 0.6, build.delays, build.fs)
-    trained = param(one_pole_model, "absorption").value().detach().numpy()
+    trained = param(one_pole_model, "post_delay").value().detach().numpy()
     np.testing.assert_allclose(trained, designed, atol=1e-6)

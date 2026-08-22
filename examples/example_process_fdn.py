@@ -340,7 +340,9 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 
     absorption = pyFDN.absorption_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
-    build = pyFDN.FDNBuild(A=A, B=B, C=C, D=D, delays=delays, fs=fs, filters=absorption)
+    build = pyFDN.FDNBuild(
+        A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
+    )
     ir = pyFDN.build_to_impz(build, int(ir_len_seconds * fs)).squeeze()
 
     print(f"absorption SOS bank: {absorption.shape}  (sections, coefficients, lines)")

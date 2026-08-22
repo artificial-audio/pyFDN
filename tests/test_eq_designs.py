@@ -185,7 +185,7 @@ def test_graphic_eq_designs_a_batch_of_gains_at_once():
 
 @pytest.mark.parametrize(
     "design",
-    [pyFDN.GraphicEQ(), pyFDN.FirstOrderShelf(), pyFDN.OnePole()],
+    [pyFDN.GraphicEQ(0.0), pyFDN.FirstOrderShelf(0.0), pyFDN.OnePole(0.0)],
     ids=lambda d: type(d).__name__,
 )
 def test_every_design_honours_the_same_contract(design):
@@ -206,7 +206,7 @@ def test_every_design_honours_the_same_contract(design):
 
 @pytest.mark.parametrize(
     "design",
-    [pyFDN.GraphicEQ(), pyFDN.FirstOrderShelf(), pyFDN.OnePole()],
+    [pyFDN.GraphicEQ(0.0), pyFDN.FirstOrderShelf(0.0), pyFDN.OnePole(0.0)],
     ids=lambda d: type(d).__name__,
 )
 def test_every_design_runs_in_torch_from_the_same_source(design):
@@ -230,32 +230,35 @@ def test_every_design_runs_in_torch_from_the_same_source(design):
     assert torch.all(torch.isfinite(tensor_target.grad))
 
 
-def test_fit_is_the_solve_and_sos_is_the_map():
-    """Only the graphic EQ has a design step its map cannot express exactly."""
+def test_a_design_carries_its_target_and_checks_its_length():
+    """The target's length is the design's business, so it is an invariant."""
     fs = 48000.0
-    shelf = pyFDN.FirstOrderShelf()
-    endpoints = np.array([-4.0, -9.0])
-    # the shelf's parameters are its own endpoints, so fitting is mapping
+    shelf = pyFDN.FirstOrderShelf((-4.0, -9.0))
+    np.testing.assert_array_equal(shelf.target, [-4.0, -9.0])
+    # design() is sos() applied to the design's own target
     np.testing.assert_allclose(
-        shelf.fit(endpoints, fs), shelf.sos(endpoints, fs), atol=1e-12
+        shelf.design(fs), shelf.sos(shelf.target, fs), atol=1e-12
     )
+    # a scalar spreads across the design's parameters
+    np.testing.assert_array_equal(pyFDN.GraphicEQ(-3.0).target, np.full(10, -3.0))
+    # and a target of the wrong length fails where it is written
+    with pytest.raises(ValueError, match="FirstOrderShelf takes 2 values"):
+        pyFDN.FirstOrderShelf(np.zeros(10))
+    with pytest.raises(ValueError, match="GraphicEQ takes 10 values"):
+        pyFDN.GraphicEQ(np.zeros(2))
 
-    geq = pyFDN.GraphicEQ()
-    target = np.linspace(-6.0, 4.0, geq.n_params)
-    # the GEQ's fit is bounded least squares -- a different, unnormalized answer
-    fitted = geq.fit(target, fs)
-    assert fitted.shape == (geq.n_sections, 6)
-    assert not np.allclose(fitted[:, 3], 1.0)
 
-
-def test_default_design_dispatches_on_length_and_rejects_the_rest():
-    assert isinstance(pyFDN.default_design(10), pyFDN.GraphicEQ)
-    assert isinstance(pyFDN.default_design(2), pyFDN.FirstOrderShelf)
-    assert pyFDN.default_design(2, crossover_frequency=2000.0).crossover_frequency == (
-        2000.0
+def test_absorption_geq_is_the_same_closed_form_the_geq_design_maps():
+    """No second, offline-only design: numpy and torch bake the same numbers."""
+    fs = 48000.0
+    rt = np.linspace(2.0, 0.6, 10)
+    delays = np.array([809.0, 1153.0])
+    slope = pyFDN.rt_to_slope(rt, fs)
+    np.testing.assert_allclose(
+        pyFDN.absorption_geq(rt, delays, fs),
+        pyFDN.GraphicEQ(rt).sos(slope[:, None] * delays[None, :], fs),
+        atol=1e-12,
     )
-    with pytest.raises(ValueError, match="no EQ design takes 5"):
-        pyFDN.default_design(5)
 
 
 def test_one_pole_design_matches_the_numpy_absorption_design():
@@ -267,7 +270,9 @@ def test_one_pole_design_matches_the_numpy_absorption_design():
 
     slope = np.array([pyFDN.rt_to_slope(rt_dc, fs), pyFDN.rt_to_slope(rt_ny, fs)])
     target_db = slope[:, None] * delays[None, :]
-    np.testing.assert_allclose(pyFDN.OnePole().sos(target_db, fs), designed, atol=1e-12)
+    np.testing.assert_allclose(
+        pyFDN.OnePole(0.0).sos(target_db, fs), designed, atol=1e-12
+    )
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,14 @@ import numpy as np
 from .generate.fdn_matrix_gallery import FDNBuild
 
 FDN_BUILD_FORMAT = "pyfdn-fdn-build"
-FDN_BUILD_VERSION = 1
+#: Current schema version. Version 1 spelled the filter hooks
+#: ``absorption_filters`` and ``output_filters`` and had no slot for the third;
+#: version 2 names all three ``post_delay``, ``post_matrix`` and ``post_output``,
+#: the names they carry everywhere else in pyFDN. Version 1 files still load.
+FDN_BUILD_VERSION = 2
+_SUPPORTED_VERSIONS = (1, 2)
+#: Version-1 key -> version-2 key, for the hooks that were renamed.
+_V1_HOOK_KEYS = {"absorption_filters": "post_delay", "output_filters": "post_output"}
 
 
 def _optional_array(value: Any, name: str) -> np.ndarray | None:
@@ -39,11 +46,18 @@ def fdn_build_to_dict(
         "direct_matrix": np.asarray(build.D).tolist(),
         "delays": np.asarray(build.delays).tolist(),
         "sample_rate": float(build.fs),
-        "absorption_filters": (
-            None if build.filters is None else np.asarray(build.filters).tolist()
+        "post_delay": (
+            None if build.post_delay is None else np.asarray(build.post_delay).tolist()
         ),
-        "output_filters": (
-            None if build.post_eq is None else np.asarray(build.post_eq).tolist()
+        "post_matrix": (
+            None
+            if build.post_matrix is None
+            else np.asarray(build.post_matrix).tolist()
+        ),
+        "post_output": (
+            None
+            if build.post_output is None
+            else np.asarray(build.post_output).tolist()
         ),
     }
     if metadata:
@@ -65,8 +79,11 @@ def fdn_build_from_dict(
 
     if data.get("format") != FDN_BUILD_FORMAT:
         raise ValueError(f"Expected format '{FDN_BUILD_FORMAT}'")
-    if data.get("version") != FDN_BUILD_VERSION:
-        raise ValueError(f"Unsupported FDN build version: {data.get('version')!r}")
+    version = data.get("version")
+    if version not in _SUPPORTED_VERSIONS:
+        raise ValueError(f"Unsupported FDN build version: {version!r}")
+    if version == 1:
+        data = {_V1_HOOK_KEYS.get(key, key): value for key, value in data.items()}
 
     required = (
         "feedback_matrix",
@@ -109,20 +126,34 @@ def fdn_build_from_dict(
     if not np.isfinite(sample_rate) or sample_rate <= 0:
         raise ValueError("sample_rate must be positive and finite")
 
-    filters = _optional_array(data.get("absorption_filters"), "absorption_filters")
-    post_eq = _optional_array(data.get("output_filters"), "output_filters")
-    if filters is not None and (
-        filters.ndim != 3 or filters.shape[1] != 6 or filters.shape[2] != num_delays
+    post_delay = _optional_array(data.get("post_delay"), "post_delay")
+    post_matrix = _optional_array(data.get("post_matrix"), "post_matrix")
+    post_output = _optional_array(data.get("post_output"), "post_output")
+    # The two in-loop hooks run on the delay lines; the output hook on the
+    # output channels.
+    for name, hook in (("post_delay", post_delay), ("post_matrix", post_matrix)):
+        if hook is not None and (
+            hook.ndim != 3 or hook.shape[1] != 6 or hook.shape[2] != num_delays
+        ):
+            raise ValueError(f"{name} must have shape (sections, 6, delay lines)")
+    if post_output is not None and (
+        post_output.ndim != 3
+        or post_output.shape[1] != 6
+        or post_output.shape[2] != C.shape[0]
     ):
-        raise ValueError(
-            "absorption_filters must have shape (sections, 6, delay lines)"
-        )
-    if post_eq is not None and (
-        post_eq.ndim != 3 or post_eq.shape[1] != 6 or post_eq.shape[2] != C.shape[0]
-    ):
-        raise ValueError("output_filters must have shape (sections, 6, outputs)")
+        raise ValueError("post_output must have shape (sections, 6, outputs)")
 
-    return FDNBuild(A, B, C, D, delays, sample_rate, filters, post_eq)
+    return FDNBuild(
+        A,
+        B,
+        C,
+        D,
+        delays,
+        sample_rate,
+        post_delay=post_delay,
+        post_matrix=post_matrix,
+        post_output=post_output,
+    )
 
 
 def save_fdn_build(

@@ -7,11 +7,9 @@ __version__ = "0.3.0"
 
 __all__ = [
     # acoustics
-    "absorption_filters",
     "echo_density",
     "estimate_initial_level_bands",
     "estimate_rt_bands",
-    "absorption_to_rt",
     "edc",
     "first_order_absorption",
     "first_order_shelving_eq",
@@ -32,6 +30,17 @@ __all__ = [
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",
+    # building a FLAMO FDN graph from numpy values
+    "assemble_fdn_core",
+    "wrap_fdn_shell",
+    "gain_module",
+    "delay_module",
+    "matrix_module",
+    "fir_matrix_module",
+    "sos_filter_module",
+    "hook_module",
+    "DecayFilter",
+    "OutputEQ",
     "audio_metadata",
     "available_audio",
     "load_audio",
@@ -77,7 +86,6 @@ __all__ = [
     "FirstOrderShelf",
     "GraphicEQ",
     "OnePole",
-    "default_design",
     "design_geq",
     "geq_design_matrix",
     "geq_sos",
@@ -224,8 +232,6 @@ __all__ = [
 
 # acoustics and absorption
 from .auxiliary.acoustics import (
-    absorption_filters,
-    absorption_to_rt,
     echo_density,
     edc,
     estimate_initial_level_bands,
@@ -256,7 +262,21 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
+from .auxiliary.flamo import (
+    DecayFilter,
+    OutputEQ,
+    assemble_fdn_core,
+    delay_module,
+    fir_matrix_module,
+    flamo_freq_response,
+    flamo_process,
+    flamo_time_response,
+    gain_module,
+    hook_module,
+    matrix_module,
+    sos_filter_module,
+    wrap_fdn_shell,
+)
 from .auxiliary.flamo_graph import (
     extract_build,
     flamo_model_to_nodes,
@@ -343,7 +363,6 @@ from .eq import (
     OnePole,
     absorption_geq,
     bandpass_filter,
-    default_design,
     design_geq,
     first_order_absorption,
     first_order_shelving_eq,

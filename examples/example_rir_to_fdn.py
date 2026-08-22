@@ -172,7 +172,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption,
+        post_delay=sos_absorption,
         shell=True,
     )
     ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
@@ -226,8 +226,8 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption,
-        output_filter=equalization_sos[:, :, np.newaxis],
+        post_delay=sos_absorption,
+        post_output=equalization_sos[:, :, np.newaxis],
         shell=True,
     )
     ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
@@ -264,8 +264,8 @@ def _(
         input_gain,
         output_gain,
         direct_gain,
-        attenuation_sos=sos_absorption,
-        post_eq_sos=equalization_sos,
+        post_delay_sos=sos_absorption,
+        post_output_sos=equalization_sos,
         fs=fs,
     )
     return

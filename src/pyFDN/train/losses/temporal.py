@@ -63,7 +63,7 @@ class MatchEnergyDecay(ResponseLoss):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
-    trained parameter (:class:`pyFDN.Trainable` ``absorption``). A magnitude
+    trained parameter (:class:`pyFDN.Trainable` ``post_delay``). A magnitude
     spectrogram distance is not a substitute: it compares two signals frame by
     frame, and two rooms with identical decay still have uncorrelated fine
     structure, so predicting *silence* scores better there than predicting the

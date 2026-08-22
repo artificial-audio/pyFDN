@@ -6,16 +6,13 @@ import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import firwin2, sosfreqz
+from scipy.signal import sosfreqz
 from scipy.special import erfc
 
-from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
-
-# The filter designs live in pyFDN.eq, which is where every EQ design in the
-# package now lives. They are re-exported here because that is where they used
-# to be, and because this module's rt_to_slope is what turns a reverberation
-# time into the dB target they take. Imported inside a function there, not at
-# module level, so the two modules do not cycle.
+# The filter designs live in pyFDN.eq, and are re-exported here because this
+# module's rt_to_slope is what turns a reverberation time into the dB target
+# they take. They import it inside a function, not at module level, so the two
+# modules do not cycle.
 from pyFDN.eq.first_order import first_order_absorption as first_order_absorption
 from pyFDN.eq.first_order import first_order_shelving_eq as first_order_shelving_eq
 from pyFDN.eq.one_pole import one_pole_absorption as one_pole_absorption
@@ -65,60 +62,6 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     rev = np.flip(ir, axis=axis)
     cum = np.cumsum(rev**2, axis=axis)
     return np.flip(cum, axis=axis)
-
-
-def absorption_filters(
-    frequency: ArrayLike,
-    target_rt: np.ndarray,
-    filterOrder: int,
-    delays: ArrayLike,
-    fs: float,
-) -> np.ndarray:
-    """
-    Generate FIR absorption filters for each channel.
-    frequency: [freq_points]
-    target_rt: shape (freq_points, channels)
-    delays: array of length channels
-    """
-    delays_arr = np.asarray(delays, dtype=float)
-    num_channels = len(delays_arr)
-    unit_freq = hertz_to_unit(frequency, fs)
-    FIR = np.zeros((num_channels, filterOrder + 1))
-
-    if filterOrder == 0:
-        rt = target_rt[0, :]
-        db = delays_arr * rt_to_slope(rt, fs)
-        FIR[:, 0] = db_to_lin(db)
-    else:
-        for ch in range(num_channels):
-            rt = target_rt[:, ch]
-            delay = delays_arr[ch] + int(np.ceil(filterOrder / 2))
-            db = delay * rt_to_slope(rt, fs)
-            target_amp = db_to_lin(db)
-            # firwin2 expects normalized [0..1] freqs and gain values
-            FIR[ch, :] = firwin2(filterOrder + 1, unit_freq, target_amp)
-    return FIR
-
-
-def absorption_to_rt(
-    filterCoeffs: np.ndarray,
-    delays: ArrayLike,
-    nfft: int,
-    fs: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute reverb time from recursive absorption filter with delay."""
-    delays_arr = np.asarray(delays, dtype=float)
-    filterLen = filterCoeffs.shape[1]
-    response = np.fft.fft(filterCoeffs, nfft, axis=1)
-    freq = np.linspace(0, fs / 2, nfft // 2, endpoint=False)
-
-    response = response[:, : nfft // 2]
-    freq = freq[: nfft // 2]
-
-    totalDelay = delays_arr[:, None] + filterLen / 2
-    decayPerSample = lin_to_db(np.abs(response)) / totalDelay
-    rt = slope_to_rt(decayPerSample, fs)
-    return rt.T, freq  # shape: (freq_points, channels)
 
 
 def echo_density(

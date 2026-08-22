@@ -11,7 +11,7 @@ trainable filters on; each design runs in numpy or in torch from one source
 from .absorption_geq import absorption_geq
 from .bandpass_filter import bandpass_filter
 from .design_geq import design_geq, geq_design_matrix, geq_sos
-from .designs import EQDesign, FirstOrderShelf, GraphicEQ, OnePole, default_design
+from .designs import EQDesign, FirstOrderShelf, GraphicEQ, OnePole
 from .first_order import (
     first_order_absorption,
     first_order_shelf_sos,
@@ -30,7 +30,6 @@ __all__ = [
     "OnePole",
     "absorption_geq",
     "bandpass_filter",
-    "default_design",
     "design_geq",
     "first_order_absorption",
     "first_order_shelf_sos",

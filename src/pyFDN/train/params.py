@@ -23,8 +23,14 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "feedback": ("mixing_matrix", "fB"),
     "delay": ("delay", "fF"),
     "direct": ("direct_gain", "brB"),
-    "absorption": ("attenuation", "filter"),
-    "post_eq": ("output_filter",),
+    # The three filter hooks, under the names assemble_fdn_core gives them.
+    # "absorption" and "post_eq" are alternative spellings of the first and the
+    # last, naming what the filter does rather than where it sits.
+    "post_delay": ("post_delay", "attenuation", "filter"),
+    "post_matrix": ("post_matrix",),
+    "post_output": ("post_output", "output_filter"),
+    "absorption": ("post_delay", "attenuation", "filter"),
+    "post_eq": ("post_output", "output_filter"),
 }
 
 
@@ -67,7 +73,7 @@ class ParamRef:
 
         Usually the mapped :meth:`value` is what you want. The pre-image is,
         when the map is the point: the RT in seconds behind an absorption
-        filter (:mod:`pyFDN.train.filters`), where the mapped value is the SOS
+        filter (:class:`~pyFDN.DecayFilter`), where the mapped value is the SOS
         bank designed from it.
         """
         return self.module.param
@@ -109,9 +115,11 @@ def param(model: Any, name: str | None = None) -> ParamRef:
         graph whose leaf names you do not control.
     name : str, optional
         A leaf name, or one of the semantic aliases ``"feedback"`` (the feedback
-        matrix, FLAMO's ``fB``), ``"delay"`` (``fF``), ``"direct"`` (``brB``)
-        ``"absorption"`` (the in-loop filter, ``filter``) and ``"post_eq"``
-        (the output filter).
+        matrix, FLAMO's ``fB``), ``"delay"`` (``fF``), ``"direct"`` (``brB``),
+        and the three filter hooks ``"post_delay"`` (the in-loop filter, i.e.
+        the decay), ``"post_matrix"`` and ``"post_output"`` (the output EQ).
+        ``"absorption"`` and ``"post_eq"`` also resolve to the first and last
+        of those.
 
     Raises
     ------

@@ -10,26 +10,30 @@ else that a caller cares about. :class:`EQDesign` is that shared shape:
 
 Every design implements it in whichever array namespace it is handed (see
 :mod:`._backend`), so one implementation serves both the numpy design path and
-the differentiable ``map`` of a trainable filter in :mod:`pyFDN.train`.
+the differentiable ``map`` of a trainable filter in :mod:`pyFDN.train`. There is
+no second, offline-only design: what a training loop evaluates and what a numpy
+caller bakes are the same closed form, so a trained FDN and the
+:class:`~pyFDN.FDNBuild` extracted from it hold the same coefficients.
 
-Two stages, deliberately named apart
-------------------------------------
+The target is part of the design
+--------------------------------
 
-Going from a target magnitude to biquad coefficients is not always one step:
+A design carries its own target, because how many numbers the target needs is a
+property of the design and nothing else: ``GraphicEQ`` takes ten, the shelf and
+the one-pole take two. Making it a constructor argument turns that into an
+invariant -- ``FirstOrderShelf(np.zeros(10))`` fails where you wrote it, rather
+than several frames into a training loop.
 
-* :meth:`EQDesign.sos` is the **map**. Closed form, differentiable, no solver.
-  It is what runs inside a training loop.
-* :meth:`EQDesign.fit` is the **design**. It may solve a constrained problem to
-  reach a target the map cannot express exactly -- :class:`GraphicEQ` fits its
-  eleven command gains to ten band targets by bounded least squares. It is not
-  differentiable and is for offline design only.
+What the design does *not* carry is anything about where the filter sits. The
+delay lengths that turn a reverberation time into decibels per round trip, the
+number of output channels, the sampling rate -- those belong to the *role*
+(:class:`~pyFDN.DecayFilter`, :class:`~pyFDN.OutputEQ`), which is why the same
+``FirstOrderShelf`` serves both an in-loop absorption and an output EQ.
 
-For the shelf and the one-pole the two coincide: their parameters *are* their
-endpoints, so the map already meets the target exactly and ``fit`` is ``sos``.
-For the graphic EQ they differ only in the bounds -- :func:`~.design_geq.geq_sos`
-folds the same least-squares problem into one constant matrix, dropping the
-bounds to buy a closed form. So a trainable graphic EQ still crosses the design
-step every step; it just crosses a matrix instead of a solver.
+:attr:`EQDesign.target` is the **seed**: the value a trainable filter copies
+into its parameter at construction. :meth:`EQDesign.sos` still takes a target
+argument, because during training the live target is a tensor that changes every
+step -- the same contract as flamo's own ``assign_value``.
 """
 
 from __future__ import annotations
@@ -38,22 +42,37 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import numpy as np
+from numpy.typing import ArrayLike
 
-from .design_geq import N_BANDS, design_geq, geq_design_matrix, geq_sos
+from .design_geq import N_BANDS, geq_design_matrix, geq_sos
 from .design_geq import N_SECTIONS as N_GEQ_SECTIONS
 from .first_order import N_ENDPOINTS, first_order_shelf_sos, shelf_crossover_omega
 from .one_pole import one_pole_sos
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class EQDesign:
-    """A filter design as a map from targets in dB to biquad sections.
+    """A filter design, and the target it starts from.
 
     Subclasses fill in :attr:`n_params`, :attr:`n_sections` and :meth:`sos`.
     Instances are frozen and carry whatever fixed choices the design has (the
     shelf's crossover, for instance), so a design is a value you can pass around
     and store, not a family of functions with keyword arguments.
+
+    Parameters
+    ----------
+    target : array_like
+        The design's target, ``(n_params,)`` or ``(n_params, n_channels)``; a
+        scalar is spread across the design's parameters. What it *means* is the
+        role's business -- a reverberation time in seconds for
+        :class:`~pyFDN.DecayFilter`, a gain in dB for :class:`~pyFDN.OutputEQ`.
     """
+
+    #: Declared as ``ArrayLike`` because that is what a caller may pass -- a
+    #: tuple, a list, a scalar. ``__post_init__`` normalizes it, so what is
+    #: stored and read back is always an ``(n_params,)`` or
+    #: ``(n_params, n_channels)`` float array.
+    target: ArrayLike
 
     #: How many numbers describe the target: one per design band or endpoint.
     n_params: ClassVar[int]
@@ -61,6 +80,21 @@ class EQDesign:
     n_sections: ClassVar[int]
     #: Human-readable parameter layout, used in error messages.
     param_description: ClassVar[str]
+
+    def __post_init__(self) -> None:
+        target = np.asarray(self.target, dtype=np.float64)
+        if target.ndim == 0:
+            target = np.full(self.n_params, float(target))
+        if target.ndim > 2:
+            raise ValueError(
+                f"target must be 1- or 2-dimensional, got shape {target.shape}"
+            )
+        if target.shape[0] != self.n_params:
+            raise ValueError(
+                f"{type(self).__name__} takes {self.n_params} values -- "
+                f"{self.param_description} -- got {target.shape[0]}"
+            )
+        object.__setattr__(self, "target", np.ascontiguousarray(target))
 
     def buffers(self, fs: float) -> dict[str, np.ndarray]:
         """Constants :meth:`sos` needs at ``fs``, to be computed once.
@@ -78,7 +112,9 @@ class EQDesign:
         ----------
         target_db : array_like or torch.Tensor
             Target magnitude in dB, shape ``(n_params,)`` or
-            ``(n_params, n_channels)``.
+            ``(n_params, n_channels)``. Passed in rather than read from
+            :attr:`target`, which is only the seed: in a training loop this is
+            the live parameter.
         fs : float
             Sampling rate in Hz.
         **buffers
@@ -92,21 +128,20 @@ class EQDesign:
         """
         raise NotImplementedError
 
-    def fit(self, target_db: Any, fs: float) -> Any:
-        """Best sections for a target -- the offline design, bounds and all.
-
-        Defaults to :meth:`sos`, which is exact for designs whose parameters are
-        their own targets. :class:`GraphicEQ` overrides it with the constrained
-        solve. Not differentiable in general; use :meth:`sos` for training.
-        """
-        return self.sos(np.asarray(target_db, dtype=float), fs, **self.buffers(fs))
+    def design(self, fs: float) -> np.ndarray:
+        """The SOS bank for this design's own :attr:`target`, in numpy."""
+        return self.sos(self.target, fs, **self.buffers(fs))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class GraphicEQ(EQDesign):
     """Ten-band graphic EQ: 10 band targets, 11 biquads.
 
     The design of Schlecht and Habets (DAFx 2017) -- see :mod:`.design_geq`.
+    Uses the closed form of :func:`~.design_geq.geq_sos` rather than the bounded
+    solve of :func:`~.design_geq.design_geq`; the bounds are inactive for the
+    moderate band gains a decay or an output EQ asks for, and dropping them is
+    what lets the numpy and torch paths share one implementation.
     """
 
     n_params: ClassVar[int] = N_BANDS
@@ -119,12 +154,8 @@ class GraphicEQ(EQDesign):
     def sos(self, target_db: Any, fs: float, **buffers: Any) -> Any:
         return geq_sos(target_db, fs, design_matrix=buffers.get("geq_matrix"))
 
-    def fit(self, target_db: Any, fs: float) -> Any:
-        """The bounded least-squares design of :func:`pyFDN.design_geq`."""
-        return design_geq(np.asarray(target_db, dtype=float), fs=fs)[0]
 
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FirstOrderShelf(EQDesign):
     """First-order shelf: DC and Nyquist gains, 1 biquad.
 
@@ -145,7 +176,7 @@ class FirstOrderShelf(EQDesign):
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class OnePole(EQDesign):
     """One-pole: DC and Nyquist gains, 1 biquad -- see :mod:`.one_pole`."""
 
@@ -156,23 +187,3 @@ class OnePole(EQDesign):
     def sos(self, target_db: Any, fs: float, **buffers: Any) -> Any:
         h = 10.0 ** (target_db / 20.0)
         return one_pole_sos(h[0], h[1])
-
-
-def default_design(
-    n_params: int, *, crossover_frequency: float | None = None
-) -> EQDesign:
-    """The design a target of ``n_params`` numbers means when none is named.
-
-    Two numbers are a first-order shelf and ten are a graphic EQ, which is the
-    dispatch :func:`pyFDN.trainable_from_build` has always done on the length of
-    ``absorption_rt``. :class:`OnePole` shares the shelf's parameter count and so
-    is never chosen by length -- pass it explicitly to use it.
-    """
-    if n_params == N_ENDPOINTS:
-        return FirstOrderShelf(crossover_frequency)
-    if n_params == N_BANDS:
-        return GraphicEQ()
-    raise ValueError(
-        f"no EQ design takes {n_params} parameters: expected "
-        f"{N_ENDPOINTS} (first-order shelf) or {N_BANDS} (graphic EQ)"
-    )

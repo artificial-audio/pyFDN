@@ -113,8 +113,8 @@ def first_order_absorption(
         SOS bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``
         (b2 = a2 = 0 for these first-order filters).
     """
-    # lazy: auxiliary.acoustics re-exports the designs in this package for
-    # backwards compatibility, so importing it at module level would cycle.
+    # lazy: auxiliary.acoustics re-exports the designs in this package, so
+    # importing it at module level would cycle.
     from ..auxiliary.acoustics import rt_to_slope
 
     # ravel: the SOS bank's channel axis is flat, so a delays array with any

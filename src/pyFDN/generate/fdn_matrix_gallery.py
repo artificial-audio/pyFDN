@@ -28,11 +28,34 @@ class FDNSystem(NamedTuple):
 class FDNBuild:
     """Complete FDN parameters returned by :func:`fdn_build_gallery`.
 
-    ``filters`` is either ``None`` (lossless) or a per-delay first-order
-    absorption SOS bank with shape ``(num_sections, 6, N)`` suitable for
-    ``dss_to_flamo(..., sos_filter=...)``. ``post_eq`` is an optional per-output
-    SOS bank with shape ``(num_sections, 6, num_outputs)`` suitable for the
-    ``output_filter`` argument of :func:`pyFDN.dss_to_flamo`.
+    A **baked** description: every field is a plain array, which is what
+    :func:`pyFDN.process_fdn` and :func:`pyFDN.build_to_impz` consume and what
+    :func:`pyFDN.save_fdn_build` writes. Nothing here remembers how a filter was
+    designed -- a reverberation time, an EQ curve -- because nothing that reads
+    a build needs to know. That knowledge lives in the design
+    (:class:`~pyFDN.eq.EQDesign`) at the moment the filter is built, and in the
+    trainable modules of :mod:`pyFDN.train`.
+
+    The three optional filter fields are the three filter hooks of
+    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core`, under the
+    same names, in the same positions, and in signal-flow order:
+
+    * ``post_delay`` -- ``None`` (lossless) or a per-delay-line SOS bank of
+      shape ``(num_sections, 6, N)``, applied to the delay output inside the
+      loop, before the signal both leaves the network and is fed back. This is
+      what sets the decay.
+    * ``post_matrix`` -- an optional per-delay-line SOS bank of shape
+      ``(num_sections, 6, N)``, applied to the feedback path after ``A``.
+    * ``post_output`` -- an optional per-output SOS bank of shape
+      ``(num_sections, 6, num_outputs)``, applied to the wet signal outside the
+      recursion. This is what colours it.
+
+    A build carries each hook as an SOS bank because that is what bakes and what
+    serializes. The hooks themselves are wider than that at runtime:
+    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core` take any
+    filter in any of the three -- a nested allpass core in ``post_delay``, a
+    :class:`pyFDN.td.TimeVaryingMatrix` in ``post_matrix`` -- and those simply
+    have no field here, since neither is a bank of biquads.
     """
 
     A: np.ndarray
@@ -41,8 +64,9 @@ class FDNBuild:
     D: np.ndarray
     delays: np.ndarray
     fs: float
-    filters: np.ndarray | None = None
-    post_eq: np.ndarray | None = None
+    post_delay: np.ndarray | None = None
+    post_matrix: np.ndarray | None = None
+    post_output: np.ndarray | None = None
 
 
 def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
@@ -141,18 +165,19 @@ def _build_io_matrices(
     return B, C, D
 
 
-def _build_post_eq(
+def _build_post_output(
     num_outputs: int,
     fs: float,
     db_dc: ArrayLike | None,
     db_nyquist: ArrayLike | None,
     crossover_frequency: float | None,
 ) -> np.ndarray | None:
-    """Per-output first-order shelving post EQ from dB gains, or ``None``."""
+    """Per-output first-order shelving output EQ from dB gains, or ``None``."""
     if db_dc is None and db_nyquist is None:
         if crossover_frequency is not None:
             raise ValueError(
-                "post_eq_db_dc or post_eq_db_nyquist must be set to configure post EQ"
+                "eq_db_dc or eq_db_nyquist must be set to configure "
+                "the post_output hook"
             )
         return None
     if db_dc is None:
@@ -172,8 +197,8 @@ def _build_post_eq(
     from ..eq.first_order import first_order_shelving_eq
 
     return first_order_shelving_eq(
-        _per_output(db_dc, "post_eq_db_dc"),
-        _per_output(db_nyquist, "post_eq_db_nyquist"),
+        _per_output(db_dc, "eq_db_dc"),
+        _per_output(db_nyquist, "eq_db_nyquist"),
         fs,
         crossover_frequency,
     )
@@ -195,9 +220,9 @@ def fdn_build_gallery(
     rt: float | None = 2.0,
     rt_nyquist: float | None = None,
     rt_crossover: float | None = None,
-    post_eq_db_dc: ArrayLike | None = None,
-    post_eq_db_nyquist: ArrayLike | None = None,
-    post_eq_crossover: float | None = None,
+    eq_db_dc: ArrayLike | None = None,
+    eq_db_nyquist: ArrayLike | None = None,
+    eq_crossover: float | None = None,
     rng: np.random.Generator | int | None = None,
 ) -> FDNBuild:
     """Build a complete FDN from a delay range, a reverberation time, and an EQ.
@@ -205,8 +230,8 @@ def fdn_build_gallery(
     The feedback matrix ``A`` is a random orthogonal matrix. In-loop decay is
     realised as per-delay first-order shelving absorption filters matching
     ``rt`` at DC and ``rt_nyquist`` at Nyquist; pass ``rt=None`` for a
-    lossless FDN (``filters=None``). An
-    optional per-output first-order shelving post EQ is specified directly in
+    lossless FDN (``post_delay=None``). An optional per-output first-order
+    shelving output EQ -- the ``post_output`` hook -- is specified directly in
     decibels at DC and Nyquist.
 
     Delays and I/O matrices use a local :class:`numpy.random.Generator`; passing
@@ -231,11 +256,12 @@ def fdn_build_gallery(
         rt_nyquist: Reverberation time in seconds at Nyquist. Defaults to
             ``rt`` (frequency-flat decay).
         rt_crossover: Shelf crossover for the absorption filters in Hz.
-        post_eq_db_dc: Post-EQ gain in dB at DC, scalar or length ``num_outputs``.
-            Setting either post-EQ argument enables a per-output output filter.
-        post_eq_db_nyquist: Post-EQ gain in dB at Nyquist, scalar or length
-            ``num_outputs``. Defaults to ``post_eq_db_dc`` (flat gain).
-        post_eq_crossover: Shelf crossover for the post EQ in Hz.
+        eq_db_dc: ``post_output`` gain in dB at DC, scalar or length
+            ``num_outputs``. Setting either this or ``eq_db_nyquist``
+            enables the per-output filter.
+        eq_db_nyquist: ``post_output`` gain in dB at Nyquist, scalar or
+            length ``num_outputs``. Defaults to ``eq_db_dc`` (flat gain).
+        eq_crossover: Shelf crossover for the output EQ in Hz.
         rng: Local NumPy generator or integer seed.
 
     Returns:
@@ -292,10 +318,23 @@ def fdn_build_gallery(
             rt, rt_ny, delays_array, float(fs), rt_crossover
         )
 
-    post_eq = _build_post_eq(
-        num_outputs, float(fs), post_eq_db_dc, post_eq_db_nyquist, post_eq_crossover
+    post_output = _build_post_output(
+        num_outputs,
+        float(fs),
+        eq_db_dc,
+        eq_db_nyquist,
+        eq_crossover,
     )
-    return FDNBuild(A, B, C, D, delays_array, float(fs), filters, post_eq)
+    return FDNBuild(
+        A,
+        B,
+        C,
+        D,
+        delays_array,
+        float(fs),
+        post_delay=filters,
+        post_output=post_output,
+    )
 
 
 @overload

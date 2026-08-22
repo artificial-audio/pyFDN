@@ -17,14 +17,17 @@ if TYPE_CHECKING:
 ChannelReduction = Literal["sum", "mean", "none"]
 
 
+def _reduce_channels_check(how: ChannelReduction) -> None:
+    if how not in ("sum", "mean", "none"):
+        raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")
+
+
 def _reduce_channels(magnitude: torch.Tensor, how: ChannelReduction) -> torch.Tensor:
     if how == "sum":
         return magnitude.sum(dim=1)
     if how == "mean":
         return magnitude.mean(dim=1)
-    if how == "none":
-        return magnitude
-    raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")
+    return magnitude
 
 
 def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -> None:
@@ -434,8 +437,3 @@ class MatchMelSpectrogram(_FlamoSpectrogramLoss):
             device=self.device,
             **self.kwargs,
         )
-
-
-def _reduce_channels_check(how: ChannelReduction) -> None:
-    if how not in ("sum", "mean", "none"):
-        raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")

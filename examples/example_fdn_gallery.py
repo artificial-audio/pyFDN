@@ -127,14 +127,14 @@ def _(mo, pyFDN, results):
 
 @app.cell
 def _(mo, pyFDN):
-    mo.md(f"""
+    mo.md(rf"""
     ---
 
     # Filter Matrix Gallery
 
     `filter_matrix_gallery` provides FIR *filter* feedback matrices — each entry of the N×N matrix is an FIR filter, so the matrix scatters energy over time as well as across delay lines. All types are paraunitary (lossless): $A^T(z^{-1})\,A(z) = I$.
 
-    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*. 
+    Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
     """)
     return
@@ -199,8 +199,8 @@ def _(pyFDN):
             8,
             rt=2.0,
             rt_nyquist=0.5,
-            post_eq_db_dc=0.0,
-            post_eq_db_nyquist=-6.0,
+            eq_db_dc=0.0,
+            eq_db_nyquist=-6.0,
             rng=0,
         ),
         "multichannel post EQ": pyFDN.fdn_build_gallery(
@@ -208,8 +208,8 @@ def _(pyFDN):
             num_outputs=3,
             rt=2.0,
             rt_nyquist=0.5,
-            post_eq_db_dc=[0.0, -3.0, -6.0],
-            post_eq_db_nyquist=-6.0,
+            eq_db_dc=[0.0, -3.0, -6.0],
+            eq_db_nyquist=-6.0,
             rng=0,
         ),
     }
@@ -224,8 +224,10 @@ def _(builds, mo):
                 "Build": _name,
                 "Delay lines": _b.delays.size,
                 "Delay range": f"{_b.delays.min()}–{_b.delays.max()}",
-                "Filters": "yes" if _b.filters is not None else "no",
-                "Post EQ outputs": 0 if _b.post_eq is None else _b.post_eq.shape[2],
+                "Filters": "yes" if _b.post_delay is not None else "no",
+                "Post EQ outputs": 0
+                if _b.post_output is None
+                else _b.post_output.shape[2],
             }
             for _name, _b in builds.items()
         ]

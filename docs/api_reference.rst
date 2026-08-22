@@ -83,11 +83,9 @@ Acoustics & Absorption
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.absorption_filters
    pyFDN.sos_gain_per_sample_curves
    pyFDN.echo_density
    pyFDN.edc
-   pyFDN.absorption_to_rt
    pyFDN.estimate_initial_level_bands
    pyFDN.estimate_rt_bands
    pyFDN.octave_bands
@@ -101,9 +99,10 @@ EQ & Absorption Design (``pyFDN.eq``)
 --------------------------------------
 
 Three designs of the same two filters -- an FDN's in-loop absorption and its
-output EQ -- behind one interface. :class:`pyFDN.EQDesign` maps targets in dB to
-biquad sections in numpy or in torch from a single implementation, which is what
-:func:`pyFDN.trainable_from_build` trains against.
+output EQ -- behind one interface. A design carries its own target and maps it
+to biquad sections in numpy or in torch from a single implementation, which is
+what a trainable :class:`pyFDN.DecayFilter` or :class:`pyFDN.OutputEQ` runs
+inside a training loop.
 
 .. autosummary::
    :toctree: generated/
@@ -113,7 +112,6 @@ biquad sections in numpy or in torch from a single implementation, which is what
    pyFDN.GraphicEQ
    pyFDN.FirstOrderShelf
    pyFDN.OnePole
-   pyFDN.default_design
    pyFDN.design_geq
    pyFDN.geq_sos
    pyFDN.geq_design_matrix
@@ -162,6 +160,29 @@ Delay Utilities
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
    pyFDN.flamo_freq_response
+
+Building a FLAMO Graph
+----------------------
+
+An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
+``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
+``post_output`` on the wet signal -- are the same three
+:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.assemble_fdn_core
+   pyFDN.wrap_fdn_shell
+   pyFDN.gain_module
+   pyFDN.delay_module
+   pyFDN.matrix_module
+   pyFDN.fir_matrix_module
+   pyFDN.sos_filter_module
+   pyFDN.hook_module
+   pyFDN.DecayFilter
+   pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
 --------------------------

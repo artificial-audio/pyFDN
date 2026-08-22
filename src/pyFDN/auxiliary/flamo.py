@@ -423,6 +423,343 @@ def sos_filter_module(
     return filt
 
 
+# ---------------------------------------------------------------------------
+# Trainable EQ modules: two roles, any EQDesign
+# ---------------------------------------------------------------------------
+
+#: Most attenuation, in dB per delay-line round trip, a single band may ask for.
+#: Not a stability bound -- any negative dB is contractive -- but a numerical
+#: one: a band demanding several hundred dB more than its neighbours overflows
+#: the graphic-EQ design in float32. 60 dB per round trip is already an
+#: instantaneous decay, and stays four orders of magnitude clear of that.
+MAX_ATTENUATION_DB = 60.0
+
+
+def _designed_target(design: Any, n_channels: int, *, broadcast: bool) -> np.ndarray:
+    """A design's seed target as ``(n_params,)`` or ``(n_params, n_channels)``.
+
+    The design has already checked that the target has the right number of
+    parameters -- that is its business. What is left is the channel axis, which
+    is the *role's* business: how many delay lines, how many output channels.
+
+    ``broadcast`` fills that axis in (the output EQ always carries one, since
+    its gains are per channel); without it a ``(n_params,)`` target stays
+    one-dimensional and means "shared across channels".
+    """
+    target = np.asarray(design.target, dtype=np.float64)
+    if target.ndim == 2 and target.shape[1] != n_channels:
+        raise ValueError(
+            f"a per-channel target must have {n_channels} columns, "
+            f"got {target.shape[1]}"
+        )
+    if broadcast and target.ndim == 1:
+        target = np.broadcast_to(target[:, None], (target.shape[0], n_channels))
+    return np.ascontiguousarray(target)
+
+
+if _HAS_FLAMO:
+
+    class DesignedSOS(dsp.parallelSOSFilter):  # type: ignore[misc]
+        """A ``parallelSOSFilter`` whose ``param`` is an :class:`EQDesign` target.
+
+        Holds what the two roles have in common: the flamo plumbing, the
+        design's per-``fs`` constants as buffers, and the parameter that
+        replaces the base class's raw coefficients.
+
+        A trainable filter in an FDN varies along two axes, and only two:
+
+        * **the role.** :class:`DecayFilter` sets the decay from inside the
+          loop; :class:`OutputEQ` colours the output from outside it.
+        * **the design.** How many numbers describe the filter and how many
+          biquads they become -- that is :class:`~pyFDN.eq.EQDesign`, and
+          nothing here needs to know which one it was handed.
+
+        So there are two subclasses, not one per combination: adding a design
+        adds no class.
+
+        Both parametrize by the *target* -- an RT, a band level -- rather than
+        by the design's own coefficients, which is what makes the trained
+        numbers the ones you would plot and, for the decay, what keeps the loop
+        contractive for every value the parameter can take. Both map onto an
+        ordinary ``(n_sections, 6, n_channels)`` SOS bank, so
+        :func:`pyFDN.extract_build` reads the trained filter back out unchanged.
+        """
+
+        def __init__(
+            self,
+            design: Any,
+            param_value: np.ndarray,
+            n_channels: int,
+            fs: float,
+            *,
+            nfft: int,
+            alias_decay_db: float,
+            device: Any,
+            dtype: Any,
+            requires_grad: bool,
+        ) -> None:
+            import torch
+
+            super().__init__(
+                size=(int(n_channels),),
+                n_sections=design.n_sections,
+                nfft=nfft,
+                fs=int(fs),
+                alias_decay_db=alias_decay_db,
+                # resolved here rather than left as None: flamo's Series asserts
+                # every module in it carries the same dtype.
+                device=_get_device(device),
+                dtype=torch.float32 if dtype is None else dtype,
+                # the designs already return a0 = 1; flamo's own normalization
+                # writes in place, which autograd rejects.
+                normalize_a0=False,
+            )
+            torch_dtype, dev = self.param.dtype, self.param.device  # type: ignore[has-type]
+            self.design = design
+            self.fs_hz = float(fs)
+            design_buffers = design.buffers(self.fs_hz)
+            self._design_buffers = tuple(design_buffers)
+            for name, value in design_buffers.items():
+                self.register_buffer(
+                    name, torch.tensor(value, dtype=torch_dtype, device=dev)
+                )
+            # Replaces the (K, 6, N) coefficient parameter of the base class with
+            # the design's own target. torch.tensor, not as_tensor: a float64
+            # argument would otherwise share memory with the caller's array.
+            self.param = torch.nn.Parameter(
+                torch.tensor(param_value, dtype=torch_dtype, device=dev),
+                requires_grad=requires_grad,
+            )
+
+        def design_sos(self, target_db: Any) -> Any:
+            """Targets in dB through the design, with its constants."""
+            buffers = {name: getattr(self, name) for name in self._design_buffers}
+            return self.design.sos(target_db, self.fs_hz, **buffers)
+
+    class DecayFilter(DesignedSOS):
+        """In-loop absorption parametrized by reverberation time.
+
+        Goes in the ``post_delay`` hook of :func:`assemble_fdn_core`, where it
+        sets the FDN's decay: its parameter is a reverberation time, one target
+        per delay line scaled by that line's round-trip length, and it must stay
+        contractive or the recursion diverges.
+
+        Shared and per-line decay
+        -------------------------
+
+        The shape of ``design.target`` decides how much freedom the decay has:
+
+        * ``(n_params,)`` -- **shared**. One reverberation time per band for the
+          whole network; what differs between delay lines is only their
+          round-trip length. This is the homogeneous decay an FDN is designed
+          for, and the classical choice: every mode decays at the rate its
+          frequency prescribes.
+        * ``(n_params, n_delays)`` -- **per line**. Each delay line carries its
+          own reverberation time per band. The decay is no longer homogeneous --
+          lines fall silent at different rates, which a physical room does not
+          do -- but a fit has ``n_delays`` times the freedom to place energy in
+          time, which is worth having when the target is a measured response
+          rather than an ideal room.
+
+        Parameters
+        ----------
+        design : EQDesign
+            The design driven by the reverberation time, carrying the RT in
+            seconds as its target -- a :class:`~pyFDN.GraphicEQ`,
+            :class:`~pyFDN.FirstOrderShelf` or :class:`~pyFDN.OnePole`.
+        delays : array_like
+            Delay lengths in samples, one per line.
+        fs : float
+            Sampling rate in Hz.
+        nfft : int
+            FFT size, matching the rest of the model.
+        alias_decay_db : float
+            Anti-time-aliasing decay; must match every other module in the
+            system.
+        requires_grad : bool
+            Whether the reverberation time is trained.
+
+        Notes
+        -----
+        ``param`` is the RT in seconds and ``map`` is the differentiable design,
+        so ``map(param)`` is an ``(n_sections, 6, n_delays)`` SOS bank -- what
+        :func:`pyFDN.extract_build` reads.
+        """
+
+        def __init__(
+            self,
+            design: Any,
+            delays: np.ndarray,
+            fs: float,
+            *,
+            nfft: int = 2**14,
+            alias_decay_db: float = 0.0,
+            device: Any = None,
+            dtype: Any = None,
+            requires_grad: bool = True,
+        ) -> None:
+            import torch
+
+            delays_arr = np.asarray(delays, dtype=np.float64).ravel()
+            rt_arr = _designed_target(design, delays_arr.size, broadcast=False)
+            super().__init__(
+                design,
+                rt_arr,
+                delays_arr.size,
+                fs,
+                nfft=nfft,
+                alias_decay_db=alias_decay_db,
+                device=device,
+                dtype=dtype,
+                requires_grad=requires_grad,
+            )
+            torch_dtype, dev = self.param.dtype, self.param.device
+            self.register_buffer(
+                "delays_samples",
+                torch.tensor(delays_arr, dtype=torch_dtype, device=dev),
+            )
+            # The RT at which a band already asks for MAX_ATTENUATION_DB, i.e.
+            # one round trip. A shared RT serves every line at once, so its floor
+            # is set by the longest; a per-line RT gets its own line's floor,
+            # which for the shorter lines is a good deal less conservative.
+            floor = 60.0 / MAX_ATTENUATION_DB * delays_arr / float(fs)
+            self.register_buffer(
+                "rt_floor",
+                torch.tensor(
+                    floor if rt_arr.ndim == 2 else floor.max(),
+                    dtype=torch_dtype,
+                    device=dev,
+                ),
+            )
+            self.map = self.rt_to_sos
+
+        def rt_to_sos(self, rt: Any) -> Any:
+            """Reverberation time in seconds to an ``(n_sections, 6, N)`` SOS bank."""
+            # A shared RT gains a trailing axis so that both cases broadcast
+            # against the delays the same way.
+            per_line = rt if rt.ndim == 2 else rt[:, None]
+            # dB of attenuation per sample, then per delay-line round trip.
+            target_db = (
+                -60.0 * self.delays_samples / (self._floored(per_line) * self.fs_hz)
+            )
+            return self.design_sos(target_db)
+
+        def _floored(self, rt: Any) -> Any:
+            """``rt`` held above :attr:`rt_floor`, smoothly.
+
+            A gradient step can put a band's RT at or below zero, where
+            ``-60 d / (rt fs)`` is not an attenuation but a *gain*, and a loop
+            filter above unity is what makes an FDN diverge. Flooring it *hard*
+            is worse than the crossing for a multi-band design: the floored band
+            then asks for hundreds of dB of attenuation while its neighbours ask
+            for none, and the graphic-EQ design overflows float32 into NaN. So
+            the floor is one round trip (:data:`MAX_ATTENUATION_DB` of
+            attenuation, four orders of magnitude below where the design
+            overflows) and the softplus knee is one floor wide: the identity to
+            float precision for every RT above ~20 floors (0.9 s for a 43 ms
+            round trip), a few percent long just above the floor, and never
+            below it.
+
+            The knee leaves a usable gradient for a band that dips across zero,
+            which is enough to pull it back. A band driven *far* under -- many
+            knees -- has a gradient that underflows and stays at the floor,
+            which is the right mapped value for it anyway: an RT below one round
+            trip is an instantaneous decay however far below it goes.
+
+            Written as ``floor * (1 + softplus(u))`` on the floor-relative
+            ``u``, rather than as a ``beta=1/floor`` softplus of ``rt - floor``:
+            the two are identical term for term, but ``beta`` must be a number,
+            and a per-line floor is a vector.
+            """
+            import torch
+
+            floor = self.rt_floor
+            return floor * (1.0 + torch.nn.functional.softplus((rt - floor) / floor))
+
+    class OutputEQ(DesignedSOS):
+        """Output EQ parametrized by gain in dB.
+
+        Goes in the ``post_output`` hook of :func:`assemble_fdn_core`, *outside*
+        the recursion -- which makes it the only part of an FDN that can shape
+        the response's spectral envelope without touching the decay, since the
+        gains ``b`` and ``c`` are single numbers per delay line with no
+        frequency dependence at all. Being outside the loop it also puts no
+        constraint on stability and needs no floor: any gain is a valid filter,
+        and the trained number is the gain you would plot.
+
+        Parameters
+        ----------
+        design : EQDesign
+            The design driven by the band gains, carrying the initial gain in dB
+            as its target. A ``(n_params,)`` target (or a scalar) is broadcast
+            across channels; the full shape is ``(n_params, n_channels)``.
+        n_channels : int
+            Number of output channels the filter runs on.
+        fs : float
+            Sampling rate in Hz.
+        nfft : int
+            FFT size, matching the rest of the model.
+        alias_decay_db : float
+            Anti-time-aliasing decay; must match every other module in the
+            system.
+        requires_grad : bool
+            Whether the band gains are trained.
+
+        Notes
+        -----
+        ``param`` is the ``(n_params, n_channels)`` gain in dB and ``map`` is
+        the differentiable design, so ``map(param)`` is an
+        ``(n_sections, 6, n_channels)`` SOS bank -- what
+        :func:`pyFDN.extract_build` reads as ``post_output``.
+        """
+
+        def __init__(
+            self,
+            design: Any,
+            n_channels: int,
+            fs: float,
+            *,
+            nfft: int = 2**14,
+            alias_decay_db: float = 0.0,
+            device: Any = None,
+            dtype: Any = None,
+            requires_grad: bool = True,
+        ) -> None:
+            gains = _designed_target(design, int(n_channels), broadcast=True)
+            super().__init__(
+                design,
+                gains,
+                int(n_channels),
+                fs,
+                nfft=nfft,
+                alias_decay_db=alias_decay_db,
+                device=device,
+                dtype=dtype,
+                requires_grad=requires_grad,
+            )
+            self.map = self.gain_to_sos
+
+        def gain_to_sos(self, gain_db: Any) -> Any:
+            """Gains in dB to an ``(n_sections, 6, n_channels)`` SOS bank."""
+            return self.design_sos(gain_db)
+
+else:  # pragma: no cover - exercised only without flamo installed
+
+    class DesignedSOS:  # type: ignore[no-redef]
+        """Placeholder raising :class:`ImportError`; flamo is not installed."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError(
+                f"{type(self).__name__} requires flamo (pip install flamo)"
+            )
+
+    class DecayFilter(DesignedSOS):  # type: ignore[no-redef]
+        """Placeholder raising :class:`ImportError`; flamo is not installed."""
+
+    class OutputEQ(DesignedSOS):  # type: ignore[no-redef]
+        """Placeholder raising :class:`ImportError`; flamo is not installed."""
+
+
 def _matrix_preimage(values: np.ndarray, matrix_type: str) -> np.ndarray:
     """Pre-image ``param`` so a flamo ``Matrix.map(param)`` realizes ``values``.
 
@@ -519,6 +856,76 @@ def matrix_module(
     return matrix
 
 
+def hook_module(
+    value: Any,
+    nfft: int,
+    *,
+    name: str,
+    device: Any = None,
+    dtype: Any = None,
+    alias_decay_db: float = 0.0,
+) -> Any:
+    """One FLAMO module for a filter hook, from an SOS bank, a module, or several.
+
+    The three hooks of :func:`assemble_fdn_core` each take a single module, but
+    what a caller has is often an ``(n_sections, 6, n_channels)`` SOS array, and
+    occasionally more than one thing to put in the same position. This resolves
+    all three cases:
+
+    * ``None`` -- no module.
+    * an array -- built with :func:`sos_filter_module`.
+    * a FLAMO module -- passed through.
+    * a sequence of the above -- composed into a ``Series`` in the given order,
+      with leaves named ``{name}_0``, ``{name}_1``, ...
+
+    Parameters
+    ----------
+    value : None, array, FLAMO module, or sequence
+        What to put in the hook.
+    nfft : int
+        FFT size, matching the rest of the model.
+    name : str
+        The hook's name (``"post_delay"``, ``"post_matrix"``, ``"post_output"``),
+        used to name the leaves of a composed ``Series``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list | tuple):
+        if not value:
+            return None
+        parts = [
+            hook_module(
+                item,
+                nfft,
+                name=name,
+                device=device,
+                dtype=dtype,
+                alias_decay_db=alias_decay_db,
+            )
+            for item in value
+        ]
+        if len(parts) == 1:
+            return parts[0]
+        if not _HAS_FLAMO:
+            raise ImportError("hook_module requires flamo (pip install flamo)")
+        from collections import OrderedDict
+
+        from flamo.processor import system
+
+        return system.Series(
+            OrderedDict((f"{name}_{i}", part) for i, part in enumerate(parts))
+        )
+    if isinstance(value, np.ndarray) or not hasattr(value, "forward"):
+        return sos_filter_module(
+            np.asarray(value, dtype=np.float64),
+            nfft,
+            device=device,
+            dtype=dtype,
+            alias_decay_db=alias_decay_db,
+        )
+    return value
+
+
 def assemble_fdn_core(
     *,
     input_gain: Any,
@@ -526,9 +933,9 @@ def assemble_fdn_core(
     delays: Any,
     output_gain: Any,
     direct: Any = None,
-    loop_filter: Any = None,
-    output_filter: Any = None,
-    post_delay_module: Any = None,
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
 ) -> Any:
     """
     Wire pre-built FLAMO modules into an FDN core (no FFT/iFFT wrapping).
@@ -538,14 +945,24 @@ def assemble_fdn_core(
     (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
-    :func:`pyFDN.extract_build` looks for).
+    :func:`pyFDN.extract_build` requires).
 
     Signal flow::
 
-        input_gain -> [recursion: delay -> (loop_filter) -> (post_delay_module); fB = feedback]
-                   -> output_gain -> (output_filter)
+        input_gain -> [recursion: fF = delay -> (post_delay)
+                                  fB = feedback -> (post_matrix)]
+                   -> output_gain -> (post_output)
 
     with the direct path ``direct`` summed in parallel when provided.
+
+    The three optional filter slots are the same three hooks, in the same three
+    positions and under the same three names, that :func:`pyFDN.process_fdn`
+    takes in numpy -- ``post_delay`` on the shared delay output (so it shapes
+    both what leaves the network and what is fed back), ``post_matrix`` on the
+    feedback path only, ``post_output`` on the wet signal only. An
+    :class:`~pyFDN.FDNBuild` has a field of each name, holding the SOS bank a
+    hook bakes down to; a hook holding something that does not bake -- a nested
+    core, a time-varying matrix -- simply has no build field to go in.
 
     Parameters
     ----------
@@ -563,13 +980,21 @@ def assemble_fdn_core(
         ``Series`` (no ``Parallel`` wrapper) -- this keeps ``core.feedback_loop``
         reachable for losses such as ``sparsity_loss``. When provided the core
         is ``Parallel(brA=fdn_branch, brB=direct)``.
-    loop_filter : FLAMO module or None
-        Optional in-loop filter after the delays (named ``filter``).
-    output_filter : FLAMO module or None
-        Optional per-output filter after the output gain (named
-        ``output_filter``).
-    post_delay_module : FLAMO module or None
-        Optional module appended after the delay in the recursion.
+    post_delay : FLAMO module or None
+        In-loop filter after the delays (named ``post_delay``). Any module of
+        input/output size N: a :class:`DecayFilter` or a plain
+        :func:`sos_filter_module` for absorption, or a whole nested core such as
+        a Schroeder allpass. Only an SOS filter here is extractable into an
+        :class:`~pyFDN.FDNBuild`.
+    post_matrix : FLAMO module or None
+        Filter on the feedback path after the feedback matrix (named
+        ``post_matrix``); the position a time-varying mixing stage occupies.
+        Adding it names the feedback branch ``mixing_matrix`` rather than
+        leaving the matrix bare on ``fB``, which is where
+        :func:`pyFDN.extract_build` looks for it either way.
+    post_output : FLAMO module or None
+        Per-output filter after the output gain (named ``post_output``);
+        typically an :class:`OutputEQ`.
 
     Returns
     -------
@@ -582,19 +1007,21 @@ def assemble_fdn_core(
 
     from flamo.processor import system
 
-    if loop_filter is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delays, "filter": loop_filter})
+    if post_delay is not None:
+        forward = system.Series(
+            OrderedDict({"delay": delays, "post_delay": post_delay})
         )
     else:
-        delay_chain = delays
+        forward = delays
 
-    if post_delay_module is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
+    if post_matrix is not None:
+        back = system.Series(
+            OrderedDict({"mixing_matrix": feedback, "post_matrix": post_matrix})
         )
+    else:
+        back = feedback
 
-    feedback_loop = system.Recursion(fF=delay_chain, fB=feedback)
+    feedback_loop = system.Recursion(fF=forward, fB=back)
     fdn_modules = OrderedDict(
         {
             "input_gain": input_gain,
@@ -602,8 +1029,8 @@ def assemble_fdn_core(
             "output_gain": output_gain,
         }
     )
-    if output_filter is not None:
-        fdn_modules["output_filter"] = output_filter
+    if post_output is not None:
+        fdn_modules["post_output"] = post_output
     fdn_branch = system.Series(fdn_modules)
 
     if direct is not None:
