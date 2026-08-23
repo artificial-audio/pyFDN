@@ -64,13 +64,18 @@ def test_unknown_audio_lists_choices() -> None:
         pyFDN.load_audio("not-a-sample")
 
 
-def test_colorless_presets_are_packaged_as_fdn_builds() -> None:
+def test_colorless_presets_are_packaged_as_preset_documents() -> None:
     names = pyFDN.available_fdn_presets()
     assert len(names) == 16
     assert "colorless_N4_d1" in names
     assert "colorless_init_N16_d2" in names
 
-    build = pyFDN.load_fdn_preset("colorless_N4_d1")
+    preset = pyFDN.get_fdn_preset("colorless_N4_d1")
+    assert preset.metadata["license"] == "MIT"
+    assert set(preset.metadata["tags"]) == {"colorless", "lossless", "optimized"}
+    assert preset.design == {"feedback_matrix": {"type": "orthogonal"}}
+
+    build = preset.build
     assert build.A.shape == (4, 4)
     assert build.B.shape == (4, 1)
     assert build.C.shape == (1, 4)
@@ -78,9 +83,9 @@ def test_colorless_presets_are_packaged_as_fdn_builds() -> None:
     assert build.delays.shape == (4,)
     np.testing.assert_allclose(build.A.T @ build.A, np.eye(4), atol=1e-12)
 
-    with_extension = pyFDN.load_fdn_preset("colorless_N4_d1.json", fs=44_100)
+    with_extension = pyFDN.load_fdn_preset("colorless_N4_d1.json")
     np.testing.assert_array_equal(with_extension.A, build.A)
-    assert with_extension.fs == 44_100
+    assert with_extension.fs == 48_000
 
 
 def test_every_example_citation_resolves_from_packaged_bibliography() -> None:
