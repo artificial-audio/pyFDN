@@ -52,14 +52,9 @@ def _flatness(magnitude):
     return float(np.exp(np.mean(np.log(power))) / np.mean(power))
 
 
-def _magnitude(model, nfft, n_in=1):
-    """|H| at DFT bins from a magnitude-output model, summed over channels."""
-    import torch
-
-    x = torch.zeros(1, nfft, n_in)
-    x[:, 0, :] = 1.0
-    with torch.no_grad():
-        return np.asarray(model(x).detach())[0].sum(axis=-1)
+def _magnitude(model):
+    """|H| at DFT bins as a loss sees it, summed over channels."""
+    return np.asarray(model_response(model).magnitude.detach()).sum(axis=(1, 2))
 
 
 def _decayed_flatness(build, rt=1.0, nfft=2**14):
@@ -70,10 +65,8 @@ def _decayed_flatness(build, rt=1.0, nfft=2**14):
     Decay does not change colouration, so measuring the decayed response on a
     fine grid is what actually tracks "colorless".
     """
-    model = trainable_from_build(
-        build_set_decay(build, rt), nfft=nfft, output="magnitude", device="cpu"
-    )
-    return _flatness(_magnitude(model, nfft))
+    model = trainable_from_build(build_set_decay(build, rt), nfft=nfft, device="cpu")
+    return _flatness(_magnitude(model))
 
 
 # The delay set of ``example_train_colorless_FDN``, so the peak/dip numbers the
@@ -85,10 +78,8 @@ _COLORLESS_DELAYS = pyFDN.sample_delay_lengths(
 
 def _decayed_db(build, rt=1.0, nfft=2**14):
     """|H| in dB relative to its own median, after decay -- see _decayed_flatness."""
-    model = trainable_from_build(
-        build_set_decay(build, rt), nfft=nfft, output="magnitude", device="cpu"
-    )
-    db = 20 * np.log10(np.maximum(_magnitude(model, nfft).ravel()[1:], 1e-12))
+    model = trainable_from_build(build_set_decay(build, rt), nfft=nfft, device="cpu")
+    db = 20 * np.log10(np.maximum(_magnitude(model).ravel()[1:], 1e-12))
     return db - np.median(db)
 
 
@@ -212,13 +203,15 @@ def test_the_decay_parameter_is_the_rt_and_trains():
         fs=fs,
     )
     frozen = trainable_from_build(
-        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+        build,
+        post_delay=_decay(build, pyFDN.GraphicEQ(rt), requires_grad=False),
+        nfft=2**12,
+        device="cpu",
     )
     assert param(frozen, "post_delay").trainable is False
 
     model = trainable_from_build(
         build,
-        trainable=Trainable(post_delay=True),
         post_delay=_decay(build, pyFDN.GraphicEQ(rt)),
         nfft=2**12,
         device="cpu",
@@ -237,7 +230,6 @@ def test_the_decay_parameter_is_the_rt_and_trains():
 
     float64 = trainable_from_build(
         build,
-        trainable=Trainable(post_delay=True),
         post_delay=_decay(build, pyFDN.GraphicEQ(rt), dtype=torch.float64),
         nfft=2**12,
         device="cpu",
@@ -267,7 +259,6 @@ def test_a_trained_rt_still_decays():
     )
     model = trainable_from_build(
         build,
-        trainable=Trainable(post_delay=True),
         post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0)), nfft=2**13),
         nfft=2**13,
         device="cpu",
@@ -305,7 +296,8 @@ def test_colorless_improves_and_preserves_structure():
     init = _decayed_flatness(init_build)
     delays0 = init_build.delays
 
-    log = train_fdn(model, "colorless", max_steps=500, lr=1e-2, device="cpu", rng=0)
+    loss = FlatMagnitude() + 0.2 * Sparsity(param(model, "feedback"))
+    log = train_fdn(model, loss, max_steps=500, lr=1e-2, device="cpu", rng=0)
 
     assert log.train_loss[-1] < log.train_loss[0]
     # the fit must flatten the FDN itself, not just the bins it was scored on
@@ -341,37 +333,33 @@ def test_lossless_build_defaults_to_alias_decay():
     np.testing.assert_allclose(damped.B, undamped.B, atol=1e-6)
     np.testing.assert_allclose(damped.C, undamped.C, atol=1e-6)
 
-    # ...but it does bound |H|, which is the whole point
+    # ...but it does bound what a loss sees, which is the whole point: without
+    # it the rendered response is the near-singular evaluation itself, peaks and
+    # all, and a magnitude fit spends its steps scaling the gains down.
     assert (
         _magnitude(
             trainable_from_build(
                 undamped,
                 nfft=2**10,
-                output="magnitude",
                 alias_decay_db=LOSSLESS_ALIAS_DECAY_DB,
                 device="cpu",
-            ),
-            2**10,
+            )
         ).max()
-        < _magnitude(
-            trainable_from_build(
-                undamped, nfft=2**10, output="magnitude", device="cpu"
-            ),
-            2**10,
-        ).max()
+        < _magnitude(trainable_from_build(undamped, nfft=2**10, device="cpu")).max()
     )
 
 
 def test_colorless_without_alias_decay_warns():
     model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
     with pytest.warns(UserWarning, match="alias_decay_db=0"):
-        train_fdn(model, "colorless", max_steps=2, rng=0, **_FAST)
+        train_fdn(model, FlatMagnitude(), max_steps=2, rng=0, **_FAST)
 
 
 def test_train_is_reproducible():
     def run():
         model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
-        return train_fdn(model, "colorless", max_steps=50, rng=0, **_FAST)
+        loss = FlatMagnitude() + 0.2 * Sparsity(param(model, "feedback"))
+        return train_fdn(model, loss, max_steps=50, rng=0, **_FAST)
 
     np.testing.assert_allclose(run().train_loss, run().train_loss, rtol=1e-6)
 
@@ -398,12 +386,6 @@ def test_match_spectrogram_runs_and_renders():
     ).reshape(-1)
     # the trained model extracts and renders to a finite IR
     assert out_ir.size > 0 and np.all(np.isfinite(out_ir))
-
-
-def test_match_mode_requires_target():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
-    with pytest.raises(ValueError, match="requires target"):
-        train_fdn(model, "match_spectrogram", **_FAST)
 
 
 def _mimo_ir(model, nfft, n_in, n_out):
@@ -470,7 +452,7 @@ def test_mimo_target_wrong_shape_raises():
     )
     bad = np.zeros((128, 3, 2))  # n_out=3 != model's 2
     with pytest.raises(ValueError, match="target has 3 outputs"):
-        train_fdn(model, "match_spectrogram", target=bad, max_steps=2, **_FAST)
+        train_fdn(model, MatchSpectrogram(bad), max_steps=2, **_FAST)
 
 
 # --- analytic decay (the exact RT path) ------------------------------------
@@ -617,24 +599,6 @@ def test_sparsity_rejects_a_non_square_parameter():
     model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="square matrix"):
         Sparsity(param(model, "input_gain"))
-
-
-def test_loss_object_and_preset_name_agree():
-    """train_fdn(model, "colorless") is shorthand for the preset expression."""
-
-    def run(objective):
-        model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
-        loss = objective(model) if callable(objective) else objective
-        return train_fdn(model, loss, max_steps=30, rng=0, **_FAST).train_loss
-
-    explicit = run(lambda m: FlatMagnitude() + 0.2 * Sparsity(param(m, "feedback")))
-    np.testing.assert_allclose(run("colorless"), explicit, rtol=1e-6)
-
-
-def test_a_loss_object_rejects_a_stray_target():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
-    with pytest.raises(ValueError, match="loss object holds its own"):
-        train_fdn(model, FlatMagnitude(), target=np.zeros(16), max_steps=2, **_FAST)
 
 
 def test_one_objective_can_hold_two_different_references():
@@ -1045,23 +1009,11 @@ def _plain_build(n=4, fs=48000.0, post_output=None):
     )
 
 
-def test_trainable_alone_does_not_conjure_a_filter():
-    """Trainable says whether a hook trains, not that it exists."""
-    empty = trainable_from_build(
-        _plain_build(),
-        trainable=Trainable(post_output=True),
-        nfft=2**12,
-        device="cpu",
-    )
-    assert not any(p.name == "post_output" for p in params(empty))
-
-
 def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     fs = 48000.0
     build = _plain_build()
     model = trainable_from_build(
         build,
-        trainable=Trainable(post_output=True),
         post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
         nfft=2**12,
         device="cpu",
@@ -1098,7 +1050,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     assert abs(db[1]) < 1.0
 
 
-def test_post_eq_is_frozen_unless_asked_for():
+def test_a_baked_post_eq_is_frozen_and_training_it_is_a_module_you_build():
     sos = pyFDN.design_geq(np.linspace(-6, 6, 10), fs=48000.0)[0]
     build = _plain_build(post_output=(sos / sos[:, 3:4])[:, :, np.newaxis])
 
@@ -1107,12 +1059,18 @@ def test_post_eq_is_frozen_unless_asked_for():
     # given as coefficients, it stays coefficients -- (n_sections, 6, n_out)
     assert param(frozen, "post_output").shape == build.post_output.shape
 
+    # raw coefficients train only if the caller builds the module that says so
     thawed = trainable_from_build(
-        build, trainable=Trainable(post_output=True), nfft=2**12, device="cpu"
+        build,
+        post_output=pyFDN.sos_filter_module(
+            build.post_output, 2**12, device="cpu", requires_grad=True
+        ),
+        nfft=2**12,
+        device="cpu",
     )
     assert param(thawed, "post_output").trainable is True
 
-    # no post EQ at all, and not asked to train one: no output filter
+    # no post EQ at all: no output filter
     assert not any(p.name == "post_output" for p in params(_plain_model()))
 
 
@@ -1123,7 +1081,6 @@ def _plain_model():
 def test_post_eq_trains_and_survives_extraction():
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(post_output=True),
         post_delay=_decay(
             _plain_build(), pyFDN.GraphicEQ(np.full(10, 0.5)), nfft=2**13
         ),
@@ -1195,7 +1152,6 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     rt = (2.5, 0.8)
     model = trainable_from_build(
         build,
-        trainable=Trainable(post_delay=True),
         post_delay=_decay(build, pyFDN.FirstOrderShelf(rt), dtype=torch.float64),
         nfft=2**12,
         device="cpu",
@@ -1227,7 +1183,6 @@ def test_shelf_post_eq_is_the_numpy_design():
     gains = (3.0, -6.0)
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(post_output=True),
         post_output=_out_eq(
             _plain_build(), pyFDN.FirstOrderShelf(gains), dtype=torch.float64
         ),
@@ -1257,7 +1212,6 @@ def test_shelf_crossover_moves_the_transition():
         build = _plain_build()
         return trainable_from_build(
             build,
-            trainable=Trainable(post_output=True),
             post_output=_out_eq(
                 build,
                 pyFDN.FirstOrderShelf((0.0, -12.0), crossover),
@@ -1294,7 +1248,6 @@ def test_shelf_decay_trains_and_stays_contractive():
     """The RT floor holds even when the fit is pushed hard at both endpoints."""
     model = trainable_from_build(
         _plain_build(),
-        trainable=Trainable(post_delay=True, post_output=True),
         post_delay=_decay(
             _plain_build(), pyFDN.FirstOrderShelf((1.0, 1.0)), nfft=2**13
         ),
@@ -1362,7 +1315,6 @@ def test_the_graphic_eq_keeps_its_ten_bands_through_both_roles():
     build = _plain_build()
     model = trainable_from_build(
         build,
-        trainable=Trainable(post_delay=True, post_output=True),
         post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0))),
         post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
         nfft=2**12,

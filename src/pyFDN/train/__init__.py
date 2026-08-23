@@ -10,8 +10,6 @@
    Losses come in two families: those that read the model's impulse response
    (:class:`~pyFDN.train.losses.base.ResponseLoss`) and those that put a cost on
    one of its parameters (:class:`~pyFDN.train.losses.base.ParameterLoss`).
-   :mod:`pyFDN.train.presets` holds ready-made combinations, also reachable by
-   name (``train_fdn(model, "colorless")``).
 3. **extract** an :class:`~pyFDN.FDNBuild` back out
    (:func:`pyFDN.extract_build`), plus a :class:`TrainLog`.
 """

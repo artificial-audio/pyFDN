@@ -1,7 +1,6 @@
 """Tests for NumPy-facing FLAMO helpers."""
 
 import numpy as np
-import pytest
 import torch
 
 from pyFDN.auxiliary.flamo import (
@@ -110,7 +109,7 @@ def test_assemble_fdn_core_direct_toggles_parallel():
     assert type(parallel_core).__name__ == "Parallel"
 
 
-def test_wrap_fdn_shell_output_modes():
+def test_wrap_fdn_shell_returns_the_time_response():
     n, a, b, c, d, m = _small_fdn()
     nfft = 2**11
     core = assemble_fdn_core(
@@ -122,12 +121,6 @@ def test_wrap_fdn_shell_output_modes():
     impulse = torch.zeros(1, nfft, 1)
     impulse[:, 0, :] = 1.0
 
-    mag = wrap_fdn_shell(core, nfft=nfft, output="magnitude")(impulse)
-    assert mag.shape == (1, nfft // 2 + 1, 1)
-    assert bool((mag >= 0).all())
-
-    time = wrap_fdn_shell(core, nfft=nfft, output="time")(impulse)
+    time = wrap_fdn_shell(core, nfft=nfft)(impulse)
     assert time.shape == (1, nfft, 1)
-
-    with pytest.raises(ValueError, match="output"):
-        wrap_fdn_shell(core, nfft=nfft, output="phase")
+    assert not time.is_complex()

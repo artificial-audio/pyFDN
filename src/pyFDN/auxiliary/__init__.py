@@ -19,7 +19,6 @@ from .flamo import (
     flamo_time_response,
     gain_module,
     matrix_module,
-    output_layer,
     sos_filter_module,
     wrap_fdn_shell,
 )
@@ -41,7 +40,6 @@ __all__ = [
     "matrix_module",
     "assemble_fdn_core",
     "wrap_fdn_shell",
-    "output_layer",
     "core_alias_decay_db",
     "flamo_time_response",
     "flamo_freq_response",

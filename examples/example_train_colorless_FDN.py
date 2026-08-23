@@ -39,8 +39,6 @@ def _(mo, pyFDN):
     * `pyFDN.FlatMagnitude()` reads `pyFDN.Response.magnitude` -- the `rfft` of the impulse response -- and fits it to a constant. That is the colorless objective.
     * `pyFDN.Sparsity(...)` is a cost on a *model parameter* rather than on the response, so it has to name one: `pyFDN.param(model, "feedback")` resolves the feedback matrix in this model's graph, and `pyFDN.params(model)` lists everything else on offer. It rewards a dense matrix, i.e. good mixing.
 
-    `train_fdn(model, "colorless")` is shorthand for exactly this sum -- see `pyFDN.train.presets`.
-
     `FlatMagnitude` weighs a peak and a dip by whatever the squared error happens to make of them. The last section of this notebook swaps it for `pyFDN.AsymmetricFlatMagnitude`, which weighs them on purpose.
 
     ## Two details that make or break the fit

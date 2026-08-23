@@ -1038,39 +1038,6 @@ def assemble_fdn_core(
     return fdn_branch
 
 
-def output_layer(
-    output: str, nfft: int, dtype: Any = None, alias_decay_db: float = 0.0
-) -> Any:
-    r"""Build the FLAMO output layer for an output domain.
-
-    ``"time"`` -> the **true** impulse response; ``"magnitude"`` -> ``|.|`` of
-    the frequency response. The single source of truth for the
-    ``output``-string -> layer mapping, used by :func:`wrap_fdn_shell` so the
-    build-time and training-time views of a model cannot disagree.
-
-    ``alias_decay_db`` must match the value the core modules were built with.
-    The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
-    its time response carries a :math:`\gamma^n` envelope; the ``"time"`` layer
-    is an ``iFFTAntiAlias``, which removes it again. The layer therefore returns
-    the impulse response itself -- the same convention as FLAMO's
-    ``get_time_response`` -- and ``alias_decay_db`` is simply the accuracy of
-    that response in dB (see :func:`pyFDN.trainable_from_build`). At
-    ``alias_decay_db=0`` it is an ordinary ``iFFT``.
-    """
-    if not _HAS_FLAMO:
-        raise ImportError("output_layer requires flamo (pip install flamo)")
-    import torch
-
-    torch_dtype = torch.float32 if dtype is None else dtype
-    if output == "time":
-        return dsp.iFFTAntiAlias(
-            nfft, alias_decay_db=float(alias_decay_db), dtype=torch_dtype
-        )
-    if output == "magnitude":
-        return dsp.Transform(transform=torch.abs, dtype=torch_dtype)
-    raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
-
-
 def core_alias_decay_db(core: Any) -> float:
     """The anti-aliasing decay the FLAMO ``core`` was built with, in dB.
 
@@ -1085,32 +1052,41 @@ def core_alias_decay_db(core: Any) -> float:
     return abs(float(value))
 
 
-def wrap_fdn_shell(
-    core: Any, *, nfft: int, dtype: Any = None, output: str = "time"
-) -> Any:
-    """
-    Wrap an FDN core in a FLAMO ``Shell`` with an FFT input layer.
+def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
+    r"""
+    Wrap an FDN core in a FLAMO ``Shell`` that returns the impulse response.
+
+    The shell is FFT in, impulse response out: the input layer is an ``FFT``
+    and the output layer the ``iFFTAntiAlias`` that matches the core's own
+    ``alias_decay_db``. A pyFDN model therefore means one thing wherever it is
+    used -- rendered, analyzed or trained -- and the time domain is a property
+    of how the model was built rather than something a caller sets afterwards.
+
+    The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
+    its response carries a :math:`\gamma^n` envelope; the output layer removes
+    it again. What comes out is the true impulse response, accurate to
+    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`). At
+    ``alias_decay_db=0`` the layer is an ordinary inverse FFT.
 
     Parameters
     ----------
     core : FLAMO module
-        FDN core, e.g. from :func:`assemble_fdn_core`.
+        FDN core, e.g. from :func:`assemble_fdn_core`. Its ``alias_decay_db``
+        is read back off it, so the output layer cannot disagree with the
+        modules it undoes.
     nfft : int
         FFT size.
     dtype : torch.dtype or None
         Dtype for the FFT/iFFT layers; defaults to float32.
-    output : str
-        Output-domain layer:
-
-        * ``"time"`` -- the impulse response (the render default, matching
-          :func:`pyFDN.dss_to_flamo`). Any anti-aliasing envelope the core was
-          built with is removed again, so this is the true impulse response.
-        * ``"magnitude"`` -- ``|.|`` of the frequency response, for
-          magnitude-domain losses (e.g. colorless training).
 
     Returns
     -------
     flamo.processor.system.Shell
+
+    See Also
+    --------
+    pyFDN.model_response : the shell's output as a :class:`~pyFDN.Response`,
+        including the magnitude spectrum a frequency-domain view wants.
     """
     if not _HAS_FLAMO:
         raise ImportError("wrap_fdn_shell requires flamo (pip install flamo)")
@@ -1121,7 +1097,7 @@ def wrap_fdn_shell(
     return system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-        output_layer=output_layer(
-            output, nfft, torch_dtype, alias_decay_db=core_alias_decay_db(core)
+        output_layer=dsp.iFFTAntiAlias(
+            nfft, alias_decay_db=core_alias_decay_db(core), dtype=torch_dtype
         ),
     )

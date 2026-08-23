@@ -1,5 +1,5 @@
 """Training losses for FDNs -- see :mod:`pyFDN.train.losses.base` for how they
-compose, and :mod:`pyFDN.train.presets` for ready-made combinations.
+compose into an objective.
 """
 
 from __future__ import annotations

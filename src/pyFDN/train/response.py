@@ -26,7 +26,7 @@ class Response:
         Impulse response of shape ``(n_samples, n_out, n_in)`` -- the same
         convention as :func:`pyFDN.build_to_impz`. This is the response itself:
         any anti-aliasing envelope the model was built with has already been
-        removed by its output layer, so ``h`` is accurate to
+        removed by the shell's output layer, so ``h`` is accurate to
         ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`) and needs no
         further correction. Differentiable during training.
     fs : float
@@ -93,16 +93,37 @@ def impulse_excitation(
     return x
 
 
+def require_time_output(model: Any) -> None:
+    """Raise unless ``model``'s output layer returns the impulse response.
+
+    Every pyFDN shell does, because :func:`pyFDN.wrap_fdn_shell` builds the
+    inverse-FFT layer that matches the core's ``alias_decay_db`` -- the domain
+    is a property of the model, not something a caller sets afterwards. A
+    ``Shell`` assembled by hand can still hand back a frequency-domain tensor,
+    which every loss would silently read as a time signal; hence this check.
+    """
+    from flamo.processor import dsp
+
+    layer = model.get_outputLayer()
+    if not isinstance(layer, dsp.iFFT | dsp.iFFTAntiAlias):
+        raise ValueError(
+            f"model's output layer is {type(layer).__name__}, so it does not "
+            "return an impulse response. Build the shell with "
+            "pyFDN.wrap_fdn_shell (or pyFDN.build_fdn), which pairs the FFT "
+            "input layer with the iFFT the core's alias_decay_db calls for."
+        )
+
+
 def model_response(model: Any, excitation: torch.Tensor | None = None) -> Response:
     """Run ``model`` on an impulse and wrap the result in a :class:`Response`.
 
-    The model must have a ``"time"`` output layer (:func:`pyFDN.build_fdn`'s
-    default). Pass ``excitation`` to reuse a tensor across steps;
+    Pass ``excitation`` to reuse a tensor across steps;
     :func:`impulse_excitation` builds one.
 
     Gradients flow through the returned response, so this is what the trainer
     calls each step -- and, detached, what you can call to inspect a model.
     """
+    require_time_output(model)
     n_in, n_out = int(model.input_channels), int(model.output_channels)
     if excitation is None:
         excitation = impulse_excitation(
@@ -112,8 +133,7 @@ def model_response(model: Any, excitation: torch.Tensor | None = None) -> Respon
     if y.shape[0] != n_in or y.shape[2] != n_out:
         raise ValueError(
             f"model output {tuple(y.shape)} does not match its (n_in, nfft, "
-            f"n_out) = ({n_in}, {int(model.nfft)}, {n_out}); is the output "
-            "layer 'time'?"
+            f"n_out) = ({n_in}, {int(model.nfft)}, {n_out})"
         )
     return Response(h=y.permute(1, 2, 0), fs=model_fs(model))
 

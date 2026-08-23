@@ -126,8 +126,8 @@ class AsymmetricFlatMagnitude(ResponseLoss):
     ``peak_power`` and the loss is gain-invariant (add :class:`~pyFDN.Energy` to
     pin the level). The exponent, not a weight, is what makes it bite, and the
     linear magnitude (not dB) is deliberate; see :doc:`the design note
-    </training_losses>` for why, and for what the exponent costs in steps and
-    seed-to-seed spread.
+    </training_losses>` for why, and for what a higher exponent costs in
+    convergence.
 
     Parameters
     ----------

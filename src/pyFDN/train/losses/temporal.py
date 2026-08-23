@@ -63,7 +63,8 @@ class MatchEnergyDecay(ResponseLoss):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
-    trained parameter (:class:`pyFDN.Trainable` ``post_delay``). A magnitude
+    trained parameter (a :class:`~pyFDN.DecayFilter` in the ``post_delay``
+    hook). A magnitude
     spectrogram distance is not a substitute for fitting a decay; see :doc:`the
     design note </training_losses>`.
 
@@ -196,8 +197,7 @@ class MatchCumulativeEnergy(ResponseLoss):
     quantization of octave bands. The compressive ``power`` (rather than a
     logarithm) keeps the surface's six-orders-of-magnitude dynamic range
     visible to the loss while staying bounded. See :doc:`the design note
-    </training_losses>` for the reasoning and the measurements behind the
-    defaults.
+    </training_losses>` for the reasoning behind the defaults.
 
     Parameters
     ----------
@@ -208,8 +208,7 @@ class MatchCumulativeEnergy(ResponseLoss):
     window, hop : int
         STFT window and hop in samples. Unlike :class:`MatchEnergyDecay` this
         loss needs no window long enough to resolve an octave -- it never splits
-        into octaves -- so the default is short. Lengthening it to 4096 changed
-        the fit of the notes below by less than it cost in wall clock.
+        into octaves -- so the default is short.
     power : float
         The compression exponent :math:`p \in (0, 1]` applied to the normalized
         surface. 1 is no compression (raw energies), 0.5 the default, 0.25

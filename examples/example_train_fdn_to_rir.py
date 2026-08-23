@@ -221,7 +221,7 @@ def _(mo):
     So the whole pipeline is:
 
     1. an FDN with a flat 1 s decay and a flat output EQ, scaled once to the target's energy.
-    2. `pyFDN.trainable_from_build(..., post_delay=DecayFilter(design(1.0), ...), post_output=OutputEQ(design(0.0), ...), trainable=Trainable(post_delay=True, direct=True, post_output=True))`.
+    2. `pyFDN.trainable_from_build(..., trainable=Trainable(direct=True), post_delay=DecayFilter(design(1.0), ...), post_output=OutputEQ(design(0.0), ...))` -- `Trainable` names the gains that train; each filter module carries its own gradient flag.
     3. `pyFDN.train_fdn(model, MatchCumulativeEnergy(rir, power=0.5, frequency="both"))`.
     4. read the two filters back out, and measure the render.
     """)
@@ -343,9 +343,10 @@ def _(design, fs, init_build, np, pyFDN, rir, rir_len):
 
     model = pyFDN.trainable_from_build(
         init_build,
-        # everything with a gradient: A, b, c, D, the decay and the output EQ
-        trainable=pyFDN.Trainable(post_delay=True, direct=True, post_output=True),
-        # the decay, as a reverberation time rather than as coefficients
+        # every gain with a gradient: A, b, c and D
+        trainable=pyFDN.Trainable(direct=True),
+        # the decay, as a reverberation time rather than as coefficients -- a
+        # DecayFilter trains its own parameter unless told requires_grad=False
         post_delay=pyFDN.DecayFilter(
             design(1.0),
             init_build.delays,

@@ -1,8 +1,8 @@
 """Train an FDN toward an objective.
 
 :func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` to a loss built from
-:mod:`pyFDN.train.losses` (or a named preset), in place, and returns a
-:class:`TrainLog`. Read the result back with :func:`pyFDN.extract_build`.
+:mod:`pyFDN.train.losses`, in place, and returns a :class:`TrainLog`. Read the
+result back with :func:`pyFDN.extract_build`.
 
 The engine knows nothing about any particular objective. Its whole job is: run
 the model on an impulse, hand the resulting :class:`~pyFDN.train.response.Response`
@@ -16,8 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .losses import Loss
-from .presets import resolve
-from .response import Response, impulse_excitation, model_fs
+from .response import Response, impulse_excitation, model_fs, require_time_output
 
 
 @dataclass
@@ -45,9 +44,8 @@ class TrainLog:
 
 def train_fdn(
     model: Any,
-    loss: Loss | str,
+    loss: Loss,
     *,
-    target: Any = None,
     max_steps: int = 2000,
     lr: float = 1e-3,
     optimizer: str = "adam",
@@ -67,21 +65,16 @@ def train_fdn(
     ----------
     model : flamo Shell
         A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_build``.
-        Its output layer is set to ``"time"``: every loss is a function of the
-        impulse response, so there is one output domain and the model means the
-        same thing before, during and after training.
-    loss : Loss or str
+        It must return its impulse response -- every loss is a function of it --
+        which every pyFDN shell does by construction.
+    loss : Loss
         The objective, e.g.::
 
             pyFDN.FlatMagnitude() + 0.2 * pyFDN.Sparsity(pyFDN.param(model, "feedback"))
 
-        A string names a preset in :mod:`pyFDN.train.presets` (``"colorless"``,
-        ``"match_spectrogram"``, ``"match_mel_spectrogram"``) and is shorthand
-        for calling it on ``model``.
-    target : array_like, optional
-        Reference impulse response, for the presets that need one. Losses built
-        by hand hold their own reference data, so this is a preset-only
-        shorthand.
+        A loss holds whatever reference data it needs (e.g.
+        ``MatchSpectrogram(target)``), so one objective can compare against
+        more than one reference.
     max_steps, lr, patience : max gradient steps, learning rate, plateau patience.
     optimizer : str
         ``"adam"`` (default) or ``"lbfgs"``.
@@ -99,30 +92,20 @@ def train_fdn(
     import torch
     from flamo.optimize.trainer import EagerTrainer
 
-    from pyFDN.auxiliary.flamo import core_alias_decay_db, output_layer
-
     dev = "cpu" if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
 
     if rng is not None:
         torch.manual_seed(int(rng))
 
-    loss = resolve(loss, model, target=target)
     loss.check(model)
 
     nfft = int(model.nfft)
     n_in = int(model.input_channels)
-    # Every loss reads the impulse response, so the output domain is fixed. This
-    # is the only mutation the trainer makes to the model, and it is idempotent:
-    # a model built by build_fdn already has exactly this layer.
-    model.set_outputLayer(
-        output_layer(
-            "time",
-            nfft,
-            torch_dtype,
-            alias_decay_db=core_alias_decay_db(model.get_core()),
-        )
-    )
+    # Every loss reads the impulse response. The trainer does not install that
+    # output layer, it requires one: the model's domain is settled where the
+    # model is built.
+    require_time_output(model)
     excitation = impulse_excitation(n_in, nfft, device=dev, dtype=torch_dtype)
 
     # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
