@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -241,7 +241,7 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, delays, fs, ir_len_seconds, mo, np, pyFDN):
+def _(A, B, C, D, delays, fs, ir_len_seconds, mo, pyFDN):
     ir_lossless = pyFDN.dss_to_impz(
         int(ir_len_seconds * fs), delays, A, B, C, D
     ).squeeze()
@@ -340,7 +340,9 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 
     absorption = pyFDN.absorption_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
-    build = pyFDN.FDNBuild(A=A, B=B, C=C, D=D, delays=delays, fs=fs, filters=absorption)
+    build = pyFDN.FDNBuild(
+        A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
+    )
     ir = pyFDN.build_to_impz(build, int(ir_len_seconds * fs)).squeeze()
 
     print(f"absorption SOS bank: {absorption.shape}  (sections, coefficients, lines)")

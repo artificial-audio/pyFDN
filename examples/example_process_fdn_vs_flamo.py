@@ -4,7 +4,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -68,24 +68,7 @@ def _(np, pyFDN):
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
     direct = np.zeros((1, 1))
-
-    # Target RT at the 10 GEQ bands (seconds), decaying towards high frequencies
-    target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
-
-    print(f"Delays: {delays}")
-    print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
-    print(f"Target RT: {target_rt}")
-    return (
-        delays,
-        direct,
-        feedback_matrix,
-        fs,
-        input_gain,
-        ir_len,
-        num_delays,
-        output_gain,
-        target_rt,
-    )
+    return delays, direct, feedback_matrix, fs, input_gain, ir_len, output_gain
 
 
 @app.cell(hide_code=True)
@@ -99,41 +82,13 @@ def _(mo):
 
 
 @app.cell
-def _(delays, fs, go, np, num_delays, pyFDN, target_rt, td):
+def _(delays, fs, np, pyFDN):
+    # Target RT at the 10 GEQ bands (seconds), decaying towards high frequencies
+    target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
+
     sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
-
-    # constract the SOSFilter
-    absorption = td.SOSBank(sos_absorption)
-
-    fig_mag = go.Figure()
-    for _i in range(num_delays):
-        _, _H_bands, _W_bands = pyFDN.probe_sos(
-            sos_absorption[..., _i], np.array([]), fft_len=2**14, fs=fs
-        )
-        _mag_db = pyFDN.lin_to_db(np.abs(np.prod(_H_bands, axis=1)))
-        fig_mag.add_trace(
-            go.Scatter(
-                x=_W_bands[:, 0],
-                y=_mag_db / delays[_i],
-                mode="lines",
-                name=f"delay={delays[_i]}",
-                line={"width": 1.2},
-            )
-        )
-    fig_mag.update_layout(
-        title="Per-delay absorption magnitude (one application)",
-        xaxis={
-            "title": "Frequency (Hz)",
-            "type": "log",
-            "range": [np.log10(50), np.log10(fs / 2)],
-        },
-        yaxis={"title": "Magnitude (dB/sample)"},
-        template="plotly_white",
-        height=400,
-    )
-    fig_mag.show()
-    return absorption, sos_absorption
+    return (sos_absorption,)
 
 
 @app.cell(hide_code=True)
@@ -148,7 +103,6 @@ def _(mo):
 
 @app.cell
 def _(
-    absorption,
     delays,
     direct,
     feedback_matrix,
@@ -159,6 +113,7 @@ def _(
     output_gain,
     pyFDN,
     sos_absorption,
+    td,
     torch,
 ):
     impulse = np.zeros(ir_len)
@@ -170,7 +125,7 @@ def _(
         input_gain,
         output_gain,
         direct,
-        post_delay=absorption,
+        post_delay=td.SOSBank(sos_absorption),
     )
 
     model = pyFDN.dss_to_flamo(
@@ -181,7 +136,7 @@ def _(
         delays,
         fs,
         nfft=2**17,
-        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
+        post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
         dtype=torch.float64,
     )

@@ -131,7 +131,7 @@ def _(
         m=delays,
         Fs=fs,
         shell=False,
-        sos_filter=sos_loop,
+        post_delay=sos_loop,
         dtype=torch.float64,
     )
     _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(

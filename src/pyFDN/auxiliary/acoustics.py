@@ -6,10 +6,16 @@ import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import firwin2, sosfreqz
+from scipy.signal import sosfreqz
 from scipy.special import erfc
 
-from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
+# The filter designs live in pyFDN.eq, and are re-exported here because this
+# module's rt_to_slope is what turns a reverberation time into the dB target
+# they take. They import it inside a function, not at module level, so the two
+# modules do not cycle.
+from pyFDN.eq.first_order import first_order_absorption as first_order_absorption
+from pyFDN.eq.first_order import first_order_shelving_eq as first_order_shelving_eq
+from pyFDN.eq.one_pole import one_pole_absorption as one_pole_absorption
 
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
@@ -56,60 +62,6 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     rev = np.flip(ir, axis=axis)
     cum = np.cumsum(rev**2, axis=axis)
     return np.flip(cum, axis=axis)
-
-
-def absorption_filters(
-    frequency: ArrayLike,
-    target_rt: np.ndarray,
-    filterOrder: int,
-    delays: ArrayLike,
-    fs: float,
-) -> np.ndarray:
-    """
-    Generate FIR absorption filters for each channel.
-    frequency: [freq_points]
-    target_rt: shape (freq_points, channels)
-    delays: array of length channels
-    """
-    delays_arr = np.asarray(delays, dtype=float)
-    num_channels = len(delays_arr)
-    unit_freq = hertz_to_unit(frequency, fs)
-    FIR = np.zeros((num_channels, filterOrder + 1))
-
-    if filterOrder == 0:
-        rt = target_rt[0, :]
-        db = delays_arr * rt_to_slope(rt, fs)
-        FIR[:, 0] = db_to_lin(db)
-    else:
-        for ch in range(num_channels):
-            rt = target_rt[:, ch]
-            delay = delays_arr[ch] + int(np.ceil(filterOrder / 2))
-            db = delay * rt_to_slope(rt, fs)
-            target_amp = db_to_lin(db)
-            # firwin2 expects normalized [0..1] freqs and gain values
-            FIR[ch, :] = firwin2(filterOrder + 1, unit_freq, target_amp)
-    return FIR
-
-
-def absorption_to_rt(
-    filterCoeffs: np.ndarray,
-    delays: ArrayLike,
-    nfft: int,
-    fs: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute reverb time from recursive absorption filter with delay."""
-    delays_arr = np.asarray(delays, dtype=float)
-    filterLen = filterCoeffs.shape[1]
-    response = np.fft.fft(filterCoeffs, nfft, axis=1)
-    freq = np.linspace(0, fs / 2, nfft // 2, endpoint=False)
-
-    response = response[:, : nfft // 2]
-    freq = freq[: nfft // 2]
-
-    totalDelay = delays_arr[:, None] + filterLen / 2
-    decayPerSample = lin_to_db(np.abs(response)) / totalDelay
-    rt = slope_to_rt(decayPerSample, fs)
-    return rt.T, freq  # shape: (freq_points, channels)
 
 
 def echo_density(
@@ -486,159 +438,6 @@ def estimate_initial_level_bands(
     energy = np.array([np.sum(sosfilt(sos, ir) ** 2) for sos in sos_bank])
 
     return slope_amplitude_to_level(energy, rt, fs), f_centre
-
-
-def one_pole_absorption(
-    rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
-) -> np.ndarray:
-    """Design one-pole absorption filters according to specified reverb time.
-
-    Returns a one-section per-channel SOS bank of shape ``(1, 6, N)`` (the
-    canonical SOS bank layout; section rows are ``[b0, b1, b2, a0, a1, a2]``).
-    """
-    delays_arr = np.asarray(delays, dtype=float)
-
-    # Calculate target gains
-    slope_dc = rt_to_slope(rt_dc, fs)
-    slope_ny = rt_to_slope(rt_ny, fs)
-
-    # Convert to linear magnitude
-    h_dc = db_to_lin(delays_arr * slope_dc)
-    h_ny = db_to_lin(delays_arr * slope_ny)
-
-    # Design filters
-    r = h_dc / h_ny
-    a1 = (1.0 - r) / (1.0 + r)
-    b0 = (1.0 - a1) * h_ny
-
-    num_filters = h_dc.size
-    sos = np.zeros((1, 6, num_filters))
-    sos[0, 0, :] = b0  # b0
-    sos[0, 3, :] = 1.0  # a0
-    sos[0, 4, :] = a1  # a1
-
-    return sos
-
-
-def first_order_absorption(
-    rt_dc: float,
-    rt_ny: float,
-    delays: ArrayLike,
-    fs: float,
-    crossover_frequency: float | None = None,
-) -> np.ndarray:
-    """Design first-order shelving absorption filters according to specified reverb time.
-
-    Each delay line gets a first-order shelving filter whose gain matches the
-    target decay (rt_dc at DC, rt_ny at Nyquist) for its delay length, with the
-    shelf transition at crossover_frequency.
-
-    Reference: Jot, J. M., "Proportional parametric equalizers - Application to
-    digital reverberation and environmental audio processing", AES 2015.
-
-    Parameters
-    ----------
-    rt_dc : float
-        Reverberation time in seconds at DC.
-    rt_ny : float
-        Reverberation time in seconds at Nyquist.
-    delays : array-like
-        Delay lengths in samples, one per channel.
-    fs : float
-        Sampling rate in Hz.
-    crossover_frequency : float, optional
-        Shelf crossover frequency in Hz. Defaults to fs/8, the midpoint of the
-        warped (bilinear) frequency axis. Values above fs/5 are clamped to fs/5
-        since a too high crossover leads to an unstable filter (fs/4 is the limit).
-
-    Returns
-    -------
-    np.ndarray
-        One-section per-channel SOS bank of shape ``(1, 6, N)`` (the canonical
-        SOS bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``
-        (b2 = a2 = 0 for these first-order filters).
-    """
-    delays_arr = np.asarray(delays, dtype=float)
-
-    h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
-    h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
-    return _first_order_shelf(h_dc, h_ny, fs, crossover_frequency)
-
-
-def _first_order_shelf(
-    h_dc: np.ndarray,
-    h_ny: np.ndarray,
-    fs: float,
-    crossover_frequency: float | None = None,
-) -> np.ndarray:
-    """First-order shelving SOS bank from target linear gains at DC and Nyquist.
-
-    Shared core of :func:`first_order_absorption` and
-    :func:`first_order_shelving_eq`. ``h_dc`` and ``h_ny`` are linear-magnitude
-    gains (one per channel); returns a one-section per-channel SOS bank of shape
-    ``(1, 6, N)``.
-    """
-    h_dc = np.asarray(h_dc, dtype=float)
-    h_ny = np.asarray(h_ny, dtype=float)
-
-    if crossover_frequency is None:
-        crossover_frequency = fs / 8.0
-    crossover_frequency = min(crossover_frequency, fs / 5.0)
-    omega = crossover_frequency / fs * 2.0 * np.pi
-
-    t = np.tan(omega)
-    sqrt_k = np.sqrt(h_dc / h_ny)
-
-    b0 = (t * sqrt_k + 1.0) * h_ny
-    b1 = (t * sqrt_k - 1.0) * h_ny
-    a0 = t / sqrt_k + 1.0
-    a1 = t / sqrt_k - 1.0
-
-    sos = np.zeros((1, 6, h_dc.size))
-    sos[0, 0, :] = b0 / a0
-    sos[0, 1, :] = b1 / a0
-    sos[0, 3, :] = 1.0
-    sos[0, 4, :] = a1 / a0
-    return sos
-
-
-def first_order_shelving_eq(
-    db_dc: ArrayLike,
-    db_nyquist: ArrayLike,
-    fs: float,
-    crossover_frequency: float | None = None,
-) -> np.ndarray:
-    """Design first-order shelving EQ filters from gains in dB at DC and Nyquist.
-
-    Unlike :func:`first_order_absorption` (whose gains are derived from a
-    reverberation time and a delay length), the shelf endpoints are specified
-    directly as decibel gains. Useful as a per-output tone correction (post EQ).
-
-    Parameters
-    ----------
-    db_dc : array-like
-        Gain in dB at DC, scalar or one value per channel.
-    db_nyquist : array-like
-        Gain in dB at Nyquist, scalar or one value per channel. Broadcast
-        against ``db_dc`` to a common number of channels.
-    fs : float
-        Sampling rate in Hz.
-    crossover_frequency : float, optional
-        Shelf crossover frequency in Hz. Defaults to fs/8; clamped to fs/5.
-
-    Returns
-    -------
-    np.ndarray
-        One-section per-channel SOS bank of shape ``(1, 6, N)`` (canonical SOS
-        bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``.
-    """
-    db_dc_arr, db_ny_arr = np.broadcast_arrays(
-        np.asarray(db_dc, dtype=float).ravel(),
-        np.asarray(db_nyquist, dtype=float).ravel(),
-    )
-    return _first_order_shelf(
-        db_to_lin(db_dc_arr), db_to_lin(db_ny_arr), fs, crossover_frequency
-    )
 
 
 def sos_gain_per_sample_curves(

@@ -1,6 +1,6 @@
 {
   "format": "pyfdn-fdn-build",
-  "version": 1,
+  "version": 2,
   "feedback_matrix": [
     [
       0.8936934696408033,
@@ -385,8 +385,9 @@
     801
   ],
   "sample_rate": 48000.0,
-  "absorption_filters": null,
-  "output_filters": null,
+  "post_delay": null,
+  "post_matrix": null,
+  "post_output": null,
   "metadata": {
     "name": "colorless_init_N16_d2",
     "description": "Initial colorless FDN build.",

@@ -53,7 +53,7 @@ def _():
         rng=1,
     )
     # Bake attenuation into A matrix for easier comparison.
-    build = dataclasses.replace(build, A=np.diag(build.filters[0, 0, :]) @ build.A)
+    build = dataclasses.replace(build, A=np.diag(build.post_delay[0, 0, :]) @ build.A)
     A, b, c, d = build.A, build.B, build.C, build.D
 
     # Convert delay state-space to single state-space system

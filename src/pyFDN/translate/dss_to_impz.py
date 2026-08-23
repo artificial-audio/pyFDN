@@ -61,14 +61,16 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
     Time-domain sibling of the FLAMO render path (:func:`pyFDN.build_to_flamo`
     -> :func:`pyFDN.flamo_time_response`): runs one :func:`pyFDN.process_fdn`
     block simulation per input channel (a Dirac on that channel), with the
-    build's per-delay-line absorption (``build.filters``, e.g. from
-    :func:`pyFDN.build_set_decay`) applied inside the loop as a
-    :class:`pyFDN.td.SOSBank`. Unlike the FFT-based FLAMO render this does
-    not time-alias, so a long or near-lossless decay is rendered faithfully up
-    to ``ir_len``.
+    build's three filter hooks each applied as a :class:`pyFDN.td.SOSBank`,
+    into the :func:`process_fdn` argument of the same name: ``post_delay`` on
+    the delay output (the per-delay-line absorption, e.g. from
+    :func:`pyFDN.build_set_decay`), ``post_matrix`` on the feedback path, and
+    ``post_output`` on the wet signal. Unlike the FFT-based FLAMO render this
+    does not time-alias, so a long or near-lossless decay is rendered
+    faithfully up to ``ir_len``.
 
     Extends :func:`dss_to_impz` (numeric state-space only) with the build's
-    absorption filters.
+    filter hooks.
 
     Parameters
     ----------
@@ -82,29 +84,21 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
     np.ndarray
         Impulse response of shape ``(ir_len, num_outputs, num_inputs)``. Use
         ``.squeeze()`` for a 1-D array from a single-in/single-out FDN.
-
-    Raises
-    ------
-    ValueError
-        If ``build.post_eq`` is set: output EQ is not applied by
-        :func:`process_fdn`. Use :func:`pyFDN.build_to_flamo` +
-        :func:`pyFDN.flamo_time_response` for output-EQ builds.
     """
     from pyFDN.td import SOSBank
 
-    if build.post_eq is not None:
-        raise ValueError(
-            "build_to_impz does not apply build.post_eq (output EQ); "
-            "use build_to_flamo + flamo_time_response for output-EQ builds."
-        )
-
     num_inputs = np.asarray(build.B).shape[1]
+
+    def bank(sos: np.ndarray | None) -> SOSBank | None:
+        return None if sos is None else SOSBank(sos)
 
     out_list = []
     for j in range(num_inputs):
-        # A fresh filter bank per channel so absorption state does not leak
+        # A fresh bank per hook per input channel, so filter state does not leak
         # between the per-input simulations (SOSBank is stateful).
-        absorption = SOSBank(build.filters) if build.filters is not None else None
+        absorption = bank(build.post_delay)
+        feedback_eq = bank(build.post_matrix)
+        output_eq = bank(build.post_output)
         input_signal = np.zeros((ir_len, num_inputs))
         input_signal[0, j] = 1.0
         out_j = process_fdn(
@@ -115,6 +109,8 @@ def build_to_impz(build: FDNBuild, ir_len: int) -> np.ndarray:
             build.C,
             build.D,
             post_delay=absorption,
+            post_matrix=feedback_eq,
+            post_output=output_eq,
         )
         if out_j.ndim == 1:
             out_j = out_j[:, np.newaxis]

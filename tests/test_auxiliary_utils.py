@@ -306,3 +306,41 @@ def test_fade_out_applies_along_last_axis():
     for row in y:
         np.testing.assert_array_equal(row[:4], 1.0)
         np.testing.assert_allclose(row[4:], ramp)
+
+
+# ============================================================================
+# marimo Display Helper Tests
+# ============================================================================
+
+
+def _wav_channels(html) -> int:
+    """Number of channels in the WAV a labeled_audio player embeds."""
+    import base64
+    import io
+    import re
+    import wave
+
+    match = re.search(r"src='([^']+)'", html.text)
+    assert match is not None, "no audio source in the rendered player"
+    src = match.group(1)
+    assert src.startswith("data:"), f"unexpected audio source: {src[:40]}"
+    payload = base64.b64decode(src.split(",", 1)[1])
+    with wave.open(io.BytesIO(payload)) as wav:
+        return wav.getnchannels()
+
+
+def test_labeled_audio_orients_time_major_stereo():
+    """A (samples, 2) render must reach mo.audio as 2 channels, not 2 samples."""
+    mo = pytest.importorskip("marimo")
+    assert mo is not None
+
+    from pyFDN.auxiliary.marimo_utils import labeled_audio
+
+    fs = 8_000
+    stereo = np.zeros((fs, 2))
+    stereo[:, 0] = 0.5  # a silent channel would make mo.audio normalize by 0
+
+    assert _wav_channels(labeled_audio("stereo", stereo, fs=fs)) == 2
+    assert _wav_channels(labeled_audio("stereo", stereo.T, fs=fs)) == 2
+    assert _wav_channels(labeled_audio("mono", stereo[:, 0], fs=fs)) == 1
+    assert _wav_channels(labeled_audio("mono", stereo[:, :1], fs=fs)) == 1

@@ -58,6 +58,7 @@ feedback matrices, designing loop filters, and inspecting pole locations.
    usage
    examples_gallery
    api_reference
+   training_losses
    modules
    contributing
    authors

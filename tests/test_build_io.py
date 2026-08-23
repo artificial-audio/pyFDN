@@ -18,19 +18,29 @@ def test_fdn_build_json_round_trip(tmp_path) -> None:
         D=np.zeros((1, 1)),
         delays=np.array([101, 149]),
         fs=48_000.0,
-        filters=np.ones((1, 6, 2)),
-        post_eq=np.ones((1, 6, 1)),
+        post_delay=np.ones((1, 6, 2)),
+        post_matrix=np.full((1, 6, 2), 0.5),
+        post_output=np.ones((1, 6, 1)),
     )
     path = tmp_path / "build.json"
 
     pyFDN.save_fdn_build(path, build, metadata={"description": "Test build"})
     encoded = json.loads(path.read_text(encoding="utf-8"))
     assert encoded["format"] == "pyfdn-fdn-build"
-    assert encoded["version"] == 1
+    assert encoded["version"] == 2
     assert encoded["metadata"]["description"] == "Test build"
 
     restored = pyFDN.load_fdn_build(path)
-    for field in ("A", "B", "C", "D", "delays", "filters", "post_eq"):
+    for field in (
+        "A",
+        "B",
+        "C",
+        "D",
+        "delays",
+        "post_delay",
+        "post_matrix",
+        "post_output",
+    ):
         np.testing.assert_array_equal(getattr(restored, field), getattr(build, field))
     assert restored.fs == build.fs
 

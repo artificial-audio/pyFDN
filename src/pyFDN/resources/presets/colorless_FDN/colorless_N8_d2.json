@@ -1,6 +1,6 @@
 {
   "format": "pyfdn-fdn-build",
-  "version": 1,
+  "version": 2,
   "feedback_matrix": [
     [
       0.6938054794869135,
@@ -137,8 +137,9 @@
     1597
   ],
   "sample_rate": 48000.0,
-  "absorption_filters": null,
-  "output_filters": null,
+  "post_delay": null,
+  "post_matrix": null,
+  "post_output": null,
   "metadata": {
     "name": "colorless_N8_d2",
     "description": "Optimized colorless FDN build.",

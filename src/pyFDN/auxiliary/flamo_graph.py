@@ -307,16 +307,23 @@ def feedback_matrix_module(model: Any) -> Any:
 def extract_build(model: Any) -> FDNBuild:
     """Extract a complete :class:`~pyFDN.FDNBuild` from a named FLAMO model graph.
 
-    The graph must contain leaves named ``input_gain`` and ``output_gain``, plus
-    either ``mixing_matrix`` or the standard recursion feedback leaf ``fB``.
-    The delay can be named ``delay`` or be the graph's only delay module.
-    Optional attenuation (``filters``), output-filter (``post_eq``), and
-    direct-path leaves are included when present. The sample rate is read from
+    The graph must be one :func:`pyFDN.assemble_fdn_core` would build: leaves
+    named ``input_gain`` and ``output_gain``, plus either ``mixing_matrix`` or
+    the standard recursion feedback leaf ``fB``. The delay can be named
+    ``delay`` or be the graph's only delay module. The sample rate is read from
     the delay module and is required: a graph that does not expose ``fs`` is
     malformed and raises :class:`ValueError`.
+
+    All three filter hooks -- ``post_delay``, ``post_matrix``, ``post_output``
+    -- are read when present. Because a build is *baked*, a hook must hold
+    something that bakes: a per-channel gain or an SOS bank. A hook holding
+    anything else -- a nested allpass core, a cascade of several modules -- is
+    refused rather than dropped, since a build missing it would render
+    differently from the model it came from.
     """
     root = flamo_model_to_nodes(model)
-    leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
+    nodes = flamo_nodes_flat(root)
+    leaves = [node for node in nodes if node["type"] == "Leaf"]
 
     def _named(name: str) -> list[dict[str, Any]]:
         return [node for node in leaves if node["name"] == name]
@@ -333,6 +340,46 @@ def extract_build(model: Any) -> FDNBuild:
                 f"found {len(matches)}"
             )
         return matches[0]["module"]
+
+    def _hook_nodes(name: str) -> list[dict[str, Any]]:
+        """Every node belonging to hook ``name``.
+
+        A hook given several modules is a ``Series`` whose leaves
+        :func:`pyFDN.hook_module` names ``{name}_0``, ``{name}_1``, ... -- and
+        flamo's ``Series`` flattens a nested one, so the container's own name is
+        gone by the time the graph is walked. Matching the prefix too is what
+        keeps such a hook visible instead of silently reading as empty.
+        """
+        prefix = f"{name}_"
+        return [
+            node
+            for node in nodes
+            if node["name"] == name or node["name"].startswith(prefix)
+        ]
+
+    def _hook_sos(name: str) -> np.ndarray | None:
+        """The SOS bank in hook ``name``, or ``None`` if the hook is empty."""
+        matches = _hook_nodes(name)
+        if not matches:
+            return None
+        node = matches[0]
+        if len(matches) > 1 or node["name"] != name or node["type"] != "Leaf":
+            raise ValueError(
+                f"the {name!r} hook holds {len(matches)} module(s) that do not "
+                "bake down to one SOS bank, so an FDNBuild cannot carry it and "
+                "would render differently from this model; render the model "
+                "directly, or take the hook apart yourself"
+            )
+        value = _module_value(node["module"])
+        if value.ndim == 1:
+            return _gain_to_sos(value)
+        if value.ndim == 3 and value.shape[1] == 6:
+            return np.asarray(value, dtype=float)
+        raise ValueError(
+            f"the {name!r} hook holds a module whose value has shape "
+            f"{tuple(value.shape)}; an FDNBuild can carry a per-channel gain or "
+            "an (n_sections, 6, n_channels) SOS bank"
+        )
 
     delay_matches = _named("delay")
     if not delay_matches:
@@ -366,22 +413,9 @@ def extract_build(model: Any) -> FDNBuild:
         else np.zeros((C.shape[0], B.shape[1]))
     )
 
-    attenuation_sos = None
-    attenuation_matches = _named("attenuation") or _named("filter")
-    if len(attenuation_matches) == 1:
-        attenuation_module = attenuation_matches[0]["module"]
-        attenuation_value = _module_value(attenuation_module)
-        if attenuation_value.ndim == 1:
-            attenuation_sos = _gain_to_sos(attenuation_value)
-        elif attenuation_value.ndim == 3 and attenuation_value.shape[1] == 6:
-            attenuation_sos = np.asarray(attenuation_value, dtype=float)
-
-    post_eq_sos = None
-    post_eq_matches = _named("output_filter")
-    if len(post_eq_matches) == 1:
-        post_eq_value = _module_value(post_eq_matches[0]["module"])
-        if post_eq_value.ndim == 3 and post_eq_value.shape[1] == 6:
-            post_eq_sos = np.asarray(post_eq_value, dtype=float)
+    post_delay_sos = _hook_sos("post_delay")
+    post_matrix_sos = _hook_sos("post_matrix")
+    post_output_sos = _hook_sos("post_output")
 
     fs_value = getattr(delay_module, "fs", None)
     if fs_value is None:
@@ -396,8 +430,9 @@ def extract_build(model: Any) -> FDNBuild:
         D=D,
         delays=delays,
         fs=float(fs_value),
-        filters=attenuation_sos,
-        post_eq=post_eq_sos,
+        post_delay=post_delay_sos,
+        post_matrix=post_matrix_sos,
+        post_output=post_output_sos,
     )
 
 

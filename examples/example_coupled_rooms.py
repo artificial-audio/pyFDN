@@ -77,9 +77,9 @@ def _(pyFDN):
         rt=0.825,
         rt_nyquist=0.6,
         rt_crossover=1000.0,
-        post_eq_db_dc=0.0,
-        post_eq_db_nyquist=-8.0,
-        post_eq_crossover=1000.0,
+        eq_db_dc=0.0,
+        eq_db_nyquist=-8.0,
+        eq_crossover=1000.0,
         io_type="ones",
         rng=5,
     )
@@ -91,9 +91,9 @@ def _(pyFDN):
         rt=4.2,
         rt_nyquist=1.5,
         rt_crossover=2000.0,
-        post_eq_db_dc=2.0,
-        post_eq_db_nyquist=-12.0,
-        post_eq_crossover=2000.0,
+        eq_db_dc=2.0,
+        eq_db_nyquist=-12.0,
+        eq_crossover=2000.0,
         io_type="ones",
         rng=6,
     )
@@ -117,8 +117,8 @@ def _(N, block_diag, ix1, ix2, np, num_input, num_output, room1, room2):
     # Concatenate the two single-room FDNs.
     delays = np.concatenate([room1.delays, room2.delays])
     A_rooms = block_diag(room1.A, room2.A)
-    attenuation_sos = np.concatenate([room1.filters, room2.filters], axis=2)
-    post_eq_sos = np.concatenate([room1.post_eq, room2.post_eq], axis=2)
+    attenuation_sos = np.concatenate([room1.post_delay, room2.post_delay], axis=2)
+    post_eq_sos = np.concatenate([room1.post_output, room2.post_output], axis=2)
 
     # Mixing matrix: orthogonal block rotation coupling room 1 with room 2.
     eye = np.eye(room1.delays.size)
@@ -158,8 +158,8 @@ def _(A, B, C, D, attenuation_sos, delays, fs, nfft, post_eq_sos, pyFDN):
         delays,
         fs,
         nfft=nfft,
-        sos_filter=attenuation_sos,
-        output_filter=post_eq_sos,
+        post_delay=attenuation_sos,
+        post_output=post_eq_sos,
     )
     return (model,)
 
@@ -208,8 +208,8 @@ def _(A, B, C, D, attenuation_sos, delays, fs, post_eq_sos, pyFDN):
         B,
         C,
         D,
-        attenuation_sos=attenuation_sos,
-        post_eq_sos=post_eq_sos,
+        post_delay_sos=attenuation_sos,
+        post_output_sos=post_eq_sos,
         fs=fs,
         title="Coupled Rooms FDN Parameters",
     )

@@ -150,11 +150,11 @@ documentation sources, and tests:
   time-domain graph. ``process_fdn`` uses ``MatrixFIR`` for polynomial feedback
   matrices; ``SOSBank`` implements per-delay-line filter cascades used for
   frequency-dependent absorption.
-* ``src/pyFDN/graphicEQ/`` contains graphic-EQ and absorption-filter design,
-  while ``src/pyFDN/translate/`` converts between delay state-space, transfer
+* ``src/pyFDN/eq/`` contains every EQ and absorption-filter design, while
+  ``src/pyFDN/translate/`` converts between delay state-space, transfer
   function, pole-residue, impulse-response, and FLAMO representations.
-* ``src/pyFDN/train/`` contains the trainable FDN construction, objectives,
-  and optimization loop. ``src/pyFDN/auxiliary/`` holds shared analysis,
+* ``src/pyFDN/train/`` contains the trainable FDN construction, the composable
+  losses in ``train/losses/``, and the optimization loop. ``src/pyFDN/auxiliary/`` holds shared analysis,
   plotting, audio, delay, and numerical helpers.
 * ``examples/`` contains executable Marimo notebooks. Metadata at the top of
   each ``example_*.py`` file drives the generated documentation gallery.

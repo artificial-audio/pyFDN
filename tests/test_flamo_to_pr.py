@@ -103,7 +103,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
         Fs=Fs,
         nfft=nfft,
         shell=True,
-        sos_filter=sos_loop,
+        post_delay=sos_loop,
         dtype=torch.float64,
     )
 
