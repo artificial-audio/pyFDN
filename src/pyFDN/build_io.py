@@ -13,14 +13,10 @@ import numpy as np
 from .generate.fdn_matrix_gallery import FDNBuild
 
 FDN_BUILD_FORMAT = "pyfdn-fdn-build"
-#: Current schema version. Version 1 spelled the filter hooks
-#: ``absorption_filters`` and ``output_filters`` and had no slot for the third;
-#: version 2 names all three ``post_delay``, ``post_matrix`` and ``post_output``,
-#: the names they carry everywhere else in pyFDN. Version 1 files still load.
+#: Current schema version. The three filter hooks are spelled ``post_delay``,
+#: ``post_matrix`` and ``post_output``, the names they carry everywhere else in
+#: pyFDN.
 FDN_BUILD_VERSION = 2
-_SUPPORTED_VERSIONS = (1, 2)
-#: Version-1 key -> version-2 key, for the hooks that were renamed.
-_V1_HOOK_KEYS = {"absorption_filters": "post_delay", "output_filters": "post_output"}
 
 
 def _optional_array(value: Any, name: str) -> np.ndarray | None:
@@ -80,10 +76,8 @@ def fdn_build_from_dict(
     if data.get("format") != FDN_BUILD_FORMAT:
         raise ValueError(f"Expected format '{FDN_BUILD_FORMAT}'")
     version = data.get("version")
-    if version not in _SUPPORTED_VERSIONS:
+    if version != FDN_BUILD_VERSION:
         raise ValueError(f"Unsupported FDN build version: {version!r}")
-    if version == 1:
-        data = {_V1_HOOK_KEYS.get(key, key): value for key, value in data.items()}
 
     required = (
         "feedback_matrix",

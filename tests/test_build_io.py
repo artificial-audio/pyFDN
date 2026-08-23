@@ -52,37 +52,6 @@ def test_fdn_build_sample_rate_override() -> None:
     assert restored.fs == 96_000
 
 
-def test_version_1_files_still_load_under_their_old_hook_names() -> None:
-    """v1 spelled the hooks absorption_filters / output_filters."""
-    build = pyFDN.FDNBuild(
-        A=np.array([[0.0, 1.0], [1.0, 0.0]]),
-        B=np.array([[1.0], [0.5]]),
-        C=np.array([[0.25, 0.75]]),
-        D=np.zeros((1, 1)),
-        delays=np.array([101, 149]),
-        fs=48_000.0,
-        post_delay=np.ones((1, 6, 2)),
-        post_output=np.ones((1, 6, 1)),
-    )
-    data = pyFDN.fdn_build_to_dict(build)
-    legacy = {
-        "absorption_filters"
-        if k == "post_delay"
-        else "output_filters"
-        if k == "post_output"
-        else k: v
-        for k, v in data.items()
-    }
-    legacy["version"] = 1
-    # a real v1 file has no third hook at all, not a null one
-    del legacy["post_matrix"]
-    loaded = pyFDN.fdn_build_from_dict(legacy)
-    np.testing.assert_allclose(loaded.post_delay, build.post_delay)
-    np.testing.assert_allclose(loaded.post_output, build.post_output)
-    # v1 had no slot for the third hook, so it loads empty
-    assert loaded.post_matrix is None
-
-
 def test_fdn_build_rejects_unknown_version() -> None:
     build = pyFDN.load_fdn_preset("colorless_N4_d1")
     data = pyFDN.fdn_build_to_dict(build)
