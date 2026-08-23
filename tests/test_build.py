@@ -1,4 +1,4 @@
-"""Tests for the readable FDNBuild exchange format."""
+"""Tests for FDNBuild and its readable exchange format."""
 
 from __future__ import annotations
 

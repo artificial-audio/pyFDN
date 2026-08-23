@@ -241,11 +241,11 @@ def test_degree_one_lossless_z1_is_rank1():
 def test_fdn_matrix_gallery_returns_type_list():
     types = fdn_matrix_gallery()
     assert isinstance(types, list)
-    assert "Hadamard" in types
+    assert "hadamard" in types
     assert "orthogonal" in types
 
 
-@pytest.mark.parametrize("matrix_type", ["orthogonal", "Householder", "circulant"])
+@pytest.mark.parametrize("matrix_type", ["orthogonal", "householder", "circulant"])
 def test_fdn_matrix_gallery_orthogonal_types(matrix_type):
     A = fdn_matrix_gallery(4, matrix_type)
     assert isinstance(A, np.ndarray)
@@ -253,9 +253,17 @@ def test_fdn_matrix_gallery_orthogonal_types(matrix_type):
 
 
 def test_fdn_matrix_gallery_hadamard():
-    A = fdn_matrix_gallery(8, "Hadamard")
+    A = fdn_matrix_gallery(8, "hadamard")
     assert isinstance(A, np.ndarray)
     np.testing.assert_allclose(A @ A.T, np.eye(8), atol=1e-10)
+
+
+def test_fdn_matrix_gallery_accepts_legacy_type_names():
+    np.testing.assert_allclose(
+        fdn_matrix_gallery(8, "Hadamard") @ fdn_matrix_gallery(8, "Hadamard").T,
+        np.eye(8),
+        atol=1e-10,
+    )
 
 
 def test_fdn_matrix_gallery_parallel():

@@ -348,7 +348,8 @@ from .auxiliary.utils import (
     skew,
     sq_to_db,
 )
-from .build_io import (
+from .build import (
+    FDNBuild,
     fdn_build_from_dict,
     fdn_build_to_dict,
     load_fdn_build,
@@ -404,7 +405,6 @@ from .generate.construct_paraunitary_from_elementals import (
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
 from .generate.fdn_matrix_gallery import (
-    FDNBuild,
     FDNSystem,
     fdn_build_gallery,
     fdn_matrix_gallery,

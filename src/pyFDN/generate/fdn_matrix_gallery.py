@@ -5,12 +5,12 @@ Translation of fdnMatrixGallery.m from fdnToolbox.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import NamedTuple, NoReturn, overload
+from typing import Literal, NamedTuple, NoReturn, get_args, overload
 
 import numpy as np
 from numpy.typing import ArrayLike
 
+from ..build import FDNBuild
 from .householder_matrix import householder_matrix
 from .random_orthogonal import random_orthogonal
 
@@ -24,51 +24,6 @@ class FDNSystem(NamedTuple):
     D: np.ndarray
 
 
-@dataclass(frozen=True)
-class FDNBuild:
-    """Complete FDN parameters returned by :func:`fdn_build_gallery`.
-
-    A **baked** description: every field is a plain array, which is what
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.build_to_impz` consume and what
-    :func:`pyFDN.save_fdn_build` writes. Nothing here remembers how a filter was
-    designed -- a reverberation time, an EQ curve -- because nothing that reads
-    a build needs to know. That knowledge lives in the design
-    (:class:`~pyFDN.EQDesign`) at the moment the filter is built, and in the
-    trainable modules of :mod:`pyFDN.train`.
-
-    The three optional filter fields are the three filter hooks of
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core`, under the
-    same names, in the same positions, and in signal-flow order:
-
-    * ``post_delay`` -- ``None`` (lossless) or a per-delay-line SOS bank of
-      shape ``(num_sections, 6, N)``, applied to the delay output inside the
-      loop, before the signal both leaves the network and is fed back. This is
-      what sets the decay.
-    * ``post_matrix`` -- an optional per-delay-line SOS bank of shape
-      ``(num_sections, 6, N)``, applied to the feedback path after ``A``.
-    * ``post_output`` -- an optional per-output SOS bank of shape
-      ``(num_sections, 6, num_outputs)``, applied to the wet signal outside the
-      recursion. This is what colours it.
-
-    A build carries each hook as an SOS bank because that is what bakes and what
-    serializes. The hooks themselves are wider than that at runtime:
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core` take any
-    filter in any of the three -- a nested allpass core in ``post_delay``, a
-    :class:`pyFDN.td.TimeVaryingMatrix` in ``post_matrix`` -- and those simply
-    have no field here, since neither is a bank of biquads.
-    """
-
-    A: np.ndarray
-    B: np.ndarray
-    C: np.ndarray
-    D: np.ndarray
-    delays: np.ndarray
-    fs: float
-    post_delay: np.ndarray | None = None
-    post_matrix: np.ndarray | None = None
-    post_output: np.ndarray | None = None
-
-
 def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
     """Build a circulant matrix from first-row vector v.
 
@@ -80,18 +35,29 @@ def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
     return np.array(rows)
 
 
-# Pure feedback-matrix types (return np.ndarray).
-_MATRIX_TYPES = [
+FeedbackMatrixType = Literal[
     "orthogonal",
-    "Hadamard",
+    "hadamard",
+    "householder",
     "circulant",
-    "Householder",
-    "parallel",
     "permutation",
-    "diagonallySimilarToOrthogonal",
-    "tinyRotation",
-    "Anderson",
+    "diagonally_similar_to_orthogonal",
+    "tiny_rotation",
+    "anderson",
+    "parallel",
 ]
+FEEDBACK_MATRIX_TYPES = get_args(FeedbackMatrixType)
+IOMatrixType = Literal["ones", "normalised", "identity"]
+IO_MATRIX_TYPES = get_args(IOMatrixType)
+
+# Historical fdnToolbox spellings remain accepted when loading old examples.
+_MATRIX_TYPE_ALIASES = {
+    "Hadamard": "hadamard",
+    "Householder": "householder",
+    "diagonallySimilarToOrthogonal": "diagonally_similar_to_orthogonal",
+    "tinyRotation": "tiny_rotation",
+    "Anderson": "anderson",
+}
 
 # Full-system types (return FDNSystem).
 _SYSTEM_TYPES = [
@@ -139,10 +105,11 @@ def _build_io_matrices(
     if min(num_inputs, num_outputs) < 1:
         raise ValueError("num_inputs and num_outputs must be positive")
 
+    io_type = "normalised" if io_type == "normalized" else io_type
     if io_type == "ones":
         B = np.ones((N, num_inputs))
         C = np.ones((num_outputs, N))
-    elif io_type == "normalized":
+    elif io_type == "normalised":
         B = np.ones((N, num_inputs)) / np.sqrt(N)
         C = np.ones((num_outputs, N)) / np.sqrt(N)
     elif io_type == "identity":
@@ -153,7 +120,7 @@ def _build_io_matrices(
         C = rng.standard_normal((num_outputs, N))
     else:
         raise ValueError(
-            "io_type must be one of 'ones', 'normalized', 'identity', or 'random'"
+            "io_type must be one of 'ones', 'normalised', 'identity', or 'random'"
         )
 
     B = input_scale * B
@@ -213,7 +180,7 @@ def fdn_build_gallery(
     sort_delays: bool = False,
     num_inputs: int = 1,
     num_outputs: int = 1,
-    io_type: str = "normalized",
+    io_type: str = "normalised",
     input_scale: float = 1.0,
     output_scale: float = 1.0,
     direct_gain: float | None = 0.0,
@@ -246,7 +213,7 @@ def fdn_build_gallery(
         sort_delays: Sort randomly generated or supplied delays.
         num_inputs: Number of input channels.
         num_outputs: Number of output channels.
-        io_type: I/O matrix style: ``ones``, ``normalized``, ``identity``, or
+        io_type: I/O matrix style: ``ones``, ``normalised``, ``identity``, or
             ``random``.
         input_scale: Scalar applied to ``B``.
         output_scale: Scalar applied to ``C``.
@@ -460,18 +427,20 @@ def fdn_matrix_gallery(
 
         fdn_matrix_gallery()             # → list of type strings
         fdn_matrix_gallery(4, "orthogonal")
-        fdn_matrix_gallery(8, "Hadamard")
+        fdn_matrix_gallery(8, "hadamard")
     """
     if matrix_type is None:
-        return list(_MATRIX_TYPES)
+        return list(FEEDBACK_MATRIX_TYPES)
 
     if N is None:
         raise ValueError("N must be provided when matrix_type is specified")
 
+    matrix_type = _MATRIX_TYPE_ALIASES.get(matrix_type, matrix_type)
+
     if matrix_type == "orthogonal":
         return random_orthogonal(N)
 
-    if matrix_type == "Hadamard":
+    if matrix_type == "hadamard":
         from scipy.linalg import hadamard
 
         return hadamard(N) / np.sqrt(N)
@@ -483,7 +452,7 @@ def fdn_matrix_gallery(
         direction = np.random.choice([-1, 1])
         return _circulant(r, direction)
 
-    if matrix_type == "Householder":
+    if matrix_type == "householder":
         return householder_matrix(np.random.rand(N))
 
     if matrix_type == "parallel":
@@ -493,18 +462,18 @@ def fdn_matrix_gallery(
         P = np.eye(N)
         return P[np.random.permutation(N)]
 
-    if matrix_type == "diagonallySimilarToOrthogonal":
+    if matrix_type == "diagonally_similar_to_orthogonal":
         D = np.diag(np.random.randn(N))
         return np.linalg.solve(D, random_orthogonal(N)) @ D
 
-    if matrix_type == "tinyRotation":
+    if matrix_type == "tiny_rotation":
         import torch
 
         from ..auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
         return tiny_rotation_matrix(N, 0.01, dtype=torch.float64).numpy()
 
-    if matrix_type == "Anderson":
+    if matrix_type == "anderson":
         from .anderson_matrix import anderson_matrix
 
         return anderson_matrix(N)
@@ -514,7 +483,9 @@ def fdn_matrix_gallery(
             f"'{matrix_type}' returns a full FDN system; use fdn_system_gallery() instead."
         )
 
-    raise ValueError(f"Unknown matrix_type {matrix_type!r}. Supported: {_MATRIX_TYPES}")
+    raise ValueError(
+        f"Unknown matrix_type {matrix_type!r}. Supported: {FEEDBACK_MATRIX_TYPES}"
+    )
 
 
 def fdn_system_gallery(

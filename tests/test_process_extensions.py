@@ -11,7 +11,7 @@ import pytest
 import pyFDN
 from pyFDN import td
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.build import FDNBuild
 from pyFDN.train import build_set_decay
 from pyFDN.translate.dss_to_impz import build_to_impz, dss_to_impz
 

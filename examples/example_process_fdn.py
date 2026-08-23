@@ -137,8 +137,8 @@ def _(N, np, pyFDN):
     A = pyFDN.fdn_matrix_gallery(N, "orthogonal")
 
     # Try this:
-    #   A = pyFDN.fdn_matrix_gallery(N, "Hadamard")     -> maximal mixing, +/-1 only
-    #   A = pyFDN.fdn_matrix_gallery(N, "Householder")  -> cheap: one inner product
+    #   A = pyFDN.fdn_matrix_gallery(N, "hadamard")     -> maximal mixing, +/-1 only
+    #   A = pyFDN.fdn_matrix_gallery(N, "householder")  -> cheap: one inner product
     #   A = pyFDN.fdn_matrix_gallery(N, "permutation")  -> lossless but never mixes
     #   A = pyFDN.fdn_matrix_gallery(N, "circulant")
     return (A,)
@@ -188,7 +188,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
         _mixed = f"{_mixing_time:.0f} ms" if _mixing_time else "never"
         print(f"{_label:12s} mixes after {_mixed}")
 
-    # Try this: add "Hadamard" or "circulant" to the list and rank them.
+    # Try this: add "hadamard" or "circulant" to the list and rank them.
     return
 
 

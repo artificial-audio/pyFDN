@@ -7,7 +7,7 @@ pytest.importorskip("torch")
 pytest.importorskip("flamo")
 
 import pyFDN  # noqa: E402
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
+from pyFDN.build import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     LOSSLESS_ALIAS_DECAY_DB,
     FlatMagnitude,

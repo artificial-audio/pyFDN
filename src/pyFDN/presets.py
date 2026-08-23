@@ -6,7 +6,7 @@ import json
 import re
 from importlib.resources import files
 
-from .build_io import fdn_build_from_dict
+from .build import fdn_build_from_dict
 from .generate.fdn_matrix_gallery import FDNBuild
 
 _PRESET_ROOT = files("pyFDN.resources").joinpath("presets", "colorless_FDN")
