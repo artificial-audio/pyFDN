@@ -8,12 +8,12 @@ import pytest
 import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
 from pyFDN.eq import (
-    absorption_geq,
-    bandpass_filter,
-    design_geq,
-    geq_sos,
+    decay_to_geq,
+    gain_to_geq,
+    highshelf_biquad,
+    lowshelf_biquad,
+    peaking_biquad,
     probe_sos,
-    shelving_filter,
 )
 from pyFDN.eq.graphic_eq import _geq_sections
 
@@ -29,36 +29,31 @@ def geq_setup():
     return center_omega, shelving_omega, R, fs
 
 
-def test_shelving_filter_low_shape():
-    b, a = shelving_filter(0.3, 2.0, "low")
+def test_lowshelf_biquad_shape():
+    b, a = lowshelf_biquad(0.3, 2.0)
     assert b.shape == (3,)
     assert a.shape == (3,)
 
 
-def test_shelving_filter_high_shape():
-    b, a = shelving_filter(0.3, 2.0, "high")
+def test_highshelf_biquad_shape():
+    b, a = highshelf_biquad(0.3, 2.0)
     assert b.shape == (3,)
     assert a.shape == (3,)
 
 
-def test_shelving_filter_unity_gain():
-    b, a = shelving_filter(0.5, 1.0, "low")
+def test_lowshelf_biquad_unity_gain():
+    b, a = lowshelf_biquad(0.5, 1.0)
     np.testing.assert_allclose(b, a, atol=1e-12)
 
 
-def test_shelving_filter_invalid_type():
-    with pytest.raises(ValueError, match="filter_type"):
-        shelving_filter(0.3, 2.0, "band")
-
-
-def test_bandpass_filter_shape():
-    b, a = bandpass_filter(0.5, 2.0, 3.0)
+def test_peaking_biquad_shape():
+    b, a = peaking_biquad(0.5, 2.0, 3.0)
     assert b.shape == (3,)
     assert a.shape == (3,)
 
 
-def test_bandpass_filter_unity_gain():
-    b, a = bandpass_filter(0.5, 1.0, 3.0)
+def test_peaking_biquad_unity_gain():
+    b, a = peaking_biquad(0.5, 1.0, 3.0)
     np.testing.assert_allclose(b, a, atol=1e-12)
 
 
@@ -94,69 +89,57 @@ def test_probe_sos_shapes(geq_setup):
     assert W.shape == (512, 11)
 
 
-def test_design_geq_shape():
-    sos, target_f = design_geq(np.zeros(10))
+def test_gain_to_geq_shape():
+    sos = gain_to_geq(np.zeros(10), 48000.0)
     assert sos.shape == (11, 6)
-    assert target_f.shape == (10,)
 
 
-def test_design_geq_flat_target():
+def test_gain_to_geq_flat_target():
     """Flat 0 dB target should give ≈ 0 dB total response at all bands."""
-    sos, _ = design_geq(np.zeros(10))
+    sos = gain_to_geq(np.zeros(10), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
     G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.zeros(len(ctrl)), atol=0.5)
 
 
-def test_design_geq_uniform_target():
+def test_gain_to_geq_uniform_target():
     """Uniform -3 dB target should give ≈ -3 dB at all bands."""
-    sos, _ = design_geq(np.full(10, -3.0))
+    sos = gain_to_geq(np.full(10, -3.0), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
     G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.full(len(ctrl), -3.0), atol=0.5)
 
 
-def test_absorption_geq_shape():
+def test_decay_to_geq_shape():
     rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.6, 0.7, 0.8, 0.9])
     delays = np.array([1000.0, 1300.0, 1700.0])
-    sos = absorption_geq(rt, delays, 48000.0)
+    sos = decay_to_geq(rt, delays, 48000.0)
     assert sos.shape == (11, 6, 3)
 
 
-def test_absorption_geq_normalised():
+def test_decay_to_geq_normalised():
     """All sections should have a₀ = 1 after normalisation."""
     rt = np.ones(10) * 0.5
     delays = np.array([800.0, 1200.0])
-    sos = absorption_geq(rt, delays, 48000.0)
+    sos = decay_to_geq(rt, delays, 48000.0)
     np.testing.assert_allclose(sos[:, 3, :], np.ones((11, 2)), atol=1e-10)
 
 
-def test_geq_sos_matches_design_geq_where_the_bounds_are_slack():
-    """The closed form is the same design as the bounded solve, unbounded."""
-    target = np.linspace(-6.0, 4.0, 10)
-    bounded, _ = design_geq(target, fs=48000.0)
-    closed = geq_sos(target, 48000.0)
-    ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000])
-    bounded_db = probe_sos(bounded / bounded[:, 3:4], ctrl, 2**16, 48000.0)[0]
-    closed_db = probe_sos(closed, ctrl, 2**16, 48000.0)[0]
-    np.testing.assert_allclose(bounded_db.sum(axis=1), closed_db.sum(axis=1), atol=0.05)
-
-
-def test_geq_sos_is_the_same_design_in_torch():
+def test_gain_to_geq_is_the_same_design_in_torch():
     """One source, two array namespaces: the tensor path must not drift."""
     torch = pytest.importorskip("torch")
     target = np.stack([np.linspace(-6.0, 4.0, 10), np.full(10, -2.0)], axis=1)
 
     tensor_target = torch.tensor(target, dtype=torch.float64, requires_grad=True)
-    tensor_sos = geq_sos(tensor_target, 48000.0)
+    tensor_sos = gain_to_geq(tensor_target, 48000.0)
     assert tensor_sos.shape == (11, 6, 2)
 
     for channel in range(target.shape[1]):
         np.testing.assert_allclose(
             tensor_sos[:, :, channel].detach().numpy(),
-            geq_sos(target[:, channel], 48000.0),
+            gain_to_geq(target[:, channel], 48000.0),
             atol=1e-12,
         )
 

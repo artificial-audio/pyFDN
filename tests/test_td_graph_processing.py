@@ -45,7 +45,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
 def _absorption_sos(delays: np.ndarray, fs: float) -> np.ndarray:
     """Per-delay first-order shelving absorption, shape (n_sections, 6, N)."""
-    return pyFDN.first_order_absorption(1.5, 0.4, delays, fs, None)
+    return pyFDN.decay_to_first_order_shelf(1.5, 0.4, None, delays, fs)
 
 
 def _noise(rng: np.random.Generator, length: int, channels: int) -> np.ndarray:

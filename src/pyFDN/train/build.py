@@ -7,9 +7,9 @@ trainable flamo ``Shell`` you can render, train, and extract.
 
 Both are conveniences over assembling flamo modules yourself with
 :func:`pyFDN.assemble_fdn_core`; neither knows anything about filter *design*.
-A trainable filter is a module -- :class:`~pyFDN.AttenuationFilter` or
+A trainable filter is a module -- :class:`~pyFDN.DecayFilter` or
 :class:`~pyFDN.OutputEQ` -- initialized with a target and a
-:class:`~pyFDN.FilterDesign` name, then handed to whichever hook it belongs in.
+:class:`~pyFDN.EQDesign` name, then handed to whichever hook it belongs in.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class Trainable:
     These four are plain arrays: they have no module of their own to carry the
     flag, so it is named here. The three *filter* hooks are not in this class,
     because a filter is a module and a module carries its own
-    ``requires_grad`` -- an :class:`~pyFDN.AttenuationFilter` or
+    ``requires_grad`` -- a :class:`~pyFDN.DecayFilter` or
     :class:`~pyFDN.OutputEQ` is trained unless it was built with
     ``requires_grad=False``.
 
@@ -90,7 +90,7 @@ def build_fdn(
         Number of delay lines when ``delays`` is omitted.
     rt : float, (rt_dc, rt_nyquist), or None
         Reverberation time in seconds, realized as an
-        :class:`~pyFDN.AttenuationFilter` with ``design="first_order_shelf"``.
+        :class:`~pyFDN.DecayFilter` with ``design="first_order_shelf"``.
         ``None`` builds a lossless FDN.
         For any other design, build the module yourself and pass it to
         :func:`trainable_from_build` as ``post_delay=``.
@@ -171,9 +171,9 @@ def build_fdn(
 
     post_delay = None
     if rt is not None:
-        from pyFDN.train.filters import AttenuationFilter
+        from pyFDN.train.filters import DecayFilter
 
-        post_delay = AttenuationFilter(
+        post_delay = DecayFilter(
             _rt_pair(rt),
             delays_arr,
             float(fs),
@@ -221,7 +221,7 @@ def trainable_from_build(
 
         model = pyFDN.trainable_from_build(
             build,
-            post_delay=pyFDN.AttenuationFilter(
+            post_delay=pyFDN.DecayFilter(
                 (1.0, 1.0), build.delays, build.fs,
                 design="first_order_shelf", nfft=nfft),
             post_output=pyFDN.OutputEQ(
@@ -246,7 +246,7 @@ def trainable_from_build(
         Feedback-matrix parametrization.
     post_delay : FLAMO module, optional
         In-loop filter, replacing ``build.post_delay``. A
-        :class:`~pyFDN.AttenuationFilter` here makes the trained parameter the
+        :class:`~pyFDN.DecayFilter` here makes the trained parameter the
         reverberation time itself, which keeps the loop contractive for every
         value it can take.
     post_matrix : FLAMO module, optional

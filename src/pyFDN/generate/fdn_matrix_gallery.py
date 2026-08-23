@@ -33,7 +33,7 @@ class FDNBuild:
     :func:`pyFDN.save_fdn_build` writes. Nothing here remembers how a filter was
     designed -- a reverberation time, an EQ curve -- because nothing that reads
     a build needs to know. That knowledge lives in the design
-    (:class:`~pyFDN.FilterDesign`) at the moment the filter is built, and in the
+    (:class:`~pyFDN.EQDesign`) at the moment the filter is built, and in the
     trainable modules of :mod:`pyFDN.train`.
 
     The three optional filter fields are the three filter hooks of

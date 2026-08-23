@@ -1,6 +1,6 @@
 """FLAMO modules whose parameters are meaningful EQ targets.
 
-``AttenuationFilter`` maps reverberation time to an in-loop SOS bank;
+``DecayFilter`` maps reverberation time to an in-loop SOS bank;
 ``OutputEQ`` maps gains in dB to a post-output SOS bank. Both use the
 same static design functions as NumPy callers.
 """
@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 
 from ..eq.design import (
-    FilterDesign,
+    EQDesign,
     _design_buffers,
     _design_parameter_count,
     _design_section_count,
@@ -40,7 +40,7 @@ def _device(device: Any) -> Any:
 
 def _target(
     value: Any,
-    design: FilterDesign,
+    design: EQDesign,
     n_channels: int,
     *,
     broadcast: bool,
@@ -74,7 +74,7 @@ if _HAS_FLAMO:
             n_channels: int,
             fs: float,
             *,
-            design: FilterDesign,
+            design: EQDesign,
             crossover: float | None,
             nfft: int,
             alias_decay_db: float,
@@ -96,7 +96,7 @@ if _HAS_FLAMO:
                 normalize_a0=False,
             )
             torch_dtype, dev = self.param.dtype, self.param.device  # type: ignore[has-type]
-            self.design: FilterDesign = design
+            self.design: EQDesign = design
             self.crossover = None if crossover is None else float(crossover)
             self.fs_hz = float(fs)
             buffers = _design_buffers(design, self.fs_hz)
@@ -120,7 +120,7 @@ if _HAS_FLAMO:
                 **buffers,
             )
 
-    class AttenuationFilter(_DesignedSOS):
+    class DecayFilter(_DesignedSOS):
         """Parallel in-loop SOS bank parametrized by reverberation time.
 
         ``rt`` is a scalar, one target per design parameter, or a
@@ -135,7 +135,7 @@ if _HAS_FLAMO:
             delays: Any,
             fs: float,
             *,
-            design: FilterDesign = "graphic_eq",
+            design: EQDesign = "graphic_eq",
             rt_crossover: float | None = None,
             nfft: int = 2**14,
             alias_decay_db: float = 0.0,
@@ -198,7 +198,7 @@ if _HAS_FLAMO:
             n_channels: int,
             fs: float,
             *,
-            design: FilterDesign = "graphic_eq",
+            design: EQDesign = "graphic_eq",
             crossover: float | None = None,
             nfft: int = 2**14,
             alias_decay_db: float = 0.0,
@@ -234,7 +234,7 @@ else:  # pragma: no cover
                 f"{type(self).__name__} requires flamo (pip install flamo)"
             )
 
-    class AttenuationFilter(_DesignedSOS):  # type: ignore[no-redef]
+    class DecayFilter(_DesignedSOS):  # type: ignore[no-redef]
         """Placeholder used when FLAMO is unavailable."""
 
     class OutputEQ(_DesignedSOS):  # type: ignore[no-redef]
@@ -242,8 +242,8 @@ else:  # pragma: no cover
 
 
 __all__ = [
-    "AttenuationFilter",
-    "FilterDesign",
+    "DecayFilter",
+    "EQDesign",
     "MAX_ATTENUATION_DB",
     "OutputEQ",
 ]

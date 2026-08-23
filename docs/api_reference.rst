@@ -100,8 +100,8 @@ EQ Design (``pyFDN.eq``)
 
 Explicit functions map either decay targets or gain targets onto a named
 filter design. The same functions run in NumPy or Torch; the trainable
-:class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
-mappings inside a training loop. ``FilterDesign`` is the literal choice of
+:class:`pyFDN.DecayFilter` and :class:`pyFDN.OutputEQ` modules use these
+mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
 modules.
 
@@ -109,7 +109,7 @@ modules.
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.FilterDesign
+   pyFDN.EQDesign
    pyFDN.decay_to_geq
    pyFDN.decay_to_first_order_shelf
    pyFDN.decay_to_one_pole
@@ -181,7 +181,7 @@ An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
    pyFDN.hook_module
-   pyFDN.AttenuationFilter
+   pyFDN.DecayFilter
    pyFDN.OutputEQ
 
 Polynomial & Matrix Maths

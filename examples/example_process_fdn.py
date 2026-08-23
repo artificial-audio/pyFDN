@@ -522,7 +522,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
     #   post_matrix=td.AbsoluteValue(len(delays))
     #       -> a rectifier in the loop. The harmonics were never in the input;
     #          the FDN is generating them. No transfer function exists any more.
-    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.design_geq
+    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_geq
     mo.hstack(
         [
             pyFDN.labeled_audio("static matrix", pyFDN.peak_normalize(wet), fs=fs),

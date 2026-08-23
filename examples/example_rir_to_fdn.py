@@ -215,8 +215,7 @@ def _(
     target_level_db = np.concatenate(([_diff_db[0]], _diff_db, [_diff_db[-1]]))
     target_level_db = target_level_db - np.array([5, 0, 0, 0, 0, 0, 0, 0, 0, 30])
 
-    equalization_sos, _ = pyFDN.design_geq(target_level_db, fs=fs)
-    equalization_sos = equalization_sos / equalization_sos[:, 3:4]  # a0 = 1
+    equalization_sos = pyFDN.gain_to_geq(target_level_db, fs=fs)
 
     model_eq = pyFDN.dss_to_flamo(
         feedback_matrix,

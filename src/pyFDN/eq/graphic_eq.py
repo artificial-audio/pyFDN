@@ -12,7 +12,6 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from scipy.optimize import lsq_linear
 
 from ..auxiliary.utils import hertz_to_rad
 from ._backend import array_namespace
@@ -123,30 +122,12 @@ def gain_to_geq(
     return sos / sos[:, 3:4, ...]
 
 
-def design_geq(
-    target_g: np.ndarray, fs: float = 48000.0
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compatibility API for the bounded graphic-EQ design."""
-    target_g = np.asarray(target_g, dtype=float).ravel()
-    system, interpolation = _geq_control_problem(float(fs))
-    target_interp = interpolation @ target_g
-    bound = np.concatenate(
-        [[np.inf], 2.0 * _PROTOTYPE_GAIN_DB * np.ones(N_GRAPHIC_EQ_BANDS)]
-    )
-    result = lsq_linear(system, target_interp, bounds=(-bound, bound))
-    center_omega, shelving_omega = _band_omega(float(fs))
-    sos = _geq_sections(center_omega, shelving_omega, BANDWIDTH_R, result.x)
-    target_f = np.concatenate([[1.0], CENTER_FREQUENCIES, [float(fs)]])
-    return sos, target_f
-
-
 __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
     "N_GRAPHIC_EQ_BANDS",
     "N_GRAPHIC_EQ_SECTIONS",
     "SHELVING_CROSSOVER",
-    "design_geq",
     "gain_to_geq",
     "geq_design_matrix",
 ]

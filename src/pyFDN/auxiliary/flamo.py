@@ -645,7 +645,7 @@ def assemble_fdn_core(
         is ``Parallel(brA=fdn_branch, brB=direct)``.
     post_delay : FLAMO module or None
         In-loop filter after the delays (named ``post_delay``). Any module of
-        input/output size N: an :class:`~pyFDN.AttenuationFilter` or a plain
+        input/output size N: a :class:`~pyFDN.DecayFilter` or a plain
         :func:`sos_filter_module` for attenuation, or a whole nested core such as
         a Schroeder allpass. Only an SOS filter here is extractable into an
         :class:`~pyFDN.FDNBuild`.

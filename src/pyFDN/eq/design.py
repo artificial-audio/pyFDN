@@ -22,7 +22,7 @@ from .graphic_eq import (
     geq_design_matrix,
 )
 
-FilterDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
+EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
 
 
 def decay_to_geq(rt: Any, delays: Any, fs: float) -> Any:
@@ -125,17 +125,17 @@ def _decay_to_gain_db(
     return -60.0 * delays / (rt * float(fs))
 
 
-def _design_parameter_count(design: FilterDesign) -> int:
+def _design_parameter_count(design: EQDesign) -> int:
     _validate_filter_design(design)
     return N_GRAPHIC_EQ_BANDS if design == "graphic_eq" else 2
 
 
-def _design_section_count(design: FilterDesign) -> int:
+def _design_section_count(design: EQDesign) -> int:
     _validate_filter_design(design)
     return N_GRAPHIC_EQ_SECTIONS if design == "graphic_eq" else 1
 
 
-def _design_buffers(design: FilterDesign, fs: float) -> dict[str, np.ndarray]:
+def _design_buffers(design: EQDesign, fs: float) -> dict[str, np.ndarray]:
     _validate_filter_design(design)
     if design == "graphic_eq":
         return {"graphic_eq_matrix": geq_design_matrix(fs)}
@@ -144,7 +144,7 @@ def _design_buffers(design: FilterDesign, fs: float) -> dict[str, np.ndarray]:
 
 def _gain_to_design(
     gain_db: Any,
-    design: FilterDesign,
+    design: EQDesign,
     fs: float,
     *,
     crossover: float | None = None,
@@ -167,7 +167,7 @@ def _validate_filter_design(design: str) -> None:
 
 
 __all__ = [
-    "FilterDesign",
+    "EQDesign",
     "decay_to_first_order_shelf",
     "decay_to_geq",
     "decay_to_one_pole",
