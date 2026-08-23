@@ -19,6 +19,7 @@ from .graphic_eq import (
     BANDWIDTH_R,
     CENTER_FREQUENCIES,
     SHELVING_CROSSOVER,
+    gain_to_bounded_geq,
     gain_to_geq,
     geq_design_matrix,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "decay_to_geq",
     "decay_to_one_pole",
     "first_order_shelf_biquad",
+    "gain_to_bounded_geq",
     "gain_to_first_order_shelf",
     "gain_to_geq",
     "gain_to_one_pole",

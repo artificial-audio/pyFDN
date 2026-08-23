@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
+from scipy.optimize import lsq_linear
 
 from ..auxiliary.utils import hertz_to_rad
 from ._backend import array_namespace
@@ -122,12 +123,65 @@ def gain_to_geq(
     return sos / sos[:, 3:4, ...]
 
 
+def gain_to_bounded_geq(
+    gain_db: Any,
+    fs: float,
+    *,
+    max_command_gain_db: float = 20.0,
+) -> np.ndarray:
+    """Design a graphic EQ with bounded internal section gains.
+
+    This is the constrained, NumPy-only counterpart of :func:`gain_to_geq`.
+    The flat-gain section remains unbounded; each of the ten frequency-shaped
+    sections is limited to ``max_command_gain_db`` in either direction.
+
+    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered as
+    DC, 63 Hz through 8 kHz, and Nyquist.
+    """
+    if type(gain_db).__module__.split(".", 1)[0] == "torch":
+        raise TypeError("gain_to_bounded_geq is NumPy-only")
+    gain_db = np.asarray(gain_db, dtype=float)
+    if gain_db.ndim not in (1, 2) or gain_db.shape[0] != N_GRAPHIC_EQ_BANDS:
+        got = 0 if gain_db.ndim == 0 else gain_db.shape[0]
+        raise ValueError(f"graphic_eq takes {N_GRAPHIC_EQ_BANDS} gains, got {got}")
+
+    limit = float(max_command_gain_db)
+    if not np.isfinite(limit) or limit <= 0.0:
+        raise ValueError("max_command_gain_db must be finite and positive")
+
+    system, interpolation = _geq_control_problem(float(fs))
+    targets = gain_db[:, None] if gain_db.ndim == 1 else gain_db
+    bound = np.concatenate([[np.inf], np.full(N_GRAPHIC_EQ_BANDS, limit)])
+    command_gains = np.column_stack(
+        [
+            lsq_linear(
+                system,
+                interpolation @ targets[:, channel],
+                bounds=(-bound, bound),
+            ).x
+            for channel in range(targets.shape[1])
+        ]
+    )
+    if gain_db.ndim == 1:
+        command_gains = command_gains[:, 0]
+
+    center_omega, shelving_omega = _band_omega(float(fs))
+    sos = _geq_sections(
+        center_omega,
+        shelving_omega,
+        BANDWIDTH_R,
+        command_gains,
+    )
+    return sos / sos[:, 3:4, ...]
+
+
 __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
     "N_GRAPHIC_EQ_BANDS",
     "N_GRAPHIC_EQ_SECTIONS",
     "SHELVING_CROSSOVER",
+    "gain_to_bounded_geq",
     "gain_to_geq",
     "geq_design_matrix",
 ]

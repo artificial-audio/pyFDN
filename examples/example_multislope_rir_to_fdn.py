@@ -290,7 +290,7 @@ def _(mo):
     The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
     the octave-band estimates are extended to it by repeating the edge bands.
 
-    `pyFDN.decay_to_geq` and `pyFDN.gain_to_geq` both return normalized biquad sections in `[b0, b1, b2, a0, a1, a2]` form, with `a0 = 1`. The first maps reverberation-time targets onto in-loop attenuation; the second maps level corrections directly onto the output EQ.
+    `pyFDN.decay_to_geq` and `pyFDN.gain_to_bounded_geq` both return normalized biquad sections in `[b0, b1, b2, a0, a1, a2]` form, with `a0 = 1`. The first maps reverberation-time targets onto in-loop attenuation; the second fits level corrections onto the output EQ while limiting every frequency-shaped section to ±20 dB of internal gain.
     """)
     return
 
@@ -338,7 +338,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
         _gain_db = pyFDN.lin_to_db(slope_level[:, _slope]) - pyFDN.lin_to_db(
             _level_flat
         )
-        _eq = pyFDN.gain_to_geq(geq_grid(_gain_db), fs=fs)
+        _eq = pyFDN.gain_to_bounded_geq(geq_grid(_gain_db), fs=fs)
 
         resynthesis += pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(

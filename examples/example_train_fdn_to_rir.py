@@ -771,7 +771,7 @@ def _(mo):
     mo.md(r"""
     ## What is left for a designed EQ to fix
 
-    The analytic pipeline ends by designing an output GEQ from the residual between the target's band levels and the FDN's. That filter is now a trained parameter, so the same residual is a test of it: whatever a `gain_to_geq` call would still be asked to correct is what the fit did not manage.
+    The analytic pipeline ends by designing an output GEQ from the residual between the target's band levels and the FDN's. That filter is now a trained parameter, so the same residual is a test of it: whatever a `gain_to_bounded_geq` call would still be asked to correct is what the fit did not manage.
 
     It takes the band-level shape error from 1.71 dB down to 0.73 dB on the graphic EQ and 0.80 dB on the shelf. So the answer is "most of it, not all of it": a designed GEQ on the residual would still buy the remainder, and nothing stops you from running one afterwards. What the fit does buy is that the EQ was chosen *while* the decay and the matrix were still moving, rather than as a correction applied to something already fixed.
     """)

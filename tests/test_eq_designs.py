@@ -9,6 +9,7 @@ import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
 from pyFDN.eq import (
     decay_to_geq,
+    gain_to_bounded_geq,
     gain_to_geq,
     highshelf_biquad,
     lowshelf_biquad,
@@ -110,6 +111,62 @@ def test_gain_to_geq_uniform_target():
     G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.full(len(ctrl), -3.0), atol=0.5)
+
+
+def test_gain_to_bounded_geq_matches_closed_form_when_bounds_are_slack():
+    target = np.linspace(-6.0, 4.0, 10)
+    bounded = gain_to_bounded_geq(target, 48000.0)
+    closed = gain_to_geq(target, 48000.0)
+    ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000])
+    bounded_db = probe_sos(bounded, ctrl, 2**16, 48000.0)[0]
+    closed_db = probe_sos(closed, ctrl, 2**16, 48000.0)[0]
+    np.testing.assert_allclose(bounded_db.sum(axis=1), closed_db.sum(axis=1), atol=0.05)
+
+
+def test_gain_to_bounded_geq_limits_internal_commands(monkeypatch):
+    import pyFDN.eq.graphic_eq as graphic_eq
+
+    captured = None
+    assemble = graphic_eq._geq_sections
+
+    def capture(center_omega, shelving_omega, bandwidth_r, command_gains):
+        nonlocal captured
+        captured = np.asarray(command_gains)
+        return assemble(
+            center_omega,
+            shelving_omega,
+            bandwidth_r,
+            command_gains,
+        )
+
+    monkeypatch.setattr(graphic_eq, "_geq_sections", capture)
+    sos = gain_to_bounded_geq(
+        np.linspace(-100.0, 100.0, 10),
+        48000.0,
+        max_command_gain_db=7.0,
+    )
+
+    assert sos.shape == (11, 6)
+    np.testing.assert_allclose(sos[:, 3], 1.0)
+    assert captured is not None
+    assert np.max(np.abs(captured[1:])) <= 7.0 + 1e-10
+
+
+def test_gain_to_bounded_geq_designs_multiple_channels():
+    targets = np.stack([np.linspace(-6.0, 4.0, 10), np.full(10, -2.0)], axis=1)
+    sos = gain_to_bounded_geq(targets, 48000.0)
+    assert sos.shape == (11, 6, 2)
+    for channel in range(targets.shape[1]):
+        np.testing.assert_allclose(
+            sos[:, :, channel],
+            gain_to_bounded_geq(targets[:, channel], 48000.0),
+            atol=1e-12,
+        )
+
+
+def test_gain_to_bounded_geq_rejects_invalid_limit():
+    with pytest.raises(ValueError, match="finite and positive"):
+        gain_to_bounded_geq(np.zeros(10), 48000.0, max_command_gain_db=0.0)
 
 
 def test_decay_to_geq_shape():
