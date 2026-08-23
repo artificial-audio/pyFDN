@@ -105,9 +105,9 @@ def _(mo):
 
 
 @app.cell
-def _(N, delay_set, fs, ir_len, pyFDN, rt):
+def _(N, delay_set, ir_len, pyFDN, rt):
     _preset = f"colorless_N{N}_d{delay_set}"
-    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _lossless = pyFDN.load_fdn_preset(_preset)
     _build = pyFDN.build_set_decay(_lossless, rt)
     ir_optim = pyFDN.build_to_impz(_build, ir_len).squeeze()
     A, B, C, D, m = (
@@ -131,9 +131,9 @@ def _(mo):
 
 
 @app.cell
-def _(N, delay_set, fs, ir_len, pyFDN, rt):
+def _(N, delay_set, ir_len, pyFDN, rt):
     _preset = f"colorless_init_N{N}_d{delay_set}"
-    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _lossless = pyFDN.load_fdn_preset(_preset)
     _build = pyFDN.build_set_decay(_lossless, rt)
     ir_init = pyFDN.build_to_impz(_build, ir_len).squeeze()
     A_i, B_i, C_i, D_i, m_i = (

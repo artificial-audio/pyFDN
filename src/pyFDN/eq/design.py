@@ -9,7 +9,7 @@ the graphic-EQ implementation lives in :mod:`pyFDN.eq.graphic_eq`.
 from __future__ import annotations
 
 import math
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import numpy as np
 
@@ -23,6 +23,7 @@ from .graphic_eq import (
 )
 
 EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
+EQ_DESIGNS = get_args(EQDesign)
 
 
 def decay_to_geq(rt: Any, delays: Any, fs: float) -> Any:
@@ -159,7 +160,7 @@ def _gain_to_design(
 
 
 def _validate_filter_design(design: str) -> None:
-    if design not in ("graphic_eq", "first_order_shelf", "one_pole"):
+    if design not in EQ_DESIGNS:
         raise ValueError(
             "design must be 'graphic_eq', 'first_order_shelf', or 'one_pole', "
             f"got {design!r}"
@@ -167,6 +168,7 @@ def _validate_filter_design(design: str) -> None:
 
 
 __all__ = [
+    "EQ_DESIGNS",
     "EQDesign",
     "decay_to_first_order_shelf",
     "decay_to_geq",

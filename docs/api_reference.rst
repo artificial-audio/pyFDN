@@ -246,7 +246,13 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
+   pyFDN.get_fdn_preset
    pyFDN.load_fdn_preset
+   pyFDN.FDNPreset
+   pyFDN.fdn_preset_to_dict
+   pyFDN.fdn_preset_from_dict
+   pyFDN.save_fdn_preset
+   pyFDN.load_fdn_preset_file
    pyFDN.fdn_build_to_dict
    pyFDN.fdn_build_from_dict
    pyFDN.save_fdn_build
@@ -295,6 +301,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
+   pyFDN.trainable_from_preset
    pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn

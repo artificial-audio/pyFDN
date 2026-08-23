@@ -9,10 +9,12 @@ modes in a feedback delay network.
 from __future__ import annotations
 
 from math import gcd, log
+from typing import Literal, get_args
 
 import numpy as np
 
-_DISTRIBUTIONS = ("uniform", "lognormal", "geometric")
+DelayDistribution = Literal["uniform", "geometric", "lognormal"]
+DELAY_DISTRIBUTIONS = get_args(DelayDistribution)
 
 
 def _as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
@@ -26,7 +28,7 @@ def _sample(
     N: int,
     low: int,
     high: int,
-    distribution: str,
+    distribution: DelayDistribution,
     generator: np.random.Generator,
 ) -> np.ndarray:
     """Draw ``N`` real-valued delay targets in ``[low, high]``."""
@@ -48,7 +50,7 @@ def _sample(
         return np.clip(samples, low, high)
 
     raise ValueError(
-        f"Unknown distribution {distribution!r}. Supported: {_DISTRIBUTIONS}"
+        f"Unknown distribution {distribution!r}. Supported: {DELAY_DISTRIBUTIONS}"
     )
 
 
@@ -90,7 +92,7 @@ def sample_delay_lengths(
     N: int,
     delay_range: tuple[int, int] = (400, 1200),
     *,
-    distribution: str = "uniform",
+    distribution: DelayDistribution = "uniform",
     coprime: bool = False,
     sort: bool = False,
     rng: np.random.Generator | int | None = None,
@@ -147,3 +149,6 @@ def sample_delay_lengths(
     if sort:
         delays = np.sort(delays)
     return delays
+
+
+__all__ = ["DELAY_DISTRIBUTIONS", "DelayDistribution", "sample_delay_lengths"]

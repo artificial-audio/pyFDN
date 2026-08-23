@@ -45,7 +45,13 @@ __all__ = [
     "paper_link",
     "paper_reference",
     "available_fdn_presets",
+    "get_fdn_preset",
     "load_fdn_preset",
+    "FDNPreset",
+    "fdn_preset_from_dict",
+    "fdn_preset_to_dict",
+    "load_fdn_preset_file",
+    "save_fdn_preset",
     "fdn_build_from_dict",
     "fdn_build_to_dict",
     "load_fdn_build",
@@ -148,6 +154,7 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
+    "trainable_from_preset",
     "LOSSLESS_ALIAS_DECAY_DB",
     "build_set_decay",
     "Trainable",
@@ -424,7 +431,16 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .presets import available_fdn_presets, load_fdn_preset
+from .preset import (
+    FDNPreset,
+    available_fdn_presets,
+    fdn_preset_from_dict,
+    fdn_preset_to_dict,
+    get_fdn_preset,
+    load_fdn_preset,
+    load_fdn_preset_file,
+    save_fdn_preset,
+)
 
 # fdn processing
 from .process import process_fdn
@@ -463,6 +479,7 @@ from .train import (
     params,
     train_fdn,
     trainable_from_build,
+    trainable_from_preset,
 )
 
 # state-space translators

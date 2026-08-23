@@ -23,6 +23,7 @@ from .build import (
     build_fdn,
     build_set_decay,
     trainable_from_build,
+    trainable_from_preset,
 )
 from .engine import TrainLog, train_fdn
 from .filters import DecayFilter, EQDesign, OutputEQ
@@ -51,6 +52,7 @@ __all__ = [
     # build
     "build_fdn",
     "trainable_from_build",
+    "trainable_from_preset",
     "build_set_decay",
     "Trainable",
     "MatrixParam",

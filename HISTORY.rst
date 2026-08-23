@@ -15,6 +15,10 @@ Unreleased
 0.4.0 (2026-08-23)
 ------------------
 
+* Add ``FDNPreset`` JSON documents: a baked ``FDNBuild`` plus catalog
+  metadata and a controlled vocabulary for delays, matrices, and the three
+  filter hooks. ``trainable_from_preset`` restores filter targets as meaningful
+  FLAMO parameters only when they reproduce the baked coefficients.
 * **Breaking:** replace ``train_fdn``'s ``mode`` string, and the ``target``,
   ``criteria``, ``sparsity_alpha`` and ``mss_nfft`` arguments that went with
   it, with a composed loss object. An objective is now written out --

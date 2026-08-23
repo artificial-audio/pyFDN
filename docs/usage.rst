@@ -39,3 +39,41 @@ FDN builds can also be exchanged as readable, versioned JSON files::
 
     pyFDN.save_fdn_build("reverberator.json", reverberator)
     restored = pyFDN.load_fdn_build("reverberator.json")
+
+Preset documents
+----------------
+
+An ``FDNPreset`` keeps a baked ``FDNBuild`` together with catalog metadata and
+the design choices that cannot be recovered reliably from its numbers. Unknown
+design choices are left out rather than guessed::
+
+    preset = pyFDN.FDNPreset(
+        build=reverberator,
+        metadata={
+            "name": "small-room",
+            "description": "A short, neutral room",
+            "authors": ["A. Author"],
+            "license": "CC0-1.0",
+            "tags": ["room", "short"],
+        },
+        design={
+            "delays": {"type": "uniform", "coprime": True},
+            "feedback_matrix": {"type": "orthogonal"},
+            "input_matrix": {"type": "normalised"},
+            "output_matrix": {"type": "normalised"},
+        },
+    )
+    pyFDN.save_fdn_preset("small-room.json", preset)
+    restored = pyFDN.load_fdn_preset_file("small-room.json")
+
+Metadata is an open dictionary because it is descriptive rather than part of
+the sound. By convention, ``tags`` is a list of strings, so selecting presets
+does not require a metadata class::
+
+    requested = {"room", "short"}
+    matches = requested <= set(restored.metadata.get("tags", []))
+
+The numerical build, including its sample rate, is authoritative. Filter design
+records may additionally carry RT or gain targets. In that case
+``pyFDN.trainable_from_preset`` restores the meaningful FLAMO parameters and
+checks that they reproduce the baked SOS coefficients before building a model.
