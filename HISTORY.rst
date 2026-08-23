@@ -2,6 +2,60 @@
 History
 =======
 
+0.4.0 (2026-08-23)
+------------------
+
+* **Breaking:** replace ``train_fdn``'s ``mode`` string, and the ``target``,
+  ``criteria``, ``sparsity_alpha`` and ``mss_nfft`` arguments that went with
+  it, with a composed loss object. An objective is now written out --
+  ``FlatMagnitude() + 0.2 * Sparsity(param(model, "feedback"))`` -- and every
+  loss is a function of the impulse response, carried as a ``Response``, so
+  losses own their reference data and one objective can fit two different
+  references. ``pyFDN.train.objectives`` and ``build_objective`` are gone.
+* **Breaking:** collect every EQ design in ``pyFDN.eq`` (formerly
+  ``pyFDN.graphicEQ``) behind one ``EQDesign`` interface, with ``GraphicEQ``,
+  ``FirstOrderShelf`` and ``OnePole`` sharing a single implementation across
+  the numpy and torch backends.
+* **Breaking:** remove ``absorption_filters`` and ``absorption_to_rt``; the FIR
+  absorption path they served has no callers left.
+* **Breaking:** name the three filter hooks ``post_delay``, ``post_matrix`` and
+  ``post_output`` everywhere -- on ``FDNBuild``, in the FLAMO graph, in the
+  plots and in the JSON schema -- and add the slot for the third. The build
+  schema is version 2; version 1 files no longer load.
+* Fix colorless training on a lossless FDN, whose poles sit on the unit circle
+  and leave ``|H|`` unbounded. ``build_fdn`` now defaults ``alias_decay_db``
+  from ``rt`` (``LOSSLESS_ALIAS_DECAY_DB`` when ``rt`` is None) and
+  ``trainable_from_build`` threads it into every module, so a magnitude
+  objective sees a bounded response.
+* Train the decay: ``DecayFilter`` parametrizes the in-loop absorption filter
+  by reverberation time per band, so the loop stays contractive for every value
+  the parameter can take, and takes either one RT curve for the network or one
+  per delay line. ``OutputEQ`` trains the output filter outside the recursion,
+  the only part of an FDN that shapes the spectral envelope without touching
+  the decay. Both are passed as the ``post_delay`` and ``post_output`` hooks of
+  ``trainable_from_build``.
+* Add the losses that go with it: ``AsymmetricFlatMagnitude``,
+  ``FlatSpectrogram``, ``MatchEnergyDecay``, ``MatchCumulativeEnergy``,
+  ``MatchMagnitude``, ``MatchSpectrogram``, ``MatchMelSpectrogram``,
+  ``MatchImpulseResponse``, ``Energy``, ``Sparsity``, ``L1`` and ``L2``.
+* Resolve trainable parameters by name: ``param(model, "feedback")`` fails
+  where you write it with the list of available names, and ``params(model)``
+  enumerates them.
+* Export the FLAMO graph builders (``assemble_fdn_core``, ``wrap_fdn_shell``,
+  ``gain_module``, ``delay_module``, ``matrix_module``, ``fir_matrix_module``,
+  ``sos_filter_module``, ``hook_module``, ``DecayFilter``, ``OutputEQ``) from
+  the top-level namespace.
+* Make ``build_to_impz`` apply all three hooks, so it no longer rejects builds
+  that carry an output EQ, and make ``extract_build`` refuse a hook it cannot
+  bake rather than silently dropping it.
+* Add an example notebook that fits every parameter of an FDN, decay included,
+  to a measured concert-hall RIR, and document the loss rationale and
+  measurements in ``docs/training_losses.rst``.
+* Fix stereo orientation in ``labeled_audio``, which decoded a stereo render as
+  thousands of channels.
+* Check packaging metadata in CI and fail the documentation build on notebook
+  cell errors.
+
 0.3.0 (2026-08-17)
 ------------------
 
