@@ -411,9 +411,9 @@ from .generate.construct_paraunitary_from_elementals import (
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
+from .generate.fdn_build_gallery import fdn_build_gallery
 from .generate.fdn_matrix_gallery import (
     FDNSystem,
-    fdn_build_gallery,
     fdn_matrix_gallery,
     fdn_system_gallery,
     filter_matrix_gallery,

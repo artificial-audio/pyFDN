@@ -5,6 +5,10 @@ History
 Unreleased
 ----------
 
+* Let ``fdn_build_gallery`` and the target-to-EQ functions optionally return
+  the design choices used to produce their coefficients, ready to store in an
+  ``FDNPreset``. Build generation now also exposes the delay distribution and
+  coprimality options and lives separately from the matrix galleries.
 * **Breaking:** rename the ``Fs`` parameter to ``fs`` everywhere it is still
   spelled with a capital -- ``dss_to_flamo``, ``dss_to_pr``, ``delay_module``
   and ``SDN``. Every other sampling-rate argument in the package was already

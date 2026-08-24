@@ -278,7 +278,7 @@ def _(mo):
     mo.md(r"""
     ## Step 1 -- a reverberator that knows nothing about the room
 
-    `fdn_build_gallery` builds the whole thing in one call: a random orthogonal feedback matrix, sixteen normalized gains, no dry path, and per-delay absorption for a **flat 1 s decay in every band**. Only the delays are sampled separately, because the gallery's own delay sampling does not expose `distribution="geometric"` or `coprime=True`; they are passed straight in.
+    `fdn_build_gallery` builds the whole thing in one call: geometrically distributed coprime delays, a random orthogonal feedback matrix, sixteen normalized gains, no dry path, and per-delay absorption for a **flat 1 s decay in every band**.
 
     So `init_build` is a complete FDN, not a scaffold -- the untrained render further down is just this build with the energy match applied, and nothing has to be reconstructed by hand to say what the optimizer started from. The gallery's absorption is a first-order shelf, but *flat* every design in `pyFDN.eq` is the same filter to numerical precision, so this build describes the optimizer's starting point exactly on either setting of the switch.
 
@@ -290,28 +290,25 @@ def _(mo):
 @app.cell
 def _(fs, np, pyFDN):
     num_delays = 16
-    delays = pyFDN.sample_delay_lengths(
-        num_delays,
-        (700, 2500),
-        distribution="geometric",
-        coprime=True,
-        sort=True,
-        rng=1,
-    )
 
-    # rng=0 is not arbitrary. The orthogonal training parametrization lives on
+    # rng=2 is not arbitrary. The orthogonal training parametrization lives on
     # SO(N), so it hands a det<0 matrix back with its last column flipped: not
     # the matrix you asked for. This seed lands in SO(N), and the assertion
     # below is what says so.
     init_build = pyFDN.fdn_build_gallery(
-        delays=delays,
+        N=num_delays,
         fs=fs,
+        delay_range=(700, 2500),
+        delay_distribution="geometric",
+        coprime=True,
+        sort_delays=True,
         io_type="normalized",
         direct_gain=0.0,
         rt=1.0,
         rt_nyquist=1.0,
-        rng=0,
+        rng=2,
     )
+    delays = init_build.delays
     assert np.linalg.det(init_build.A) > 0, "feedback matrix is not in SO(N)"
 
     print(f"delays (samples): {init_build.delays}")
