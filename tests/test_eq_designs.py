@@ -226,6 +226,46 @@ def test_geq_designs_a_batch_of_gains_at_once():
 # ------------------------------------------------------ target-to-EQ API ---
 
 
+def test_eq_design_functions_optionally_return_their_targets():
+    fs = 48_000.0
+    delays = np.array([101.0, 149.0])
+    rt = np.linspace(1.5, 0.6, 10)
+    gain_db = np.linspace(0.0, -6.0, 10)
+
+    _, decay_geq = pyFDN.decay_to_geq(rt, delays, fs, return_design=True)
+    _, gain_geq = pyFDN.gain_to_geq(gain_db, fs, return_design=True)
+    _, decay_shelf = pyFDN.decay_to_first_order_shelf(
+        1.5, 0.6, 4_000.0, delays, fs, return_design=True
+    )
+    _, gain_shelf = pyFDN.gain_to_first_order_shelf(
+        0.0, -6.0, 4_000.0, fs, return_design=True
+    )
+    _, decay_pole = pyFDN.decay_to_one_pole(1.5, 0.6, delays, fs, return_design=True)
+    _, gain_pole = pyFDN.gain_to_one_pole(0.0, -6.0, return_design=True)
+
+    assert decay_geq == {"type": "graphic_eq", "rt": rt.tolist()}
+    assert gain_geq == {"type": "graphic_eq", "gain_db": gain_db.tolist()}
+    assert decay_shelf == {
+        "type": "first_order_shelf",
+        "rt": 1.5,
+        "rt_nyquist": 0.6,
+        "rt_crossover": 4_000.0,
+    }
+    assert gain_shelf == {
+        "type": "first_order_shelf",
+        "gain_db": 0.0,
+        "gain_db_nyquist": -6.0,
+        "crossover": 4_000.0,
+    }
+    assert decay_pole == {"type": "one_pole", "rt": 1.5, "rt_nyquist": 0.6}
+    assert gain_pole == {
+        "type": "one_pole",
+        "gain_db": 0.0,
+        "gain_db_nyquist": -6.0,
+    }
+    assert isinstance(pyFDN.gain_to_one_pole(0.0, -6.0), np.ndarray)
+
+
 @pytest.mark.parametrize(
     ("design", "n_parameters", "n_sections"),
     [

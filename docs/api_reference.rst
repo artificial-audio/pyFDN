@@ -103,7 +103,8 @@ filter design. The same functions run in NumPy or Torch; the trainable
 :class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
-modules.
+modules. The target-to-EQ functions accept ``return_design=True`` when their
+JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
    :toctree: generated/
