@@ -253,6 +253,27 @@ Training
    pyFDN.train_fdn
    pyFDN.TrainLog
 
+Feature Extraction
+------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.MelSpectrogramFeature
+   pyFDN.stft_magnitude
+   pyFDN.stft_phase
+
+Loss Functions
+--------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.l1
+   pyFDN.mse
+
 Plotting
 --------
 

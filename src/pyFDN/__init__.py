@@ -42,6 +42,9 @@ __all__ = [
     # feature extraction (torch-based, differentiable)
     "stft_magnitude",
     "stft_phase",
+    "MelSpectrogramFeature",
+    "l1",
+    "mse",
     # packaged references and presets
     "paper_link",
     "paper_reference",
@@ -381,9 +384,18 @@ from .graphicEQ import (
 from .presets import available_fdn_presets, load_fdn_preset
 
 # feature extraction (torch-based, differentiable)
-from .features.spectral import (
+from .losses.features.spectral.stft import (
     stft_magnitude,
     stft_phase,
+)
+
+from .losses.features.spectral.mel import (
+    MelSpectrogramFeature,
+)
+
+from .losses.losses import (
+    l1,
+    mse,
 )
 
 # fdn processing
