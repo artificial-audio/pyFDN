@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.4.1 (2026-08-24)
+------------------
 
 * **Breaking:** rename the ``Fs`` parameter to ``fs`` everywhere it is still
   spelled with a capital -- ``dss_to_flamo``, ``dss_to_pr``, ``delay_module``
