@@ -228,7 +228,7 @@ def delay_module(
     lengths_seconds: np.ndarray,
     nfft: int,
     *,
-    Fs: float,
+    fs: float,
     device=None,
     dtype=None,
     isint: bool = True,
@@ -238,7 +238,7 @@ def delay_module(
     """
     Build a FLAMO parallelDelay module from delay lengths in seconds.
 
-    Values are assigned directly (no sample conversion); buffer size is derived from Fs.
+    Values are assigned directly (no sample conversion); buffer size is derived from fs.
 
     Parameters
     ----------
@@ -246,8 +246,8 @@ def delay_module(
         1D array of delay lengths in seconds, one per channel.
     nfft : int
         FFT size for the FLAMO module.
-    Fs : float
-        Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * Fs).
+    fs : float
+        Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * fs).
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
     dtype : torch.dtype or None
@@ -271,7 +271,7 @@ def delay_module(
 
     lengths = np.asarray(lengths_seconds, dtype=np.float64).ravel()
     n = len(lengths)
-    max_len = int(np.ceil(np.max(lengths) * Fs)) if n else 1
+    max_len = int(np.ceil(np.max(lengths) * fs)) if n else 1
     max_len = max(1, max_len)
     dev = _get_device(device)
 
@@ -282,7 +282,7 @@ def delay_module(
         nfft=nfft,
         isint=isint,
         unit=1,
-        fs=Fs,
+        fs=fs,
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,

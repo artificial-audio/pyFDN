@@ -84,7 +84,7 @@ def _(fs, pyFDN, receiver_pos, room_size, source_pos, wall_filters):
         room_size=room_size,
         source_pos=source_pos,
         receiver_pos=receiver_pos,
-        Fs=fs,
+        fs=fs,
         wall_filters=wall_filters,
     )
     _ = sdn.compute()  # mutates sdn in place; assign to suppress the result-dict output
@@ -179,7 +179,7 @@ def _(block_diag, np, pyFDN, sdn_result):
         @ sdn_result["permutation_matrix"]
     )
     delays_smp = np.rint(
-        np.asarray(sdn_result["delay_lengths_flat"]) * sdn_result["Fs"]
+        np.asarray(sdn_result["delay_lengths_flat"]) * sdn_result["fs"]
     ).astype(int)
     B = sdn_result["input_matrix"] @ np.asarray(sdn_result["input_gains"]).reshape(
         -1, 1
@@ -197,7 +197,7 @@ def _(block_diag, np, pyFDN, sdn_result):
         C,
         D,
         post_delay_sos=sdn_result["wall_filters_sos"],
-        fs=sdn_result["Fs"],
+        fs=sdn_result["fs"],
         title="SDN FDN parameters",
     )
     return

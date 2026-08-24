@@ -447,7 +447,7 @@ def _frozen_delays(
     return delay_module(
         np.asarray(delay_samples, dtype=np.float64) / float(fs),
         nfft,
-        Fs=fs,
+        fs=fs,
         device=device,
         dtype=dtype,
         isint=True,

@@ -104,9 +104,9 @@ def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     )
     output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
 
-    main_delays = delay_module(main_delay_sec, nfft, Fs=fs)
-    input_delays = delay_module(input_delay_sec, nfft, Fs=fs)
-    output_delays = delay_module(output_delay_sec, nfft, Fs=fs)
+    main_delays = delay_module(main_delay_sec, nfft, fs=fs)
+    input_delays = delay_module(input_delay_sec, nfft, fs=fs)
+    output_delays = delay_module(output_delay_sec, nfft, fs=fs)
 
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * fs).astype(float)
