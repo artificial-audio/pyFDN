@@ -104,7 +104,6 @@ def _(hop_length, ir, n_fft, pyFDN, torch):
     )
     print(f"STFT magnitude shape: {stft_mag.shape}")
     print(f"Value range: [{stft_mag.min():.4f}, {stft_mag.max():.4f}]")
-
     return (stft_mag,)
 
 
@@ -148,7 +147,6 @@ def _(hop_length, ir, n_fft, pyFDN, torch):
 
     print(f"STFT phase shape: {stft_phase.shape}")
     print(f"Value range (radians): [{stft_phase.min():.4f}, {stft_phase.max():.4f}]")
-
     return (stft_phase,)
 
 
@@ -167,6 +165,50 @@ def _(mo, plt, stft_phase):
     mo.vstack([
         mo.md("### STFT Phase Visualization"),
         fig1
+    ])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Feature 3: Mel-Spectrogram
+    """)
+    return
+
+
+@app.cell
+def _(fs, hop_length, ir, n_fft, pyFDN, torch):
+    mel_spectrogram = pyFDN.MelSpectrogramFeature(
+        sample_rate=fs,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=128,
+        f_min=0,
+        f_max=fs / 2,
+        log=True
+    )
+
+    mel_spec = mel_spectrogram(torch.from_numpy(ir))
+    print(f"Mel-spectrogram shape: {mel_spec.shape}")
+    print(f"Value range (log): [{mel_spec.min():.4f}, {mel_spec.max():.4f}]")
+    return (mel_spec,)
+
+
+@app.cell
+def _(mel_spec, mo, plt):
+    fig2, ax2 = plt.subplots(figsize=(12, 5))
+
+    im2 = ax2.pcolormesh(mel_spec.cpu().numpy(), shading="auto", cmap="magma")
+    ax2.set_xlabel("Time frame")
+    ax2.set_ylabel("Mel frequency bin")
+    ax2.set_title("Mel-Spectrogram (Log-scale)")
+    fig2.colorbar(im2, ax=ax2, label="Log Power")
+    plt.tight_layout()
+
+    mo.vstack([
+        mo.md("### Mel-Spectrogram Visualization"),
+        fig2
     ])
     return
 
