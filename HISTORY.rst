@@ -2,6 +2,16 @@
 History
 =======
 
+Unreleased
+----------
+
+* **Breaking:** rename the ``Fs`` parameter to ``fs`` everywhere it is still
+  spelled with a capital -- ``dss_to_flamo``, ``dss_to_pr``, ``delay_module``
+  and ``SDN``. Every other sampling-rate argument in the package was already
+  ``fs``, and the odd one out forced callers to remember which spelling each
+  function wanted. ``SDN`` also renames its ``fs`` attribute and the ``"fs"``
+  key of the dictionary ``SDN.compute()`` returns.
+
 0.4.0 (2026-08-23)
 ------------------
 

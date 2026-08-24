@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Special FDNs
 # gallery_description: Process music through an FDN whose orthogonal feedback matrix changes over time at selectable modulation rates.
 
 import marimo
@@ -17,18 +17,18 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Time Varying FDN
+    # Time-varying FDN
+
+    A static FDN has fixed modes, and a sustained tone excites the same few of them for as long as it lasts — which is what "metallic" or "ringing" describes. Modulating the feedback matrix moves the modes while the sound decays, so no single one is driven long enough to stand out.
+
+    The modulation costs something too: move the matrix too fast and the shifting pitch becomes audible as chorusing. This notebook runs one musical phrase through three settings — none, slow, fast — so the trade is audible in the same signal.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
-    Example for time-varying matrices.
-
-    Process a musical sound with a time-varying FDN reverberation. Different options include slow and fast time-variation.
-
     Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}*. <br/>
     Reference: *{pyFDN.paper_link("Schlecht2015TimevaryingFeedbackMatrices")}*.
 
@@ -59,7 +59,9 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Object Initialization & Audio Loading
+    ## The dry signal
+
+    Either a two-tone sine that stops two seconds before the end — the tail is then all reverb, which is where modulation artefacts are easiest to hear — or a synth phrase.
     """)
     return
 
@@ -95,7 +97,6 @@ def _(mo, np, pyFDN, sound_selection):
         synth[-2 * fs :, :] = 0.0
 
     elif mode == "melody":
-        # synth, fs = pyFDN.load_audio("speech/p008_emo_contentment_sentences.wav")
         synth, fs = pyFDN.load_audio("synth_dry")
 
         print(f"Loaded {len(synth)} samples at {fs} Hz ({len(synth) / fs:.2f} s)")
@@ -104,14 +105,16 @@ def _(mo, np, pyFDN, sound_selection):
         time = (samples / fs) * 1000 * 1000
 
     _audio_src = synth.T if synth.ndim == 2 else synth
-    mo.vstack([mo.audio(_audio_src, fs)])
+    mo.audio(_audio_src, fs)
     return fs, synth
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Define FDN: Signal Dimensionality & Formatting
+    ## The FDN
+
+    Eight delay lines, one input and two outputs for a stereo return. The input and output gains are orthonormalised so neither adds any colouration of its own, leaving the loop responsible for everything that is heard.
     """)
     return
 
@@ -137,7 +140,9 @@ def _(la, np, random_orthogonal):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Generate Absorption Ailter
+    ## Absorption
+
+    A one-pole filter per delay line, giving 4 s of reverberation at DC falling to 1 s at Nyquist. Absorption is what makes the decay finite; the modulation below changes *which* modes decay, not how fast.
     """)
     return
 
@@ -149,7 +154,6 @@ def _(delays, fs, pyFDN, td):
 
     coeffs = pyFDN.decay_to_one_pole(RT_DC, RT_NY, delays, fs)
 
-    # Constract the absorption
     absorption = td.SOSBank(coeffs)
     return (absorption,)
 
@@ -157,7 +161,9 @@ def _(delays, fs, pyFDN, td):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Time Varying Matrix Generation & Reverberation Processing Across Matrix Variations
+    ## Three modulation rates
+
+    `td.TimeVaryingMatrix` rotates the feedback matrix continuously, and takes a modulation frequency, an amplitude and a spread over the delay lines. The same phrase is rendered three times: static, 1 Hz, and 10 Hz.
     """)
     return
 
@@ -216,7 +222,9 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Output Visualization
+    ## What the modulation does to the spectrum
+
+    Read the three spectrograms downwards. The static FDN leaves horizontal ridges where individual modes sustain; slow modulation smears them; fast modulation broadens them into bands, which is the point at which the movement starts to become audible in its own right.
     """)
     return
 
@@ -243,7 +251,9 @@ def _(fs, matrix_types, mo, pyFDN, reverbed_synth):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Audio Playback
+    ## Listen
+
+    The ringing of the static version and the chorusing of the fast one are both clearest in the tail, once the dry signal has stopped.
     """)
     return
 

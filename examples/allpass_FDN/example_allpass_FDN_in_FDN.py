@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Allpass FDN embedded in a larger FDN
 # gallery_description: Embed a homogeneous MIMO allpass FDN inside a larger recursive delay network with stereo output.
 
@@ -29,33 +29,22 @@ def _(mo):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
-    """)
-    return
-
-
 @app.cell
 def _():
-    import numpy as np
-    import plotly.io as pio
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
 
+    import numpy as np
     from flamo.processor import dsp, system
 
     import pyFDN
     from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
 
     np.random.seed(10)
-    Fs = 48000
+    fs = 48000
     nfft = 2**17
     N = 4  # number of delay lines (1→N input gain, N→2 output gain)
     return (
-        Fs,
+        fs,
         N,
         OrderedDict,
         delay_module,
@@ -80,10 +69,10 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, N, nfft, np, pyFDN):
+def _(fs, N, nfft, np, pyFDN):
     # Homogeneous MIMO allpass FDN: delays, G = diag(g^delays), A = G @ U, complete_fdn
     delays_sch = np.random.randint(51, 300, size=N)
-    _g = pyFDN.rt_to_gain_per_sample(0.07, Fs)
+    _g = pyFDN.rt_to_gain_per_sample(0.07, fs)
     G = np.diag(_g**delays_sch)
     U = pyFDN.random_orthogonal(N)
     A_sch = G @ U
@@ -91,7 +80,7 @@ def _(Fs, N, nfft, np, pyFDN):
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft, shell=False
+        A_sch, B_sch, C_sch, D_sch, delays_sch, fs, nfft=nfft, shell=False
     )
     return (allpass_fdn_core,)
 
@@ -107,7 +96,7 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
+def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Main delays (feedback path), input and output delays — in seconds
     main_delay_sec = np.random.uniform(0.02, 0.04, size=N)
     input_delay_sec = np.linspace(0.01, 0.02 * N, N) + np.random.uniform(
@@ -115,14 +104,14 @@ def _(Fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     )
     output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
 
-    main_delays = delay_module(main_delay_sec, nfft, Fs=Fs)
-    input_delays = delay_module(input_delay_sec, nfft, Fs=Fs)
-    output_delays = delay_module(output_delay_sec, nfft, Fs=Fs)
+    main_delays = delay_module(main_delay_sec, nfft, fs=fs)
+    input_delays = delay_module(input_delay_sec, nfft, fs=fs)
+    output_delays = delay_module(output_delay_sec, nfft, fs=fs)
 
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
-    main_delay_smp = np.round(main_delay_sec * Fs).astype(float)
+    main_delay_smp = np.round(main_delay_sec * fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
-    sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, None, main_delay_smp, fs=Fs)
+    sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, None, main_delay_smp, fs=fs)
     attenuation = sos_filter_module(sos, nfft)
     return attenuation, input_delays, main_delays, output_delays
 
@@ -220,16 +209,16 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, ir_stereo, mo, pyFDN):
+def _(fs, ir_stereo, mo, pyFDN):
     fig = pyFDN.plot_impulse_response(
         ir_stereo[:, 0],
         ir_stereo[:, 1],
-        fs=Fs,
+        fs=fs,
         labels=["L", "R"],
         title="Allpass FDN in FDN — stereo IR",
     )
 
-    mo.vstack([fig, mo.audio(ir_stereo.T, Fs)])
+    mo.vstack([fig, mo.audio(ir_stereo.T, fs)])
     return
 
 

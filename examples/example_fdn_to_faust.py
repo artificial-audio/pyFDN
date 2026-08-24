@@ -1,4 +1,5 @@
-# gallery_category: Translation Examples
+# gallery_category: Export & Deployment
+# gallery_title: Compile an FDN to FAUST
 # gallery_description: Compile a pyFDN design through FLAMO and adac into certified FAUST source for browser, offline, and plugin deployment.
 # references: Franchino2026ADAC
 # requires: adac
@@ -221,7 +222,7 @@ def _(adac, config):
     return faust_code, faust_plain
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(faust_code, mo):
     mo.md(f"```faust\n{faust_code}\n```")
     return

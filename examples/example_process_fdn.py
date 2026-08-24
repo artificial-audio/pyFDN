@@ -46,9 +46,6 @@ def _():
 
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in marimo and in the docs
 
     import pyFDN
     from pyFDN import td

@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Visualize how delay count and delay length trade computational cost against modal and echo density.
 
 import marimo
@@ -29,7 +29,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
@@ -41,12 +41,10 @@ def _(mo, pyFDN):
 @app.cell
 def _():
     import numpy as np
-    import plotly.io as pio
     from plotly.subplots import make_subplots
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return make_subplots, np, pyFDN
 
 

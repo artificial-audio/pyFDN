@@ -1,4 +1,4 @@
-# gallery_category: Absorption & Filters
+# gallery_category: Absorption & Decay
 # gallery_title: Convert a room impulse response into an FDN
 # gallery_description: Estimate octave-band decay and level from a measured room response, then design an FDN that matches both.
 # references: Concert_Hall_Impulse_Responses
@@ -40,11 +40,9 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 

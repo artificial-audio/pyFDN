@@ -1,4 +1,5 @@
-# gallery_category: Translation Examples
+# gallery_category: Representations
+# gallery_title: Poles and residues from a FLAMO model
 # gallery_description: Convert a FLAMO feedback model with an SOS loop filter into poles and residues, including iterative pole refinement.
 
 import marimo
@@ -48,7 +49,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     - Characteristic matrix of the recursive loop with feedforward $F(z)$ and feedback $G(z)$
@@ -166,7 +167,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     At pole index $i$:
@@ -235,9 +236,9 @@ def _(pyFDN, torch):
     # in the loop. The gallery designs the per-delay-line first-order absorption
     # from the two reverberation times and bakes it into the build's post_delay
     # hook as a canonical (1, 6, N) SOS bank.
-    Fs = 48000.0
+    fs = 48000.0
     build = pyFDN.fdn_build_gallery(
-        fs=Fs,
+        fs=fs,
         N=4,
         delay_range=[300, 600],
         io_type="identity",
@@ -250,7 +251,7 @@ def _(pyFDN, torch):
     # Build -> FLAMO: state-space and the in-loop filter in one call
     # (delay -> post_delay -> A).
     model = pyFDN.build_to_flamo(build, nfft=2**16, dtype=torch.float64)
-    return Fs, build, model
+    return fs, build, model
 
 
 @app.cell
@@ -269,9 +270,9 @@ def _(model, pyFDN):
 
 
 @app.cell
-def _(Fs, direct, is_pair, model, np, poles, pyFDN, residues):
+def _(fs, direct, is_pair, model, np, poles, pyFDN, residues):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
-    ir_flamo = pyFDN.flamo_time_response(model, fs=int(Fs)).squeeze()
+    ir_flamo = pyFDN.flamo_time_response(model, fs=int(fs)).squeeze()
     if ir_flamo.ndim > 1:
         ir_flamo = ir_flamo[:, 0, 0]
     ir_flamo = np.asarray(ir_flamo, dtype=np.float64)
@@ -303,9 +304,9 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, build, go, np, poles, pyFDN):
+def _(fs, build, go, np, poles, pyFDN):
     _pole_trace = go.Scatter(
-        x=pyFDN.rad_to_hertz(np.angle(poles), Fs),
+        x=pyFDN.rad_to_hertz(np.angle(poles), fs),
         y=pyFDN.lin_to_db(np.abs(poles)),
         mode="markers",
         marker={"size": 4, "color": "red"},
@@ -314,7 +315,7 @@ def _(Fs, build, go, np, poles, pyFDN):
     _fig_decay = pyFDN.plot_db_per_sample(
         build.post_delay,
         build.delays,
-        fs=Fs,
+        fs=fs,
         nfft=2**12,
         title="Absorption gain per sample and extracted poles",
     )
@@ -331,11 +332,11 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, ir_modal, ir_ref, pyFDN):
+def _(fs, ir_modal, ir_ref, pyFDN):
     pyFDN.plot_impulse_response(
         ir_ref,
         ir_modal,
-        fs=Fs,
+        fs=fs,
         labels=["IR from FLAMO", "IR from poles/residues"],
         title="FLAMO time response vs modal reconstruction",
     )
@@ -356,14 +357,12 @@ def _(mo):
       - Deflation and EAI update are done directly in $w$.
       - Conversion to $z=1/w$ happens only once at the end, before residue computation.
 
-    ### Why this is better
+    ### Why the w-plane
 
-    1. **Single-variable formulation:** easier to reason about and debug.
-    2. **Closer to delay-polynomial structure:** delays are naturally polynomial in $w=z^{-1}$.
-    3. **Numerical robustness:** avoids repeated z↔w conversion during iteration.
-    4. **Lower layering:** direct calls into FLAMO recursion APIs, fewer adaptation layers.
-
-    If you want, the next extension is to add a side-by-side diagnostic cell comparing convergence traces of the new fully-w formulation against a legacy z-formulation.
+    1. **Single-variable formulation:** one variable throughout, so there is nothing to convert and nothing to get backwards.
+    2. **Closer to the delay-polynomial structure:** delays are naturally polynomial in $w=z^{-1}$.
+    3. **Numerical robustness:** no repeated z-to-w conversion accumulating error during iteration.
+    4. **Lower layering:** direct calls into FLAMO's recursion API, with fewer adaptation layers in between.
     """)
     return
 

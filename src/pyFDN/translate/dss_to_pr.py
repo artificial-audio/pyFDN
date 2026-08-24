@@ -104,7 +104,7 @@ def dss_to_pr(
     symmetrize: bool = True,
     verbose: bool = False,
     # ─── FLAMO model-construction (only used for mode="eai") ──────────────
-    Fs: float = 1.0,
+    fs: float = 1.0,
     nfft: int = 2**16,
     dtype: Any = None,
     device: Any = None,
@@ -170,7 +170,7 @@ def dss_to_pr(
             C=np.asarray(C, dtype=np.float64),
             D=np.asarray(D, dtype=np.float64),
             m=delays_arr,
-            Fs=float(Fs),
+            fs=float(fs),
             nfft=int(nfft),
             device=device,
             shell=False,

@@ -1,4 +1,5 @@
-# gallery_category: Translation Examples
+# gallery_category: Representations
+# gallery_title: Poles and residues from a delay state space
 # gallery_description: Compare three pole-residue solvers by reconstructing an FDN impulse response from its modal decomposition.
 
 import marimo
