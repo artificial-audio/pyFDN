@@ -608,8 +608,8 @@ def _(mo):
       feedback path
     - `example_fdn_gallery` — every feedback matrix in the gallery, side by side
     - `example_time_varying_fdn`, `example_scattering_fdn` — beyond the vanilla FDN
-    - `example_train_colorless_FDN` — when there is no closed form left, use
-      gradients
+    - `example_train_fdn_to_rir` — the same room, this time matched by gradient
+      descent instead of by hand
     """)
     return
 
