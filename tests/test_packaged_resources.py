@@ -87,7 +87,7 @@ def test_every_example_citation_resolves_from_packaged_bibliography() -> None:
     paper_ids: set[str] = set()
     for example in (PROJECT_ROOT / "examples").rglob("*.py"):
         paper_ids.update(
-            re.findall(r'paper_link\(["\']([^"\']+)["\']\)', example.read_text())
+            re.findall(r'paper_link\(["\']([^"\']+)["\']\)', example.read_text(encoding="utf-8"))
         )
 
     assert paper_ids
