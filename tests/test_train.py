@@ -161,8 +161,8 @@ def test_det_negative_orthogonal_warns_and_projects():
     assert np.linalg.det(out.A) > 0
 
 
-def test_a_decay_filter_reproduces_the_designed_absorption_filters():
-    """The trainable decay filter agrees with ``decay_to_geq``."""
+def test_an_attenuation_filter_reproduces_the_designed_absorption_filters():
+    """The trainable attenuation filter agrees with ``decay_to_geq``."""
     from scipy.signal import sosfreqz
 
     fs = 48000.0
@@ -984,7 +984,7 @@ def _post_output_db(model, fs, freqs):
 
 def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's in-loop decay as a trainable module, on a named design."""
-    return pyFDN.DecayFilter(
+    return pyFDN.AttenuationFilter(
         rt,
         build.delays,
         build.fs,
@@ -1247,7 +1247,7 @@ def test_shelf_crossover_moves_the_transition():
 
 def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
     with pytest.raises(ValueError, match="takes 2 values"):
-        pyFDN.DecayFilter(
+        pyFDN.AttenuationFilter(
             np.ones(3),
             np.array([100.0, 150.0]),
             48000.0,
@@ -1257,7 +1257,7 @@ def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
 
     # The role still checks the channel axis, which is the role's business.
     with pytest.raises(ValueError, match="must have 2 columns"):
-        pyFDN.DecayFilter(
+        pyFDN.AttenuationFilter(
             np.ones((2, 3)),
             np.array([100.0, 150.0]),
             48000.0,
@@ -1324,7 +1324,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     import torch
 
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
-    module = pyFDN.DecayFilter(
+    module = pyFDN.AttenuationFilter(
         (-5.0, 1.0),
         delays,
         48000.0,
@@ -1338,7 +1338,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) < 1.0)
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
-    deeper = pyFDN.DecayFilter(
+    deeper = pyFDN.AttenuationFilter(
         (-50.0, 1.0),
         delays,
         48000.0,
@@ -1409,10 +1409,10 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
 
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
-    shared = pyFDN.DecayFilter(
+    shared = pyFDN.AttenuationFilter(
         np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64
     )
-    per_line = pyFDN.DecayFilter(
+    per_line = pyFDN.AttenuationFilter(
         np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64
     )
     assert shared.rt_floor.ndim == 0

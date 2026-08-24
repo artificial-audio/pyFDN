@@ -63,7 +63,7 @@ class MatchEnergyDecay(ResponseLoss):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
-    trained parameter (a :class:`~pyFDN.DecayFilter` in the ``post_delay``
+    trained parameter (a :class:`~pyFDN.AttenuationFilter` in the ``post_delay``
     hook). A magnitude
     spectrogram distance is not a substitute for fitting a decay; see :doc:`the
     design note </training_losses>`.

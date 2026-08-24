@@ -1,6 +1,6 @@
 """FLAMO modules whose parameters are meaningful EQ targets.
 
-``DecayFilter`` maps reverberation time to an in-loop SOS bank;
+``AttenuationFilter`` maps reverberation time to an in-loop SOS bank;
 ``OutputEQ`` maps gains in dB to a post-output SOS bank. Both use the
 same static design functions as NumPy callers.
 """
@@ -120,7 +120,7 @@ if _HAS_FLAMO:
                 **buffers,
             )
 
-    class DecayFilter(_DesignedSOS):
+    class AttenuationFilter(_DesignedSOS):
         """Parallel in-loop SOS bank parametrized by reverberation time.
 
         ``rt`` is a scalar, one target per design parameter, or a
@@ -234,7 +234,7 @@ else:  # pragma: no cover
                 f"{type(self).__name__} requires flamo (pip install flamo)"
             )
 
-    class DecayFilter(_DesignedSOS):  # type: ignore[no-redef]
+    class AttenuationFilter(_DesignedSOS):  # type: ignore[no-redef]
         """Placeholder used when FLAMO is unavailable."""
 
     class OutputEQ(_DesignedSOS):  # type: ignore[no-redef]
@@ -242,7 +242,7 @@ else:  # pragma: no cover
 
 
 __all__ = [
-    "DecayFilter",
+    "AttenuationFilter",
     "EQDesign",
     "MAX_ATTENUATION_DB",
     "OutputEQ",

@@ -153,7 +153,7 @@ def test_trainable_from_preset_recovers_meaningful_filter_targets() -> None:
     torch = pytest.importorskip("torch")
     nfft = 256
     base = _build()
-    decay = pyFDN.DecayFilter(
+    decay = pyFDN.AttenuationFilter(
         (1.2, 0.8),
         base.delays,
         base.fs,

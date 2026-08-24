@@ -9,7 +9,7 @@ Both are conveniences over assembling flamo modules yourself with
 :func:`pyFDN.assemble_fdn_core`; a bare build no longer knows anything about
 filter *design*. :func:`trainable_from_preset` bridges that gap when an
 :class:`~pyFDN.FDNPreset` records the target and design name. A trainable filter
-is a module -- :class:`~pyFDN.DecayFilter` or :class:`~pyFDN.OutputEQ` --
+is a module -- :class:`~pyFDN.AttenuationFilter` or :class:`~pyFDN.OutputEQ` --
 initialized with that target and handed to whichever hook it belongs in.
 """
 
@@ -47,7 +47,7 @@ class Trainable:
     These four are plain arrays: they have no module of their own to carry the
     flag, so it is named here. The three *filter* hooks are not in this class,
     because a filter is a module and a module carries its own
-    ``requires_grad`` -- a :class:`~pyFDN.DecayFilter` or
+    ``requires_grad`` -- a :class:`~pyFDN.AttenuationFilter` or
     :class:`~pyFDN.OutputEQ` is trained unless it was built with
     ``requires_grad=False``.
 
@@ -94,7 +94,7 @@ def build_fdn(
         Number of delay lines when ``delays`` is omitted.
     rt : float, (rt_dc, rt_nyquist), or None
         Reverberation time in seconds, realized as an
-        :class:`~pyFDN.DecayFilter` with ``design="first_order_shelf"``.
+        :class:`~pyFDN.AttenuationFilter` with ``design="first_order_shelf"``.
         ``None`` builds a lossless FDN.
         For any other design, build the module yourself and pass it to
         :func:`trainable_from_build` as ``post_delay=``.
@@ -175,9 +175,9 @@ def build_fdn(
 
     post_delay = None
     if rt is not None:
-        from pyFDN.train.filters import DecayFilter
+        from pyFDN.train.filters import AttenuationFilter
 
-        post_delay = DecayFilter(
+        post_delay = AttenuationFilter(
             _rt_pair(rt),
             delays_arr,
             float(fs),
@@ -225,7 +225,7 @@ def trainable_from_build(
 
         model = pyFDN.trainable_from_build(
             build,
-            post_delay=pyFDN.DecayFilter(
+            post_delay=pyFDN.AttenuationFilter(
                 (1.0, 1.0), build.delays, build.fs,
                 design="first_order_shelf", nfft=nfft),
             post_output=pyFDN.OutputEQ(
@@ -250,7 +250,7 @@ def trainable_from_build(
         Feedback-matrix parametrization.
     post_delay : FLAMO module, optional
         In-loop filter, replacing ``build.post_delay``. A
-        :class:`~pyFDN.DecayFilter` here makes the trained parameter the
+        :class:`~pyFDN.AttenuationFilter` here makes the trained parameter the
         reverberation time itself, which keeps the loop contractive for every
         value it can take.
     post_matrix : FLAMO module, optional
@@ -404,7 +404,7 @@ def trainable_from_preset(
     """Build a FLAMO model while recovering designed filter parameters.
 
     The baked build is always the source of truth. A hook is recreated as a
-    :class:`~pyFDN.DecayFilter` or :class:`~pyFDN.OutputEQ` only when its design
+    :class:`~pyFDN.AttenuationFilter` or :class:`~pyFDN.OutputEQ` only when its design
     record contains a target and the recreated SOS bank matches the baked one.
     Otherwise the baked coefficients remain a frozen filter, exactly as in
     :func:`trainable_from_build`.
@@ -412,7 +412,7 @@ def trainable_from_preset(
     ``trainable_hooks`` selects which recovered design targets require
     gradients. It does not make raw baked SOS coefficients trainable.
     """
-    from pyFDN.train.filters import DecayFilter, OutputEQ
+    from pyFDN.train.filters import AttenuationFilter, OutputEQ
 
     requested = set(trainable_hooks)
     known: set[TrainableHook] = {"post_delay", "post_matrix", "post_output"}
@@ -431,7 +431,7 @@ def trainable_from_preset(
     decay = preset.design.get("post_delay")
     if decay is not None and decay.get("rt") is not None:
         design_type = _preset_filter_type(decay, "post_delay")
-        hook_modules["post_delay"] = DecayFilter(
+        hook_modules["post_delay"] = AttenuationFilter(
             decay["rt"],
             build.delays,
             build.fs,

@@ -37,7 +37,7 @@ def _(mo):
 
     | what | which parameter | how |
     |---|---|---|
-    | **decay** | `post_delay` hook | **trained** -- as reverberation time in seconds, via `pyFDN.DecayFilter` |
+    | **decay** | `post_delay` hook | **trained** -- as reverberation time in seconds, via `pyFDN.AttenuationFilter` |
     | **colour** of the output | `post_output` hook | **trained** -- as gain in dB, via `pyFDN.OutputEQ` |
     | fine structure of $\lvert H \rvert$, echo build-up | feedback matrix $A$ | **trained** -- on $SO(N)$ |
     | **level** | gains $b$, $c$ | **trained** |
@@ -66,13 +66,13 @@ def _(mo):
 
     Training the attenuation filter's *coefficients* does not work, and not for want of tuning. A too-quiet FDN offers any loss the same cheap direction -- more loop gain -- so a raw SOS cascade, with nothing holding its poles inside the unit circle, walks straight out of it. At `lr=3e-2` and at `lr=1e-3` alike the fit diverges within fifty steps, the loss ends four orders of magnitude *above* where it started, and the extracted FDN renders as `nan`.
 
-    `pyFDN.DecayFilter` rewrites the filter as a differentiable function of the **reverberation time**:
+    `pyFDN.AttenuationFilter` rewrites the filter as a differentiable function of the **reverberation time**:
 
     $$\mathrm{RT}_k \;\longrightarrow\; \underbrace{-60\,d_i / (\mathrm{RT}_k f_s)}_\text{dB per round trip} \;\longrightarrow\; \text{design} \;\longrightarrow\; \text{biquads}$$
 
     A positive RT means a negative dB attenuation, which means a contractive loop -- for **every** value the parameter can take. One RT per band is shared by all $N$ delay lines, and what differs between them is only the round-trip length $d_i$: exactly the homogeneous decay an FDN is designed for.
 
-    What the RT still needs a floor for is the *sign*. A gradient step that puts a band at or below zero turns $-60 d_i / (\mathrm{RT} f_s)$ from an attenuation into a gain. `DecayFilter` floors it the same way whatever the design -- softplus, one round trip of the longest delay line, a knee one floor wide -- so a band that dips across zero still has a gradient to come back on.
+    What the RT still needs a floor for is the *sign*. A gradient step that puts a band at or below zero turns $-60 d_i / (\mathrm{RT} f_s)$ from an attenuation into a gain. `AttenuationFilter` floors it the same way whatever the design -- softplus, one round trip of the longest delay line, a knee one floor wide -- so a band that dips across zero still has a gradient to come back on.
 
     ## 2. Something in the model that can change the colour
 
@@ -88,10 +88,10 @@ def _(mo):
     mo.md(r"""
     ## The switch: which design the two filters use
 
-    Both filters take the same `EQDesign` literal and their own target. So switching the whole notebook between a ten-band graphic EQ and a first-order shelf is switching one name: a scalar target spreads across however many parameters that design has, and `DecayFilter` / `OutputEQ` take it from there.
+    Both filters take the same `EQDesign` literal and their own target. So switching the whole notebook between a ten-band graphic EQ and a first-order shelf is switching one name: a scalar target spreads across however many parameters that design has, and `AttenuationFilter` / `OutputEQ` take it from there.
 
     ```python
-    decay_filter = DecayFilter(1.0, ..., design=design)
+    decay_filter = AttenuationFilter(1.0, ..., design=design)
     output_eq    = OutputEQ(0.0, ..., design=design)
     ```
 
@@ -223,7 +223,7 @@ def _(mo):
     So the whole pipeline is:
 
     1. an FDN with a flat 1 s decay and a flat output EQ, scaled once to the target's energy.
-    2. `pyFDN.trainable_from_build(..., trainable=Trainable(direct=True), post_delay=DecayFilter(1.0, ..., design=design), post_output=OutputEQ(0.0, ..., design=design))` -- `Trainable` names the gains that train; each filter module carries its own gradient flag.
+    2. `pyFDN.trainable_from_build(..., trainable=Trainable(direct=True), post_delay=AttenuationFilter(1.0, ..., design=design), post_output=OutputEQ(0.0, ..., design=design))` -- `Trainable` names the gains that train; each filter module carries its own gradient flag.
     3. `pyFDN.train_fdn(model, MatchCumulativeEnergy(rir, power=0.5, frequency="both"))`.
     4. read the two filters back out, and measure the render.
     """)
@@ -324,7 +324,7 @@ def _(mo):
     mo.md(r"""
     ## Step 2 -- the model, and the one thing the room is allowed to set
 
-    `trainable_from_build` with a `DecayFilter` in the `post_delay` hook (the decay as a parameter) and an `OutputEQ` in the `post_output` hook (starting flat). Each is handed an explicit design name and its own target, so nothing is inferred from how long a target happens to be.
+    `trainable_from_build` with an `AttenuationFilter` in the `post_delay` hook (the decay as a parameter) and an `OutputEQ` in the `post_output` hook (starting flat). Each is handed an explicit design name and its own target, so nothing is inferred from how long a target happens to be.
 
     `nfft = 2**17` is 2.73 s at 48 kHz, and it is chosen once and used for everything. Both jobs it has to do put a floor under it. The loss compares this window against the target, so it has to hold the decay being fitted; and the *same* render is what the octave-band estimators at the bottom measure, where Schroeder integration over a window shorter than the decay under-reads it. 2.73 s clears both: the target has only -72 dB of its energy left after it, and the band RTs come out equal to three decimals against a render four times as long.
 
@@ -348,9 +348,9 @@ def _(design, fs, init_build, np, pyFDN, rir, rir_len):
         # every gain with a gradient: A, b, c and D
         trainable=pyFDN.Trainable(direct=True),
         # the decay, as a reverberation time rather than as coefficients -- a
-        # DecayFilter trains its own parameter unless told
+        # AttenuationFilter trains its own parameter unless told
         # requires_grad=False
-        post_delay=pyFDN.DecayFilter(
+        post_delay=pyFDN.AttenuationFilter(
             1.0,
             init_build.delays,
             fs,

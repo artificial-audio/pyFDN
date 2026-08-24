@@ -41,7 +41,7 @@ Unreleased
   from ``rt`` (``LOSSLESS_ALIAS_DECAY_DB`` when ``rt`` is None) and
   ``trainable_from_build`` threads it into every module, so a magnitude
   objective sees a bounded response.
-* Train the decay: ``DecayFilter`` parametrizes the in-loop absorption filter
+* Train the decay: ``AttenuationFilter`` parametrizes the in-loop absorption filter
   by reverberation time per band, so the loop stays contractive for every value
   the parameter can take, and takes either one RT curve for the network or one
   per delay line. ``OutputEQ`` trains the output filter outside the recursion,
@@ -57,7 +57,7 @@ Unreleased
   enumerates them.
 * Export the FLAMO graph builders (``assemble_fdn_core``, ``wrap_fdn_shell``,
   ``gain_module``, ``delay_module``, ``matrix_module``, ``fir_matrix_module``,
-  ``sos_filter_module``, ``hook_module``, ``DecayFilter``, ``OutputEQ``) from
+  ``sos_filter_module``, ``hook_module``, ``AttenuationFilter``, ``OutputEQ``) from
   the top-level namespace.
 * Make ``build_to_impz`` apply all three hooks, so it no longer rejects builds
   that carry an output EQ, and make ``extract_build`` refuse a hook it cannot
