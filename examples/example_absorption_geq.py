@@ -20,7 +20,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
 
-    Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
+    Demonstrates `pyFDN.decay_to_geq`: frequency-dependent attenuation designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
 
     The absorption filters are applied per delay line.  Here we:
 
@@ -84,7 +84,7 @@ def _(mo):
     mo.md(r"""
     ## Design absorption filters
 
-    `absorption_geq` converts T60 to a per-sample dB slope, fits a GEQ, and returns SOS coefficients for each delay line.
+    `decay_to_geq` converts T60 to a per-sample dB slope, fits a graphic EQ, and returns SOS coefficients for each delay line.
     """)
     return
 
@@ -94,9 +94,9 @@ def _(build, dataclasses, np, pyFDN):
     # Target RT at the 10 GEQ bands (seconds)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
-    # absorption_geq uses the 8 interior RT values (bands 1..8)
+    # decay_to_geq uses the 8 interior RT values (bands 1..8)
     # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
-    sos_absorption = pyFDN.absorption_geq(target_rt, build.delays, build.fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, build.delays, build.fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
 

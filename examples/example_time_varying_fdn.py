@@ -43,14 +43,12 @@ def _():
 
     import pyFDN
     from pyFDN import td
-    from pyFDN.auxiliary.acoustics import one_pole_absorption
     from pyFDN.generate.random_orthogonal import random_orthogonal
     from pyFDN.process import process_fdn
 
     return (
         la,
         np,
-        one_pole_absorption,
         process_fdn,
         pyFDN,
         random_orthogonal,
@@ -150,11 +148,11 @@ def _(mo):
 
 
 @app.cell
-def _(delays, fs, one_pole_absorption, td):
+def _(delays, fs, pyFDN, td):
     RT_DC = 4  # seconds
     RT_NY = 1  # seconds
 
-    coeffs = one_pole_absorption(RT_DC, RT_NY, delays, fs)
+    coeffs = pyFDN.decay_to_one_pole(RT_DC, RT_NY, delays, fs)
 
     absorption = td.SOSBank(coeffs)
     return (absorption,)

@@ -321,7 +321,7 @@ def _(mo):
     Real rooms absorb high frequencies faster than low ones, so a single number
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
-    `absorption_geq` designs those filters from a target curve at ten bands (DC,
+    `decay_to_geq` designs those filters from a target curve at ten bands (DC,
     the eight octave bands 63 Hz – 8 kHz, and Nyquist).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
@@ -335,7 +335,7 @@ def _(mo):
 def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     target_rt = np.array([2.4, 2.4, 2.3, 2.1, 1.8, 1.4, 1.0, 0.7, 0.5, 0.5])
 
-    absorption = pyFDN.absorption_geq(target_rt, delays, fs)  # (n_sections, 6, N)
+    absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
     build = pyFDN.FDNBuild(
         A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
@@ -519,7 +519,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
     #   post_matrix=td.AbsoluteValue(len(delays))
     #       -> a rectifier in the loop. The harmonics were never in the input;
     #          the FDN is generating them. No transfer function exists any more.
-    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.design_geq
+    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_geq
     mo.hstack(
         [
             pyFDN.labeled_audio("static matrix", pyFDN.peak_normalize(wet), fs=fs),

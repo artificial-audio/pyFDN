@@ -124,7 +124,7 @@ def _(est_rt, fs, np, pyFDN):
 
     target_rt = np.concatenate(([est_rt[0]], est_rt, [est_rt[-1]]))
     target_rt = target_rt * np.array([0.9, 1, 1, 1, 1, 1, 1, 1, 0.9, 0.5])
-    sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
 
     print(f"Delays: {delays}")
     print(f"Target RT at GEQ bands (s): {target_rt.round(2)}")
@@ -213,8 +213,7 @@ def _(
     target_level_db = np.concatenate(([_diff_db[0]], _diff_db, [_diff_db[-1]]))
     target_level_db = target_level_db - np.array([5, 0, 0, 0, 0, 0, 0, 0, 0, 30])
 
-    equalization_sos, _ = pyFDN.design_geq(target_level_db, fs=fs)
-    equalization_sos = equalization_sos / equalization_sos[:, 3:4]  # a0 = 1
+    equalization_sos = pyFDN.gain_to_bounded_geq(target_level_db, fs=fs)
 
     model_eq = pyFDN.dss_to_flamo(
         feedback_matrix,

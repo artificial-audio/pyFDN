@@ -162,7 +162,7 @@ def test_det_negative_orthogonal_warns_and_projects():
 
 
 def test_a_decay_filter_reproduces_the_designed_absorption_filters():
-    """The differentiable GEQ design agrees with pyFDN.absorption_geq."""
+    """The trainable decay filter agrees with ``decay_to_geq``."""
     from scipy.signal import sosfreqz
 
     fs = 48000.0
@@ -177,9 +177,9 @@ def test_a_decay_filter_reproduces_the_designed_absorption_filters():
         fs=fs,
     )
     model = trainable_from_build(
-        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+        build, post_delay=_decay(build, rt), nfft=2**12, device="cpu"
     )
-    designed = pyFDN.absorption_geq(rt, delays, fs)
+    designed = pyFDN.decay_to_geq(rt, delays, fs)
     trained = param(model, "post_delay").value().detach().numpy().astype(float)
     assert trained.shape == designed.shape
 
@@ -204,7 +204,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
     )
     frozen = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.GraphicEQ(rt), requires_grad=False),
+        post_delay=_decay(build, rt, requires_grad=False),
         nfft=2**12,
         device="cpu",
     )
@@ -212,7 +212,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
 
     model = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.GraphicEQ(rt)),
+        post_delay=_decay(build, rt),
         nfft=2**12,
         device="cpu",
     )
@@ -230,7 +230,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
 
     float64 = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.GraphicEQ(rt), dtype=torch.float64),
+        post_delay=_decay(build, rt, dtype=torch.float64),
         nfft=2**12,
         device="cpu",
         dtype=torch.float64,
@@ -259,7 +259,7 @@ def test_a_trained_rt_still_decays():
     )
     model = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0)), nfft=2**13),
+        post_delay=_decay(build, np.full(10, 1.0), nfft=2**13),
         nfft=2**13,
         device="cpu",
     )
@@ -982,17 +982,29 @@ def _post_output_db(model, fs, freqs):
     return 20 * np.log10(np.abs(h))
 
 
-def _decay(build, design, *, nfft=2**12, **kw):
+def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's in-loop decay as a trainable module, on a named design."""
     return pyFDN.DecayFilter(
-        design, build.delays, build.fs, nfft=nfft, device="cpu", **kw
+        rt,
+        build.delays,
+        build.fs,
+        design=design,
+        nfft=nfft,
+        device="cpu",
+        **kw,
     )
 
 
-def _out_eq(build, design, *, nfft=2**12, **kw):
+def _out_eq(build, gain_db, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's output EQ as a trainable module, on a named design."""
     return pyFDN.OutputEQ(
-        design, np.shape(build.C)[0], build.fs, nfft=nfft, device="cpu", **kw
+        gain_db,
+        np.shape(build.C)[0],
+        build.fs,
+        design=design,
+        nfft=nfft,
+        device="cpu",
+        **kw,
     )
 
 
@@ -1014,7 +1026,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     build = _plain_build()
     model = trainable_from_build(
         build,
-        post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
+        post_output=_out_eq(build, 0.0),
         nfft=2**12,
         device="cpu",
     )
@@ -1028,7 +1040,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     # a 6 dB parameter is 6 dB of filter
     lifted = trainable_from_build(
         _plain_build(),
-        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(6.0)),
+        post_output=_out_eq(_plain_build(), 6.0),
         nfft=2**12,
         device="cpu",
     )
@@ -1039,7 +1051,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     tilt[4] = 12.0  # the 500 Hz band (index 0 is DC, then 63, 125, 250, 500 …)
     tilted = trainable_from_build(
         _plain_build(),
-        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(tilt)),
+        post_output=_out_eq(_plain_build(), tilt),
         nfft=2**12,
         device="cpu",
     )
@@ -1051,8 +1063,8 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
 
 
 def test_a_baked_post_eq_is_frozen_and_training_it_is_a_module_you_build():
-    sos = pyFDN.design_geq(np.linspace(-6, 6, 10), fs=48000.0)[0]
-    build = _plain_build(post_output=(sos / sos[:, 3:4])[:, :, np.newaxis])
+    sos = pyFDN.gain_to_geq(np.linspace(-6, 6, 10), fs=48000.0)
+    build = _plain_build(post_output=sos[:, :, np.newaxis])
 
     frozen = trainable_from_build(build, nfft=2**12, device="cpu")
     assert param(frozen, "post_output").trainable is False
@@ -1081,10 +1093,8 @@ def _plain_model():
 def test_post_eq_trains_and_survives_extraction():
     model = trainable_from_build(
         _plain_build(),
-        post_delay=_decay(
-            _plain_build(), pyFDN.GraphicEQ(np.full(10, 0.5)), nfft=2**13
-        ),
-        post_output=_out_eq(_plain_build(), pyFDN.GraphicEQ(0.0), nfft=2**13),
+        post_delay=_decay(_plain_build(), np.full(10, 0.5), nfft=2**13),
+        post_output=_out_eq(_plain_build(), 0.0, nfft=2**13),
         nfft=2**13,
         device="cpu",
     )
@@ -1144,7 +1154,7 @@ def test_cumulative_energy_rejects_an_unknown_frequency_direction():
 
 
 def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
-    """A FirstOrderShelf decay is first_order_absorption, differentiably."""
+    """A first-order shelf attenuation is the NumPy design, differentiably."""
     import torch
 
     fs = 48000.0
@@ -1152,7 +1162,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     rt = (2.5, 0.8)
     model = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.FirstOrderShelf(rt), dtype=torch.float64),
+        post_delay=_decay(build, rt, design="first_order_shelf", dtype=torch.float64),
         nfft=2**12,
         device="cpu",
         dtype=torch.float64,
@@ -1163,7 +1173,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     np.testing.assert_allclose(ref.raw().detach().numpy(), rt, rtol=1e-6)
 
     # and the filter it maps onto is the numpy design, to float64
-    expected = pyFDN.first_order_absorption(rt[0], rt[1], build.delays, fs)
+    expected = pyFDN.decay_to_first_order_shelf(rt[0], rt[1], None, build.delays, fs)
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
 
     out = pyFDN.extract_build(model)
@@ -1176,7 +1186,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
 
 
 def test_shelf_post_eq_is_the_numpy_design():
-    """A FirstOrderShelf output EQ is first_order_shelving_eq, differentiably."""
+    """A first-order shelf output EQ is the NumPy design, differentiably."""
     import torch
 
     fs = 48000.0
@@ -1184,7 +1194,10 @@ def test_shelf_post_eq_is_the_numpy_design():
     model = trainable_from_build(
         _plain_build(),
         post_output=_out_eq(
-            _plain_build(), pyFDN.FirstOrderShelf(gains), dtype=torch.float64
+            _plain_build(),
+            gains,
+            design="first_order_shelf",
+            dtype=torch.float64,
         ),
         nfft=2**12,
         device="cpu",
@@ -1194,7 +1207,7 @@ def test_shelf_post_eq_is_the_numpy_design():
     assert ref.trainable is True
     np.testing.assert_allclose(ref.raw().detach().numpy(), [[3.0], [-6.0]], rtol=1e-6)
 
-    expected = pyFDN.first_order_shelving_eq(gains[0], gains[1], fs)
+    expected = pyFDN.gain_to_first_order_shelf(gains[0], gains[1], None, fs)[:, :, None]
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-10)
 
     # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter
@@ -1214,7 +1227,9 @@ def test_shelf_crossover_moves_the_transition():
             build,
             post_output=_out_eq(
                 build,
-                pyFDN.FirstOrderShelf((0.0, -12.0), crossover),
+                (0.0, -12.0),
+                design="first_order_shelf",
+                crossover=crossover,
                 dtype=torch.float64,
             ),
             nfft=2**12,
@@ -1231,17 +1246,32 @@ def test_shelf_crossover_moves_the_transition():
 
 
 def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
-    from pyFDN.eq import FirstOrderShelf
+    with pytest.raises(ValueError, match="takes 2 values"):
+        pyFDN.DecayFilter(
+            np.ones(3),
+            np.array([100.0, 150.0]),
+            48000.0,
+            design="first_order_shelf",
+            nfft=2**10,
+        )
 
-    with pytest.raises(ValueError, match="2 endpoints"):
-        FirstOrderShelf(np.ones(3))
-
-    # what a role still checks is the channel axis, which is the role's business
-    shelf = FirstOrderShelf(np.ones((2, 3)))
+    # The role still checks the channel axis, which is the role's business.
     with pytest.raises(ValueError, match="must have 2 columns"):
-        pyFDN.DecayFilter(shelf, np.array([100.0, 150.0]), 48000.0, nfft=2**10)
+        pyFDN.DecayFilter(
+            np.ones((2, 3)),
+            np.array([100.0, 150.0]),
+            48000.0,
+            design="first_order_shelf",
+            nfft=2**10,
+        )
     with pytest.raises(ValueError, match="must have 1 columns"):
-        pyFDN.OutputEQ(shelf, 1, 48000.0, nfft=2**10)
+        pyFDN.OutputEQ(
+            np.ones((2, 3)),
+            1,
+            48000.0,
+            design="first_order_shelf",
+            nfft=2**10,
+        )
 
 
 def test_shelf_decay_trains_and_stays_contractive():
@@ -1249,10 +1279,16 @@ def test_shelf_decay_trains_and_stays_contractive():
     model = trainable_from_build(
         _plain_build(),
         post_delay=_decay(
-            _plain_build(), pyFDN.FirstOrderShelf((1.0, 1.0)), nfft=2**13
+            _plain_build(),
+            (1.0, 1.0),
+            design="first_order_shelf",
+            nfft=2**13,
         ),
         post_output=_out_eq(
-            _plain_build(), pyFDN.FirstOrderShelf((0.0, 0.0)), nfft=2**13
+            _plain_build(),
+            (0.0, 0.0),
+            design="first_order_shelf",
+            nfft=2**13,
         ),
         nfft=2**13,
         device="cpu",
@@ -1287,11 +1323,14 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     """A negative RT is an amplifying loop; the floor maps it to fast decay."""
     import torch
 
-    from pyFDN.eq import FirstOrderShelf
-
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
     module = pyFDN.DecayFilter(
-        FirstOrderShelf((-5.0, 1.0)), delays, 48000.0, nfft=2**10, dtype=torch.float64
+        (-5.0, 1.0),
+        delays,
+        48000.0,
+        design="first_order_shelf",
+        nfft=2**10,
+        dtype=torch.float64,
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1300,7 +1339,12 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
     deeper = pyFDN.DecayFilter(
-        FirstOrderShelf((-50.0, 1.0)), delays, 48000.0, nfft=2**10, dtype=torch.float64
+        (-50.0, 1.0),
+        delays,
+        48000.0,
+        design="first_order_shelf",
+        nfft=2**10,
+        dtype=torch.float64,
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1310,13 +1354,13 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) > 1e-4)
 
 
-def test_the_graphic_eq_keeps_its_ten_bands_through_both_roles():
+def test_the_geq_keeps_its_ten_bands_through_both_roles():
     """Ten numbers in, ten trained numbers out -- in both hooks at once."""
     build = _plain_build()
     model = trainable_from_build(
         build,
-        post_delay=_decay(build, pyFDN.GraphicEQ(np.full(10, 1.0))),
-        post_output=_out_eq(build, pyFDN.GraphicEQ(0.0)),
+        post_delay=_decay(build, np.full(10, 1.0)),
+        post_output=_out_eq(build, 0.0),
         nfft=2**12,
         device="cpu",
     )
@@ -1340,7 +1384,7 @@ def test_per_line_rt_gives_every_delay_line_its_own_decay():
     # line 0 decays fast, line 3 slowly -- a decay no shared RT can produce
     rt = np.tile(np.linspace(0.4, 3.0, 4), (10, 1))
     model = trainable_from_build(
-        build, post_delay=_decay(build, pyFDN.GraphicEQ(rt)), nfft=2**12, device="cpu"
+        build, post_delay=_decay(build, rt), nfft=2**12, device="cpu"
     )
 
     absorption = param(model, "post_delay")
@@ -1363,15 +1407,13 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
     """The shared floor is the longest line's; a per-line floor is each line's."""
     import torch
 
-    from pyFDN.eq import GraphicEQ
-
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
     shared = pyFDN.DecayFilter(
-        GraphicEQ(np.full(10, 1.0)), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64
     )
     per_line = pyFDN.DecayFilter(
-        GraphicEQ(np.full((10, 2), 1.0)), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64
     )
     assert shared.rt_floor.ndim == 0
     np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
@@ -1384,25 +1426,23 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
 
 
 def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
-    """Both take two endpoints, so only naming the design can distinguish them."""
-    from pyFDN.eq import FirstOrderShelf, OnePole
-
+    """Both take two endpoints, so the EQDesign name distinguishes them."""
     build = _plain_build()
     shelf_model = trainable_from_build(
         build,
-        post_delay=_decay(build, FirstOrderShelf((1.5, 0.6))),
+        post_delay=_decay(build, (1.5, 0.6), design="first_order_shelf"),
         nfft=2**12,
         device="cpu",
     )
     one_pole_model = trainable_from_build(
         build,
-        post_delay=_decay(build, OnePole((1.5, 0.6))),
+        post_delay=_decay(build, (1.5, 0.6), design="one_pole"),
         nfft=2**12,
         device="cpu",
     )
-    assert isinstance(param(shelf_model, "post_delay").module.design, FirstOrderShelf)
-    assert isinstance(param(one_pole_model, "post_delay").module.design, OnePole)
+    assert param(shelf_model, "post_delay").module.design == "first_order_shelf"
+    assert param(one_pole_model, "post_delay").module.design == "one_pole"
 
-    designed = pyFDN.one_pole_absorption(1.5, 0.6, build.delays, build.fs)
+    designed = pyFDN.decay_to_one_pole(1.5, 0.6, build.delays, build.fs)
     trained = param(one_pole_model, "post_delay").value().detach().numpy()
     np.testing.assert_allclose(trained, designed, atol=1e-6)

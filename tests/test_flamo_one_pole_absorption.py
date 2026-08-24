@@ -12,8 +12,8 @@ from collections import OrderedDict
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption
 from pyFDN.auxiliary.flamo import flamo_time_response
+from pyFDN.eq import decay_to_one_pole
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +42,7 @@ def one_pole_absorption_reference(loadmat):
     sos_matlab = ref["absorption"]
 
     # Generate coefficients in Python (SOS bank, shape (1, 6, N))
-    sos_python = one_pole_absorption(RT_DC, RT_NY, delays, fs)
+    sos_python = decay_to_one_pole(RT_DC, RT_NY, delays, fs)
 
     # Generate impulse response via FLAMO integration (if available)
     try:

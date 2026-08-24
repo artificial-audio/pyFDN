@@ -25,7 +25,7 @@ def _(mo, pyFDN):
 
     The estimators (`estimate_rt_bands`, `estimate_initial_level_bands`) still appear below, but only ever as the **yardstick**: nothing they return is fed to the model. What they measure at the end is a test the fit either passes or does not.
 
-    The two filters the FDN needs -- the in-loop absorption that sets the decay, and the output EQ that colours it -- are built from a `pyFDN.eq.EQDesign`, and **which design is a switch, two sections down**. A ten-band graphic EQ spends ten numbers and eleven biquads on each; a first-order shelf spends two and one. The notebook runs either. On this room the two land within half a point of each other on mean RT error -- and get there by being wrong in completely different places, which turns out to say more about the loss than about the filters.
+    The two filters the FDN needs -- the in-loop attenuation that sets the decay, and the output EQ that colours it -- use a `pyFDN.EQDesign`, and **which design is a switch, two sections down**. A ten-band graphic EQ spends ten numbers and eleven biquads on each; a first-order shelf spends two and one. The notebook runs either. On this room the two land within half a point of each other on mean RT error -- and get there by being wrong in completely different places, which turns out to say more about the loss than about the filters.
     """)
     return
 
@@ -64,7 +64,7 @@ def _(mo):
     mo.md(r"""
     ## 1. A parametrization the decay cannot escape
 
-    Training the absorption filter's *coefficients* does not work, and not for want of tuning. A too-quiet FDN offers any loss the same cheap direction -- more loop gain -- so a raw SOS cascade, with nothing holding its poles inside the unit circle, walks straight out of it. At `lr=3e-2` and at `lr=1e-3` alike the fit diverges within fifty steps, the loss ends four orders of magnitude *above* where it started, and the extracted FDN renders as `nan`.
+    Training the attenuation filter's *coefficients* does not work, and not for want of tuning. A too-quiet FDN offers any loss the same cheap direction -- more loop gain -- so a raw SOS cascade, with nothing holding its poles inside the unit circle, walks straight out of it. At `lr=3e-2` and at `lr=1e-3` alike the fit diverges within fifty steps, the loss ends four orders of magnitude *above* where it started, and the extracted FDN renders as `nan`.
 
     `pyFDN.DecayFilter` rewrites the filter as a differentiable function of the **reverberation time**:
 
@@ -88,14 +88,14 @@ def _(mo):
     mo.md(r"""
     ## The switch: which design the two filters use
 
-    Both filters are built from an `EQDesign`, and a design carries **its own target**. So switching the whole notebook between a ten-band graphic EQ and a first-order shelf is switching one name: a scalar target spreads across however many parameters that design has, and `DecayFilter` / `OutputEQ` take it from there.
+    Both filters take the same `EQDesign` literal and their own target. So switching the whole notebook between a ten-band graphic EQ and a first-order shelf is switching one name: a scalar target spreads across however many parameters that design has, and `DecayFilter` / `OutputEQ` take it from there.
 
     ```python
-    decay_design = design(1.0)   # a flat 1 s decay:  10 numbers, or 2
-    eq_design    = design(0.0)   # a flat output EQ:  10 numbers, or 2
+    decay_filter = DecayFilter(1.0, ..., design=design)
+    output_eq    = OutputEQ(0.0, ..., design=design)
     ```
 
-    Nothing downstream names either class again. The cells below read the design through the interface -- `n_params`, `n_sections`, and the SOS bank it maps onto -- so the model, the training call, the plots and the assertions are all written once.
+    Nothing downstream names a design class. The model, the training call, the plots and the assertions are all written once.
 
     The shelf is the default because it is the cheaper run by a wide margin: eleven biquads per delay line instead of one puts the graphic EQ at roughly six times the wall clock for the same 300 steps. Both results are tabulated further down, so you can read the comparison without paying for it.
     """)
@@ -103,22 +103,26 @@ def _(mo):
 
 
 @app.cell
-def _(mo, np, pyFDN):
-    from pyFDN.eq.design_geq import CENTER_FREQUENCIES
+def _(mo, np):
+    from pyFDN.eq import CENTER_FREQUENCIES
 
     fs = 48000
 
     # Everything that differs between the two runs of this notebook, in one
-    # place: the design class, and where on the frequency axis each of its
+    # place: the design name, its dimensions, and where on the frequency axis
     # parameters sits (which is the design's own band layout, not the
     # estimator's -- they coincide at the octave centres and nowhere else).
     _designs = {
         "Ten-band graphic EQ -- 10 numbers, 11 biquads": (
-            pyFDN.GraphicEQ,
+            "graphic_eq",
+            10,
+            11,
             np.concatenate(([1.0], CENTER_FREQUENCIES, [fs / 2])),
         ),
         "First-order shelf -- 2 numbers, 1 biquad": (
-            pyFDN.FirstOrderShelf,
+            "first_order_shelf",
+            2,
+            1,
             np.array([1.0, fs / 2]),
         ),
     }
@@ -133,13 +137,13 @@ def _(mo, np, pyFDN):
 
 @app.cell
 def _(design_choice):
-    design, param_frequencies = design_choice.value
+    design, n_parameters, n_sections, param_frequencies = design_choice.value
 
-    print(f"design:      {design.__name__}")
-    print(f"n_params:    {design.n_params}")
-    print(f"n_sections:  {design.n_sections}")
+    print(f"design:      {design}")
+    print(f"n_params:    {n_parameters}")
+    print(f"n_sections:  {n_sections}")
     print(f"parameters sit at (Hz): {param_frequencies.round(0)}")
-    return design, param_frequencies
+    return design, n_sections, param_frequencies
 
 
 @app.cell(hide_code=True)
@@ -147,9 +151,9 @@ def _(mo):
     mo.md(r"""
     ### What each design can and cannot say
 
-    A **ten-band graphic EQ** (`pyFDN.GraphicEQ`, Schlecht and Habets 2017) places a peaking filter at each octave centre from 63 Hz to 8 kHz plus a shelf at either end, and can therefore describe an RT curve of essentially any shape the octave grid can resolve. The least-squares fit that designs it is linear in its target, so it collapses into one constant matrix and the chain stays closed-form differentiable -- no iterative filter design inside the training loop.
+    A **ten-band graphic EQ** (`design="graphic_eq"`, Schlecht and Habets 2017) places a peaking filter at each octave centre from 63 Hz to 8 kHz plus a shelf at either end, and can therefore describe an RT curve of essentially any shape the octave grid can resolve. The least-squares fit that designs it is linear in its target, so it collapses into one constant matrix and the chain stays closed-form differentiable -- no iterative filter design inside the training loop.
 
-    A **first-order shelf** (`pyFDN.FirstOrderShelf`, Jot 2015) has exactly two degrees of freedom once its crossover is fixed at $f_s/8$: its value at DC and its value at Nyquist. The curve it designs is a monotone tilt from one plateau to the other and it *cannot* be anything else. There is no setting of the two numbers that gives the 250 Hz octave a longer tail than its neighbours.
+    A **first-order shelf** (`design="first_order_shelf"`, Jot 2015) has exactly two degrees of freedom once its crossover is fixed at $f_s/8$: its value at DC and its value at Nyquist. The curve it designs is a monotone tilt from one plateau to the other and it *cannot* be anything else. There is no setting of the two numbers that gives the 250 Hz octave a longer tail than its neighbours.
 
     That is a real restriction and it is worth being explicit that it is one. It is also, for an absorptive room, most of what there is to say: air and material absorption both rise with frequency, so a measured RT curve is usually a tilt with a few dB of wobble on it, and the wobble is the part a fit is least able to distinguish from the fine structure it cannot predict anyway.
 
@@ -219,7 +223,7 @@ def _(mo):
     So the whole pipeline is:
 
     1. an FDN with a flat 1 s decay and a flat output EQ, scaled once to the target's energy.
-    2. `pyFDN.trainable_from_build(..., trainable=Trainable(direct=True), post_delay=DecayFilter(design(1.0), ...), post_output=OutputEQ(design(0.0), ...))` -- `Trainable` names the gains that train; each filter module carries its own gradient flag.
+    2. `pyFDN.trainable_from_build(..., trainable=Trainable(direct=True), post_delay=DecayFilter(1.0, ..., design=design), post_output=OutputEQ(0.0, ..., design=design))` -- `Trainable` names the gains that train; each filter module carries its own gradient flag.
     3. `pyFDN.train_fdn(model, MatchCumulativeEnergy(rir, power=0.5, frequency="both"))`.
     4. read the two filters back out, and measure the render.
     """)
@@ -320,7 +324,7 @@ def _(mo):
     mo.md(r"""
     ## Step 2 -- the model, and the one thing the room is allowed to set
 
-    `trainable_from_build` with a `DecayFilter` in the `post_delay` hook (the decay as a parameter) and an `OutputEQ` in the `post_output` hook (starting flat). Each is handed `design(...)`, so the design and the number of values it takes arrive together and nothing is inferred from how long a target happens to be.
+    `trainable_from_build` with a `DecayFilter` in the `post_delay` hook (the decay as a parameter) and an `OutputEQ` in the `post_output` hook (starting flat). Each is handed an explicit design name and its own target, so nothing is inferred from how long a target happens to be.
 
     `nfft = 2**17` is 2.73 s at 48 kHz, and it is chosen once and used for everything. Both jobs it has to do put a floor under it. The loss compares this window against the target, so it has to hold the decay being fitted; and the *same* render is what the octave-band estimators at the bottom measure, where Schroeder integration over a window shorter than the decay under-reads it. 2.73 s clears both: the target has only -72 dB of its energy left after it, and the band RTs come out equal to three decimals against a render four times as long.
 
@@ -344,20 +348,23 @@ def _(design, fs, init_build, np, pyFDN, rir, rir_len):
         # every gain with a gradient: A, b, c and D
         trainable=pyFDN.Trainable(direct=True),
         # the decay, as a reverberation time rather than as coefficients -- a
-        # DecayFilter trains its own parameter unless told requires_grad=False
+        # DecayFilter trains its own parameter unless told
+        # requires_grad=False
         post_delay=pyFDN.DecayFilter(
-            design(1.0),
+            1.0,
             init_build.delays,
             fs,
+            design=design,
             nfft=nfft,
             device="cpu",
             dtype=torch.float64,
         ),
         # the output EQ, starting flat, as a gain in dB
         post_output=pyFDN.OutputEQ(
-            design(0.0),
+            0.0,
             1,
             fs,
+            design=design,
             nfft=nfft,
             device="cpu",
             dtype=torch.float64,
@@ -762,7 +769,7 @@ def _(mo):
     mo.md(r"""
     ## What is left for a designed EQ to fix
 
-    The analytic pipeline ends by designing an output GEQ from the residual between the target's band levels and the FDN's. That filter is now a trained parameter, so the same residual is a test of it: whatever a `design_geq` call would still be asked to correct is what the fit did not manage.
+    The analytic pipeline ends by designing an output GEQ from the residual between the target's band levels and the FDN's. That filter is now a trained parameter, so the same residual is a test of it: whatever a `gain_to_bounded_geq` call would still be asked to correct is what the fit did not manage.
 
     It takes the band-level shape error from 1.71 dB down to 0.73 dB on the graphic EQ and 0.80 dB on the shelf. So the answer is "most of it, not all of it": a designed GEQ on the residual would still buy the remainder, and nothing stops you from running one afterwards. What the fit does buy is that the EQ was chosen *while* the decay and the matrix were still moving, rather than as a correction applied to something already fixed.
     """)
@@ -841,12 +848,12 @@ def _(mo):
 
 
 @app.cell
-def _(design, est_rt, np, rt_curve, rt_init, rt_trained, trained_sos):
+def _(est_rt, n_sections, np, rt_curve, rt_init, rt_trained, trained_sos):
     assert np.all(np.isfinite(rt_trained)), "trained FDN did not render"
     assert np.all(np.isfinite(rt_curve)) and np.all(rt_curve > 0), (
         "the decay filter is not contractive at every frequency"
     )
-    assert trained_sos.shape[0] == design.n_sections, "the design changed its mind"
+    assert trained_sos.shape[0] == n_sections, "the design changed its mind"
 
     _err_init = np.abs(rt_init / est_rt - 1)
     _err = np.abs(rt_trained / est_rt - 1)
