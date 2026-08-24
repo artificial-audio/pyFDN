@@ -1,4 +1,5 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
+# gallery_title: Denser reverberation with a delay feedback matrix
 # gallery_description: Compare three feedback-path topologies to show how delay feedback matrices accelerate echo-density buildup.
 
 import marimo
@@ -14,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Denser Reverberation with Delay Feedback Matrix
@@ -34,9 +35,6 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
 
     import pyFDN
 

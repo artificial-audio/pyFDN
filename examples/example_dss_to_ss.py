@@ -1,4 +1,4 @@
-# gallery_category: Translation Examples
+# gallery_category: Representations
 # gallery_description: Convert delay state-space FDN parameters into a conventional state-space model and verify matching impulse responses.
 
 import marimo
@@ -19,14 +19,19 @@ def _(mo):
     mo.md(r"""
     # Delay state-space to state-space
 
-    This example converts an FDN in **delay state-space** form (separate delay lengths and feedback matrix) into a single **state-space** system, and checks that the impulse response matches the delay-state-space implementation.
+    Delay state-space form describes an FDN with $N$ delay lines as $N$ delay lengths plus an $N \times N$ feedback matrix — a compact description that says nothing about how many states the system actually has. `pyFDN.dss_to_ss` expands it into an ordinary state-space system by giving every sample inside every delay line its own state, so the $N \times N$ feedback matrix becomes a $\sum_i m_i$ square matrix of mostly shift structure.
 
-    **What it does:**
-    - Builds a small lossless FDN: random orthogonal matrix, diagonal of gains `g^m`, and random input/output vectors.
-    - Uses `pyFDN.dss_to_ss` to get the equivalent state-space matrices `(A, b, c, d)`.
-    - Computes the impulse response both via `scipy.signal` (from the state-space) and via `pyFDN.dss2impz` (from the delay state-space).
-    - Plots both (mu-law encoded) and asserts they match within tolerance.
-    - Plots the FDN parameters (feedback matrix, delays, I/O vectors, magnitude response) with `pyFDN.plot_FDN_build`.
+    That expansion is what lets any standard state-space tool work on an FDN — here `scipy.signal.dimpulse`, but equally a controllability or balancing routine. The price is size: three delays of 13, 19 and 23 samples already need 55 states, and a realistic FDN needs tens of thousands. The delays are kept deliberately tiny for that reason.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## A three-delay FDN
+
+    Three short delays with a random orthogonal feedback matrix and random input/output vectors. The per-line attenuation that `fdn_build_gallery` returns as a separate `post_delay` gain is folded into the feedback matrix, so the whole loop is the single matrix `A` that `dss_to_ss` expects.
     """)
     return
 
@@ -41,7 +46,6 @@ def _():
     import pyFDN
 
     np.random.seed(1)
-    # Impulse response length for comparison
     impulse_response_length = 1000
 
     m = np.array([13, 19, 23])
@@ -52,22 +56,44 @@ def _():
         rt=0.02,
         rng=1,
     )
-    # Bake attenuation into A matrix for easier comparison.
     build = dataclasses.replace(build, A=np.diag(build.post_delay[0, 0, :]) @ build.A)
     A, b, c, d = build.A, build.B, build.C, build.D
+    return (
+        A,
+        b,
+        build,
+        c,
+        d,
+        dimpulse,
+        dlti,
+        impulse_response_length,
+        m,
+        np,
+        pyFDN,
+    )
 
-    # Convert delay state-space to single state-space system
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Expand and compare
+
+    `dss_to_ss` returns the expanded matrices; `scipy.signal.dimpulse` then treats the FDN as any other discrete-time system. Running the delay recursion with `dss_to_impz` gives the reference.
+    """)
+    return
+
+
+@app.cell
+def _(A, b, c, d, dimpulse, dlti, impulse_response_length, m, np, pyFDN):
     aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)
-    # Via state-space (scipy)
+
     system = dlti(aa, bb, cc, dd, dt=1.0)
     _, ir_state_space = dimpulse(system, n=impulse_response_length)
     ir_state_space = np.squeeze(ir_state_space)
 
-    # Via delay state-space (pyFDN); shape (ir_len, n_out, n_in)
     ir_delay_state_space = pyFDN.dss_to_impz(impulse_response_length, m, A, b, c, d)
     ir_delay_state_space = np.asarray(ir_delay_state_space).squeeze()
 
-    # Sanity check: both implementations match
     assert pyFDN.is_almost_zero(ir_state_space - ir_delay_state_space, tol=0.001)
 
     pyFDN.plot_impulse_response(
@@ -75,13 +101,15 @@ def _():
         ir_delay_state_space,
         labels=["State space", "Delay state space"],
     )
-    return aa, bb, build, cc, dd, pyFDN
+    return aa, bb, cc, dd
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN parameter overview
+    ## The FDN it started from
+
+    Feedback matrix, delays, input/output vectors and magnitude response of the delay state-space description.
     """)
     return
 
@@ -95,9 +123,9 @@ def _(build, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Equivalent state-space system
+    ## The expanded system
 
-    The single state-space matrices `(A, b, c, d)` returned by `pyFDN.dss_to_ss`, expanding the delay lines into unit-delay states.
+    The same FDN as one 55-state system. The feedback matrix is almost entirely the sub-diagonal that shifts each delay line along by one sample; the original $3 \times 3$ mixing survives only in the few entries where a delay line ends and feeds the others.
     """)
     return
 

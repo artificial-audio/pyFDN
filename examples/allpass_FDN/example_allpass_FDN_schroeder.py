@@ -1,6 +1,6 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Schroeder allpass reverberator
-# gallery_description: Build the classic Schroeder series-allpass reverberator and verify its lossless magnitude response.
+# gallery_description: Build the classic Schroeder series-allpass reverberator and verify that it is uniallpass -- allpass whatever the delays.
 
 import marimo
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Schroeder's Series Allpass FDN
@@ -26,14 +26,6 @@ def _(mo, pyFDN):
 
     See also: {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
     """)
     return
 
@@ -62,25 +54,26 @@ def _(mo):
 def _(np, pyFDN):
     N = 6
     g = np.array([0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-    Fs = 48000
+    fs = 48000
     delays = np.random.randint(200, 1000, size=N)
 
     A, B, C, D = pyFDN.series_allpass(g)
-    return A, B, C, D, Fs, delays
+    return A, B, C, D, delays, fs
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot the system matrix
+    ## The system matrix
+
+    `[A, B; C, D]` as one block heatmap. `series_allpass` puts the gains on the diagonal of `A` and the feedforward taps in the strictly triangular part — the cascade structure read off directly.
     """)
     return
 
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    _fig = pyFDN.plot_system_matrix(A, B, C, D)
-    _fig.show()
+    pyFDN.plot_system_matrix(A, B, C, D)
     return
 
 
@@ -96,8 +89,8 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    is_a, P = pyFDN.is_uniallpass(A, B, C, D)
-    assert is_a, "Expected uniallpass"
+    is_uniallpass, _P = pyFDN.is_uniallpass(A, B, C, D)
+    assert is_uniallpass, "Expected uniallpass"
     print("Uniallpass: OK")
     return
 
@@ -107,52 +100,40 @@ def _(mo):
     mo.md(r"""
     ## Impulse response
 
-    Render the IR and plot (SISO: single channel).
+    Two seconds of the cascade's response. Each section recirculates at its own delay, and because the six delays are unequal their echo patterns interleave instead of landing on top of each other, so the response fills in over time.
     """)
     return
 
 
 @app.cell
-def _(A, B, C, D, Fs, delays, pyFDN):
-    ir_len = 2 * Fs
-    impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D).squeeze()
+def _(A, B, C, D, delays, fs, pyFDN):
+    impulse_response = pyFDN.dss_to_impz(2 * fs, delays, A, B, C, D).squeeze()
+
+    pyFDN.plot_impulse_response(
+        impulse_response,
+        fs=fs,
+        title="Schroeder series allpass — impulse response",
+    )
     return (impulse_response,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Impulse response plot
+    ## Spectrogram
+
+    The flat magnitude response is the allpass property; what the ear objects to is the structure *in time*, which the spectrogram shows and the magnitude response cannot.
     """)
     return
 
 
 @app.cell
-def _(Fs, impulse_response, pyFDN):
-    pyFDN.plot_impulse_response(
-        impulse_response,
-        fs=Fs,
-        title="Schroeder series allpass — impulse response",
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Spectrogram and play
-    """)
-    return
-
-
-@app.cell
-def _(Fs, impulse_response, mo, np, pyFDN):
-    channel_ir = np.asarray(impulse_response).squeeze()
+def _(fs, impulse_response, mo, pyFDN):
     _fig = pyFDN.plot_spectrogram(
-        channel_ir, Fs, title="Schroeder series allpass — spectrogram"
+        impulse_response, fs, title="Schroeder series allpass — spectrogram"
     )
 
-    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(impulse_response, fs)])
     return
 
 

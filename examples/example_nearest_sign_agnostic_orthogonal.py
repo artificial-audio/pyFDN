@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
 # gallery_title: Nearest sign-agnostic orthogonal matrix
 # gallery_description: Fit an orthogonal matrix whose element magnitudes approximate a non-negative target matrix despite unknown signs.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Nearest Sign-Agnostic Orthogonal Matrix
@@ -38,11 +38,9 @@ def _(mo, pyFDN):
 @app.cell
 def _():
     import numpy as np
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return np, pyFDN
 
 

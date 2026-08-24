@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Optimization
 # gallery_title: Train an FDN to match a room impulse response
 # gallery_description: Fit every parameter of an FDN -- decay and output EQ included -- to a measured RIR, starting from a generic 1 s reverberator, with the filter design a one-line switch between a ten-band graphic EQ and a first-order shelf.
 # references: Concert_Hall_Impulse_Responses
@@ -53,11 +53,9 @@ def _(mo):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 
@@ -812,7 +810,7 @@ def _(mo):
     mo.md(r"""
     ## The deliverable
 
-    `extract_build` reads the trained model back out as an `FDNBuild` -- plain numpy, no torch -- with the two trained filters baked into the `post_delay` and `post_output` hooks as ordinary SOS banks. That is the thing `process_fdn`, `build_to_impz` or `build_to_faust` would take, and it is what makes the assertions below a test of the FDN you would ship rather than of a torch graph.
+    `extract_build` reads the trained model back out as an `FDNBuild` -- plain numpy, no torch -- with the two trained filters baked into the `post_delay` and `post_output` hooks as ordinary SOS banks. That is the thing `process_fdn`, `build_to_impz` or `build_to_flamo` would take, and it is what makes the assertions below a test of the FDN you would ship rather than of a torch graph.
 
     Nothing about it remembers which design produced it, which is the point: a build is baked, and `n_sections` biquads are `n_sections` biquads however they were chosen.
     """)

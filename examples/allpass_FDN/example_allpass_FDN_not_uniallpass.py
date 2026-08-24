@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Allpass but not uniallpass FDN
 # gallery_description: Demonstrate an FDN that is allpass for one delay configuration but loses that property when its delays change.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Allpass but not uniallpass FDN
@@ -26,14 +26,6 @@ def _(mo, pyFDN):
 
     See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
     """)
     return
 

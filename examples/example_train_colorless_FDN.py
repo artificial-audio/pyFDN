@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Optimization
 # gallery_title: Train a colorless FDN
 # gallery_description: Optimize an FDN for a flat lossless magnitude response, extract its build, and add decay for listening.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Colorless FDN, trained in-notebook

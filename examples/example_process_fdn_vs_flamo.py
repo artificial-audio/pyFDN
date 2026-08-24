@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_title: Time-domain FDN versus FLAMO
 # gallery_description: Render the same paraunitary FDN with GEQ absorption in two independent engines and verify sample-accurate agreement.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
@@ -36,13 +36,11 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
     from pyFDN import td
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN, td, torch
 
 

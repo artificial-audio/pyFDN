@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Schroeder allpass in a feedback loop
 # gallery_description: Place a Schroeder allpass cascade inside a recursive loop and examine the resulting reverberator.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # FDN with Schroeder allpass filters in the loop
@@ -33,27 +33,16 @@ def _(mo, pyFDN):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
-    """)
-    return
-
-
 @app.cell
 def _():
     import numpy as np
-    import plotly.io as pio
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
 
     import pyFDN
 
     np.random.seed(6)
-    Fs = 48000
+    fs = 48000
     nfft = 2**16
-    return Fs, nfft, np, pyFDN
+    return fs, nfft, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -128,15 +117,15 @@ def _(
 
 
 @app.cell
-def _(Fs, ir_schroeder, mo, np, pyFDN):
+def _(fs, ir_schroeder, mo, np, pyFDN):
     ir_schroeder_channel = ir_schroeder[:, 0, 0]
     _fig = pyFDN.plot_impulse_response(
         ir_schroeder_channel,
-        fs=Fs,
+        fs=fs,
         title="MIMO parallel Schroeder allpass — impulse response (in0→out0)",
     )
 
-    mo.vstack([_fig, mo.audio(np.asarray(ir_schroeder_channel), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_schroeder_channel), fs)])
     return
 
 
@@ -151,10 +140,10 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, N, nfft, pyFDN):
+def _(fs, N, nfft, pyFDN):
     fdn_build = pyFDN.fdn_build_gallery(
         N,
-        fs=Fs,
+        fs=fs,
         delay_range=(600, 3900),
         rt=2.0,
         rt_nyquist=0.7,
@@ -167,14 +156,14 @@ def _(Fs, N, nfft, pyFDN):
 
 
 @app.cell
-def _(Fs, ir_fdn, mo, np, pyFDN):
+def _(fs, ir_fdn, mo, np, pyFDN):
     _fig = pyFDN.plot_impulse_response(
         ir_fdn,
-        fs=Fs,
+        fs=fs,
         title="Vanilla FDN (SISO) — impulse response",
     )
 
-    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn), fs)])
     return
 
 
@@ -194,7 +183,7 @@ def _(
     B_schroeder,
     C_schroeder,
     D_schroeder,
-    Fs,
+    fs,
     delays_schroeder,
     fdn_build,
     nfft,
@@ -207,7 +196,7 @@ def _(
         C_schroeder,
         D_schroeder,
         delays_schroeder,
-        Fs,
+        fs,
         nfft=nfft,
         shell=False,
     )
@@ -223,14 +212,14 @@ def _(
 
 
 @app.cell
-def _(Fs, ir_fdn_allpass, mo, np, pyFDN):
+def _(fs, ir_fdn_allpass, mo, np, pyFDN):
     _fig = pyFDN.plot_impulse_response(
         ir_fdn_allpass,
-        fs=Fs,
+        fs=fs,
         title="FDN with Schroeder allpass behind delays — impulse response",
     )
 
-    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn_allpass), Fs)])
+    mo.vstack([_fig, mo.audio(np.asarray(ir_fdn_allpass), fs)])
     return
 
 

@@ -1,4 +1,4 @@
-# gallery_category: Absorption & Filters
+# gallery_category: Absorption & Decay
 # gallery_title: Absorption GEQ in an FDN
 # gallery_description: Design per-delay graphic-EQ absorption filters and confirm that the rendered FDN follows a target frequency-dependent reverberation time.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
@@ -42,18 +42,18 @@ def _():
 
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return dataclasses, go, np, pyFDN
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN parameters
+    ## The FDN to be absorbed
+
+    Eight delay lines with an orthogonal feedback matrix — lossless on its own. All of the decay comes from the filters designed in the next cell.
     """)
     return
 
@@ -149,6 +149,8 @@ def _(geq_build, np, pyFDN, rir_len):
 def _(mo):
     mo.md(r"""
     ## Impulse response
+
+    The high end dies first and the low end rings on, which is the target T60 curve made audible.
     """)
     return
 

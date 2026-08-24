@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Bound the poles of an FDN with frequency-dependent absorption using loop-transfer singular values.
 
 import marimo
@@ -26,7 +26,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}.*
@@ -41,12 +41,10 @@ def _():
 
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return SimpleNamespace, go, np, pyFDN, torch
 
 

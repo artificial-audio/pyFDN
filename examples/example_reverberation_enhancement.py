@@ -39,12 +39,10 @@ def _(mo):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
     from pyFDN import td
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN, td
 
 

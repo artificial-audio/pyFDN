@@ -1,4 +1,4 @@
-# gallery_category: Absorption & Filters
+# gallery_category: Absorption & Decay
 # gallery_description: Estimate two decay slopes per octave from a coupled-room response and resynthesize them with parallel FDNs.
 # references: Neural_Network_For_Multi_Exponential_Sound_Energy_Decay_Analysis
 # requires: multislope
@@ -38,14 +38,12 @@ def _(mo):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     from multislope import DecayFitNet
     from scipy.linalg import block_diag
     from scipy.signal import sosfilt
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return DecayFitNet, block_diag, go, np, pyFDN, sosfilt
 
 
@@ -54,7 +52,7 @@ def _(mo):
     mo.md(r"""
     ## A coupled-space impulse response
 
-    Two single-room FDNs — a small bright room (RT 0.7 s at DC) and a large reverberant one (RT 3.2 s) — are concatenated into one FDN with a block-diagonal feedback matrix and coupled by anorthogonal block rotation, as in the *Coupled Rooms* example.  The source sits in the small room, and so does the receiver: it picks up the small room directly and the large room only weakly, which is the geometry that produces a pronounced double-slope decay.
+    Two single-room FDNs — a small bright room (RT 0.7 s at DC) and a large reverberant one (RT 3.2 s) — are concatenated into one FDN with a block-diagonal feedback matrix and coupled by an orthogonal block rotation, as in the *Coupled Rooms* example.  The source sits in the small room, and so does the receiver: it picks up the small room directly and the large room only weakly, which is the geometry that produces a pronounced double-slope decay.
     """)
     return
 
@@ -285,7 +283,7 @@ def _(mo):
 
     ## One FDN per slope
 
-    Each slope becomes its own FDN. A GEQ absorption filter per delay line gives the FDN the decay time of that slope, and an output GEQ sets its initial level. The level target is the difference* between the level the slope should have and the level the unequalized FDN happens to produce, so the design corrects itself.
+    Each slope becomes its own FDN. A GEQ absorption filter per delay line gives the FDN the decay time of that slope, and an output GEQ sets its initial level. The level target is the difference between the level the slope should have and the level the unequalized FDN happens to produce, so the design corrects itself.
 
     The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
     the octave-band estimates are extended to it by repeating the edge bands.

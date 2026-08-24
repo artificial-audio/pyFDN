@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
 # gallery_title: Paraunitary filter feedback delay network
 # gallery_description: Build an FDN with a lossless FIR scattering matrix and verify its time-domain and modal responses.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Filter feedback delay network (FFDN) with paraunitary feedback matrix
@@ -31,16 +31,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
-    return go, np, plt, pyFDN, torch
+    return go, np, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -83,15 +80,15 @@ def _(mo):
 
 
 @app.cell
-def _(feedback_matrix, np, plt, pyFDN):
-    pyFDN.plot_impulse_response_matrix(
+def _(feedback_matrix, mo, np, pyFDN):
+    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
         np.arange(feedback_matrix.shape[2]),
         pyFDN.mulaw_encode(feedback_matrix.transpose(2, 0, 1)),
         xlabel="Time (samples)",
         ylabel="Amplitude (mu)",
         title="Paraunitary feedback matrix",
     )
-    plt.show()
+    mo.as_html(_fig)
     return
 
 
