@@ -52,10 +52,15 @@ def test_fdn_preset_json_round_trip(tmp_path) -> None:
             "output_matrix": {"type": "ones"},
             "post_delay": {
                 "type": "first_order_shelf",
-                "rt": (1.2, 0.8),
+                "rt": 1.2,
+                "rt_nyquist": 0.8,
                 "rt_crossover": 4_000,
             },
-            "post_matrix": {"type": "one_pole", "gain_db": (0.0, -1.0)},
+            "post_matrix": {
+                "type": "one_pole",
+                "gain_db": 0.0,
+                "gain_db_nyquist": -1.0,
+            },
             "post_output": {
                 "type": "graphic_eq",
                 "gain_db": np.arange(10.0),
@@ -88,7 +93,8 @@ def test_fdn_preset_json_round_trip(tmp_path) -> None:
         "sort": False,
     }
     assert restored.design["feedback_matrix"] == {"type": "orthogonal"}
-    np.testing.assert_array_equal(restored.design["post_delay"]["rt"], [1.2, 0.8])
+    assert restored.design["post_delay"]["rt"] == 1.2
+    assert restored.design["post_delay"]["rt_nyquist"] == 0.8
     for name in (
         "A",
         "B",
@@ -149,14 +155,51 @@ def test_packaged_build_is_available_as_a_preset() -> None:
     assert preset.build.fs == 48_000.0
 
 
+def test_gallery_design_round_trips_into_trainable_filter_targets() -> None:
+    torch = pytest.importorskip("torch")
+    build, design = pyFDN.fdn_build_gallery(
+        2,
+        rt=1.2,
+        rt_nyquist=0.8,
+        rt_crossover=4_000,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-3.0,
+        output_crossover=6_000,
+        rng=4,
+        return_design=True,
+    )
+    preset = pyFDN.fdn_preset_from_dict(
+        pyFDN.fdn_preset_to_dict(
+            pyFDN.FDNPreset(build=build, design=design, metadata={"name": "gallery"})
+        )
+    )
+
+    model = pyFDN.trainable_from_preset(
+        preset,
+        matrix="random",
+        nfft=256,
+        dtype=torch.float64,
+    )
+
+    np.testing.assert_allclose(
+        pyFDN.param(model, "post_delay").raw().detach().cpu().numpy(),
+        [1.2, 0.8],
+    )
+    np.testing.assert_allclose(
+        pyFDN.param(model, "post_output").raw().detach().cpu().numpy(),
+        [[0.0], [-3.0]],
+    )
+
+
 def test_trainable_from_preset_recovers_meaningful_filter_targets() -> None:
     torch = pytest.importorskip("torch")
     nfft = 256
     base = _build()
     decay = pyFDN.AttenuationFilter(
-        (1.2, 0.8),
+        1.2,
         base.delays,
         base.fs,
+        rt_nyquist=0.8,
         design="first_order_shelf",
         rt_crossover=4_000,
         nfft=nfft,
@@ -164,9 +207,10 @@ def test_trainable_from_preset_recovers_meaningful_filter_targets() -> None:
         requires_grad=False,
     )
     output = pyFDN.OutputEQ(
-        (0.0, -3.0),
+        0.0,
         base.C.shape[0],
         base.fs,
+        gain_db_nyquist=-3.0,
         design="first_order_shelf",
         crossover=6_000,
         nfft=nfft,
@@ -174,9 +218,10 @@ def test_trainable_from_preset_recovers_meaningful_filter_targets() -> None:
         requires_grad=False,
     )
     matrix = pyFDN.OutputEQ(
-        (0.0, -1.0),
+        0.0,
         base.A.shape[0],
         base.fs,
+        gain_db_nyquist=-1.0,
         design="one_pole",
         nfft=nfft,
         dtype=torch.float64,
@@ -194,16 +239,19 @@ def test_trainable_from_preset_recovers_meaningful_filter_targets() -> None:
         design={
             "post_delay": {
                 "type": "first_order_shelf",
-                "rt": decay.param.detach().cpu().numpy(),
+                "rt": 1.2,
+                "rt_nyquist": 0.8,
                 "rt_crossover": 4_000,
             },
             "post_matrix": {
                 "type": "one_pole",
-                "gain_db": matrix.param.detach().cpu().numpy(),
+                "gain_db": 0.0,
+                "gain_db_nyquist": -1.0,
             },
             "post_output": {
                 "type": "first_order_shelf",
-                "gain_db": output.param.detach().cpu().numpy(),
+                "gain_db": 0.0,
+                "gain_db_nyquist": -3.0,
                 "crossover": 6_000,
             },
         },
@@ -237,7 +285,13 @@ def test_trainable_from_preset_rejects_a_target_that_changes_the_build() -> None
     preset = pyFDN.FDNPreset(
         build=build,
         metadata={"name": "mismatch"},
-        design={"post_delay": {"type": "first_order_shelf", "rt": (1.2, 0.8)}},
+        design={
+            "post_delay": {
+                "type": "first_order_shelf",
+                "rt": 1.2,
+                "rt_nyquist": 0.8,
+            }
+        },
     )
 
     with pytest.raises(ValueError, match="does not reproduce build.post_delay"):

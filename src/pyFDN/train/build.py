@@ -177,10 +177,12 @@ def build_fdn(
     if rt is not None:
         from pyFDN.train.filters import AttenuationFilter
 
+        rt_value, rt_nyquist = _rt_pair(rt)
         post_delay = AttenuationFilter(
-            _rt_pair(rt),
+            rt_value,
             delays_arr,
             float(fs),
+            rt_nyquist=rt_nyquist,
             design="first_order_shelf",
             nfft=nfft,
             alias_decay_db=float(alias_decay_db),
@@ -226,7 +228,7 @@ def trainable_from_build(
         model = pyFDN.trainable_from_build(
             build,
             post_delay=pyFDN.AttenuationFilter(
-                (1.0, 1.0), build.delays, build.fs,
+                1.0, build.delays, build.fs, rt_nyquist=1.0,
                 design="first_order_shelf", nfft=nfft),
             post_output=pyFDN.OutputEQ(
                 0.0, build.C.shape[0], build.fs,
@@ -435,6 +437,7 @@ def trainable_from_preset(
             decay["rt"],
             build.delays,
             build.fs,
+            rt_nyquist=decay.get("rt_nyquist"),
             design=design_type,
             rt_crossover=decay.get("rt_crossover"),
             nfft=nfft,
@@ -454,6 +457,7 @@ def trainable_from_preset(
                 design["gain_db"],
                 channels,
                 build.fs,
+                gain_db_nyquist=design.get("gain_db_nyquist"),
                 design=design_type,
                 crossover=design.get("crossover"),
                 nfft=nfft,

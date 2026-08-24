@@ -45,10 +45,38 @@ Preset documents
 
 An ``FDNPreset`` keeps a baked ``FDNBuild`` together with catalog metadata and
 the design choices that cannot be recovered reliably from its numbers. Unknown
-design choices are left out rather than guessed::
+design choices are left out rather than guessed. Generators and EQ design
+functions return only their numerical result by default; opt into their design
+record when preparing a preset::
+
+    build, design = pyFDN.fdn_build_gallery(
+        N=8,
+        fs=48_000,
+        delay_distribution="geometric",
+        coprime=True,
+        rt=1.2,
+        rt_nyquist=0.8,
+        return_design=True,
+    )
+
+A separately designed filter can return the same kind of record. The caller
+only has to say which FDN hook receives it::
+
+    import dataclasses
+
+    post_matrix, post_matrix_design = pyFDN.gain_to_one_pole(
+        gain_db=[0.0] * 8,
+        gain_db_nyquist=[-3.0] * 8,
+        return_design=True,
+    )
+    build = dataclasses.replace(build, post_matrix=post_matrix)
+    design["post_matrix"] = post_matrix_design
+
+Once all numerical and design parts are assembled, freeze that particular
+realization as the preset::
 
     preset = pyFDN.FDNPreset(
-        build=reverberator,
+        build=build,
         metadata={
             "name": "small-room",
             "description": "A short, neutral room",
@@ -56,12 +84,7 @@ design choices are left out rather than guessed::
             "license": "CC0-1.0",
             "tags": ["room", "short"],
         },
-        design={
-            "delays": {"type": "uniform", "coprime": True},
-            "feedback_matrix": {"type": "orthogonal"},
-            "input_matrix": {"type": "normalised"},
-            "output_matrix": {"type": "normalised"},
-        },
+        design=design,
     )
     pyFDN.save_fdn_preset("small-room.json", preset)
     restored = pyFDN.load_fdn_preset_file("small-room.json")

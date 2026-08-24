@@ -984,10 +984,12 @@ def _post_output_db(model, fs, freqs):
 
 def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's in-loop decay as a trainable module, on a named design."""
+    rt_value, rt_nyquist = (rt, None) if design == "graphic_eq" else rt
     return pyFDN.AttenuationFilter(
-        rt,
+        rt_value,
         build.delays,
         build.fs,
+        rt_nyquist=rt_nyquist,
         design=design,
         nfft=nfft,
         device="cpu",
@@ -997,10 +999,12 @@ def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
 
 def _out_eq(build, gain_db, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's output EQ as a trainable module, on a named design."""
+    gain_value, gain_nyquist = (gain_db, None) if design == "graphic_eq" else gain_db
     return pyFDN.OutputEQ(
-        gain_db,
+        gain_value,
         np.shape(build.C)[0],
         build.fs,
+        gain_db_nyquist=gain_nyquist,
         design=design,
         nfft=nfft,
         device="cpu",
@@ -1245,30 +1249,32 @@ def test_shelf_crossover_moves_the_transition():
     )
 
 
-def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
-    with pytest.raises(ValueError, match="takes 2 values"):
+def test_endpoint_targets_are_separate_and_validate_the_channel_axis():
+    with pytest.raises(ValueError, match="graphic_eq uses one target array"):
+        pyFDN.AttenuationFilter(
+            np.ones(10),
+            np.array([100.0, 150.0]),
+            48000.0,
+            rt_nyquist=1.0,
+            design="graphic_eq",
+            nfft=2**10,
+        )
+
+    with pytest.raises(ValueError, match="must have 2 columns"):
         pyFDN.AttenuationFilter(
             np.ones(3),
             np.array([100.0, 150.0]),
             48000.0,
-            design="first_order_shelf",
-            nfft=2**10,
-        )
-
-    # The role still checks the channel axis, which is the role's business.
-    with pytest.raises(ValueError, match="must have 2 columns"):
-        pyFDN.AttenuationFilter(
-            np.ones((2, 3)),
-            np.array([100.0, 150.0]),
-            48000.0,
+            rt_nyquist=np.ones(3),
             design="first_order_shelf",
             nfft=2**10,
         )
     with pytest.raises(ValueError, match="must have 1 columns"):
         pyFDN.OutputEQ(
-            np.ones((2, 3)),
+            np.ones(3),
             1,
             48000.0,
+            gain_db_nyquist=np.ones(3),
             design="first_order_shelf",
             nfft=2**10,
         )
@@ -1325,9 +1331,10 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
 
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
     module = pyFDN.AttenuationFilter(
-        (-5.0, 1.0),
+        -5.0,
         delays,
         48000.0,
+        rt_nyquist=1.0,
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
@@ -1339,9 +1346,10 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
     deeper = pyFDN.AttenuationFilter(
-        (-50.0, 1.0),
+        -50.0,
         delays,
         48000.0,
+        rt_nyquist=1.0,
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
