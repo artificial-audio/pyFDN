@@ -95,34 +95,35 @@ Acoustics & Absorption
    pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
-EQ & Absorption Design (``pyFDN.eq``)
---------------------------------------
+EQ Design (``pyFDN.eq``)
+-------------------------
 
-Three designs of the same two filters -- an FDN's in-loop absorption and its
-output EQ -- behind one interface. A design carries its own target and maps it
-to biquad sections in numpy or in torch from a single implementation, which is
-what a trainable :class:`pyFDN.DecayFilter` or :class:`pyFDN.OutputEQ` runs
-inside a training loop.
+Explicit functions map either decay targets or gain targets onto a named
+filter design. The same functions run in NumPy or Torch; the trainable
+:class:`pyFDN.DecayFilter` and :class:`pyFDN.OutputEQ` modules use these
+mappings inside a training loop. ``EQDesign`` is the literal choice of
+``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
+modules.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
    pyFDN.EQDesign
-   pyFDN.GraphicEQ
-   pyFDN.FirstOrderShelf
-   pyFDN.OnePole
-   pyFDN.design_geq
-   pyFDN.geq_sos
+   pyFDN.decay_to_geq
+   pyFDN.decay_to_first_order_shelf
+   pyFDN.decay_to_one_pole
+   pyFDN.gain_to_geq
+   pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_first_order_shelf
+   pyFDN.gain_to_one_pole
    pyFDN.geq_design_matrix
-   pyFDN.graphic_eq
-   pyFDN.absorption_geq
-   pyFDN.first_order_absorption
-   pyFDN.first_order_shelving_eq
-   pyFDN.one_pole_absorption
+   pyFDN.lowshelf_biquad
+   pyFDN.highshelf_biquad
+   pyFDN.peaking_biquad
+   pyFDN.first_order_shelf_biquad
+   pyFDN.one_pole_biquad
    pyFDN.probe_sos
-   pyFDN.shelving_filter
-   pyFDN.bandpass_filter
 
 Time-Domain Graph (``pyFDN.td``)
 --------------------------------

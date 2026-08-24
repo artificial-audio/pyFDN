@@ -1,45 +1,47 @@
-"""Equalizer and absorption filter design.
+"""Filter sections and target-to-EQ design functions."""
 
-Three designs of the same two filters -- an FDN's in-loop absorption and its
-output EQ -- at three levels of detail: a ten-band graphic EQ, a first-order
-shelf, and a one-pole. :mod:`.designs` puts them behind one interface,
-:class:`~.designs.EQDesign`, which is what :mod:`pyFDN.train` builds its
-trainable filters on; each design runs in numpy or in torch from one source
-(see :mod:`._backend`).
-"""
-
-from .absorption_geq import absorption_geq
-from .bandpass_filter import bandpass_filter
-from .design_geq import design_geq, geq_design_matrix, geq_sos
-from .designs import EQDesign, FirstOrderShelf, GraphicEQ, OnePole
-from .first_order import (
-    first_order_absorption,
-    first_order_shelf_sos,
-    first_order_shelving_eq,
-    shelf_crossover_omega,
+from .biquads import (
+    first_order_shelf_biquad,
+    highshelf_biquad,
+    lowshelf_biquad,
+    one_pole_biquad,
+    peaking_biquad,
 )
-from .graphic_eq import graphic_eq
-from .one_pole import one_pole_absorption, one_pole_sos
+from .design import (
+    EQDesign,
+    decay_to_first_order_shelf,
+    decay_to_geq,
+    decay_to_one_pole,
+    gain_to_first_order_shelf,
+    gain_to_one_pole,
+)
+from .graphic_eq import (
+    BANDWIDTH_R,
+    CENTER_FREQUENCIES,
+    SHELVING_CROSSOVER,
+    gain_to_bounded_geq,
+    gain_to_geq,
+    geq_design_matrix,
+)
 from .probe_sos import probe_sos
-from .shelving_filter import shelving_filter
 
 __all__ = [
+    "BANDWIDTH_R",
+    "CENTER_FREQUENCIES",
     "EQDesign",
-    "FirstOrderShelf",
-    "GraphicEQ",
-    "OnePole",
-    "absorption_geq",
-    "bandpass_filter",
-    "design_geq",
-    "first_order_absorption",
-    "first_order_shelf_sos",
-    "first_order_shelving_eq",
+    "SHELVING_CROSSOVER",
+    "decay_to_first_order_shelf",
+    "decay_to_geq",
+    "decay_to_one_pole",
+    "first_order_shelf_biquad",
+    "gain_to_bounded_geq",
+    "gain_to_first_order_shelf",
+    "gain_to_geq",
+    "gain_to_one_pole",
     "geq_design_matrix",
-    "geq_sos",
-    "graphic_eq",
-    "one_pole_absorption",
-    "one_pole_sos",
+    "highshelf_biquad",
+    "lowshelf_biquad",
+    "one_pole_biquad",
+    "peaking_biquad",
     "probe_sos",
-    "shelf_crossover_omega",
-    "shelving_filter",
 ]

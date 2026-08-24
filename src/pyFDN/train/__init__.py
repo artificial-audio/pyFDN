@@ -25,6 +25,7 @@ from .build import (
     trainable_from_build,
 )
 from .engine import TrainLog, train_fdn
+from .filters import DecayFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
     L2,
@@ -54,6 +55,9 @@ __all__ = [
     "Trainable",
     "MatrixParam",
     "LOSSLESS_ALIAS_DECAY_DB",
+    "DecayFilter",
+    "OutputEQ",
+    "EQDesign",
     # train
     "train_fdn",
     "TrainLog",

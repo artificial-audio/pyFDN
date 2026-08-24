@@ -341,11 +341,11 @@ def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
 def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_absorption(rt, rt_nyquist, delays, fs, crossover):
-        captured["crossover"] = crossover
+    def fake_attenuation(rt, rt_nyquist, rt_crossover, delays, fs):
+        captured["crossover"] = rt_crossover
         return np.ones((1, 6, len(delays)))
 
-    monkeypatch.setattr("pyFDN.eq.first_order.first_order_absorption", fake_absorption)
+    monkeypatch.setattr("pyFDN.eq.decay_to_first_order_shelf", fake_attenuation)
 
     build = fdn_build_gallery(3, rt_crossover=750.0, rng=7)
 
@@ -354,7 +354,7 @@ def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
 
 
 def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
-    from pyFDN.auxiliary.acoustics import first_order_shelving_eq
+    from pyFDN.eq import gain_to_first_order_shelf
 
     scalar = fdn_build_gallery(
         4,
@@ -379,7 +379,7 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
     )
     assert per_channel.post_output is not None
     assert per_channel.post_output.shape == (1, 6, 3)
-    expected = first_order_shelving_eq([0.0, -3.0, -6.0], -6.0, per_channel.fs)
+    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, None, per_channel.fs)
     np.testing.assert_allclose(per_channel.post_output, expected)
 
 

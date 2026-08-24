@@ -7,9 +7,9 @@ trainable flamo ``Shell`` you can render, train, and extract.
 
 Both are conveniences over assembling flamo modules yourself with
 :func:`pyFDN.assemble_fdn_core`; neither knows anything about filter *design*.
-A trainable filter is a module -- :class:`~pyFDN.DecayFilter`,
-:class:`~pyFDN.OutputEQ` -- built from an :class:`~pyFDN.eq.EQDesign` that
-carries its own target, and handed to whichever hook it belongs in.
+A trainable filter is a module -- :class:`~pyFDN.DecayFilter` or
+:class:`~pyFDN.OutputEQ` -- initialized with a target and a
+:class:`~pyFDN.EQDesign` name, then handed to whichever hook it belongs in.
 """
 
 from __future__ import annotations
@@ -89,8 +89,9 @@ def build_fdn(
     N : int, optional
         Number of delay lines when ``delays`` is omitted.
     rt : float, (rt_dc, rt_nyquist), or None
-        Reverberation time in seconds, realized as a :class:`~pyFDN.DecayFilter`
-        on a :class:`~pyFDN.FirstOrderShelf`. ``None`` builds a lossless FDN.
+        Reverberation time in seconds, realized as an
+        :class:`~pyFDN.DecayFilter` with ``design="first_order_shelf"``.
+        ``None`` builds a lossless FDN.
         For any other design, build the module yourself and pass it to
         :func:`trainable_from_build` as ``post_delay=``.
     matrix : {"orthogonal", "random"}
@@ -170,13 +171,13 @@ def build_fdn(
 
     post_delay = None
     if rt is not None:
-        from pyFDN.auxiliary.flamo import DecayFilter
-        from pyFDN.eq.designs import FirstOrderShelf
+        from pyFDN.train.filters import DecayFilter
 
         post_delay = DecayFilter(
-            FirstOrderShelf(_rt_pair(rt)),
+            _rt_pair(rt),
             delays_arr,
             float(fs),
+            design="first_order_shelf",
             nfft=nfft,
             alias_decay_db=float(alias_decay_db),
             device=device,
@@ -220,10 +221,12 @@ def trainable_from_build(
 
         model = pyFDN.trainable_from_build(
             build,
-            post_delay=pyFDN.DecayFilter(pyFDN.FirstOrderShelf((1.0, 1.0)),
-                                         build.delays, build.fs, nfft=nfft),
-            post_output=pyFDN.OutputEQ(pyFDN.FirstOrderShelf(0.0),
-                                       build.C.shape[0], build.fs, nfft=nfft),
+            post_delay=pyFDN.DecayFilter(
+                (1.0, 1.0), build.delays, build.fs,
+                design="first_order_shelf", nfft=nfft),
+            post_output=pyFDN.OutputEQ(
+                0.0, build.C.shape[0], build.fs,
+                design="first_order_shelf", nfft=nfft),
         )
 
     Each of those modules is trained because it says so itself (both default to
@@ -391,16 +394,20 @@ def build_set_decay(
 ) -> FDNBuild:
     """Return a copy of ``build`` with homogeneous decay matching ``rt``.
 
-    Sets the ``post_delay`` hook to per-delay first-order absorption
-    (:func:`pyFDN.first_order_absorption`) for ``rt`` (a single value, or
+    Sets the ``post_delay`` hook to per-delay first-order attenuation
+    (:func:`pyFDN.decay_to_first_order_shelf`) for ``rt`` (a single value, or
     ``(rt_dc, rt_nyquist)``). Decay does not change colouration, so this is the
     natural way to add a tail to a colorless build.
     """
-    from pyFDN.eq.first_order import first_order_absorption
+    from pyFDN.eq import decay_to_first_order_shelf
 
     rt_dc, rt_ny = _rt_pair(rt)
-    filters = first_order_absorption(
-        rt_dc, rt_ny, np.asarray(build.delays), float(build.fs), rt_crossover
+    filters = decay_to_first_order_shelf(
+        rt_dc,
+        rt_ny,
+        rt_crossover,
+        np.asarray(build.delays),
+        float(build.fs),
     )
     return dataclasses.replace(build, post_delay=filters)
 

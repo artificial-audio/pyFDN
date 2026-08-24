@@ -9,14 +9,6 @@ from numpy.typing import ArrayLike
 from scipy.signal import sosfreqz
 from scipy.special import erfc
 
-# The filter designs live in pyFDN.eq, and are re-exported here because this
-# module's rt_to_slope is what turns a reverberation time into the dB target
-# they take. They import it inside a function, not at module level, so the two
-# modules do not cycle.
-from pyFDN.eq.first_order import first_order_absorption as first_order_absorption
-from pyFDN.eq.first_order import first_order_shelving_eq as first_order_shelving_eq
-from pyFDN.eq.one_pole import one_pole_absorption as one_pole_absorption
-
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
     """Convert reverb time (RT, seconds) to energy decay slope (dB per sample)."""
@@ -457,7 +449,8 @@ def sos_gain_per_sample_curves(
     ----------
     sos : (n_sections, 6, N) array
         Per-channel SOS bank; section rows are ``[b0, b1, b2, a0, a1, a2]``. Same
-        format as :func:`one_pole_absorption` / :func:`first_order_absorption`
+        format as :func:`pyFDN.decay_to_one_pole` /
+        :func:`pyFDN.decay_to_first_order_shelf`
         return.
     delays : (N,) array-like
         Delay lengths in samples, one per channel. Used to scale gain to per-sample.
