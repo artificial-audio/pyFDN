@@ -8,6 +8,9 @@ on:
     paths:
       - 'src/**'
       - 'docs/**'
+      # The marimo notebooks under examples/ are executed and baked into the
+      # site at build time, so editing one changes the published docs.
+      - 'examples/**'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [ main ]
@@ -36,10 +39,10 @@ jobs:
           tool-cache: false
 
       # Set up Python
-      - name: Set up Python 3.11
+      - name: Set up Python 3.14
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       # Install system libraries required by soundfile (via flamo)
       - name: Install system dependencies
@@ -51,12 +54,8 @@ jobs:
           python -m pip install --upgrade pip --no-cache-dir
           pip install --no-cache-dir ".[docs]"
       
-      # Auto-generate .rst files from source
-      - name: Generate Sphinx RST
-        run: |
-          sphinx-apidoc -o ./docs/ ./src/pyFDN  # replace with your package
-
-      # Build the HTML documentation
+      # The docs Makefile owns all generated RST inputs so local and CI builds
+      # follow exactly the same path.
       - name: Build HTML docs
         working-directory: docs
         run: make html

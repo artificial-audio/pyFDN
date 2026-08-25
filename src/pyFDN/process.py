@@ -7,8 +7,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
-from pyFDN.dsp.feedback_delay import FeedbackDelay
+from pyFDN.td.operators import MatrixFIR, RecursionState
 
 
 def process_fdn(
@@ -25,7 +24,7 @@ def process_fdn(
 ) -> np.ndarray:
     """Simulate the feedback delay network using block processing.
 
-    Recursion per block (same ordering as the MATLAB ``processFDN``):
+    Recursion per block:
     delay output -> optional post-delay filter -> output gains C, and in the feedback
     path: absorbed delay output -> feedback matrix A -> optional post-matrix filter -> + B input.
     The wet signal is processed with an optional post-output filter before being added to the direct signal.
@@ -44,9 +43,11 @@ def process_fdn(
     post_delay : object or None, optional
         An optional filter applied to the delay output before feedback processing.
         Must implement a `filter` method that accepts and processes the delay output.
+        Typically per-delay-line absorption, e.g. :class:`pyFDN.td.SOSBank`.
     post_matrix : object or None, optional
         An optional filter applied to the feedback signal after the feedback matrix
-        multiplication. Must implement a `filter` method that accepts and processes the feedback signal.
+        multiplication. Must implement a `filter` method that accepts and processes the feedback signal
+        (e.g. :class:`pyFDN.td.TimeVaryingMatrix`).
     post_output : object or None, optional
         An optional filter applied to the wet signal (output signal) before it is
         added to the direct signal. Must implement a `filter` method that accepts and processes the wet signal.
@@ -72,14 +73,14 @@ def process_fdn(
         raise ValueError("Delays must be positive integers")
 
     if A_mat.ndim == 3:
-        feedback_filter: FIRMatrixFilter | None = FIRMatrixFilter(A_mat)
+        feedback_filter: MatrixFIR | None = MatrixFIR(A_mat)
     elif A_mat.ndim == 2:
         feedback_filter = None
     else:
         raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
 
     max_block_size = min(int(2**12), int(np.min(delays_arr)))
-    delay_bank = FeedbackDelay(delays_arr, max_block_size)
+    delay_bank = RecursionState(delays_arr, max_block_size)
 
     num_samples = x.shape[0]
     num_outputs = C_mat.shape[0]

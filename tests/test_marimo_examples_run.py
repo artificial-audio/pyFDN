@@ -17,6 +17,19 @@ def _example_scripts() -> list[Path]:
     return sorted(EXAMPLES_DIR.rglob("example_*.py"))
 
 
+def _optional_requirements(script: Path) -> list[str]:
+    """Modules an example needs beyond the core test environment.
+
+    Declared in a header comment, e.g. ``# requires: multislope``. Examples may
+    depend on optional packages (see the ``examples`` extra); the core test run
+    skips those rather than failing on the import.
+    """
+    for line in script.read_text(encoding="utf-8").splitlines()[:20]:
+        if line.startswith("# requires: "):
+            return line.removeprefix("# requires: ").replace(",", " ").split()
+    return []
+
+
 @pytest.fixture(autouse=True)  # type: ignore[misc]
 def _headless_rendering(monkeypatch: MonkeyPatch) -> Iterator[None]:
     """Neutralise display side-effects so examples run headless.
@@ -43,4 +56,6 @@ def test_examples_dir_is_populated() -> None:
     ids=lambda p: str(p.relative_to(EXAMPLES_DIR)),
 )
 def test_example_runs(script: Path) -> None:
+    for module in _optional_requirements(script):
+        pytest.importorskip(module)
     runpy.run_path(str(script), run_name="__main__")

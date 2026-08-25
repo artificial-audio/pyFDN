@@ -1,4 +1,6 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
+# gallery_title: Gardner's nested allpass FDN
+# gallery_description: Recreate Gardner's SISO reverberator by iteratively nesting feedforward and feedback allpass sections.
 
 import marimo
 
@@ -10,29 +12,19 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
-@app.cell
-def _(mo, paper_link):
-    mo.md(f""" 
+@app.cell(hide_code=True)
+def _(mo, pyFDN):
+    mo.md(f"""
     # Gardner's Nested Allpass FDN
 
     Example for the nested allpass structure: an FDN built by iteratively nesting a feedforward/back allpass around the previous system. SISO (single input, single output).
 
-    **Reference:** *{paper_link("Gardner1992RealtimeMultichannelRoom")}*.
+    **Reference:** *{pyFDN.paper_link("Gardner1992RealtimeMultichannelRoom")}*.
 
-    See also: {paper_link("Allpass_Feedback_Delay_Networks")}.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
+    See also: {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
     """)
     return
 
@@ -44,7 +36,8 @@ def _():
     import pyFDN
 
     np.random.seed(42)
-    return np, pyFDN
+    fs = 48000
+    return fs, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -52,7 +45,7 @@ def _(mo):
     mo.md(r"""
     ## Build nested allpass FDN
 
-    Use a vector of gains **g** (one per nesting stage). Delays are powers of two: **m = 2^(0:N-1)**.
+    `nested_allpass` takes one gain per nesting stage and returns the delay state-space system that realises the whole nest. The delays are drawn at random — nesting does not constrain them, since the structure is uniallpass.
     """)
     return
 
@@ -74,15 +67,16 @@ def _(np, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot the system matrix
+    ## The system matrix
+
+    `[A, B; C, D]` as one block heatmap. Nesting shows up as structure in `A`: each section's feedback sits on the diagonal, and the coupling into the section it wraps sits just off it.
     """)
     return
 
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    _fig = pyFDN.plot_system_matrix(A, B, C, D)
-    _fig.show()
+    pyFDN.plot_system_matrix(A, B, C, D)
     return
 
 
@@ -98,8 +92,8 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    is_a, P = pyFDN.is_uniallpass(A, B, C, D)
-    assert is_a, "Expected uniallpass"
+    is_uniallpass, _P = pyFDN.is_uniallpass(A, B, C, D)
+    assert is_uniallpass, "Expected uniallpass"
     print("Uniallpass: OK")
     return
 
@@ -109,54 +103,40 @@ def _(mo):
     mo.md(r"""
     ## Impulse response
 
-    Render the IR and plot (SISO: single channel).
+    Four seconds of the nested cascade. Nesting an allpass inside another one multiplies their echo patterns rather than concatenating them, which is what buys Gardner's structure its density from so few sections.
     """)
     return
 
 
 @app.cell
-def _(A, B, C, D, delays, pyFDN):
-    Fs = 48000
-    ir_len = 4 * Fs  # 4 seconds
-    impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D).squeeze()
-    # Shape: (ir_len, n_out, n_in) -> (ir_len, ) for SISO
-    return Fs, impulse_response
+def _(A, B, C, D, delays, fs, pyFDN):
+    impulse_response = pyFDN.dss_to_impz(4 * fs, delays, A, B, C, D).squeeze()
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Impulse response plot
-    """)
-    return
-
-
-@app.cell
-def _(Fs, impulse_response, pyFDN):
     pyFDN.plot_impulse_response(
         impulse_response,
-        fs=Fs,
+        fs=fs,
         title="Nested allpass FDN — impulse response",
     )
-    return
+    return (impulse_response,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Spectrogram (one channel)
+    ## Spectrogram
+
+    Flat on average — it is allpass — but the time structure the ear hears as ringing is visible here and nowhere in the magnitude response.
     """)
     return
 
 
 @app.cell
-def _(Fs, impulse_response, mo, np, pyFDN):
-    channel_ir = np.asarray(impulse_response).squeeze()
+def _(fs, impulse_response, mo, pyFDN):
     _fig = pyFDN.plot_spectrogram(
-        channel_ir, Fs, title="Nested allpass FDN — spectrogram"
+        impulse_response, fs, title="Nested allpass FDN — spectrogram"
     )
 
-    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(impulse_response, fs)])
     return
 
 

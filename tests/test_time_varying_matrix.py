@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
+from pyFDN.td import TimeVaryingMatrix
 
 
 def _make_time_varying_matrix() -> TimeVaryingMatrix:
@@ -63,8 +63,12 @@ def test_time_varying_matrix_filter_keeps_state_across_blocks():
 def test_time_varying_matrix_filter_rejects_wrong_shape():
     tvm = _make_time_varying_matrix()
 
-    with pytest.raises(ValueError, match="shape"):
+    # As a TimeOperator, a 1-D block is one channel of 4 samples -- not 4 channels.
+    with pytest.raises(ValueError, match="expects 4 input channels"):
         tvm.filter(np.zeros(4))
 
-    with pytest.raises(ValueError, match="shape"):
+    with pytest.raises(ValueError, match="expects 4 input channels"):
         tvm.filter(np.zeros((8, 3)))
+
+    with pytest.raises(ValueError, match="signal block must be 1-D or 2-D"):
+        tvm.filter(np.zeros((2, 8, 4)))

@@ -3,25 +3,19 @@
 from importlib import import_module
 
 __author__ = "Facundo Franchino"
-__version__ = "0.1.0"
+__version__ = "0.4.1"
 
 __all__ = [
-    # dsp
-    "FeedbackDelay",
-    "FIRMatrixFilter",
-    "SOSFilterBank",
     # acoustics
-    "absorption_filters",
     "echo_density",
     "estimate_initial_level_bands",
     "estimate_rt_bands",
-    "absorption_to_rt",
     "edc",
-    "first_order_absorption",
-    "first_order_shelving_eq",
-    "one_pole_absorption",
+    "octave_band_filterbank",
+    "octave_bands",
     "rt_to_gain_per_sample",
     "rt_to_slope",
+    "slope_amplitude_to_level",
     "slope_to_rt",
     "sos_gain_per_sample_curves",
     # delay utilities
@@ -33,7 +27,29 @@ __all__ = [
     "flamo_time_response",
     "flamo_freq_response",
     "flamo_process",
+    # building a FLAMO FDN graph from numpy values
+    "assemble_fdn_core",
+    "wrap_fdn_shell",
+    "gain_module",
+    "delay_module",
+    "matrix_module",
+    "fir_matrix_module",
+    "sos_filter_module",
+    "hook_module",
+    "DecayFilter",
+    "OutputEQ",
+    "audio_metadata",
+    "available_audio",
     "load_audio",
+    # packaged references and presets
+    "paper_link",
+    "paper_reference",
+    "available_fdn_presets",
+    "load_fdn_preset",
+    "fdn_build_from_dict",
+    "fdn_build_to_dict",
+    "load_fdn_build",
+    "save_fdn_build",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -60,13 +76,22 @@ __all__ = [
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
-    # graphicEQ
-    "absorption_geq",
-    "bandpass_filter",
-    "design_geq",
-    "graphic_eq",
+    # eq
+    "EQDesign",
+    "decay_to_first_order_shelf",
+    "decay_to_geq",
+    "decay_to_one_pole",
+    "first_order_shelf_biquad",
+    "gain_to_bounded_geq",
+    "gain_to_first_order_shelf",
+    "gain_to_geq",
+    "gain_to_one_pole",
+    "geq_design_matrix",
+    "highshelf_biquad",
+    "lowshelf_biquad",
+    "one_pole_biquad",
+    "peaking_biquad",
     "probe_sos",
-    "shelving_filter",
     # polynomial and matrix maths
     "adj_poly",
     "adjugate",
@@ -123,10 +148,35 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
+    "LOSSLESS_ALIAS_DECAY_DB",
     "build_set_decay",
     "Trainable",
     "train_fdn",
     "TrainLog",
+    # training: what a loss sees
+    "Response",
+    "model_response",
+    "impulse_excitation",
+    "param",
+    "params",
+    "ParamRef",
+    # training: losses
+    "Loss",
+    "ResponseLoss",
+    "ParameterLoss",
+    "FlatMagnitude",
+    "AsymmetricFlatMagnitude",
+    "FlatSpectrogram",
+    "MatchMagnitude",
+    "MatchSpectrogram",
+    "MatchMelSpectrogram",
+    "MatchImpulseResponse",
+    "MatchEnergyDecay",
+    "MatchCumulativeEnergy",
+    "Energy",
+    "Sparsity",
+    "L1",
+    "L2",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -149,6 +199,8 @@ __all__ = [
     "flamo_nodes_flat",
     "plot_flamo_graph",
     "extract_build",
+    # time-domain graph engine
+    "td",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -180,17 +232,15 @@ __all__ = [
 
 # acoustics and absorption
 from .auxiliary.acoustics import (
-    absorption_filters,
-    absorption_to_rt,
     echo_density,
     edc,
     estimate_initial_level_bands,
     estimate_rt_bands,
-    first_order_absorption,
-    first_order_shelving_eq,
-    one_pole_absorption,
+    octave_band_filterbank,
+    octave_bands,
     rt_to_gain_per_sample,
     rt_to_slope,
+    slope_amplitude_to_level,
     slope_to_rt,
     sos_gain_per_sample_curves,
 )
@@ -202,7 +252,7 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .auxiliary.audio import load_audio
+from .auxiliary.audio import audio_metadata, available_audio, load_audio
 
 # delay utilities
 from .auxiliary.delay import (
@@ -212,7 +262,19 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
+from .auxiliary.flamo import (
+    assemble_fdn_core,
+    delay_module,
+    fir_matrix_module,
+    flamo_freq_response,
+    flamo_process,
+    flamo_time_response,
+    gain_module,
+    hook_module,
+    matrix_module,
+    sos_filter_module,
+    wrap_fdn_shell,
+)
 from .auxiliary.flamo_graph import (
     extract_build,
     flamo_model_to_nodes,
@@ -286,11 +348,29 @@ from .auxiliary.utils import (
     skew,
     sq_to_db,
 )
-
-# dsp components
-from .dsp.dfilt_matrix import FIRMatrixFilter
-from .dsp.feedback_delay import FeedbackDelay
-from .dsp.sos_filter_bank import SOSFilterBank
+from .build_io import (
+    fdn_build_from_dict,
+    fdn_build_to_dict,
+    load_fdn_build,
+    save_fdn_build,
+)
+from .eq import (
+    EQDesign,
+    decay_to_first_order_shelf,
+    decay_to_geq,
+    decay_to_one_pole,
+    first_order_shelf_biquad,
+    gain_to_bounded_geq,
+    gain_to_first_order_shelf,
+    gain_to_geq,
+    gain_to_one_pole,
+    geq_design_matrix,
+    highshelf_biquad,
+    lowshelf_biquad,
+    one_pole_biquad,
+    peaking_biquad,
+    probe_sos,
+)
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -344,24 +424,43 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .graphicEQ import (
-    absorption_geq,
-    bandpass_filter,
-    design_geq,
-    graphic_eq,
-    probe_sos,
-    shelving_filter,
-)
+from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing
 from .process import process_fdn
+from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
 from .train import (
+    L1,
+    L2,
+    LOSSLESS_ALIAS_DECAY_DB,
+    AsymmetricFlatMagnitude,
+    DecayFilter,
+    Energy,
+    FlatMagnitude,
+    FlatSpectrogram,
+    Loss,
+    MatchCumulativeEnergy,
+    MatchEnergyDecay,
+    MatchImpulseResponse,
+    MatchMagnitude,
+    MatchMelSpectrogram,
+    MatchSpectrogram,
+    OutputEQ,
+    ParameterLoss,
+    ParamRef,
+    Response,
+    ResponseLoss,
+    Sparsity,
     Trainable,
     TrainLog,
     build_fdn,
     build_set_decay,
+    impulse_excitation,
+    model_response,
+    param,
+    params,
     train_fdn,
     trainable_from_build,
 )
@@ -384,3 +483,6 @@ from .translate.pr_to_impz import pr_to_impz
 
 # Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
 allpass = import_module(".auxiliary.allpass", __name__)
+
+# Time-domain graph engine (pyFDN.td operators and connectors).
+from . import td  # noqa: E402

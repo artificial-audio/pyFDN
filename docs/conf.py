@@ -9,12 +9,14 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 )
 
+from audio_gallery import generate_audio_gallery
 from example_gallery import generate_gallery  # noqa: E402
 
 import pyFDN  # noqa: E402
 
-# Keep the gallery in sync with every marimo notebook before Sphinx reads it.
+# Keep the gallery in sync with every marimo notebook and audio file before Sphinx reads it.
 generate_gallery()
+generate_audio_gallery()
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"
@@ -45,6 +47,11 @@ autosummary_imported_members = True
 # Napoleon settings (Google / NumPy docstrings)
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render "Attributes" sections as :ivar: fields instead of standalone
+# ``.. attribute::`` directives. Without this, every documented attribute is
+# registered twice (once by napoleon, once by autodoc's member scan) and Sphinx
+# warns about duplicate object descriptions.
+napoleon_use_ivar = True
 
 
 # Intersphinx mapping
@@ -112,7 +119,9 @@ latex_documents = [
 marimo_notebook_dir = "../examples"
 marimo_default_height = "800px"
 marimo_default_width = "100%"
-marimo_click_to_load = "overlay"  # Use overlay mode for better performance
+# ``True`` is rendered as the extension's overlay mode. Keep this a boolean;
+# sphinx-marimo declares the setting as such and Sphinx warns on string values.
+marimo_click_to_load = True
 marimo_load_button_text = "Load Interactive Notebook"
 
 # Build notebooks serially in-process. The export-mode override below patches the
@@ -139,6 +148,17 @@ marimo_cache_notebooks = False
 #
 # This patch lives in conf.py (our repo), so the installed sphinx-marimo package
 # stays pristine and deployment (RTD / GitHub Actions) needs no vendored changes.
+#
+# Cell errors are build failures: a notebook that raises still produces HTML,
+# with the traceback baked in where the output should be, so a broken example
+# reaches the published site looking like a rendered page. We record every
+# notebook whose export exited non-zero and fail the build at the end (see
+# ``setup`` below) instead of aborting on the first one, so a single run reports
+# all of them. Set ``PYFDN_DOCS_ALLOW_NOTEBOOK_ERRORS=1`` to downgrade this back
+# to a warning when you need a build out of a knowingly broken notebook.
+_marimo_export_failures: "list[tuple[str, str]]" = []
+
+
 def _patch_marimo_static_export():
     import subprocess
 
@@ -164,8 +184,8 @@ def _patch_marimo_static_export():
         # `html` (not `html-wasm`) executes the notebook server-side with the real
         # venv and embeds the outputs. marimo returns a non-zero exit code when any
         # cell raises during execution, but it still writes the HTML (with the error
-        # baked in), so we log a warning and keep going rather than aborting the
-        # whole docs build on one bad notebook.
+        # baked in), so we record the failure and keep going; the build-finished
+        # handler turns the collected failures into a build error.
         proc = subprocess.run(
             [
                 "marimo",
@@ -181,9 +201,10 @@ def _patch_marimo_static_export():
         )
         if proc.returncode != 0:
             print(
-                f"[conf.py] WARNING: '{relative_path}' had cell errors during static "
+                f"[conf.py] ERROR: '{relative_path}' had cell errors during static "
                 f"export (output still written):\n{proc.stderr.strip()}"
             )
+            _marimo_export_failures.append((str(relative_path), proc.stderr.strip()))
 
         return {
             "name": output_name,
@@ -196,3 +217,30 @@ def _patch_marimo_static_export():
 
 
 _patch_marimo_static_export()
+
+
+def _fail_on_marimo_export_errors(app, exception):
+    """Fail the build if any notebook raised while being exported."""
+    # The build already failed for another reason; don't mask it.
+    if exception is not None or not _marimo_export_failures:
+        return
+
+    report = "\n\n".join(
+        f"{path}:\n{stderr}" for path, stderr in _marimo_export_failures
+    )
+    if os.environ.get("PYFDN_DOCS_ALLOW_NOTEBOOK_ERRORS") == "1":
+        print(
+            f"[conf.py] WARNING: {len(_marimo_export_failures)} notebook(s) had cell "
+            f"errors; failing is disabled via PYFDN_DOCS_ALLOW_NOTEBOOK_ERRORS:\n{report}"
+        )
+        return
+
+    raise RuntimeError(
+        f"{len(_marimo_export_failures)} example notebook(s) raised during static "
+        f"export. The generated HTML contains the traceback instead of the intended "
+        f"output, so this must not be published:\n\n{report}"
+    )
+
+
+def setup(app):
+    app.connect("build-finished", _fail_on_marimo_export_errors)

@@ -33,7 +33,7 @@ def impz_to_res(
             "which is required by impz2res least-squares formulation"
         )
 
-    # Remove direct term and crop as in MATLAB.
+    # Remove direct term and crop
     ir_use = ir[1:impulse_response_length]
 
     t = np.arange(impulse_response_length, dtype=np.float64).reshape(-1, 1)

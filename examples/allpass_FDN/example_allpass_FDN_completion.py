@@ -1,4 +1,6 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
+# gallery_title: Allpass FDN completion
+# gallery_description: Complete the input, output, and direct-path coefficients that turn a given feedback matrix into a uniallpass FDN.
 
 import marimo
 
@@ -10,28 +12,18 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
-@app.cell
-def _(mo, paper_link):
+@app.cell(hide_code=True)
+def _(mo, pyFDN):
     mo.md(f"""
     # Allpass FDN completion
 
     For a given feedback matrix **A**, the goal is to construct **b**, **c**, and **d** such that the FDN is uniallpass.
 
-    See *{paper_link("Allpass_Feedback_Delay_Networks")}.*
+    See *{pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.*
 
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
     """)
     return
 
@@ -154,10 +146,10 @@ def _(mo):
 def _(np, pyFDN):
     # Homogeneous allpass FDN with random admissible diagonal X
     _N = 4
-    delays = np.random.randint(1, 31, size=_N)  # delays in samples, 1..30
+    delays = np.random.randint(1, 31, size=_N)
     _g = 0.99
     _G = np.diag(_g**delays)  # global gain per sample
-    _X = pyFDN.rand_admissible_homogeneous_allpass(_G, (0.7, 0.999))  # gain matrix
+    _X = pyFDN.rand_admissible_homogeneous_allpass(_G, (0.7, 0.999))
     _X @ _G @ _G
     _A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(_G, _X)
     is_a0, P0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)

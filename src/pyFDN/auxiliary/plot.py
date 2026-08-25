@@ -546,10 +546,10 @@ def _db_per_sample_traces(
     import plotly.graph_objects as go
     from scipy.signal import sosfreqz
 
-    from pyFDN.dsp.sos_filter_bank import SOSFilterBank
+    from pyFDN.td.operators import SOSBank
 
     N = delays_arr.size
-    sos_bank = SOSFilterBank(sos, N).sos  # (N, n_sections, 6)
+    sos_bank = SOSBank(sos).sos  # (N, n_sections, 6)
     traces = []
     for i in range(N):
         w, h = sosfreqz(sos_bank[i], worN=nfft)
@@ -590,7 +590,7 @@ def plot_db_per_sample(
     ----------
     sos : array-like
         Per-delay-line SOS bank, same layout as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
+        :class:`pyFDN.td.SOSBank`: ``(n_sections, 6, N)``.
     delays : array-like
         Delay lengths in samples, shape (N,).
     fs : float, optional
@@ -635,8 +635,9 @@ def plot_fdn_parameter(
     c: ArrayLike,
     d: ArrayLike,
     *,
-    attenuation_sos: ArrayLike | None = None,
-    post_eq_sos: ArrayLike | None = None,
+    post_delay_sos: ArrayLike | None = None,
+    post_matrix_sos: ArrayLike | None = None,
+    post_output_sos: ArrayLike | None = None,
     fs: float | None = None,
     nfft: int = 512,
     zmin: float | None = None,
@@ -646,15 +647,18 @@ def plot_fdn_parameter(
     """Plot all FDN parameters in one figure.
 
     Extends :func:`plot_system_matrix` with the delay lengths and, optionally,
-    the attenuation filters and the post EQ:
+    any of the three filter hooks, named as :func:`pyFDN.process_fdn` and
+    :class:`pyFDN.FDNBuild` name them:
 
     - the system matrix blocks ``A``, ``b``, ``c``, ``d`` as heatmaps with a
       shared RdBu color scale;
     - the delays as a bar plot whose bars are aligned with the columns of the
       feedback matrix ``A`` (one bar per delay line);
-    - the attenuation filters as gain-per-sample curves, as in
-      :func:`plot_db_per_sample`;
-    - the post EQ as plain magnitude response in dB.
+    - ``post_delay`` and ``post_matrix``, the two in-loop hooks, as
+      gain-per-sample curves, as in :func:`plot_db_per_sample` -- both are per
+      delay line and both act once per round trip, so the two rows are directly
+      comparable;
+    - ``post_output`` as plain magnitude response in dB.
 
     Bar and curve colors are matched per delay line and encode the delay
     length (Viridis, short = dark, long = bright).
@@ -665,11 +669,11 @@ def plot_fdn_parameter(
         Delay lengths in samples, shape (N,).
     A, b, c, d : array-like
         Feedback matrix, input gains, output gains, direct gains.
-    attenuation_sos : array-like, optional
-        Per-delay-line SOS attenuation bank, same layout as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
-    post_eq_sos : array-like, optional
-        Post EQ as an SOS cascade in scipy format, shape ``(n_sections, 6)``
+    post_delay_sos, post_matrix_sos : array-like, optional
+        Per-delay-line SOS banks for the two in-loop hooks, same layout as
+        :class:`pyFDN.td.SOSBank`: ``(n_sections, 6, N)``.
+    post_output_sos : array-like, optional
+        Output EQ as an SOS cascade in scipy format, shape ``(n_sections, 6)``
         (or ``(6,)`` for one section) for a single output, or
         ``(n_sections, 6, K)`` to draw one magnitude curve per output channel.
     fs : float, optional
@@ -700,12 +704,15 @@ def plot_fdn_parameter(
         raise ValueError("delays must have one entry per column of A")
     N = delays_arr.size
 
-    # Color encodes the delay length, shared between bars and attenuation curves.
+    # Color encodes the delay length, shared between bars and in-loop curves.
     colors = _delay_colors(delays_arr)
 
-    # Row layout: delays | A b | c d | [attenuation] | [post EQ]
-    has_attenuation = attenuation_sos is not None
-    has_post_eq = post_eq_sos is not None
+    # Row layout: delays | A b | c d | [post_delay] | [post_matrix] | [post_output]
+    in_loop = [
+        (post_delay_sos, "post_delay [dB/sample]"),
+        (post_matrix_sos, "post_matrix [dB/sample]"),
+    ]
+    has_post_output = post_output_sos is not None
     matrix_px = 440.0
     row_px = [
         110.0,
@@ -718,11 +725,12 @@ def plot_fdn_parameter(
         [{}, {}],
     ]
     subplot_titles = ["", "A", "b", "c", "d"]
-    if has_attenuation:
-        specs.append([{"colspan": 2}, None])
-        subplot_titles.append("")
-        row_px.append(190.0)
-    if has_post_eq:
+    for sos, _ in in_loop:
+        if sos is not None:
+            specs.append([{"colspan": 2}, None])
+            subplot_titles.append("")
+            row_px.append(190.0)
+    if has_post_output:
         specs.append([{"colspan": 2}, None])
         subplot_titles.append("")
         row_px.append(190.0)
@@ -775,24 +783,26 @@ def plot_fdn_parameter(
             fig.update_xaxes(title_text="Frequency [rad/sample]", row=row, col=1)
 
     next_row = 4
-    if attenuation_sos is not None:
+    for sos, y_title in in_loop:
+        if sos is None:
+            continue
         for trace in _db_per_sample_traces(
-            attenuation_sos, delays_arr, fs=fs, nfft=nfft, colors=colors
+            sos, delays_arr, fs=fs, nfft=nfft, colors=colors
         ):
             fig.add_trace(trace, row=next_row, col=1)
         _style_frequency_xaxis(next_row)
-        fig.update_yaxes(title_text="Attenuation [dB/sample]", row=next_row, col=1)
+        fig.update_yaxes(title_text=y_title, row=next_row, col=1)
         next_row += 1
 
-    if has_post_eq:
-        sos_eq = np.asarray(post_eq_sos, dtype=float)
+    if has_post_output:
+        sos_eq = np.asarray(post_output_sos, dtype=float)
         if sos_eq.ndim == 1:
             sos_eq = sos_eq.reshape(1, 6, 1)
         elif sos_eq.ndim == 2:
             sos_eq = sos_eq[:, :, None]
         if sos_eq.ndim != 3 or sos_eq.shape[1] != 6:
             raise ValueError(
-                "post_eq_sos must have shape (n_sections, 6) or (n_sections, 6, K)"
+                "post_output_sos must have shape (n_sections, 6) or (n_sections, 6, K)"
             )
         n_out = sos_eq.shape[2]
         if n_out == 1:
@@ -814,13 +824,13 @@ def plot_fdn_parameter(
                     mode="lines",
                     line={"color": eq_colors[k], "width": 1.5},
                     showlegend=n_out > 1,
-                    name=f"out {k}" if n_out > 1 else "post EQ",
+                    name=f"out {k}" if n_out > 1 else "post_output",
                 ),
                 row=next_row,
                 col=1,
             )
         _style_frequency_xaxis(next_row)
-        fig.update_yaxes(title_text="Post EQ [dB]", row=next_row, col=1)
+        fig.update_yaxes(title_text="post_output [dB]", row=next_row, col=1)
 
     fig.update_layout(
         title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
@@ -844,7 +854,9 @@ def plot_FDN_build(
     """Plot the parameters stored in an :class:`pyFDN.FDNBuild`.
 
     This is a convenience wrapper around :func:`plot_fdn_parameter`. A
-    multichannel ``build.post_eq`` is rendered as one curve per output channel.
+    multichannel ``build.post_output`` is rendered as one curve per output
+    channel. Each of the build's three filter hooks becomes its own row, and
+    only the ones it carries.
     """
     return plot_fdn_parameter(
         build.delays,
@@ -852,8 +864,9 @@ def plot_FDN_build(
         build.B,
         build.C,
         build.D,
-        attenuation_sos=build.filters,
-        post_eq_sos=build.post_eq,
+        post_delay_sos=build.post_delay,
+        post_matrix_sos=build.post_matrix,
+        post_output_sos=build.post_output,
         fs=build.fs,
         nfft=nfft,
         zmin=zmin,

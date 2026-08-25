@@ -1,4 +1,5 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Absorption & Decay
+# gallery_description: Contrast homogeneous modal decay with a rotated absorption design that spreads reverberation times across modes.
 
 import marimo
 
@@ -10,9 +11,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
-
-    return mo, paper_link
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -20,24 +19,20 @@ def _(mo):
     mo.md(r"""
     # FDN with spread modal decay
 
-    Demonstrates an FDN *without* homogeneous decay, but with a certain decay
-    spread, as is typically observed in shoebox rooms and scattering delay
-    networks. The spread is evaluated via the modal decomposition.
+    Demonstrates an FDN *without* homogeneous decay, but with a certain decay spread, as is typically observed in shoebox rooms and scattering delay networks. The spread is evaluated via the modal decomposition.
 
     Two feedback matrices with identical gain-per-sample energy:
 
-    - **Proportional**: $A = Q\,\Gamma$ with orthogonal $Q$ and delay-proportional
-      gains $\Gamma = \mathrm{diag}(g^{m_i})$ → all modes decay with the same T60.
-    - **Spread**: $A = Q_1\,\Gamma\,Q_2$ → the second rotation distributes the
-      absorption unevenly over the modes, spreading their T60s.
+    - **Proportional**: $A = Q\,\Gamma$ with orthogonal $Q$ and delay-proportional gains $\Gamma = \mathrm{diag}(g^{m_i})$ → all modes decay with the same T60.
+    - **Spread**: $A = Q_1\,\Gamma\,Q_2$ → the second rotation distributes the absorption unevenly over the modes, spreading their T60s.
     """)
     return
 
 
-@app.cell
-def _(mo, paper_link):
+@app.cell(hide_code=True)
+def _(mo, pyFDN):
     mo.md(f"""
-    Reference: *{paper_link("Schlecht2019ModalDecompositionFeedback")}*.
+    Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}*.
 
     """)
     return
@@ -47,11 +42,9 @@ def _(mo, paper_link):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 
@@ -105,9 +98,7 @@ def _(mo):
     mo.md(r"""
     ## Modal decomposition, impulse response, energy decay curve
 
-    For each matrix type, compute poles/residues with `dss_to_pr`,
-    synthesize the impulse response from the modes with `pr_to_impz`, and
-    compute the energy decay curve.
+    For each matrix type, compute poles/residues with `dss_to_pr`, synthesize the impulse response from the modes with `pr_to_impz`, and compute the energy decay curve.
     """)
     return
 
@@ -143,8 +134,7 @@ def _(mo):
     mo.md(r"""
     ## Energy decay curves
 
-    The proportional FDN decays along a straight line; the spread FDN bends,
-    because slowly decaying modes dominate the late tail.
+    The proportional FDN decays along a straight line; the spread FDN bends, because slowly decaying modes dominate the late tail.
     """)
     return
 
@@ -171,8 +161,7 @@ def _(mo):
     mo.md(r"""
     ## Pole T60s
 
-    Per-mode reverberation time over pole angle. The proportional matrix puts
-    all poles on a single T60 line; the spread matrix scatters them.
+    Per-mode reverberation time over pole angle. The proportional matrix puts all poles on a single T60 line; the spread matrix scatters them.
     """)
     return
 

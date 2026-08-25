@@ -42,6 +42,12 @@ feedback matrices, designing loop filters, and inspecting pole locations.
 
       How to report bugs, request features, and set up
       a development environment.
+   
+   .. grid-item-card:: Audio Gallery
+      :link: audio_gallery
+      :link-type: doc
+
+      Explore different audio examples.
 
 
 .. toctree::
@@ -52,7 +58,9 @@ feedback matrices, designing loop filters, and inspecting pole locations.
    usage
    examples_gallery
    api_reference
+   training_losses
    modules
    contributing
    authors
    history
+   audio_gallery

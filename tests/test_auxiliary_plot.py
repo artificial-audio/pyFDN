@@ -130,8 +130,8 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
         D=np.zeros((1, 1)),
         delays=np.array([11, 13]),
         fs=48000.0,
-        filters=np.ones((1, 6, 2)),
-        post_eq=np.ones((1, 6, 1)),
+        post_delay=np.ones((1, 6, 2)),
+        post_output=np.ones((1, 6, 1)),
     )
     captured: dict[str, Any] = {}
 
@@ -151,10 +151,10 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
     assert forwarded[2] is build.B
     assert forwarded[3] is build.C
     assert forwarded[4] is build.D
-    assert captured["kwargs"]["attenuation_sos"] is build.filters
-    assert build.post_eq is not None
+    assert captured["kwargs"]["post_delay_sos"] is build.post_delay
+    assert build.post_output is not None
     # The full (possibly multichannel) post EQ bank is forwarded unchanged.
-    assert captured["kwargs"]["post_eq_sos"] is build.post_eq
+    assert captured["kwargs"]["post_output_sos"] is build.post_output
     assert captured["kwargs"]["fs"] == build.fs
     assert captured["kwargs"]["nfft"] == 1024
     assert captured["kwargs"]["title"] == "FDN"
@@ -168,8 +168,8 @@ def test_plot_FDN_build_renders_multichannel_post_eq():
         num_outputs=3,
         rt=2.0,
         rt_nyquist=0.5,
-        post_eq_db_dc=[0.0, -3.0, -6.0],
-        post_eq_db_nyquist=-6.0,
+        eq_db_dc=[0.0, -3.0, -6.0],
+        eq_db_nyquist=-6.0,
         rng=0,
     )
     fig = pyFDN.plot_FDN_build(build)
@@ -180,7 +180,7 @@ def test_plot_FDN_build_renders_multichannel_post_eq():
 
 def test_plot_fdn_parameter_labels_quantities_on_y_axes():
     identity_sos = np.array([[[1.0], [0.0], [0.0], [1.0], [0.0], [0.0]]])
-    attenuation_sos = np.repeat(identity_sos, 2, axis=2)
+    per_line_sos = np.repeat(identity_sos, 2, axis=2)
 
     fig = plot_fdn_parameter(
         delays=[11, 13],
@@ -188,20 +188,41 @@ def test_plot_fdn_parameter_labels_quantities_on_y_axes():
         b=np.ones((2, 1)),
         c=np.ones((1, 2)),
         d=np.zeros((1, 1)),
-        attenuation_sos=attenuation_sos,
-        post_eq_sos=identity_sos[:, :, 0],
+        post_delay_sos=per_line_sos,
+        post_matrix_sos=per_line_sos,
+        post_output_sos=identity_sos[:, :, 0],
         fs=48000.0,
     )
 
+    # one row per hook the caller supplied, labelled with the hook's own name
     yaxis_titles = [axis.title.text for axis in fig.select_yaxes()]
     assert "Delays [samples]" in yaxis_titles
-    assert "Attenuation [dB/sample]" in yaxis_titles
-    assert "Post EQ [dB]" in yaxis_titles
+    assert "post_delay [dB/sample]" in yaxis_titles
+    assert "post_matrix [dB/sample]" in yaxis_titles
+    assert "post_output [dB]" in yaxis_titles
 
     subplot_titles = [annotation.text for annotation in fig.layout.annotations]
     assert "delays [samples]" not in subplot_titles
-    assert "attenuation [dB/sample]" not in subplot_titles
-    assert "post EQ [dB]" not in subplot_titles
+    assert "post_delay [dB/sample]" not in subplot_titles
+    assert "post_output [dB]" not in subplot_titles
+
+
+def test_plot_fdn_parameter_omits_the_rows_for_hooks_that_are_absent():
+    """Each hook is its own row, and only the ones that are there."""
+    identity_sos = np.array([[[1.0], [0.0], [0.0], [1.0], [0.0], [0.0]]])
+    base = {
+        "delays": [11, 13],
+        "A": np.eye(2),
+        "b": np.ones((2, 1)),
+        "c": np.ones((1, 2)),
+        "d": np.zeros((1, 1)),
+        "fs": 48000.0,
+    }
+    bare = plot_fdn_parameter(**base)
+    one = plot_fdn_parameter(**base, post_matrix_sos=np.repeat(identity_sos, 2, axis=2))
+    assert len(list(one.select_yaxes())) == len(list(bare.select_yaxes())) + 1
+    assert "post_matrix [dB/sample]" in [a.title.text for a in one.select_yaxes()]
+    assert "post_delay [dB/sample]" not in [a.title.text for a in bare.select_yaxes()]
 
 
 def test_plot_matrix_block_boundaries_draws_dividing_lines():

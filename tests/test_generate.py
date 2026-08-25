@@ -288,8 +288,8 @@ def test_fdn_build_gallery_is_complete_and_reproducible():
 def test_fdn_build_gallery_lossless_has_no_filters():
     build = fdn_build_gallery(4, rt=None, rng=12)
 
-    assert build.filters is None
-    assert build.post_eq is None
+    assert build.post_delay is None
+    assert build.post_output is None
     # The feedback matrix is orthogonal (lossless).
     np.testing.assert_allclose(build.A @ build.A.T, np.eye(4), atol=1e-12)
 
@@ -325,8 +325,8 @@ def test_fdn_build_gallery_first_order_absorption_keeps_A_lossless():
     delays = np.array([101, 149, 211])
     build = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=0.5, rng=7)
 
-    assert build.filters is not None
-    assert build.filters.shape == (1, 6, 3)
+    assert build.post_delay is not None
+    assert build.post_delay.shape == (1, 6, 3)
     np.testing.assert_allclose(build.A @ build.A.T, np.eye(3), atol=1e-12)
 
 
@@ -335,49 +335,52 @@ def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
     default_ny = fdn_build_gallery(delays=delays, rt=2.0, rng=7)
     explicit_flat = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=2.0, rng=7)
 
-    np.testing.assert_allclose(default_ny.filters, explicit_flat.filters)
+    np.testing.assert_allclose(default_ny.post_delay, explicit_flat.post_delay)
 
 
 def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_absorption(rt, rt_nyquist, delays, fs, crossover):
-        captured["crossover"] = crossover
+    def fake_attenuation(rt, rt_nyquist, rt_crossover, delays, fs):
+        captured["crossover"] = rt_crossover
         return np.ones((1, 6, len(delays)))
 
-    monkeypatch.setattr(
-        "pyFDN.auxiliary.acoustics.first_order_absorption", fake_absorption
-    )
+    monkeypatch.setattr("pyFDN.eq.decay_to_first_order_shelf", fake_attenuation)
 
     build = fdn_build_gallery(3, rt_crossover=750.0, rng=7)
 
     assert captured["crossover"] == 750.0
-    assert build.filters is not None
+    assert build.post_delay is not None
 
 
 def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
-    from pyFDN.auxiliary.acoustics import first_order_shelving_eq
+    from pyFDN.eq import gain_to_first_order_shelf
 
     scalar = fdn_build_gallery(
-        4, num_outputs=2, rt=None, post_eq_db_dc=0.0, post_eq_db_nyquist=-6.0, rng=7
+        4,
+        num_outputs=2,
+        rt=None,
+        eq_db_dc=0.0,
+        eq_db_nyquist=-6.0,
+        rng=7,
     )
-    assert scalar.post_eq is not None
-    assert scalar.post_eq.shape == (1, 6, 2)
+    assert scalar.post_output is not None
+    assert scalar.post_output.shape == (1, 6, 2)
     # scalar dB values broadcast to identical per-output sections
-    np.testing.assert_allclose(scalar.post_eq[:, :, 0], scalar.post_eq[:, :, 1])
+    np.testing.assert_allclose(scalar.post_output[:, :, 0], scalar.post_output[:, :, 1])
 
     per_channel = fdn_build_gallery(
         4,
         num_outputs=3,
         rt=None,
-        post_eq_db_dc=[0.0, -3.0, -6.0],
-        post_eq_db_nyquist=-6.0,
+        eq_db_dc=[0.0, -3.0, -6.0],
+        eq_db_nyquist=-6.0,
         rng=7,
     )
-    assert per_channel.post_eq is not None
-    assert per_channel.post_eq.shape == (1, 6, 3)
-    expected = first_order_shelving_eq([0.0, -3.0, -6.0], -6.0, per_channel.fs)
-    np.testing.assert_allclose(per_channel.post_eq, expected)
+    assert per_channel.post_output is not None
+    assert per_channel.post_output.shape == (1, 6, 3)
+    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, None, per_channel.fs)
+    np.testing.assert_allclose(per_channel.post_output, expected)
 
 
 def test_fdn_build_gallery_rejects_invalid_configuration():
@@ -388,7 +391,7 @@ def test_fdn_build_gallery_rejects_invalid_configuration():
     with pytest.raises(ValueError, match="delays must contain exactly N values"):
         fdn_build_gallery(3, delays=np.array([1, 2]))
     with pytest.raises(ValueError, match="scalar or length num_outputs"):
-        fdn_build_gallery(4, num_outputs=2, post_eq_db_dc=[0.0, -3.0, -6.0])
+        fdn_build_gallery(4, num_outputs=2, eq_db_dc=[0.0, -3.0, -6.0])
 
 
 # ---------------------------------------------------------------------------
@@ -449,10 +452,22 @@ def test_delay_lengths_sort_is_ascending():
     np.testing.assert_array_equal(delays, np.sort(delays))
 
 
+def _global_rng_state() -> tuple[np.ndarray, int]:
+    """Key array and position of the global MT19937 state.
+
+    Drawing from the global RNG advances ``pos`` and, every 624 draws, twists
+    the key, so comparing both detects any consumption.
+    """
+    state = np.random.get_state(legacy=False)["state"]
+    return np.asarray(state["key"]), int(state["pos"])
+
+
 def test_delay_lengths_does_not_mutate_global_rng():
-    state = np.random.get_state()
+    key_before, pos_before = _global_rng_state()
     sample_delay_lengths(8, rng=7)
-    np.testing.assert_array_equal(np.random.get_state()[1], state[1])
+    key_after, pos_after = _global_rng_state()
+    np.testing.assert_array_equal(key_after, key_before)
+    assert pos_after == pos_before
 
 
 def test_delay_lengths_invalid_distribution_raises():

@@ -29,6 +29,14 @@ Overview
 
 ``pyFDN`` provides building blocks for designing, simulating, and analysing Feedback Delay Networks (FDNs). The package focuses on reusable, tested helper functions that simplify typical FDN workflows such as creating orthogonal feedback matrices, designing loop filters, and inspecting pole locations. Using ``flamo`` as a dependency, ``pyFDN`` allows modular design of advanced FDN structure with DSP operations in time and frequency domain.
 
+The `pyFDN tutorial
+<https://artificial-audio.github.io/pyfdn-tutorial-2026/>`_ provides an introduction to the package.
+
+The source code is MIT-licensed. Small packaged tutorial resources retain the
+separate terms recorded in ``src/pyFDN/resources/ATTRIBUTION.md``; in
+particular, the Pori concert-hall impulse response is limited to
+noncommercial use.
+
 
 Highlights
 ----------
@@ -70,17 +78,17 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     feedback = pyFDN.random_orthogonal(len(delays))
 
     # one-pole absorption filters targeting RT of 1.2 s at DC and 0.9 s at Nyquist
-    absorption = pyFDN.one_pole_absorption(1.2, 0.9, delays, fs)
+    absorption = pyFDN.decay_to_one_pole(1.2, 0.9, delays, fs)
 
     # convert delay state-space to standard state-space (A_ss, b, c, d)
     A_ss, b, c, d = pyFDN.dss_to_ss(delays, feedback)
 
 Alternatively, import specific functions directly::
 
-    from pyFDN import random_orthogonal, one_pole_absorption, lin_to_db
+    from pyFDN import decay_to_one_pole, lin_to_db, random_orthogonal
 
     feedback = random_orthogonal(4)
-    absorption = one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
+    absorption = decay_to_one_pole(1.2, 0.9, [100, 150, 200, 250], 48_000)
 
 
 Development
@@ -96,3 +104,12 @@ Or, inside an activated virtual environment::
 
 For linting and packaging helpers see ``Makefile`` (``make lint``/``make docs``)
 and ``tox.ini`` for multi-environment testing.
+
+
+Helpful links
+-------------
+
+* `List of papers on Feedback Delay Networks <https://github.com/gdalsanto/delay-network-reverbs>`_ .
+* `Multislope Estimation library <https://github.com/artificial-audio/multislope>`_ .
+* `FLAMO (An Open-Source Library for Frequency-Domain Differentiable Audio Processing) <https://github.com/gdalsanto/flamo>`_ .
+* `ADAC (Automatic Differentiable Audio Compilation) library <https://github.com/cucuwritescode/adac>`_ .

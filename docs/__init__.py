@@ -1,2 +1,1 @@
-# intentionally empty for making 'docs' a package in order to connect paper references to pyFDN examples.
-# May edit if needed.
+"""Documentation build helpers; this package is not distributed in the wheel."""

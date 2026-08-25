@@ -5,12 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.acoustics import (
-    first_order_absorption,
-    one_pole_absorption,
-    rt_to_slope,
-    slope_to_rt,
-)
+from pyFDN.auxiliary.acoustics import rt_to_slope, slope_to_rt
 from pyFDN.auxiliary.delay import ms_to_smp
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
 from pyFDN.auxiliary.utils import (
@@ -23,6 +18,7 @@ from pyFDN.auxiliary.utils import (
     max_corr,
     pole_boundaries,
 )
+from pyFDN.eq import decay_to_first_order_shelf, decay_to_one_pole
 
 # ============================================================================
 # Conversion Utility Tests
@@ -84,7 +80,7 @@ def test_lin_to_db_from_poly_degree():
 
 def test_one_pole_absorption_shapes_are_correct():
     delays = np.array([10.0, 20.0, 30.0])
-    sos = one_pole_absorption(1.2, 0.8, delays, 44100.0)
+    sos = decay_to_one_pole(1.2, 0.8, delays, 44100.0)
     assert sos.shape == (1, 6, delays.size)
     assert np.all(sos[0, 3, :] == 1.0)
 
@@ -93,7 +89,7 @@ def test_first_order_absorption_matches_rt_targets():
     fs = 48000.0
     rt_dc, rt_ny = 1.2, 0.8
     delays = np.array([100.0, 130.0, 250.0])
-    sos = first_order_absorption(rt_dc, rt_ny, delays, fs, crossover_frequency=4000.0)
+    sos = decay_to_first_order_shelf(rt_dc, rt_ny, 4000.0, delays, fs)
 
     assert sos.shape == (1, 6, delays.size)
     s = sos[0]  # (6, N): rows [b0, b1, b2, a0, a1, a2]
@@ -111,8 +107,8 @@ def test_first_order_absorption_matches_rt_targets():
 def test_first_order_absorption_clamps_high_crossover():
     fs = 48000.0
     delays = np.array([100.0, 130.0])
-    clamped = first_order_absorption(1.0, 0.5, delays, fs, crossover_frequency=fs / 3)
-    limit = first_order_absorption(1.0, 0.5, delays, fs, crossover_frequency=fs / 5)
+    clamped = decay_to_first_order_shelf(1.0, 0.5, fs / 3, delays, fs)
+    limit = decay_to_first_order_shelf(1.0, 0.5, fs / 5, delays, fs)
     np.testing.assert_allclose(clamped, limit)
 
 
@@ -259,7 +255,7 @@ def test_max_corr_shifted_negated_copy():
 
 
 def test_max_corr_unfolds_column_major():
-    # signal k corresponds to entry (k % N1, k // N1), as in MATLAB maxCorr.m
+    # signal k corresponds to entry (k % N1, k // N1).
     signals = np.zeros((2, 2, 16))
     signals[1, 0, 3] = 1.0  # column-major index 1
     signals[0, 1, 7] = 1.0  # column-major index 2
@@ -306,3 +302,41 @@ def test_fade_out_applies_along_last_axis():
     for row in y:
         np.testing.assert_array_equal(row[:4], 1.0)
         np.testing.assert_allclose(row[4:], ramp)
+
+
+# ============================================================================
+# marimo Display Helper Tests
+# ============================================================================
+
+
+def _wav_channels(html) -> int:
+    """Number of channels in the WAV a labeled_audio player embeds."""
+    import base64
+    import io
+    import re
+    import wave
+
+    match = re.search(r"src='([^']+)'", html.text)
+    assert match is not None, "no audio source in the rendered player"
+    src = match.group(1)
+    assert src.startswith("data:"), f"unexpected audio source: {src[:40]}"
+    payload = base64.b64decode(src.split(",", 1)[1])
+    with wave.open(io.BytesIO(payload)) as wav:
+        return wav.getnchannels()
+
+
+def test_labeled_audio_orients_time_major_stereo():
+    """A (samples, 2) render must reach mo.audio as 2 channels, not 2 samples."""
+    mo = pytest.importorskip("marimo")
+    assert mo is not None
+
+    from pyFDN.auxiliary.marimo_utils import labeled_audio
+
+    fs = 8_000
+    stereo = np.zeros((fs, 2))
+    stereo[:, 0] = 0.5  # a silent channel would make mo.audio normalize by 0
+
+    assert _wav_channels(labeled_audio("stereo", stereo, fs=fs)) == 2
+    assert _wav_channels(labeled_audio("stereo", stereo.T, fs=fs)) == 2
+    assert _wav_channels(labeled_audio("mono", stereo[:, 0], fs=fs)) == 1
+    assert _wav_channels(labeled_audio("mono", stereo[:, :1], fs=fs)) == 1

@@ -18,8 +18,23 @@ import re
 from pathlib import Path
 
 import pyFDN
+import pyFDN.eq
 
 _REFERENCE = Path(__file__).resolve().parent.parent / "docs" / "api_reference.rst"
+
+REMOVED_EQ_API = {
+    "absorption_geq",
+    "bandpass_filter",
+    "design_geq",
+    "first_order_absorption",
+    "first_order_shelf_sos",
+    "first_order_shelving_eq",
+    "geq_sos",
+    "one_pole_absorption",
+    "one_pole_sos",
+    "shelf_crossover_omega",
+    "shelving_filter",
+}
 
 # Exported from ``pyFDN`` but intentionally NOT in the API reference.
 #   - low-level linear-algebra / completion helpers (advanced / plumbing)
@@ -41,13 +56,25 @@ INTENTIONALLY_UNDOCUMENTED = {
     "sqrtm_psd",
     # misc internal helper
     "is_almost_zero",
+    # loss taxonomy base classes (subclass to write a loss; not used directly)
+    "ResponseLoss",
+    "ParameterLoss",
+    # excitation plumbing (train_fdn builds this for you)
+    "impulse_excitation",
     # low-level FLAMO graph/recursion manipulation (advanced / plumbing)
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     # submodule aliases (namespaced access, not standalone functions)
     "allpass",
     "allpass_completion",
+    "td",
 }
+
+
+def test_pre_refactor_eq_api_is_removed() -> None:
+    for name in REMOVED_EQ_API:
+        assert not hasattr(pyFDN, name)
+        assert not hasattr(pyFDN.eq, name)
 
 
 def _documented_names() -> set[str]:
