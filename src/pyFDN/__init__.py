@@ -36,7 +36,7 @@ __all__ = [
     "fir_matrix_module",
     "sos_filter_module",
     "hook_module",
-    "DecayFilter",
+    "AttenuationFilter",
     "OutputEQ",
     "audio_metadata",
     "available_audio",
@@ -45,7 +45,12 @@ __all__ = [
     "paper_link",
     "paper_reference",
     "available_fdn_presets",
+    "get_fdn_preset",
     "load_fdn_preset",
+    "FDNPreset",
+    "fdn_preset_from_dict",
+    "fdn_preset_to_dict",
+    "save_fdn_preset",
     "fdn_build_from_dict",
     "fdn_build_to_dict",
     "load_fdn_build",
@@ -148,6 +153,7 @@ __all__ = [
     # training
     "build_fdn",
     "trainable_from_build",
+    "trainable_from_preset",
     "LOSSLESS_ALIAS_DECAY_DB",
     "build_set_decay",
     "Trainable",
@@ -348,7 +354,8 @@ from .auxiliary.utils import (
     skew,
     sq_to_db,
 )
-from .build_io import (
+from .build import (
+    FDNBuild,
     fdn_build_from_dict,
     fdn_build_to_dict,
     load_fdn_build,
@@ -403,10 +410,9 @@ from .generate.construct_paraunitary_from_elementals import (
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
+from .generate.fdn_build_gallery import fdn_build_gallery
 from .generate.fdn_matrix_gallery import (
-    FDNBuild,
     FDNSystem,
-    fdn_build_gallery,
     fdn_matrix_gallery,
     fdn_system_gallery,
     filter_matrix_gallery,
@@ -424,7 +430,15 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .presets import available_fdn_presets, load_fdn_preset
+from .preset import (
+    FDNPreset,
+    available_fdn_presets,
+    fdn_preset_from_dict,
+    fdn_preset_to_dict,
+    get_fdn_preset,
+    load_fdn_preset,
+    save_fdn_preset,
+)
 
 # fdn processing
 from .process import process_fdn
@@ -436,7 +450,7 @@ from .train import (
     L2,
     LOSSLESS_ALIAS_DECAY_DB,
     AsymmetricFlatMagnitude,
-    DecayFilter,
+    AttenuationFilter,
     Energy,
     FlatMagnitude,
     FlatSpectrogram,
@@ -463,6 +477,7 @@ from .train import (
     params,
     train_fdn,
     trainable_from_build,
+    trainable_from_preset,
 )
 
 # state-space translators

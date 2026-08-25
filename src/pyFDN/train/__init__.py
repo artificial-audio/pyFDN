@@ -23,9 +23,10 @@ from .build import (
     build_fdn,
     build_set_decay,
     trainable_from_build,
+    trainable_from_preset,
 )
 from .engine import TrainLog, train_fdn
-from .filters import DecayFilter, EQDesign, OutputEQ
+from .filters import AttenuationFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
     L2,
@@ -51,11 +52,12 @@ __all__ = [
     # build
     "build_fdn",
     "trainable_from_build",
+    "trainable_from_preset",
     "build_set_decay",
     "Trainable",
     "MatrixParam",
     "LOSSLESS_ALIAS_DECAY_DB",
-    "DecayFilter",
+    "AttenuationFilter",
     "OutputEQ",
     "EQDesign",
     # train

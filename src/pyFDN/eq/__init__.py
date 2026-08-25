@@ -8,6 +8,7 @@ from .biquads import (
     peaking_biquad,
 )
 from .design import (
+    EQ_DESIGNS,
     EQDesign,
     decay_to_first_order_shelf,
     decay_to_geq,
@@ -29,6 +30,7 @@ __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
     "EQDesign",
+    "EQ_DESIGNS",
     "SHELVING_CROSSOVER",
     "decay_to_first_order_shelf",
     "decay_to_geq",

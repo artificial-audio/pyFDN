@@ -5,6 +5,10 @@ History
 0.4.1 (2026-08-24)
 ------------------
 
+* Let ``fdn_build_gallery`` and the target-to-EQ functions optionally return
+  the design choices used to produce their coefficients, ready to store in an
+  ``FDNPreset``. Build generation now also exposes the delay distribution and
+  coprimality options and lives separately from the matrix galleries.
 * **Breaking:** rename the ``Fs`` parameter to ``fs`` everywhere it is still
   spelled with a capital -- ``dss_to_flamo``, ``dss_to_pr``, ``delay_module``
   and ``SDN``. Every other sampling-rate argument in the package was already
@@ -15,6 +19,10 @@ History
 0.4.0 (2026-08-23)
 ------------------
 
+* Add ``FDNPreset`` JSON documents: a baked ``FDNBuild`` plus catalog
+  metadata and a controlled vocabulary for delays, matrices, and the three
+  filter hooks. ``trainable_from_preset`` restores filter targets as meaningful
+  FLAMO parameters only when they reproduce the baked coefficients.
 * **Breaking:** replace ``train_fdn``'s ``mode`` string, and the ``target``,
   ``criteria``, ``sparsity_alpha`` and ``mss_nfft`` arguments that went with
   it, with a composed loss object. An objective is now written out --
@@ -37,7 +45,7 @@ History
   from ``rt`` (``LOSSLESS_ALIAS_DECAY_DB`` when ``rt`` is None) and
   ``trainable_from_build`` threads it into every module, so a magnitude
   objective sees a bounded response.
-* Train the decay: ``DecayFilter`` parametrizes the in-loop absorption filter
+* Train the decay: ``AttenuationFilter`` parametrizes the in-loop absorption filter
   by reverberation time per band, so the loop stays contractive for every value
   the parameter can take, and takes either one RT curve for the network or one
   per delay line. ``OutputEQ`` trains the output filter outside the recursion,
@@ -53,7 +61,7 @@ History
   enumerates them.
 * Export the FLAMO graph builders (``assemble_fdn_core``, ``wrap_fdn_shell``,
   ``gain_module``, ``delay_module``, ``matrix_module``, ``fir_matrix_module``,
-  ``sos_filter_module``, ``hook_module``, ``DecayFilter``, ``OutputEQ``) from
+  ``sos_filter_module``, ``hook_module``, ``AttenuationFilter``, ``OutputEQ``) from
   the top-level namespace.
 * Make ``build_to_impz`` apply all three hooks, so it no longer rejects builds
   that carry an output EQ, and make ``extract_build`` refuse a hook it cannot

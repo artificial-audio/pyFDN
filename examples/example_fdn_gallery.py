@@ -199,8 +199,8 @@ def _(pyFDN):
             8,
             rt=2.0,
             rt_nyquist=0.5,
-            eq_db_dc=0.0,
-            eq_db_nyquist=-6.0,
+            output_gain_db=0.0,
+            output_gain_db_nyquist=-6.0,
             rng=0,
         ),
         "multichannel post EQ": pyFDN.fdn_build_gallery(
@@ -208,8 +208,8 @@ def _(pyFDN):
             num_outputs=3,
             rt=2.0,
             rt_nyquist=0.5,
-            eq_db_dc=[0.0, -3.0, -6.0],
-            eq_db_nyquist=-6.0,
+            output_gain_db=[0.0, -3.0, -6.0],
+            output_gain_db_nyquist=-6.0,
             rng=0,
         ),
     }
