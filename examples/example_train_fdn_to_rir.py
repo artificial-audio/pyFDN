@@ -308,7 +308,7 @@ def _(mo):
 
     | what | which parameter | how |
     |---|---|---|
-    | **decay** | `post_delay` hook | trained — as reverberation time in seconds, via `pyFDN.DecayFilter` |
+    | **decay** | `post_delay` hook | trained — as reverberation time in seconds, via `pyFDN.AttenuationFilter` |
     | **colour** | `post_output` hook | trained — as gain in dB, via `pyFDN.OutputEQ` |
     | fine structure of $\lvert H \rvert$ | feedback matrix $A$ | trained — on $SO(N)$ |
     | level | gains $b$, $c$ | trained |
@@ -334,7 +334,7 @@ def _(mo):
     alike the fit diverges within fifty steps, the loss ends four orders of
     magnitude *above* where it started, and the extracted FDN renders as `nan`.
 
-    `pyFDN.DecayFilter` rewrites the filter as a differentiable function of the
+    `pyFDN.AttenuationFilter` rewrites the filter as a differentiable function of the
     reverberation time:
 
     $$\mathrm{RT}_k \;\longrightarrow\; \underbrace{-60\,d_i / (\mathrm{RT}_k f_s)}_\text{dB per round trip} \;\longrightarrow\; \text{design} \;\longrightarrow\; \text{biquads}$$
@@ -346,7 +346,7 @@ def _(mo):
 
     What the RT still needs a floor for is the *sign*. A gradient step that puts
     a band at or below zero turns $-60 d_i / (\mathrm{RT} f_s)$ from an
-    attenuation into a gain. `DecayFilter` floors it the same way whatever the
+    attenuation into a gain. `AttenuationFilter` floors it the same way whatever the
     design — softplus, one round trip of the longest delay line, a knee one floor
     wide — so a band that dips across zero still has a gradient to come back on.
     """),
@@ -413,7 +413,7 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
         # every gain with a gradient: A, b, c and D
         trainable=pyFDN.Trainable(direct=True),
         # the decay, as a reverberation time rather than as coefficients
-        post_delay=pyFDN.DecayFilter(
+        post_delay=pyFDN.AttenuationFilter(
             1.0,
             init_build.delays,
             fs,
