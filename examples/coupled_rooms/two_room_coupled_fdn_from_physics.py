@@ -14,7 +14,7 @@ def _():
     from numpy.typing import NDArray
 
     import pyFDN
-    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
+    from pyFDN.td import TimeVaryingMatrix
     from pyFDN.auxiliary.physics_based_coupling import (
         create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
         create_state_transition_matrix, trajectory, trajectory_with_delays,

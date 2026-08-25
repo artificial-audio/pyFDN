@@ -5,7 +5,7 @@ from typing import Optional, Tuple, List, Union
 from numpy.typing import NDArray, ArrayLike
 
 import pyFDN
-from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
+from pyFDN.td import TimeVaryingMatrix
 
 
 def create_lossless_coupling_matrix(aperture_area: NDArray,
@@ -264,7 +264,7 @@ def run_gfdn(A,
             _B,
             _C,
             np.zeros((num_outputs, num_inputs)),
-            extra_matrix=tv_matrix,
+            post_matrix=tv_matrix,
         )
     return Y
 

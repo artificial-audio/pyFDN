@@ -17,7 +17,7 @@ def _():
     from numpy.typing import NDArray, ArrayLike
 
     import pyFDN
-    from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
+    from pyFDN.td import TimeVaryingMatrix
     from pyFDN.auxiliary.geometry import (get_plane_area, get_room_volume,
                                           get_room_surface_area,
                                           get_room_absorptive_area,
