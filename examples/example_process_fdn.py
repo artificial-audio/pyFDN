@@ -216,8 +216,10 @@ def _(N, np):
 
     # Try this:
     #   D = np.full((1, 1), 0.5)                     -> mix the dry signal back in
-    #   C = np.random.default_rng(0).standard_normal((2, N)) / np.sqrt(N)
-    #       -> a stereo FDN: two decorrelated taps on the same tail
+    #   C, D = pyFDN.random_orthogonal(N)[:2], np.zeros((2, 1))
+    #       -> a stereo FDN: two orthonormal taps on the same tail. Orthogonal,
+    #          not merely different -- Gaussian rows keep a leftover inner
+    #          product, and the channels stay audibly correlated.
     #   B = np.eye(N)[:, :1]                         -> drive one delay line only
     return B, C, D
 
@@ -534,6 +536,65 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ## Now match a real room
+
+    `s3_r4_o` is a measured impulse response of the Promenadikeskus concert hall
+    in Pori, Finland. It is the target.
+
+    Go back up and turn the knobs — `N`, the delay range, the matrix, `target_rt`,
+    the hooks — until your FDN gets as close to it as you can. The printout below
+    compares the two on decay and mixing time; the plot and the two players
+    compare them on everything else.
+
+    Nobody gets all the way there. Where you stop, and what is still different
+    when you do, is the interesting part.
+    """)
+    return
+
+
+@app.cell
+def _(fs, ir, mo, np, pyFDN, warnings):
+    room, _ = pyFDN.load_audio("s3_r4_o", fs=fs)
+    room = room[int(np.argmax(np.abs(room))) :]  # trim to the direct sound
+
+    _room_rt, _bands = pyFDN.estimate_rt_bands(room, fs)
+    _your_rt, _ = pyFDN.estimate_rt_bands(ir, fs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        _room_mix, _ = pyFDN.echo_density(room, n=1024, fs=fs, hop=256)
+        _your_mix, _ = pyFDN.echo_density(ir, n=1024, fs=fs, hop=256)
+
+    print(f"band [Hz]  {np.array2string(_bands, precision=0)}")
+    print(f"the room   {np.round(_room_rt, 2)}  mixes after {_room_mix:.0f} ms")
+    print(
+        f"your FDN   {np.round(_your_rt, 2)}  mixes after "
+        f"{f'{_your_mix:.0f} ms' if _your_mix else 'never'}"
+    )
+
+    mo.vstack(
+        [
+            pyFDN.plot_edc(
+                room,
+                ir,
+                fs=fs,
+                labels=["the room", "your FDN"],
+                normalize=True,
+                title="Energy decay curve — the target and your FDN",
+            ),
+            mo.hstack(
+                [
+                    pyFDN.labeled_audio("the room", pyFDN.peak_normalize(room), fs=fs),
+                    pyFDN.labeled_audio("your FDN", pyFDN.peak_normalize(ir), fs=fs),
+                ]
+            ),
+        ]
+    )
+    return (room,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## Checkpoint
 
     Get an FDN you like the sound of. Then break it on purpose — make it metallic,
@@ -547,8 +608,8 @@ def _(mo):
       feedback path
     - `example_fdn_gallery` — every feedback matrix in the gallery, side by side
     - `example_time_varying_fdn`, `example_scattering_fdn` — beyond the vanilla FDN
-    - `example_train_colorless_FDN` — when there is no closed form left, use
-      gradients
+    - `example_train_fdn_to_rir` — the same room, this time matched by gradient
+      descent instead of by hand
     """)
     return
 

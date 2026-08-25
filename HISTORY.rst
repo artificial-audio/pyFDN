@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.4.1 (2026-08-24)
+------------------
 
 * Let ``fdn_build_gallery`` and the target-to-EQ functions optionally return
   the design choices used to produce their coefficients, ready to store in an
