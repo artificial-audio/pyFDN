@@ -108,7 +108,7 @@ jobs:
     - name: Smoke-test installed wheel outside the repository
       working-directory: /tmp
       run: |
-        python -c "import pyFDN; assert pyFDN.load_audio('synth_dry')[0].size; assert pyFDN.load_fdn_preset('colorless_N4_d1').A.shape == (4, 4); assert pyFDN.paper_reference('Allpass_Feedback_Delay_Networks')['year'] == '2021'"
+        python -c "import pyFDN; assert pyFDN.load_audio('synth_dry')[0].size; assert pyFDN.get_fdn_preset('colorless_N4_d1').build.A.shape == (4, 4); assert pyFDN.paper_reference('Allpass_Feedback_Delay_Networks')['year'] == '2021'"
 
     - name: Assert no decay-estimation extra was pulled in
       run: |

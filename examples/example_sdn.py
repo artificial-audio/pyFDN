@@ -59,8 +59,8 @@ def _(np, pyFDN):
 
     # Wall filters: one first-order shelving EQ per wall, shared by its 5 outputs.
     wall_sos = pyFDN.gain_to_first_order_shelf(
-        gain_dc_db=np.full(6, -1.0),
-        gain_nyquist_db=np.full(6, -6.0),
+        gain_db=np.full(6, -1.0),
+        gain_db_nyquist=np.full(6, -6.0),
         crossover=8000.0,
         fs=fs,
     )

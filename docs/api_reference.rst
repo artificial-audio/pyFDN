@@ -100,10 +100,11 @@ EQ Design (``pyFDN.eq``)
 
 Explicit functions map either decay targets or gain targets onto a named
 filter design. The same functions run in NumPy or Torch; the trainable
-:class:`pyFDN.DecayFilter` and :class:`pyFDN.OutputEQ` modules use these
+:class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
-modules.
+modules. The target-to-EQ functions accept ``return_design=True`` when their
+JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
    :toctree: generated/
@@ -182,7 +183,7 @@ An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
    pyFDN.hook_module
-   pyFDN.DecayFilter
+   pyFDN.AttenuationFilter
    pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
@@ -246,6 +247,11 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
+   pyFDN.get_fdn_preset
+   pyFDN.FDNPreset
+   pyFDN.fdn_preset_to_dict
+   pyFDN.fdn_preset_from_dict
+   pyFDN.save_fdn_preset
    pyFDN.load_fdn_preset
    pyFDN.fdn_build_to_dict
    pyFDN.fdn_build_from_dict
@@ -295,6 +301,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
+   pyFDN.trainable_from_preset
    pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn

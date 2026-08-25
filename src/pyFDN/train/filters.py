@@ -1,6 +1,6 @@
 """FLAMO modules whose parameters are meaningful EQ targets.
 
-``DecayFilter`` maps reverberation time to an in-loop SOS bank;
+``AttenuationFilter`` maps reverberation time to an in-loop SOS bank;
 ``OutputEQ`` maps gains in dB to a post-output SOS bank. Both use the
 same static design functions as NumPy callers.
 """
@@ -65,6 +65,40 @@ def _target(
     return np.ascontiguousarray(target)
 
 
+def _filter_target(
+    value: Any,
+    value_nyquist: Any | None,
+    design: EQDesign,
+    n_channels: int,
+    *,
+    broadcast: bool,
+) -> np.ndarray:
+    if design == "graphic_eq":
+        if value_nyquist is not None:
+            raise ValueError("graphic_eq uses one target array, not a Nyquist target")
+        return _target(value, design, n_channels, broadcast=broadcast)
+
+    nyquist = value if value_nyquist is None else value_nyquist
+    first, last = np.broadcast_arrays(
+        np.asarray(value, dtype=np.float64),
+        np.asarray(nyquist, dtype=np.float64),
+    )
+    target = np.stack((first, last))
+    if target.ndim not in (1, 2):
+        raise ValueError(
+            "endpoint targets must be scalar or one value per channel, "
+            f"got shape {target.shape}"
+        )
+    if target.ndim == 2 and target.shape[1] != n_channels:
+        raise ValueError(
+            f"a per-channel target must have {n_channels} columns, "
+            f"got {target.shape[1]}"
+        )
+    if broadcast and target.ndim == 1:
+        target = np.broadcast_to(target[:, None], (2, n_channels))
+    return np.ascontiguousarray(target)
+
+
 if _HAS_FLAMO:
 
     class _DesignedSOS(dsp.parallelSOSFilter):  # type: ignore[misc]
@@ -120,11 +154,13 @@ if _HAS_FLAMO:
                 **buffers,
             )
 
-    class DecayFilter(_DesignedSOS):
+    class AttenuationFilter(_DesignedSOS):
         """Parallel in-loop SOS bank parametrized by reverberation time.
 
-        ``rt`` is a scalar, one target per design parameter, or a
-        ``(n_parameters, n_delays)`` array for independent delay-line targets.
+        For ``graphic_eq``, ``rt`` is the ten-band target. First-order shelves
+        and one-pole filters use ``rt`` at DC and the separately named
+        ``rt_nyquist`` target; omitting the latter creates a flat target.
+        Targets may additionally carry one value per delay line.
         The filter is implemented with FLAMO's ``parallelSOSFilter`` because an
         FDN applies one SOS cascade to each delay line in parallel.
         """
@@ -135,6 +171,7 @@ if _HAS_FLAMO:
             delays: Any,
             fs: float,
             *,
+            rt_nyquist: Any | None = None,
             design: EQDesign = "graphic_eq",
             rt_crossover: float | None = None,
             nfft: int = 2**14,
@@ -147,7 +184,13 @@ if _HAS_FLAMO:
 
             _validate_filter_design(design)
             delays_array = np.asarray(delays, dtype=np.float64).ravel()
-            rt_array = _target(rt, design, delays_array.size, broadcast=False)
+            rt_array = _filter_target(
+                rt,
+                rt_nyquist,
+                design,
+                delays_array.size,
+                broadcast=False,
+            )
             super().__init__(
                 rt_array,
                 delays_array.size,
@@ -190,7 +233,12 @@ if _HAS_FLAMO:
             return floor * (1.0 + torch.nn.functional.softplus((rt - floor) / floor))
 
     class OutputEQ(_DesignedSOS):
-        """Parallel post-output SOS bank parametrized by gain in dB."""
+        """Parallel SOS bank parametrized by gain in dB.
+
+        For ``graphic_eq``, ``gain_db`` is the ten-band target. First-order
+        shelves and one-pole filters use ``gain_db`` at DC and the separately
+        named ``gain_db_nyquist`` target; omitting it creates a flat target.
+        """
 
         def __init__(
             self,
@@ -198,6 +246,7 @@ if _HAS_FLAMO:
             n_channels: int,
             fs: float,
             *,
+            gain_db_nyquist: Any | None = None,
             design: EQDesign = "graphic_eq",
             crossover: float | None = None,
             nfft: int = 2**14,
@@ -207,7 +256,13 @@ if _HAS_FLAMO:
             requires_grad: bool = True,
         ) -> None:
             _validate_filter_design(design)
-            gains = _target(gain_db, design, int(n_channels), broadcast=True)
+            gains = _filter_target(
+                gain_db,
+                gain_db_nyquist,
+                design,
+                int(n_channels),
+                broadcast=True,
+            )
             super().__init__(
                 gains,
                 int(n_channels),
@@ -234,7 +289,7 @@ else:  # pragma: no cover
                 f"{type(self).__name__} requires flamo (pip install flamo)"
             )
 
-    class DecayFilter(_DesignedSOS):  # type: ignore[no-redef]
+    class AttenuationFilter(_DesignedSOS):  # type: ignore[no-redef]
         """Placeholder used when FLAMO is unavailable."""
 
     class OutputEQ(_DesignedSOS):  # type: ignore[no-redef]
@@ -242,7 +297,7 @@ else:  # pragma: no cover
 
 
 __all__ = [
-    "DecayFilter",
+    "AttenuationFilter",
     "EQDesign",
     "MAX_ATTENUATION_DB",
     "OutputEQ",

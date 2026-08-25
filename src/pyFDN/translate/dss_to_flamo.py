@@ -14,7 +14,7 @@ import numpy as np
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
 try:
     import flamo.processor  # noqa: F401
@@ -165,7 +165,7 @@ def build_to_flamo(
     Build a FLAMO model from a complete :class:`FDNBuild` config.
 
     Thin wrapper over :func:`dss_to_flamo` that unpacks an
-    :class:`~pyFDN.generate.fdn_matrix_gallery.FDNBuild` (as returned by
+    :class:`~pyFDN.FDNBuild` (as returned by
     :func:`pyFDN.fdn_build_gallery`) into its state-space arguments. The build's
     three filter hooks go straight through under the same names: ``post_delay``
     for the in-loop absorption, ``post_matrix`` for the feedback path, and

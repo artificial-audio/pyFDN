@@ -121,7 +121,7 @@ def test_plot_edc_rejects_mismatched_labels():
 
 
 def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
     build = FDNBuild(
         A=np.eye(2),
@@ -168,8 +168,8 @@ def test_plot_FDN_build_renders_multichannel_post_eq():
         num_outputs=3,
         rt=2.0,
         rt_nyquist=0.5,
-        eq_db_dc=[0.0, -3.0, -6.0],
-        eq_db_nyquist=-6.0,
+        output_gain_db=[0.0, -3.0, -6.0],
+        output_gain_db_nyquist=-6.0,
         rng=0,
     )
     fig = pyFDN.plot_FDN_build(build)
