@@ -140,6 +140,11 @@ rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Gain
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
+   pyFDN.td.ControllableFullWaveRect
+   pyFDN.td.SDFD
+   pyFDN.td.RingModulator
+   pyFDN.td.PitchShift
+   pyFDN.td.GranularPitchShift
    pyFDN.td.SOSBank
    pyFDN.td.MatrixFIR
    pyFDN.td.MatrixConvolver
