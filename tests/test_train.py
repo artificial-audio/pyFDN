@@ -1457,3 +1457,39 @@ def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
     designed = pyFDN.decay_to_one_pole(1.5, 0.6, build.delays, build.fs)
     trained = param(one_pole_model, "post_delay").value().detach().numpy()
     np.testing.assert_allclose(trained, designed, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "make_loss",
+    [
+        lambda ref: MatchCumulativeEnergy(ref, window=512),
+        lambda ref: MatchEnergyDecay(ref, window=512),
+        lambda ref: pyFDN.MatchMagnitude(ref),
+        lambda ref: pyFDN.MatchImpulseResponse(ref),
+        lambda ref: MatchSpectrogram(ref, nfft=(256,)),
+        lambda ref: pyFDN.MatchMelSpectrogram(ref, nfft=(256,)),
+    ],
+)
+def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
+    """A loss caches its reference, but only for the response it was built for.
+
+    Reusing one loss object across runs is the normal way a notebook cell works,
+    and the second run may be at another length, dtype or device -- a GPU run
+    after a CPU one used to hand a CPU reference to a CUDA step.
+    """
+    import torch
+
+    from pyFDN.train import Response
+
+    fs = 48000.0
+    rng = np.random.default_rng(7)
+    reference = _decaying_noise(2**13, fs, 0.4, rng)
+    ir = _decaying_noise(2**13, fs, 0.3, rng)
+
+    loss = make_loss(reference)
+    float(loss(Response(h=_as_h(ir), fs=fs)))  # caches against this response
+
+    # Longer, and in another dtype: a fresh loss is the ground truth.
+    long_ir = np.concatenate([ir, np.zeros(2**12)])
+    moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
+    assert float(loss(moved)) == pytest.approx(float(make_loss(reference)(moved)))

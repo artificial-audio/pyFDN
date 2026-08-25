@@ -45,19 +45,37 @@ def align_target(target: Any, response: Response) -> torch.Tensor:
     return torch.as_tensor(aligned, device=response.h.device, dtype=response.h.dtype)
 
 
+def response_key(response: Response) -> tuple[Any, ...]:
+    """What a loss's cached reference is only valid for.
+
+    Anything derived from a target is aligned to one response's shape, device
+    and dtype. Those hold still within a run, so caching is worth it -- but a
+    loss object outlives the run that built it, and the next one may be on a
+    different device (a notebook cell re-run on a GPU is the usual way) or at a
+    different ``nfft``. Caches key on this and rebuild when it changes, rather
+    than handing back a CPU tensor to a CUDA step.
+    """
+    h = response.h
+    return (tuple(h.shape), h.device, h.dtype, response.fs)
+
+
 class _CachedTarget:
-    """Aligns a target once, on the first response it sees.
+    """Aligns a target once per response shape/device/dtype it sees.
 
     The alignment needs the response's length, device and dtype, which are only
-    known at the first step -- but they do not change after it, so the loss
-    holds the raw target and converts lazily.
+    known at the first step -- and do not change within a run -- so the loss
+    holds the raw target and converts lazily, re-aligning if it is later called
+    on a response that no longer matches.
     """
 
     def __init__(self, target: Any) -> None:
         self._raw = target
         self._aligned: torch.Tensor | None = None
+        self._key: tuple[Any, ...] | None = None
 
     def __call__(self, response: Response) -> torch.Tensor:
-        if self._aligned is None:
+        key = response_key(response)
+        if self._aligned is None or self._key != key:
             self._aligned = align_target(self._raw, response)
+            self._key = key
         return self._aligned
