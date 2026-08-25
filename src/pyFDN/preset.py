@@ -135,7 +135,7 @@ def save_fdn_preset(path: str | PathLike[str], preset: FDNPreset) -> None:
     )
 
 
-def load_fdn_preset_file(path: str | PathLike[str]) -> FDNPreset:
+def load_fdn_preset(path: str | PathLike[str]) -> FDNPreset:
     """Load an :class:`FDNPreset` from a JSON file."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -144,7 +144,7 @@ def load_fdn_preset_file(path: str | PathLike[str]) -> FDNPreset:
 
 
 def available_fdn_presets() -> tuple[str, ...]:
-    """Return the names accepted by :func:`load_fdn_preset`."""
+    """Return the names accepted by :func:`get_fdn_preset`."""
     names = []
     for resource in _PRESET_ROOT.iterdir():
         match = re.fullmatch(r"colorless_(init_)?N(\d+)_d(\d+)\.json", resource.name)
@@ -184,11 +184,6 @@ def get_fdn_preset(name: str) -> FDNPreset:
     return FDNPreset(build=fdn_build_from_dict(data), metadata=metadata)
 
 
-def load_fdn_preset(name: str) -> FDNBuild:
-    """Load the exact baked build carried by a packaged preset."""
-    return get_fdn_preset(name).build
-
-
 __all__ = [
     "FDNPreset",
     "available_fdn_presets",
@@ -196,6 +191,5 @@ __all__ = [
     "fdn_preset_to_dict",
     "get_fdn_preset",
     "load_fdn_preset",
-    "load_fdn_preset_file",
     "save_fdn_preset",
 ]

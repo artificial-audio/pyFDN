@@ -84,7 +84,7 @@ def test_fdn_preset_json_round_trip(tmp_path) -> None:
     assert "hooks" not in encoded["design"]
     assert "construction" not in json.dumps(encoded)
 
-    restored = pyFDN.load_fdn_preset_file(path)
+    restored = pyFDN.load_fdn_preset(path)
     assert restored.metadata == preset.metadata
     assert restored.design["delays"] == {
         "type": "geometric",

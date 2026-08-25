@@ -46,14 +46,14 @@ def test_fdn_build_json_round_trip(tmp_path) -> None:
 
 
 def test_fdn_build_sample_rate_override() -> None:
-    build = pyFDN.load_fdn_preset("colorless_N4_d1")
+    build = pyFDN.get_fdn_preset("colorless_N4_d1").build
     data = pyFDN.fdn_build_to_dict(build)
     restored = pyFDN.fdn_build_from_dict(data, fs=96_000)
     assert restored.fs == 96_000
 
 
 def test_fdn_build_rejects_unknown_version() -> None:
-    build = pyFDN.load_fdn_preset("colorless_N4_d1")
+    build = pyFDN.get_fdn_preset("colorless_N4_d1").build
     data = pyFDN.fdn_build_to_dict(build)
     data["version"] = 999
     with pytest.raises(ValueError, match="Unsupported FDN build version"):

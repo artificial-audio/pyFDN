@@ -50,7 +50,6 @@ __all__ = [
     "FDNPreset",
     "fdn_preset_from_dict",
     "fdn_preset_to_dict",
-    "load_fdn_preset_file",
     "save_fdn_preset",
     "fdn_build_from_dict",
     "fdn_build_to_dict",
@@ -438,7 +437,6 @@ from .preset import (
     fdn_preset_to_dict,
     get_fdn_preset,
     load_fdn_preset,
-    load_fdn_preset_file,
     save_fdn_preset,
 )
 

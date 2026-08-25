@@ -26,8 +26,8 @@ public API, independent of the current working directory::
 
     dry, fs = pyFDN.load_audio("synth_dry")
 
-    preset = pyFDN.load_fdn_preset("colorless_N8_d1")
-    reverberator = pyFDN.build_set_decay(preset, 1.5)
+    preset = pyFDN.get_fdn_preset("colorless_N8_d1")
+    reverberator = pyFDN.build_set_decay(preset.build, 1.5)
 
     citation = pyFDN.paper_link("Allpass_Feedback_Delay_Networks")
 
@@ -87,7 +87,7 @@ realization as the preset::
         design=design,
     )
     pyFDN.save_fdn_preset("small-room.json", preset)
-    restored = pyFDN.load_fdn_preset_file("small-room.json")
+    restored = pyFDN.load_fdn_preset("small-room.json")
 
 Metadata is an open dictionary because it is descriptive rather than part of
 the sound. By convention, ``tags`` is a list of strings, so selecting presets

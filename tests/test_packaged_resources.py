@@ -83,9 +83,9 @@ def test_colorless_presets_are_packaged_as_preset_documents() -> None:
     assert build.delays.shape == (4,)
     np.testing.assert_allclose(build.A.T @ build.A, np.eye(4), atol=1e-12)
 
-    with_extension = pyFDN.load_fdn_preset("colorless_N4_d1.json")
-    np.testing.assert_array_equal(with_extension.A, build.A)
-    assert with_extension.fs == 48_000
+    with_extension = pyFDN.get_fdn_preset("colorless_N4_d1.json")
+    np.testing.assert_array_equal(with_extension.build.A, build.A)
+    assert with_extension.build.fs == 48_000
 
 
 def test_every_example_citation_resolves_from_packaged_bibliography() -> None:
