@@ -115,8 +115,11 @@ def _(fs, ir, mo, pyFDN):
             #     ir, fs=fs, title="Linear (Vanilla) FDN"
             # ),
             # pyFDN.plot_spectrogram(ir, fs, title="Impulse response — time-frequency energy"),
-            pyFDN.labeled_audio("Linear (Vanilla) FDN", pyFDN.peak_normalize(ir), fs=fs),
-    ])
+            pyFDN.labeled_audio(
+                "Linear (Vanilla) FDN", pyFDN.peak_normalize(ir), fs=fs
+            ),
+        ]
+    )
     return
 
 
@@ -186,14 +189,18 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         C,
         D,
         post_delay=td.SOSBank(absorption),
-        post_matrix=td.ControllableFullWaveRect(len(delays), alpha=0.25, active_channels=[-1, -3]),
+        post_matrix=td.ControllableFullWaveRect(
+            len(delays), alpha=0.25, active_channels=[-1, -3]
+        ),
     )
 
     mo.hstack(
         [
             pyFDN.labeled_audio("plain FDN", pyFDN.peak_normalize(wet), fs=fs),
             pyFDN.labeled_audio(
-                "Controllable Full-Wave Rectifier FDN", pyFDN.peak_normalize(wet_cfwr), fs=fs
+                "Controllable Full-Wave Rectifier FDN",
+                pyFDN.peak_normalize(wet_cfwr),
+                fs=fs,
             ),
         ]
     )
@@ -233,9 +240,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
     mo.hstack(
         [
             pyFDN.labeled_audio("plain FDN", pyFDN.peak_normalize(wet), fs=fs),
-            pyFDN.labeled_audio(
-                "SDFD FDN", pyFDN.peak_normalize(wet_sdfd), fs=fs
-            ),
+            pyFDN.labeled_audio("SDFD FDN", pyFDN.peak_normalize(wet_sdfd), fs=fs),
         ]
     )
     return
@@ -269,7 +274,13 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
         C,
         D,
         post_matrix=td.SOSBank(absorption),
-        post_delay=td.RingModulator(len(delays), mod_freq=10, mod_amp=np.sqrt(2), fs=fs, active_channels=[4, 5, 6, 7]),
+        post_delay=td.RingModulator(
+            len(delays),
+            mod_freq=10,
+            mod_amp=np.sqrt(2),
+            fs=fs,
+            active_channels=[4, 5, 6, 7],
+        ),
     )
 
     mo.hstack(
@@ -308,7 +319,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
-    delays_2  = pyFDN.sample_delay_lengths(
+    delays_2 = pyFDN.sample_delay_lengths(
         N,
         delay_range=(1000, 6000),  # samples: about 21-62 ms at 48 kHz
         distribution="geometric",
@@ -316,7 +327,6 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
         rng=2,
     )
     absorption_2 = pyFDN.decay_to_geq(target_rt, delays_2, fs)  # (n_sections, 6, N)
-
 
     window_size = 2048
     wet_ps = pyFDN.process_fdn(
@@ -327,15 +337,20 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
         C,
         D,
         post_matrix=td.SOSBank(absorption_2),
-        post_delay=td.PitchShift(len(delays_2), max_delay_samps=window_size * 2, window_size = window_size, transpose_cents=-700, fs=fs, active_channels=[-1,-2]),
+        post_delay=td.PitchShift(
+            len(delays_2),
+            max_delay_samps=window_size * 2,
+            window_size=window_size,
+            transpose_cents=-700,
+            fs=fs,
+            active_channels=[-1, -2],
+        ),
     )
 
     mo.hstack(
         [
             pyFDN.labeled_audio("plain FDN", pyFDN.peak_normalize(wet), fs=fs),
-            pyFDN.labeled_audio(
-                "Pitch Shift FDN", pyFDN.peak_normalize(wet_ps), fs=fs
-            ),
+            pyFDN.labeled_audio("Pitch Shift FDN", pyFDN.peak_normalize(wet_ps), fs=fs),
         ]
     )
     return absorption_2, delays_2
@@ -369,7 +384,15 @@ def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
         C,
         D,
         post_matrix=td.SOSBank(absorption_2),
-        post_delay=td.GranularPitchShift(len(delays_2), max_delay_samps=grain_dur_samps * 4, grain_dur_samps=grain_dur_samps, transpose_cents=700, active_channels=[-1,]),
+        post_delay=td.GranularPitchShift(
+            len(delays_2),
+            max_delay_samps=grain_dur_samps * 4,
+            grain_dur_samps=grain_dur_samps,
+            transpose_cents=700,
+            active_channels=[
+                -1,
+            ],
+        ),
     )
 
     mo.hstack(

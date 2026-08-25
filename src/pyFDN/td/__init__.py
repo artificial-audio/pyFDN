@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from pyFDN.td.connectors import Parallel, Recursion, Series
 from pyFDN.td.operators import (
+    SDFD,
     AbsoluteValue,
     ControllableFullWaveRect,
     Delay,
@@ -40,7 +41,6 @@ from pyFDN.td.operators import (
     PitchShift,
     RecursionState,
     RingModulator,
-    SDFD,
     SOSBank,
     TimeOperator,
     TimeVaryingMatrix,

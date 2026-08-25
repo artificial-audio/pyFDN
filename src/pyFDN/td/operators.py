@@ -17,6 +17,7 @@ delay lines.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -129,6 +130,7 @@ class AbsoluteValue(TimeOperator):
         if x.shape[1] != self.in_channels:
             raise ValueError(f"AbsoluteValue expects {self.in_channels} input channels")
         return np.abs(x)
+
 
 class DCBlocker(TimeOperator):
     """Stateful per-channel first-order DC blocker with optional slow energy
@@ -250,11 +252,11 @@ class ControllableFullWaveRect(TimeOperator):
         self._mask = np.zeros(self.in_channels, dtype=bool)
         self._mask[np.asarray(active_channels)] = True
 
-    def anti_dev(self, x):
+    def anti_dev(self, x: np.ndarray) -> np.ndarray:
         y = 0.5 * x * np.abs(x)
         return y
 
-    def abs(self, x: ArrayLike) -> np.ndarray:
+    def abs(self, x: np.ndarray) -> np.ndarray:
         # x_prev[n] = x[n - 1], carrying the last sample of the previous block
         x_prev = np.concatenate([self.state, x[:-1]], axis=0)
         den = x - x_prev
@@ -267,7 +269,9 @@ class ControllableFullWaveRect(TimeOperator):
     def filter(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
-            raise ValueError(f"ControllableFullWaveRect expects {self.in_channels} input channels")
+            raise ValueError(
+                f"ControllableFullWaveRect expects {self.in_channels} input channels"
+            )
         y = self.g_cfwr * ((1 - self.alpha) * x + self.alpha * self.abs(x))
         y = self.dc_blocker.filter(y)
         out = x.copy()
@@ -475,6 +479,11 @@ class PitchShift(TimeOperator):
         self.phase_2 = 0.5
 
 
+class _Grain(TypedDict):
+    read_ptr: float
+    pos: int
+
+
 class GranularPitchShift(TimeOperator):
     """Stateful, controllable granular pitch shifter.
 
@@ -534,7 +543,7 @@ class GranularPitchShift(TimeOperator):
         age = self.rng.integers(self.grain_dur, max_age + self.grain_dur)
         return float((self.write_ptr - int(age)) % self.max_delay)
 
-    def _new_grain(self, phase_offset: int = 0) -> dict:
+    def _new_grain(self, phase_offset: int = 0) -> _Grain:
         return {
             "read_ptr": self._random_read_start(),
             "pos": phase_offset % self.grain_dur,
@@ -572,7 +581,9 @@ class GranularPitchShift(TimeOperator):
     def filter(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
-            raise ValueError(f"GranularPitchShift expects {self.in_channels} input channels")
+            raise ValueError(
+                f"GranularPitchShift expects {self.in_channels} input channels"
+            )
 
         out = x.copy()
         for i in range(x.shape[0]):
