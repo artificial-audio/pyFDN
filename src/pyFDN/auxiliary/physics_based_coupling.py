@@ -8,7 +8,9 @@ import pyFDN
 from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
 
 
-def make_beta(aperture_area: NDArray, volume: ArrayLike, c: float = 343):
+def create_lossless_coupling_matrix(aperture_area: NDArray,
+                                    volume: ArrayLike,
+                                    c: float = 343):
     """Create the coupling coefficient from Cremer-Muller theory"""
     num_rooms = len(volume)
     beta = np.zeros((num_rooms, num_rooms))
@@ -21,13 +23,15 @@ def make_beta(aperture_area: NDArray, volume: ArrayLike, c: float = 343):
     return beta
 
 
-def make_gamma(absorp_area: List, volume: List, c: float = 343):
+def create_diagonal_absorption_matrix(absorp_area: List,
+                                      volume: List,
+                                      c: float = 343):
     """Create the diagonal absorption matrix from Cremer-Muller theory"""
     gamma = (c * absorp_area) / (4 * volume)
     return np.diag(gamma)
 
 
-def make_Q(beta: NDArray):
+def create_state_transition_matrix(beta: NDArray):
     """Create the state transition matrix of the CT system from Cremer-Muller theory"""
     Q = beta.copy()
     np.fill_diagonal(Q, -beta.sum(axis=1))
@@ -147,7 +151,7 @@ def trajectory_with_delays(
     return w, out
 
 
-def make_theta(beta: NDArray, dt_i: List) -> NDArray:
+def get_coupling_angles(beta: NDArray, dt_i: List) -> NDArray:
     """
     Get the coupling angles from the coupling coefficients
     and mean free path lengths for all FDNs
@@ -164,7 +168,7 @@ def make_theta(beta: NDArray, dt_i: List) -> NDArray:
     return theta
 
 
-def make_K(theta: NDArray):
+def get_coupling_matrix(theta: NDArray):
     """Construct a skew symmetric matrix from the coupling coefficients"""
     tri = np.triu(theta, 1)
     return tri - tri.T
@@ -265,7 +269,8 @@ def run_gfdn(A,
     return Y
 
 
-def gfdn_ledger(Y: NDArray, num_rooms: int, Nroom: int, delays: ArrayLike):
+def gfdn_energy_ledger(Y: NDArray, num_rooms: int, Nroom: int,
+                       delays: ArrayLike):
     """
     Calculate the GFDN energy ledger
     Args:

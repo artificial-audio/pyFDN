@@ -15,10 +15,11 @@ def _():
 
     import pyFDN
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
-    from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
-                                                        trajectory, trajectory_with_delays,
-                                                        make_theta, make_K, get_decay_matrix, get_feedback_matrix,
-                                                        run_gfdn, gfdn_ledger)
+    from pyFDN.auxiliary.physics_based_coupling import (
+        create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
+        create_state_transition_matrix, trajectory, trajectory_with_delays,
+        get_coupling_angles, get_coupling_matrix, get_decay_matrix,
+        get_feedback_matrix, run_gfdn, gfdn_energy_ledger)
 
     return (
         NDArray,
@@ -26,12 +27,12 @@ def _():
         block_diag,
         get_decay_matrix,
         get_feedback_matrix,
-        gfdn_ledger,
-        make_K,
-        make_Q,
-        make_beta,
-        make_gamma,
-        make_theta,
+        gfdn_energy_ledger,
+        get_coupling_matrix,
+        create_state_transition_matrix,
+        create_lossless_coupling_matrix,
+        create_diagonal_absorption_matrix,
+        get_coupling_angles,
         mo,
         np,
         plt,
@@ -67,9 +68,16 @@ def _(mo):
                       step=10,
                       label="room 2 volume $V_2$ (m³)")
 
-    a1 = mo.ui.slider(0, 1, value = 0.1, step = 0.05, label = "room 1 absorption $a_1$")
-    a2 = mo.ui.slider(0, 1, value = 0.3, step = 0.05, label = "room 2 absorption $a_2$")
-
+    a1 = mo.ui.slider(0,
+                      1,
+                      value=0.1,
+                      step=0.05,
+                      label="room 1 absorption $a_1$")
+    a2 = mo.ui.slider(0,
+                      1,
+                      value=0.3,
+                      step=0.05,
+                      label="room 2 absorption $a_2$")
 
     S12 = mo.ui.slider(0.1,
                        10.0,
@@ -88,7 +96,11 @@ def _(mo):
                        step=0.25,
                        label="impulse‑response length (s)")
 
-    avg_delays = mo.ui.slider(100, 10000, value=1000, step=100, label="Avg delay line length in samples")
+    avg_delays = mo.ui.slider(100,
+                              10000,
+                              value=1000,
+                              step=100,
+                              label="Avg delay line length in samples")
 
     mo.md(
         f"### Controls\n{V1}\n\n{V2}\n\n{a1}\n\n{a2}\n\n{S12}\n\n{Nper}\n\n{dur}\n\n{avg_delays}"
@@ -97,7 +109,9 @@ def _(mo):
 
 
 @app.cell
-def _(S12, V1, V2, a1, a2, make_Q, make_beta, make_gamma, mo, np):
+def _(S12, V1, V2, a1, a2, create_state_transition_matrix,
+      create_lossless_coupling_matrix, create_diagonal_absorption_matrix, mo,
+      np):
     # --- Cremer-Muller generators for the two topologies -----------------------
     c = 343.0
     V = np.array([V1.value, V2.value])
@@ -105,12 +119,12 @@ def _(S12, V1, V2, a1, a2, make_Q, make_beta, make_gamma, mo, np):
     num_rooms = 2
 
     S = np.array([[0, S12.value], [S12.value, 0]])
-    beta = make_beta(S, V)
-    Q = make_Q(beta)
+    beta = create_lossless_coupling_matrix(S, V)
+    Q = create_state_transition_matrix(beta)
 
     # assuming a perfect cube
     _A = 6 * (np.cbrt(V)**2) * absorp
-    gamma = make_gamma(_A, V)
+    gamma = create_diagonal_absorption_matrix(_A, V)
 
     mo.md(rf"""
     ## 0 · Physical generators
@@ -137,10 +151,13 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
     M_avg = avg_delays.value
 
     gscale = V[0] / V[1]
-    d2 = pyFDN.sample_delay_lengths(N2, (M_avg * 0.5, M_avg * 1.5), coprime=True, rng=122)
+    d2 = pyFDN.sample_delay_lengths(N2, (M_avg * 0.5, M_avg * 1.5),
+                                    coprime=True,
+                                    rng=122)
     d1 = pyFDN.sample_delay_lengths(
-        N1, (int(M_avg * 0.5 * gscale), int(M_avg * 1.5 * gscale)), coprime=True, rng=331
-    )
+        N1, (int(M_avg * 0.5 * gscale), int(M_avg * 1.5 * gscale)),
+        coprime=True,
+        rng=331)
     delays = np.concatenate([d1, d2]).astype(int)
     delays_per_fdn = np.asarray([delays[:N1], delays[N1:]], dtype=np.int32)
     M1, M2 = int(d1.sum()), int(d2.sum())
@@ -149,7 +166,7 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
 
     k1 = Nroom / np.sum(delays[:N1])
     k2 = Nroom / np.sum(delays[N1:])
-    dt_i = 1.0 / (np.array([k1, k2], dtype=np.float32)  * fs)
+    dt_i = 1.0 / (np.array([k1, k2], dtype=np.float32) * fs)
 
     mo.md(rf"""
     ## 1 · Geometry — $M_i \propto V_i$, equal $N_i$ (so $\mathbf D=\mathbf I$, no weighting needed)
@@ -165,17 +182,19 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
 
 
 @app.cell
-def _(beta, dt_i, make_K, make_theta, mo, np, num_rooms):
-    theta = make_theta(beta, dt_i)
-    K = make_K(theta)
-    R_room = np.array([[np.cos(theta[0,1]), np.sin(theta[0, 1])],[-np.sin(theta[1, 0]), np.cos(theta[1, 0])]])
+def _(beta, dt_i, get_coupling_matrix, get_coupling_angles, mo, np, num_rooms):
+    theta = get_coupling_angles(beta, dt_i)
+    K = get_coupling_matrix(theta)
+    R_room = np.array([[np.cos(theta[0, 1]),
+                        np.sin(theta[0, 1])],
+                       [-np.sin(theta[1, 0]),
+                        np.cos(theta[1, 0])]])
 
     # sanity check: beta_ij*dt_i should equal beta_ji*dt_j (design consistency)
     _check = []
     for _i in range(num_rooms):
         for _j in range(_i + 1, num_rooms):
-            _check.append(
-                (beta[_i, _j] * dt_i[_i], beta[_j, _i] * dt_i[_j]))
+            _check.append((beta[_i, _j] * dt_i[_i], beta[_j, _i] * dt_i[_j]))
 
     mo.md(rf"""
     ## 2 · Pairwise angles $\theta_{{ij}}$ (rate‑matched, $\sin^2\theta_{{ij}}=\beta_{{ij}}\Delta t_i$)
@@ -189,7 +208,7 @@ def _(beta, dt_i, make_K, make_theta, mo, np, num_rooms):
     Consistency check ($\beta_{{ij}}\Delta t_i$ vs. $\beta_{{ji}}\Delta t_j$, should match by the $\Delta t_i\propto V_i$
     design): edge 1–2: ${_check[0][0]:.5f}$ vs ${_check[0][1]:.5f}$;
     """)
-    return (R_room,)
+    return (R_room, )
 
 
 @app.cell
@@ -216,9 +235,8 @@ def _(
     modulation_frequency = 1.0  # hz
     modulation_amplitude = 3.0
     spread = 0.3
-    tv_matrix = TimeVaryingMatrix(
-            Ntot, modulation_frequency, modulation_amplitude, fs, spread
-        )
+    tv_matrix = TimeVaryingMatrix(Ntot, modulation_frequency,
+                                  modulation_amplitude, fs, spread)
 
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2))
@@ -227,14 +245,12 @@ def _(
         rho = np.sqrt(ratio_mismatch)
         return block_diag(rho * np.eye(N1), np.eye(N2))
 
-
     Gamma = get_decay_matrix(gamma, delays_per_fdn, fs)
     D = compensating_matrix()
 
     A = get_feedback_matrix(R_room, Qblocks, N1)
-    A_lossy = A @ Gamma 
+    A_lossy = A @ Gamma
     _ok = pyFDN.is_unilossless(A)
-
 
     mo.md(rf"""
     ## 3 · The two GFDN feedback matrices
@@ -256,7 +272,7 @@ def _(
     delays,
     dur,
     fs,
-    gfdn_ledger,
+    gfdn_energy_ledger,
     np,
     num_rooms,
     run_gfdn,
@@ -270,11 +286,23 @@ def _(
 
     # output taken from all rooms
     C_lines = np.eye(Ntot)
-    Y = run_gfdn(A, B, C_lines, delays, n_samp, _src=[0, 1], tv_matrix=tv_matrix)
-    Y_lossy = run_gfdn(A_lossy, B, C_lines, delays, n_samp, _src=[0, 1], tv_matrix=tv_matrix)
+    Y = run_gfdn(A,
+                 B,
+                 C_lines,
+                 delays,
+                 n_samp,
+                 _src=[0, 1],
+                 tv_matrix=tv_matrix)
+    Y_lossy = run_gfdn(A_lossy,
+                       B,
+                       C_lines,
+                       delays,
+                       n_samp,
+                       _src=[0, 1],
+                       tv_matrix=tv_matrix)
 
-    E_ex, n_ex = gfdn_ledger(Y, num_rooms, N1, delays)
-    E_ex_lossy, _ = gfdn_ledger(Y_lossy, num_rooms, N1, delays)
+    E_ex, n_ex = gfdn_energy_ledger(Y, num_rooms, N1, delays)
+    E_ex_lossy, _ = gfdn_energy_ledger(Y_lossy, num_rooms, N1, delays)
 
     return E_ex, E_ex_lossy, Y, Y_lossy, n_ex, n_samp
 
@@ -284,7 +312,12 @@ def _(Q, fs, gamma, n_samp, np, num_rooms, trajectory):
     # --- True physical trajectory e(t) = expm(Q t) e(0), source = room 1 -------
     tsec = np.arange(n_samp) / fs
     _, Eref = trajectory(Q, np.array([1.0, 0]), np.eye(num_rooms), fs, n_samp)
-    _, Eref_lossy = trajectory(Q, np.array([1.0, 0]), np.eye(num_rooms), fs, n_samp, gamma=gamma)
+    _, Eref_lossy = trajectory(Q,
+                               np.array([1.0, 0]),
+                               np.eye(num_rooms),
+                               fs,
+                               n_samp,
+                               gamma=gamma)
     return Eref, Eref_lossy, tsec
 
 
@@ -309,12 +342,13 @@ def _(
     _colors = ["C0", "C1"]
     _targets = V / V.sum()
 
-    def db(_Y: NDArray, is_energy_signal:bool=True):
+    def db(_Y: NDArray, is_energy_signal: bool = True):
         _tmp = np.log10(np.abs(_Y) + 1e-10)
-        return 10*_tmp if is_energy_signal else 20*_tmp
+        return 10 * _tmp if is_energy_signal else 20 * _tmp
 
-    for _ax, _Eex, _Eref, _title in zip(
-            _axs, [E_ex, db(E_ex_lossy)], [Eref, db(Eref_lossy)],["Lossless", "Lossy"]):
+    for _ax, _Eex, _Eref, _title in zip(_axs, [E_ex, db(E_ex_lossy)],
+                                        [Eref, db(Eref_lossy)],
+                                        ["Lossless", "Lossy"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
                      _Eex[0, :, _r],
@@ -340,7 +374,7 @@ def _(
         fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (db,)
+    return (db, )
 
 
 @app.cell
@@ -359,8 +393,7 @@ def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np):
     _M1, _M2 = int(delays[:N1].sum()), int(delays[N1:].sum())
     _equipartition_split = np.array([_M1, _M2]) / (_M1 + _M2)
 
-    mo.md(
-        rf"""
+    mo.md(rf"""
     ## 4 · How closely does the GFDN track the physics?
 
     Max absolute deviation between the exact GFDN ledger and the true $e^{{tQ}}$ trajectory over the
@@ -384,8 +417,7 @@ def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np):
     live delay-line/matrix realization; if it already matches $M_i/M_{{\rm tot}}$ but that itself is
     off from $V_i/V_{{\rm tot}}$, the fix is tightening the delay-length design so $M_1/M_2$ lands
     closer to $V_1/V_2$.
-    """
-    )
+    """)
     return
 
 
@@ -401,7 +433,8 @@ def _(mo):
 def _(N1, Y, Y_lossy, mo, np, num_rooms, plt, tsec):
     # physical receivers: one microphone per room = coherent sum of its lines
     h_mic = np.stack([Y[:, :, :N1].sum(-1), Y[:, :, N1:].sum(-1)], axis=-1)
-    h_mic_lossy = np.stack([Y_lossy[:, :, :N1].sum(-1), Y_lossy[:, :, N1:].sum(-1)], axis=-1)
+    h_mic_lossy = np.stack(
+        [Y_lossy[:, :, :N1].sum(-1), Y_lossy[:, :, N1:].sum(-1)], axis=-1)
 
     # --- The four impulse responses (microphone = sum of the room's lines) -----
     _fig, _axs = plt.subplots(2, 2, figsize=(8, 4.6), sharex=True, sharey=True)
@@ -410,16 +443,25 @@ def _(N1, Y, Y_lossy, mo, np, num_rooms, plt, tsec):
     for _src in range(num_rooms):
         for _rec in range(num_rooms):
             _ax = _axs[_src, _rec]
-            _ax.plot(tsec[:_nmax] * 1000, h_mic[_src, :_nmax, _rec], lw=0.4, color="C0")
-            _ax.plot(tsec[:_nmax] * 1000, h_mic_lossy[_src, :_nmax, _rec], lw=0.4, color="C2")
-            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}", fontsize=9)
+            _ax.plot(tsec[:_nmax] * 1000,
+                     h_mic[_src, :_nmax, _rec],
+                     lw=0.4,
+                     color="C0")
+            _ax.plot(tsec[:_nmax] * 1000,
+                     h_mic_lossy[_src, :_nmax, _rec],
+                     lw=0.4,
+                     color="C2")
+            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}",
+                          fontsize=9)
     for _ax in _axs[-1]:
         _ax.set_xlabel("time (ms)")
     for _ax in _axs[:, 0]:
         _ax.set_ylabel("$h(t)$")
-    _ymax = np.abs(h_mic[:, : _nmax]).max()
+    _ymax = np.abs(h_mic[:, :_nmax]).max()
     _axs[0, 0].set_ylim(-_ymax, _ymax)
-    _fig.suptitle("Four lossless + lossy impulse responses (first %.0f ms)" % (_tmax * 1000), fontsize=10)
+    _fig.suptitle("Four lossless + lossy impulse responses (first %.0f ms)" %
+                  (_tmax * 1000),
+                  fontsize=10)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
     return h_mic, h_mic_lossy
@@ -435,17 +477,12 @@ def _(mo):
 
 @app.cell
 def _(fs, h_mic, mo, num_rooms):
-    mo.vstack(
-        [
-        [
-            mo.vstack(
-                [mo.md(f"src={_src}, rec={_rec}"), mo.audio(src=h_mic[_src, :, _rec].T, rate=fs)]
-            )
-            for _rec in range(num_rooms)
-            for _src in range(num_rooms)
-        ]
-        ]
-    )
+    mo.vstack([[
+        mo.vstack([
+            mo.md(f"src={_src}, rec={_rec}"),
+            mo.audio(src=h_mic[_src, :, _rec].T, rate=fs)
+        ]) for _rec in range(num_rooms) for _src in range(num_rooms)
+    ]])
     return
 
 
@@ -459,38 +496,46 @@ def _(mo):
 
 @app.cell
 def _(fs, h_mic_lossy, mo, num_rooms):
-    mo.vstack(
-        [
-            [
-                mo.vstack(
-                    [mo.md(f"src={_src}, rec={_rec}"), mo.audio(src=h_mic_lossy[_src, :, _rec].T, rate=fs)]
-                )
-                for _src in range(num_rooms)
-                for _rec in range(num_rooms)
-            ]
-        ]
-    )
+    mo.vstack([[
+        mo.vstack([
+            mo.md(f"src={_src}, rec={_rec}"),
+            mo.audio(src=h_mic_lossy[_src, :, _rec].T, rate=fs)
+        ]) for _src in range(num_rooms) for _rec in range(num_rooms)
+    ]])
     return
 
 
 @app.cell
 def _(db, h_mic, h_mic_lossy, mo, num_rooms, plt, pyFDN, tsec):
     _fig, _axs = plt.subplots(2, 2, figsize=(8, 4.6), sharex=True, sharey=True)
-    _tmax =  tsec[-1]
+    _tmax = tsec[-1]
     _nmax = int(_tmax * len(tsec) / tsec[-1])
     for _src in range(num_rooms):
         for _rec in range(num_rooms):
             _ax = _axs[_src, _rec]
-            _ax.plot(tsec[:_nmax] * 1000, db(pyFDN.auxiliary.acoustics.edc(h_mic[_src, :_nmax, _rec])), lw=1.0, color="C0")
-            _ax.plot(tsec[:_nmax] * 1000, db(pyFDN.auxiliary.acoustics.edc(h_mic_lossy[_src, :_nmax, _rec])), lw=1.0, color="C2")
-            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}", fontsize=9)
+            _ax.plot(tsec[:_nmax] * 1000,
+                     db(
+                         pyFDN.auxiliary.acoustics.edc(h_mic[_src, :_nmax,
+                                                             _rec])),
+                     lw=1.0,
+                     color="C0")
+            _ax.plot(tsec[:_nmax] * 1000,
+                     db(
+                         pyFDN.auxiliary.acoustics.edc(
+                             h_mic_lossy[_src, :_nmax, _rec])),
+                     lw=1.0,
+                     color="C2")
+            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}",
+                          fontsize=9)
     for _ax in _axs[-1]:
         _ax.set_xlabel("time (ms)")
     for _ax in _axs[:, 0]:
         _ax.set_ylabel("$h(t)$")
     _axs[0, 0].set_ylim(-100, 20)
-    _axs[0,0].legend(['Lossless', 'Lossy'])
-    _fig.suptitle("Four lossless + lossy EDCs (first %.0f ms)" % (_tmax * 1000), fontsize=10)
+    _axs[0, 0].legend(['Lossless', 'Lossy'])
+    _fig.suptitle("Four lossless + lossy EDCs (first %.0f ms)" %
+                  (_tmax * 1000),
+                  fontsize=10)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
     return

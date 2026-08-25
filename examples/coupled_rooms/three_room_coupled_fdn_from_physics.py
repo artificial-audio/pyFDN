@@ -13,10 +13,11 @@ def _():
 
     import pyFDN
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
-    from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
-                                                        trajectory, trajectory_with_delays,
-                                                        make_theta, make_K, get_decay_matrix, get_feedback_matrix,
-                                                        run_gfdn, gfdn_ledger)
+    from pyFDN.auxiliary.physics_based_coupling import (
+        create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
+        create_state_transition_matrix, trajectory, trajectory_with_delays,
+        get_coupling_angles, get_coupling_matrix, get_decay_matrix,
+        get_feedback_matrix, run_gfdn, gfdn_energy_ledger)
 
     return (
         TimeVaryingMatrix,
@@ -24,12 +25,12 @@ def _():
         expm,
         get_decay_matrix,
         get_feedback_matrix,
-        gfdn_ledger,
-        make_K,
-        make_Q,
-        make_beta,
-        make_gamma,
-        make_theta,
+        gfdn_energy_ledger,
+        get_coupling_matrix,
+        create_state_transition_matrix,
+        create_lossless_coupling_matrix,
+        create_diagonal_absorption_matrix,
+        get_coupling_angles,
         mo,
         np,
         plt,
@@ -92,9 +93,21 @@ def _(mo):
                        step=0.1,
                        label="aperture $S_{13}$ (m²) — complete case only")
 
-    a1 = mo.ui.slider(0, 1, value = 0.1, step = 0.05, label = "room 1 absorption $a_1$")
-    a2 = mo.ui.slider(0, 1, value = 0.3, step = 0.05, label = "room 2 absorption $a_2$")
-    a3 = mo.ui.slider(0, 1, value = 0.2, step = 0.05, label = "room 3 absorption $a_3$")
+    a1 = mo.ui.slider(0,
+                      1,
+                      value=0.1,
+                      step=0.05,
+                      label="room 1 absorption $a_1$")
+    a2 = mo.ui.slider(0,
+                      1,
+                      value=0.3,
+                      step=0.05,
+                      label="room 2 absorption $a_2$")
+    a3 = mo.ui.slider(0,
+                      1,
+                      value=0.2,
+                      step=0.05,
+                      label="room 3 absorption $a_3$")
 
     Nper = mo.ui.slider(4,
                         48,
@@ -102,8 +115,11 @@ def _(mo):
                         step=2,
                         label="delay lines per room $N_i$ (equal)")
 
-    avg_delays = mo.ui.slider(100, 10000, value=5000, step=100, label="Avg delay line length in samples")
-
+    avg_delays = mo.ui.slider(100,
+                              10000,
+                              value=5000,
+                              step=100,
+                              label="Avg delay line length in samples")
 
     dur = mo.ui.slider(0.5,
                        10.0,
@@ -127,9 +143,9 @@ def _(
     a1,
     a2,
     a3,
-    make_Q,
-    make_beta,
-    make_gamma,
+    create_state_transition_matrix,
+    create_lossless_coupling_matrix,
+    create_diagonal_absorption_matrix,
     mo,
     np,
 ):
@@ -145,13 +161,15 @@ def _(
                             S13.value], [S12.value, 0, S23.value],
                            [S13.value, S23.value, 0]])
 
-    beta_chain, beta_complete = make_beta(S_chain, V), make_beta(S_complete, V)
-    Q_chain, Q_complete = make_Q(beta_chain), make_Q(beta_complete)
+    beta_chain, beta_complete = create_lossless_coupling_matrix(
+        S_chain, V), create_lossless_coupling_matrix(S_complete, V)
+    Q_chain, Q_complete = create_state_transition_matrix(
+        beta_chain), create_state_transition_matrix(beta_complete)
 
     # assuming a perfect cube
     _A = 6 * (np.cbrt(V)**2) * absorp
     # get the diagonal absorption matrix
-    gamma = make_gamma(_A, V)
+    gamma = create_diagonal_absorption_matrix(_A, V)
 
     mo.md(rf"""
     ## 0 · Physical generators
@@ -182,15 +200,20 @@ def _(Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
     delays = []
 
     for _i in range(num_rooms):
-        delays.append(pyFDN.sample_delay_lengths(
-            Nroom, (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])), coprime=True, rng=331 + 10*_i))
+        delays.append(
+            pyFDN.sample_delay_lengths(
+                Nroom,
+                (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])),
+                coprime=True,
+                rng=331 + 10 * _i))
 
     delays = np.concatenate(delays).astype(int)
-    M1, M2, M3 = int(delays[:N1].sum()), int(delays[N1:N1+N2].sum()), int(delays[N1+N2:].sum())
-    delays_per_fdn = np.asarray([delays[:N1], delays[N1:N1+N2], delays[N1+N2:]], dtype=np.int32)
+    M1, M2, M3 = int(delays[:N1].sum()), int(delays[N1:N1 + N2].sum()), int(
+        delays[N1 + N2:].sum())
+    delays_per_fdn = np.asarray(
+        [delays[:N1], delays[N1:N1 + N2], delays[N1 + N2:]], dtype=np.int32)
     M = np.asarray([M1, M2, M3])
     dt_i = M / (Nroom * fs)
-
 
     mo.md(rf"""
     ## 1 · Geometry — $M_i \propto V_i$, equal $N_i$ (so $\mathbf D=\mathbf I$, no weighting needed)
@@ -211,14 +234,15 @@ def _(
     beta_complete,
     dt_i,
     expm,
-    make_K,
-    make_theta,
+    get_coupling_matrix,
+    get_coupling_angles,
     mo,
     num_rooms,
 ):
-    theta_chain, theta_complete = make_theta(beta_chain, dt_i), make_theta(
-        beta_complete, dt_i)
-    K_chain, K_complete = make_K(theta_chain), make_K(theta_complete)
+    theta_chain, theta_complete = get_coupling_angles(
+        beta_chain, dt_i), get_coupling_angles(beta_complete, dt_i)
+    K_chain, K_complete = get_coupling_matrix(
+        theta_chain), get_coupling_matrix(theta_complete)
     R_room_chain, R_room_complete = expm(K_chain), expm(K_complete)
 
     # sanity check: beta_ij*dt_i should equal beta_ji*dt_j (design consistency)
@@ -273,9 +297,8 @@ def _(
     modulation_frequency = 1.0  # hz
     modulation_amplitude = 3.0
     spread = 0.3
-    tv_matrix = TimeVaryingMatrix(
-            Ntot, modulation_frequency, modulation_amplitude, fs, spread
-        )
+    tv_matrix = TimeVaryingMatrix(Ntot, modulation_frequency,
+                                  modulation_amplitude, fs, spread)
 
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2),
@@ -315,7 +338,7 @@ def _(
     delays,
     dur,
     fs,
-    gfdn_ledger,
+    gfdn_energy_ledger,
     np,
     num_rooms,
     run_gfdn,
@@ -324,21 +347,33 @@ def _(
     n_samp = int(dur.value * fs)
     B = np.zeros((Ntot, num_rooms))
     B[:N1, 0] = 1.0 / np.sqrt(N1)
-    B[N1:N1+N2, 1] = 1.0 / np.sqrt(N2)
-    B[N1+N2:, 2] = 1.0 / np.sqrt(N3)
+    B[N1:N1 + N2, 1] = 1.0 / np.sqrt(N2)
+    B[N1 + N2:, 2] = 1.0 / np.sqrt(N3)
     # output taken from all rooms
     C_lines = np.eye(Ntot)
     src = 0
 
     Y_chain = run_gfdn(A_chain, B, C_lines, delays, n_samp, _src=src)
-    Y_chain_lossy = run_gfdn(A_chain_lossy, B, C_lines, delays, n_samp, _src=src)
+    Y_chain_lossy = run_gfdn(A_chain_lossy,
+                             B,
+                             C_lines,
+                             delays,
+                             n_samp,
+                             _src=src)
     Y_complete = run_gfdn(A_complete, B, C_lines, delays, n_samp, src)
-    Y_complete_lossy = run_gfdn(A_complete_lossy, B, C_lines, delays, n_samp, _src=src)
+    Y_complete_lossy = run_gfdn(A_complete_lossy,
+                                B,
+                                C_lines,
+                                delays,
+                                n_samp,
+                                _src=src)
 
-    E_ex_chain, n_ex = gfdn_ledger(Y_chain, num_rooms, Nroom, delays)
-    E_ex_chain_lossy, _ = gfdn_ledger(Y_chain_lossy, num_rooms, Nroom, delays)
-    E_ex_complete, _ = gfdn_ledger(Y_complete, num_rooms, Nroom, delays)
-    E_ex_complete_lossy, _ = gfdn_ledger(Y_complete_lossy, num_rooms, Nroom, delays)
+    E_ex_chain, n_ex = gfdn_energy_ledger(Y_chain, num_rooms, Nroom, delays)
+    E_ex_chain_lossy, _ = gfdn_energy_ledger(Y_chain_lossy, num_rooms, Nroom,
+                                             delays)
+    E_ex_complete, _ = gfdn_energy_ledger(Y_complete, num_rooms, Nroom, delays)
+    E_ex_complete_lossy, _ = gfdn_energy_ledger(Y_complete_lossy, num_rooms,
+                                                Nroom, delays)
     return (
         E_ex_chain,
         E_ex_chain_lossy,
@@ -358,10 +393,13 @@ def _(Q_chain, Q_complete, fs, gamma, n_samp, np, num_rooms, trajectory):
     rec_weight = np.eye(num_rooms)
 
     _, Eref_chain = trajectory(Q_chain, src_weight, rec_weight, fs, n_samp)
-    _, Eref_chain_lossy = trajectory(Q_chain, src_weight, rec_weight, fs, n_samp, gamma)
+    _, Eref_chain_lossy = trajectory(Q_chain, src_weight, rec_weight, fs,
+                                     n_samp, gamma)
 
-    _, Eref_complete = trajectory(Q_complete, src_weight, rec_weight, fs, n_samp)
-    _, Eref_complete_lossy = trajectory(Q_complete, src_weight, rec_weight, fs, n_samp, gamma)
+    _, Eref_complete = trajectory(Q_complete, src_weight, rec_weight, fs,
+                                  n_samp)
+    _, Eref_complete_lossy = trajectory(Q_complete, src_weight, rec_weight, fs,
+                                        n_samp, gamma)
     return Eref_chain, Eref_chain_lossy, Eref_complete, Eref_complete_lossy
 
 
@@ -413,7 +451,7 @@ def _(
         fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (tsec,)
+    return (tsec, )
 
 
 @app.cell
@@ -435,20 +473,21 @@ def _(
     _targets = V / V.sum()
 
     for _ax, _Eex, _Eref, _title in zip(
-            _axs, [E_ex_chain_lossy, E_ex_complete_lossy], [Eref_chain_lossy, Eref_complete_lossy],
+            _axs, [E_ex_chain_lossy, E_ex_complete_lossy],
+        [Eref_chain_lossy, Eref_complete_lossy],
         ["chain (1–2, 2–3)", "complete (all coupled)"]):
         for _r in range(num_rooms):
             _ax.semilogy(tsec[:n_ex],
-                     _Eex[0, :, _r],
-                     color=_colors[_r],
-                     lw=1.1,
-                     label=f"GFDN {_labels[_r]}")
+                         _Eex[0, :, _r],
+                         color=_colors[_r],
+                         lw=1.1,
+                         label=f"GFDN {_labels[_r]}")
             _ax.semilogy(tsec,
-                     _Eref[:, _r],
-                     "--",
-                     color=_colors[_r],
-                     lw=1.0,
-                     alpha=0.7)
+                         _Eref[:, _r],
+                         "--",
+                         color=_colors[_r],
+                         lw=1.0,
+                         alpha=0.7)
             _ax.axhline(_targets[_r], color=_colors[_r], lw=0.5, ls=":")
         _ax.set_title(_title, fontsize=10)
         _ax.set_xlabel("time (s)")
@@ -488,17 +527,17 @@ def _(
     _ref_split_chain = _ref_tail_chain / _ref_tail_chain.sum()
 
     _gfdn_tail_complete = E_ex_complete[0, _tail].mean(0)
-    _gfdn_split_complete = _gfdn_tail_complete/ _gfdn_tail_complete.sum()
+    _gfdn_split_complete = _gfdn_tail_complete / _gfdn_tail_complete.sum()
     _ref_tail_complete = Eref_complete[_tail].mean(0)
     _ref_split_complete = _ref_tail_complete / _ref_tail_complete.sum()
 
     _target_split = V / V.sum()
 
-    _M1, _M2, _M3 = int(delays[:N1].sum()), int(delays[N1:N1+N2].sum()), int(delays[N1+N2:].sum())
+    _M1, _M2, _M3 = int(delays[:N1].sum()), int(delays[N1:N1 + N2].sum()), int(
+        delays[N1 + N2:].sum())
     _equipartition_split = np.array([_M1, _M2, _M3]) / (_M1 + _M2 + _M3)
 
-    mo.md(
-        rf"""
+    mo.md(rf"""
     ## 4 · How closely does the GFDN track the physics?
 
     Max absolute deviation between the exact GFDN ledger and the true $e^{{tQ}}$ trajectory over the
@@ -531,8 +570,7 @@ def _(
     live delay-line/matrix realization; if it already matches $M_i/M_{{\rm tot}}$ but that itself is
     off from $V_i/V_{{\rm tot}}$, the fix is tightening the delay-length design so $M_1/M_2$ lands
     closer to $V_1/V_2$.
-    """
-    )
+    """)
     return
 
 
@@ -557,34 +595,49 @@ def _(
     pyFDN,
     tsec,
 ):
-    h_mic_chain_lossy = np.stack([Y_chain_lossy[:, :, :N1].sum(-1), 
-                                  Y_chain_lossy[:, :, N1:N1+N2].sum(-1), 
-                                  Y_chain_lossy[:, :, N1+N2:].sum(-1)], 
+    h_mic_chain_lossy = np.stack([
+        Y_chain_lossy[:, :, :N1].sum(-1), Y_chain_lossy[:, :,
+                                                        N1:N1 + N2].sum(-1),
+        Y_chain_lossy[:, :, N1 + N2:].sum(-1)
+    ],
                                  axis=-1)
-    h_mic_complete_lossy = np.stack([Y_complete_lossy[:, :, :N1].sum(-1), 
-                                  Y_complete_lossy[:, :, N1:N1+N2].sum(-1), 
-                                  Y_complete_lossy[:, :, N1+N2:].sum(-1)], 
-                                  axis=-1)
-    def db(_Y, is_energy_signal:bool=True):
-        tmp = np.log10(np.abs(_Y) + 1e-10)
-        return 10*tmp if is_energy_signal else 20*tmp
+    h_mic_complete_lossy = np.stack([
+        Y_complete_lossy[:, :, :N1].sum(-1),
+        Y_complete_lossy[:, :, N1:N1 + N2].sum(-1),
+        Y_complete_lossy[:, :, N1 + N2:].sum(-1)
+    ],
+                                    axis=-1)
 
+    def db(_Y, is_energy_signal: bool = True):
+        tmp = np.log10(np.abs(_Y) + 1e-10)
+        return 10 * tmp if is_energy_signal else 20 * tmp
 
     _fig, _axs = plt.subplots(3, 3, figsize=(8, 6.6), sharex=True, sharey=True)
-    _tmax =  tsec[-1]
+    _tmax = tsec[-1]
     _nmax = int(_tmax * len(tsec) / tsec[-1])
     for _src in range(num_rooms):
         for _rec in range(num_rooms):
             _ax = _axs[_src, _rec]
-            _ax.plot(tsec[:_nmax] * 1000, db(pyFDN.auxiliary.acoustics.edc(h_mic_chain_lossy[_src, :_nmax, _rec])), lw=1.0, color="C0")
-            _ax.plot(tsec[:_nmax] * 1000, db(pyFDN.auxiliary.acoustics.edc(h_mic_complete_lossy[_src, :_nmax, _rec])), lw=1.0, color="C2")
-            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}", fontsize=9)
+            _ax.plot(tsec[:_nmax] * 1000,
+                     db(
+                         pyFDN.auxiliary.acoustics.edc(
+                             h_mic_chain_lossy[_src, :_nmax, _rec])),
+                     lw=1.0,
+                     color="C0")
+            _ax.plot(tsec[:_nmax] * 1000,
+                     db(
+                         pyFDN.auxiliary.acoustics.edc(
+                             h_mic_complete_lossy[_src, :_nmax, _rec])),
+                     lw=1.0,
+                     color="C2")
+            _ax.set_title(f"source room {_src+1} → receiver room {_rec+1}",
+                          fontsize=9)
     for _ax in _axs[-1]:
         _ax.set_xlabel("time (ms)")
     for _ax in _axs[:, 0]:
         _ax.set_ylabel("$h(t)$")
     _axs[0, 0].set_ylim(-100, 20)
-    _axs[0,0].legend(['1-2, 2-3', '1-2, 1-3, 2-3'])
+    _axs[0, 0].legend(['1-2, 2-3', '1-2, 1-3, 2-3'])
     _fig.suptitle("EDCs (first %.0f ms)" % (_tmax * 1000), fontsize=10)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)

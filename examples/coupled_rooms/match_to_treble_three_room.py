@@ -21,19 +21,17 @@ def _():
 
     import pyFDN
     from pyFDN.dsp.time_varying_matrix import TimeVaryingMatrix
-    from pyFDN.auxiliary.geometry import (get_plane_area, 
-                                          get_room_volume, 
-                                          get_room_surface_area, 
-                                          get_room_absorptive_area, 
-                                          find_room,
+    from pyFDN.auxiliary.geometry import (get_plane_area, get_room_volume,
+                                          get_room_surface_area,
+                                          get_room_absorptive_area, find_room,
                                           get_point_to_room_weights,
-                                          get_aperture_form_factor,
-                                          Aperture
-                                        )
-    from pyFDN.auxiliary.physics_based_coupling import (make_beta, make_gamma, make_Q,
-                                                        trajectory, trajectory_with_delays,
-                                                        make_theta, make_K, get_decay_matrix, get_feedback_matrix,
-                                                        run_gfdn, gfdn_ledger, room_energy_ledger_from_rirs)
+                                          get_aperture_form_factor, Aperture)
+    from pyFDN.auxiliary.physics_based_coupling import (
+        create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
+        create_state_transition_matrix, trajectory, trajectory_with_delays,
+        get_coupling_angles, get_coupling_matrix, get_decay_matrix,
+        get_feedback_matrix, run_gfdn, gfdn_energy_ledger,
+        room_energy_ledger_from_rirs)
 
     from multislope import DecayFitNet
     from sklearn.cluster import KMeans
@@ -60,13 +58,13 @@ def _():
         get_point_to_room_weights,
         get_room_absorptive_area,
         get_room_volume,
-        gfdn_ledger,
+        gfdn_energy_ledger,
         least_squares,
-        make_K,
-        make_Q,
-        make_beta,
-        make_gamma,
-        make_theta,
+        get_coupling_matrix,
+        create_state_transition_matrix,
+        create_lossless_coupling_matrix,
+        create_diagonal_absorption_matrix,
+        get_coupling_angles,
         mo,
         np,
         pickle,
@@ -105,6 +103,7 @@ def _(
     np,
     pickle,
 ):
+
     def dataset_to_sim_mic_pos(mic_pos: Union[ArrayLike, NDArray]) -> NDArray:
         """
         Map Treble three dataset mic position to simulation coordinates.
@@ -121,7 +120,6 @@ def _(
             sim_mic_pos[k, :] = np.array([corr_x, corr_y, mic_pos[k, 2]],
                                          dtype=np.float64)
         return sim_mic_pos
-
 
     def sample_receivers_along_line(
         receiver_positions: NDArray[np.float64],
@@ -172,7 +170,6 @@ def _(
 
         return indices, receiver_positions[indices]
 
-
     def create_linear_trajectory(
         receiver_positions: NDArray,
         line_spacing_m: float = 0.3,
@@ -211,7 +208,8 @@ def _(
 
         return np.r_[idx1, idx2], np.vstack((traj1, traj2))
 
-    def read_treble_data(pkl_path: Path) -> Tuple[NDArray, NDArray, ArrayLike, float]:
+    def read_treble_data(
+            pkl_path: Path) -> Tuple[NDArray, NDArray, ArrayLike, float]:
         """Read the Treble dataset and return the RIRs, receiver positions and source position"""
         with open(pkl_path.resolve(), "rb") as file:
             data_dict = pickle.load(file)
@@ -233,13 +231,13 @@ def _(
         Returns:
             Tuple: containing the sample rate, receivers in a trajectory, corresponding RIRs and the receiver indices
         """
-        rirs, receiver_positions, source_position, sample_rate = read_treble_data(pkl_path)
+        rirs, receiver_positions, source_position, sample_rate = read_treble_data(
+            pkl_path)
 
         selected_indices, selected_receivers = create_linear_trajectory(
             receiver_positions, line_spacing_m)
         selected_rirs = rirs[selected_indices]
         return source_position, selected_receivers, selected_rirs, selected_indices
-
 
     mo.md("### Treble data parsing only")
     return dataset_to_sim_mic_pos, parse_treble_three_room, read_treble_data
@@ -248,7 +246,9 @@ def _(
 @app.cell
 def _(DecayFitNet, KMeans, NDArray, mo, np, pyFDN):
     # --- Stage 1: per-receiver multi-slope fits, aggregated per room -----------
-    def estimate_room_slopes(rirs_in_room: NDArray, fs: float, n_slopes: int=3):
+    def estimate_room_slopes(rirs_in_room: NDArray,
+                             fs: float,
+                             n_slopes: int = 3):
         """
         Estimate the T60s from the RIRs using k-means clustering
         Args:
@@ -264,7 +264,8 @@ def _(DecayFitNet, KMeans, NDArray, mo, np, pyFDN):
 
         Ts, As = [], []
         for edc in edcs_in_room:
-            estimated_parameters, _ = decayfitnet.estimate_parameters(edc.copy(), input_is_edc=True)
+            estimated_parameters, _ = decayfitnet.estimate_parameters(
+                edc.copy(), input_is_edc=True)
             T, A, N = estimated_parameters  # T: decay times, A: amplitudes, N: noise floor
             T, A = np.asarray(T).flatten(), np.asarray(A).flatten()
             order = np.argsort(-T)  # slowest (largest T60) first
@@ -281,7 +282,7 @@ def _(DecayFitNet, KMeans, NDArray, mo, np, pyFDN):
         return cluster_centers
 
     mo.md("### Common slopes analysis from data")
-    return (estimate_room_slopes,)
+    return (estimate_room_slopes, )
 
 
 @app.cell
@@ -357,13 +358,14 @@ def _(
     pyFDN,
     room_energy_ledger_from_rirs,
 ):
-    fdtd_room_energy, room_masks = room_energy_ledger_from_rirs(all_rirs, dataset_to_sim_mic_pos(all_rec_pos), 
-                                                                ROOM_START, ROOM_DIMS)
+    fdtd_room_energy, room_masks = room_energy_ledger_from_rirs(
+        all_rirs, dataset_to_sim_mic_pos(all_rec_pos), ROOM_START, ROOM_DIMS)
 
-    fdtd_energy_env = pyFDN.auxiliary.acoustics.calculate_energy_envelope(fdtd_room_energy, 
-                                                                          fs, smooth_time_ms=50, time_axis=-1)
+    fdtd_energy_env = pyFDN.auxiliary.acoustics.calculate_energy_envelope(
+        fdtd_room_energy, fs, smooth_time_ms=50, time_axis=-1)
 
-    mo.md(rf"""### FDTD integrated energy ledger (mean over receivers in each room)
+    mo.md(
+        rf"""### FDTD integrated energy ledger (mean over receivers in each room)
 
     We are plotting the EDC of the averaged room-integrated FDTD ledger, calculated as,
 
@@ -372,7 +374,7 @@ def _(
     vs the predicted energy update from Cremer-Muller equations when we excite room 2 with $b_S = [0, 1]$ and weigh the outputs
     equally from both roons $c_R = \begin{{pmatrix}}1 & 0 \\ 0 & 1 \end{{pmatrix}}$.
     """)
-    return (fdtd_energy_env,)
+    return (fdtd_energy_env, )
 
 
 @app.cell(hide_code=True)
@@ -398,9 +400,9 @@ def _(
     get_aperture_form_factor,
     get_room_absorptive_area,
     get_room_volume,
-    make_Q,
-    make_beta,
-    make_gamma,
+    create_state_transition_matrix,
+    create_lossless_coupling_matrix,
+    create_diagonal_absorption_matrix,
     mo,
     np,
 ):
@@ -408,19 +410,33 @@ def _(
     use_non_diffuse_energy = False
     if use_non_diffuse_energy:
         form_factor = get_aperture_form_factor(aperture_12, aperture_13)
-        S = np.array([[0, (1-form_factor)*aperture_12_area, (1-form_factor)*aperture_13_area],
-                    [(1-form_factor)*aperture_12_area, 0, form_factor*aperture_12_area],
-                    [(1-form_factor)*aperture_13_area, form_factor*aperture_13_area, 0]])
+        S = np.array([[
+            0, (1 - form_factor) * aperture_12_area,
+            (1 - form_factor) * aperture_13_area
+        ],
+                      [(1 - form_factor) * aperture_12_area, 0,
+                       form_factor * aperture_12_area],
+                      [(1 - form_factor) * aperture_13_area,
+                       form_factor * aperture_13_area, 0]])
     else:
-        S = np.array([[0, aperture_12_area, aperture_13_area], [aperture_12_area, 0, 0], [aperture_13_area, 0, 0]])
+        S = np.array([[0, aperture_12_area, aperture_13_area],
+                      [aperture_12_area, 0, 0], [aperture_13_area, 0, 0]])
 
-    V = np.array([get_room_volume(ROOM1_DIMS), get_room_volume(ROOM2_DIMS), get_room_volume(ROOM3_DIMS)])
-    absorp_area = np.array([get_room_absorptive_area(ROOM1_DIMS, ROOM1_ABS), get_room_absorptive_area(ROOM2_DIMS, ROOM2_ABS), get_room_absorptive_area(ROOM3_DIMS, ROOM3_ABS)])
+    V = np.array([
+        get_room_volume(ROOM1_DIMS),
+        get_room_volume(ROOM2_DIMS),
+        get_room_volume(ROOM3_DIMS)
+    ])
+    absorp_area = np.array([
+        get_room_absorptive_area(ROOM1_DIMS, ROOM1_ABS),
+        get_room_absorptive_area(ROOM2_DIMS, ROOM2_ABS),
+        get_room_absorptive_area(ROOM3_DIMS, ROOM3_ABS)
+    ])
     num_rooms = 3
 
-    beta = make_beta(S, V)
-    gamma = make_gamma(absorp_area, V)
-    Q = make_Q(beta)
+    beta = create_lossless_coupling_matrix(S, V)
+    gamma = create_diagonal_absorption_matrix(absorp_area, V)
+    Q = create_state_transition_matrix(beta)
 
     mo.md(rf"""
     ### Physical generators
@@ -454,9 +470,11 @@ def _(
     parse_treble_three_room,
     read_treble_data,
 ):
-    file_path = Path('../GroupedFDN/DiffGFDN/resources/Georg_3room_FDTD/srirs.pkl')
+    file_path = Path(
+        '../GroupedFDN/DiffGFDN/resources/Georg_3room_FDTD/srirs.pkl')
     all_rirs, all_rec_pos, src_pos, fs = read_treble_data(file_path)
-    _, sel_rec, sel_rirs, sel_idx = parse_treble_three_room(file_path, line_spacing_m=0.5)
+    _, sel_rec, sel_rirs, sel_idx = parse_treble_three_room(file_path,
+                                                            line_spacing_m=0.5)
 
     c = 343
     rate_s = 1.0 / fs
@@ -464,21 +482,32 @@ def _(
     tsec = np.arange(n_samp) / fs
 
     # get source weighting
-    src_weight, src_delay = get_point_to_room_weights(np.asarray(SOURCE_POS), 
-                                                      ROOM_DIMS, ROOM_START, apertures, return_delays=True, fs=fs)
+    src_weight, src_delay = get_point_to_room_weights(np.asarray(SOURCE_POS),
+                                                      ROOM_DIMS,
+                                                      ROOM_START,
+                                                      apertures,
+                                                      return_delays=True,
+                                                      fs=fs)
     src_room = [find_room(ROOM_DIMS, ROOM_START, SOURCE_POS)]
-
 
     # for now select a few receivers and plot their ledger
     rec_idx = [2, 4, 8, 10, 13, 21, 30]
     rec_pos = dataset_to_sim_mic_pos(sel_rec[rec_idx])
-    rec_params = np.asarray([get_point_to_room_weights(rec_pos[k], ROOM_DIMS, ROOM_START, 
-                                                                  apertures, return_delays=True, fs=fs) 
-                             for k in range(len(rec_idx))])
+    rec_params = np.asarray([
+        get_point_to_room_weights(rec_pos[k],
+                                  ROOM_DIMS,
+                                  ROOM_START,
+                                  apertures,
+                                  return_delays=True,
+                                  fs=fs) for k in range(len(rec_idx))
+    ])
     rec_weight = np.asarray([rec_params[k][0] for k in range(len(rec_idx))])
     rec_delay = np.asarray([rec_params[k][1] for k in range(len(rec_idx))])
 
-    rec_room = [find_room(ROOM_DIMS, ROOM_START, rec_pos[k]) for k in range(len(rec_idx))]
+    rec_room = [
+        find_room(ROOM_DIMS, ROOM_START, rec_pos[k])
+        for k in range(len(rec_idx))
+    ]
 
     mo.md("### Read data and calculate source and receiver weights and delays")
     return (
@@ -521,19 +550,20 @@ def _(
     trajectory_with_delays,
 ):
     # trajectory for a particular source and receiver position
-    common_decay, Emarkov_src_rec = trajectory_with_delays(Q, src_weight[None,:], 
-                                                         rec_weight, src_delay[None, :], rec_delay, 
-                                                         src_room, rec_room, fs, n_samp,
-                                                         gamma)
+    common_decay, Emarkov_src_rec = trajectory_with_delays(
+        Q, src_weight[None, :], rec_weight, src_delay[None, :], rec_delay,
+        src_room, rec_room, fs, n_samp, gamma)
 
     Emarkov_src_rec = Emarkov_src_rec.squeeze()
-    common_t60= np.log(1e-6) / common_decay
+    common_t60 = np.log(1e-6) / common_decay
 
     # trajectory independent of source and receiver position
-    _, Emarkov_lossy = trajectory(Q, np.array([0, 1, 0]), np.eye(num_rooms), fs, n_samp, gamma)
+    _, Emarkov_lossy = trajectory(Q, np.array([0, 1, 0]), np.eye(num_rooms),
+                                  fs, n_samp, gamma)
 
     # without the 0.5, the decay rates appear to be twice as long
-    common_t60_ref = 0.5 * estimate_room_slopes(all_rirs, int(fs), n_slopes=num_rooms)
+    common_t60_ref = 0.5 * estimate_room_slopes(
+        all_rirs, int(fs), n_slopes=num_rooms)
 
     mo.md(rf"""
     ### Markov trajectory
@@ -557,14 +587,14 @@ def _(
     common_t60_ref,
     gamma,
     least_squares,
-    make_Q,
+    create_state_transition_matrix,
     mo,
     np,
 ):
     # Fit the eta correction against the DecayFitNet-identified rates ---
     def fit_eta_to_decayfitnet(common_T60s: List,
-                               beta :NDArray,
-                               gamma_diag :NDArray,
+                               beta: NDArray,
+                               gamma_diag: NDArray,
                                db_target=60.0):
         """
         common_T60s : list of length num_rooms, each element containing estimated T60s
@@ -584,6 +614,7 @@ def _(
 
         ln_target = np.log(10**(-db_target / 10))  # e.g. ln(1e-6) for 60 dB
         dominant_rate = np.array([ln_target / -T60_slow])  # 1/s, positive
+
         # dominant_rate = np.array([ln_target / -common_T60s])  # 1/s, positive
 
         def residual(eta):
@@ -597,7 +628,7 @@ def _(
             gamma_c[idx_slow] *= eta[0]
             # Correct absorption of all rooms
             # gamma_c = gamma_c * eta
-            Q = make_Q(beta)
+            Q = create_state_transition_matrix(beta)
             A_c = Q - gamma_c
             w = np.sort(np.abs(np.linalg.eig(A_c)[0].real))
             # match the model's SLOWEST eigenvalue to the consensus dominant rate --
@@ -609,7 +640,6 @@ def _(
                                bounds=(0.1, 5.0))
         print(f'Mismatch in rates is {result.fun}s')
         return np.abs(result.x)
-
 
     eta_fit = fit_eta_to_decayfitnet(common_t60_ref, beta, gamma)
     # gamma_c  = gamma * eta_fit
@@ -632,7 +662,7 @@ def _(
     $$\mathbf \Gamma_c = \begin{{pmatrix}}{gamma_c[0,0]:.4f}&{gamma_c[0,1]:.4f}&{gamma_c[0, 2]:.4f}\\{gamma_c[1,0]:.4f}&{gamma_c[1,1]:.4f}&{gamma_c[1,2]:.4f}\\{gamma_c[2,0]:.4f}&{gamma_c[2,1]:.4f}&{gamma_c[2, 2]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
 
     """)
-    return (gamma_c,)
+    return (gamma_c, )
 
 
 @app.cell
@@ -656,15 +686,15 @@ def _(
     trajectory_with_delays,
 ):
     # trajectory for a particular source and receiver position
-    new_common_decay, Emarkov_src_rec_new = trajectory_with_delays(Q, src_weight[None,:], 
-                                                             rec_weight, src_delay[None, :], rec_delay, 
-                                                             src_room, rec_room, fs, n_samp,
-                                                             gamma_c)
+    new_common_decay, Emarkov_src_rec_new = trajectory_with_delays(
+        Q, src_weight[None, :], rec_weight, src_delay[None, :], rec_delay,
+        src_room, rec_room, fs, n_samp, gamma_c)
     Emarkov_src_rec_new = Emarkov_src_rec_new.squeeze()
-    new_common_t60= np.log(1e-6) / new_common_decay
+    new_common_t60 = np.log(1e-6) / new_common_decay
 
     # trajectory independent of source and receiver position
-    _, Emarkov_lossy_new = trajectory(Q, np.array([0, 1, 0]), np.eye(num_rooms), fs, n_samp, gamma_c)
+    _, Emarkov_lossy_new = trajectory(Q, np.array([0, 1, 0]),
+                                      np.eye(num_rooms), fs, n_samp, gamma_c)
 
     mo.md(rf"""
     The old common decay times from solving ODEs are {np.round(common_t60, 3)}s.
@@ -686,7 +716,8 @@ def _(mo):
 
 @app.cell
 def _(V, fs, mo, np, num_rooms, pyFDN):
-    def ms_to_samps(time_ms: float, fs:float):
+
+    def ms_to_samps(time_ms: float, fs: float):
         return int(np.round(time_ms * 1e-3 * fs))
 
     Nroom = 24
@@ -701,12 +732,18 @@ def _(V, fs, mo, np, num_rooms, pyFDN):
     delays = []
 
     for _i in range(num_rooms):
-        delays.append(pyFDN.sample_delay_lengths(
-            Nroom, (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])), coprime=True, rng=331 + 10*_i))
+        delays.append(
+            pyFDN.sample_delay_lengths(
+                Nroom,
+                (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])),
+                coprime=True,
+                rng=331 + 10 * _i))
 
     delays = np.concatenate(delays).astype(int)
-    M1, M2, M3 = int(delays[:N1].sum()), int(delays[N1:N1+N2].sum()), int(delays[N1+N2:].sum())
-    delays_per_fdn = np.asarray([delays[:N1], delays[N1:N1+N2], delays[N1+N2:]], dtype=np.int32)
+    M1, M2, M3 = int(delays[:N1].sum()), int(delays[N1:N1 + N2].sum()), int(
+        delays[N1 + N2:].sum())
+    delays_per_fdn = np.asarray(
+        [delays[:N1], delays[N1:N1 + N2], delays[N1 + N2:]], dtype=np.int32)
     M = np.asarray([M1, M2, M3])
     dt_i = M / (Nroom * fs)
 
@@ -724,17 +761,17 @@ def _(V, fs, mo, np, num_rooms, pyFDN):
 
 
 @app.cell
-def _(beta, dt_i, expm, make_K, make_theta, mo, num_rooms):
-    theta = make_theta(beta, dt_i)
-    K = make_K(theta)
+def _(beta, dt_i, expm, get_coupling_matrix, get_coupling_angles, mo,
+      num_rooms):
+    theta = get_coupling_angles(beta, dt_i)
+    K = get_coupling_matrix(theta)
     R_room = expm(K)
 
     # sanity check: beta_ij*dt_i should equal beta_ji*dt_j (design consistency)
     _check = []
     for _i in range(num_rooms):
         for _j in range(_i + 1, num_rooms):
-            _check.append(
-                (beta[_i, _j] * dt_i[_i], beta[_j, _i] * dt_i[_j]))
+            _check.append((beta[_i, _j] * dt_i[_i], beta[_j, _i] * dt_i[_j]))
 
     mo.md(rf"""
     ## 2 · Pairwise angles $\theta_{{ij}}$ (rate‑matched, $\sin^2\theta_{{ij}}=\beta_{{ij}}\Delta t_i$)
@@ -754,7 +791,7 @@ def _(beta, dt_i, expm, make_K, make_theta, mo, num_rooms):
 
     Note -- if the delays are too large, then 0.5(beta / dt_i) approaches 1, and the coupling angle caps at pi/2.
     """)
-    return (R_room,)
+    return (R_room, )
 
 
 @app.cell
@@ -781,16 +818,15 @@ def _(
     modulation_frequency = 1.0  # hz
     modulation_amplitude = 3.0
     spread = 0.3
-    tv_matrix = TimeVaryingMatrix(
-            Ntot, modulation_frequency, modulation_amplitude, fs, spread
-        )
+    tv_matrix = TimeVaryingMatrix(Ntot, modulation_frequency,
+                                  modulation_amplitude, fs, spread)
 
     Qblocks = block_diag(pyFDN.random_orthogonal(N1),
                          pyFDN.random_orthogonal(N2),
                          pyFDN.random_orthogonal(N3))
     Gamma = get_decay_matrix(gamma_c, delays_per_fdn, fs)
     A = get_feedback_matrix(R_room, Qblocks, N1)
-    A_lossy = A @ Gamma 
+    A_lossy = A @ Gamma
     _ok = pyFDN.is_unilossless(A)
 
     mo.md(rf"""
@@ -810,7 +846,7 @@ def _(
     N2,
     Ntot,
     delays,
-    gfdn_ledger,
+    gfdn_energy_ledger,
     mo,
     n_samp,
     np,
@@ -820,12 +856,18 @@ def _(
 ):
     # Markov ledger matching - excite room 2 only and take output equally from rooms 1, 2 and 3
     B = np.zeros((Ntot, num_rooms))
-    B[N1:N1+N2, 1] = 1.0 / np.sqrt(N2)
+    B[N1:N1 + N2, 1] = 1.0 / np.sqrt(N2)
 
     # output taken from all rooms
     C_lines = np.eye(Ntot)
-    Y_lossy = run_gfdn(A_lossy, B, C_lines, delays, n_samp, _src=1, tv_matrix=tv_matrix)
-    E_ex_lossy, n_ex = gfdn_ledger(Y_lossy, num_rooms, N1, delays)
+    Y_lossy = run_gfdn(A_lossy,
+                       B,
+                       C_lines,
+                       delays,
+                       n_samp,
+                       _src=1,
+                       tv_matrix=tv_matrix)
+    E_ex_lossy, n_ex = gfdn_energy_ledger(Y_lossy, num_rooms, N1, delays)
 
     mo.md("""### Get the GFDN ledger comparable to the Markov ledger""")
     return E_ex_lossy, n_ex
@@ -858,13 +900,21 @@ def _(
     C_rec = np.zeros((num_rec, Ntot))
     offset = 0
     for _room, _M in enumerate([N1, N2, N3]):
-        B_src[offset: offset+ _M, 0] = np.sqrt(src_weight[_room]) / np.sqrt(_M)
-        C_rec[:, offset:offset+_M] = np.sqrt(rec_weight[:, _room])[:, None] / np.sqrt(_M)
+        B_src[offset:offset + _M, 0] = np.sqrt(src_weight[_room]) / np.sqrt(_M)
+        C_rec[:, offset:offset +
+              _M] = np.sqrt(rec_weight[:, _room])[:, None] / np.sqrt(_M)
         offset += _M
 
-    Y_src_rec = run_gfdn(A_lossy, B_src, C_rec, delays, n_samp, tv_matrix=tv_matrix)
+    Y_src_rec = run_gfdn(A_lossy,
+                         B_src,
+                         C_rec,
+                         delays,
+                         n_samp,
+                         tv_matrix=tv_matrix)
 
-    mo.md("### Get the GFDN RIRs corresponding to the desired source and receiver positions")
+    mo.md(
+        "### Get the GFDN RIRs corresponding to the desired source and receiver positions"
+    )
     return Y_src_rec, num_rec
 
 
@@ -886,9 +936,9 @@ def _(
     _colors = ["C0", "C1", "C2"]
     _targets = V / V.sum()
 
-    def db(_Y, is_energy_signal:bool=True):
+    def db(_Y, is_energy_signal: bool = True):
         tmp = np.log10(np.abs(_Y) + 1e-10)
-        return 10*tmp if is_energy_signal else 20*tmp
+        return 10 * tmp if is_energy_signal else 20 * tmp
 
     for room in range(num_rooms):
 
@@ -908,14 +958,12 @@ def _(
             lw=1.5,
             label="Cremer-Muller",
         )
-        ax.plot(
-            tsec[:n_ex], 
-            db(E_ex_lossy[1, :, room]), 
-               '-.', 
-               color = _colors[room], 
-               lw=1.2, 
-               label='GFDN'
-        )
+        ax.plot(tsec[:n_ex],
+                db(E_ex_lossy[1, :, room]),
+                '-.',
+                color=_colors[room],
+                lw=1.2,
+                label='GFDN')
         ax.set_title(_labels[room])
         ax.set_xlabel("Time (s)")
         ax.set_ylim(-60, 5)
@@ -929,7 +977,7 @@ def _(
     )
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (db,)
+    return (db, )
 
 
 @app.cell(hide_code=True)
@@ -961,8 +1009,12 @@ def _(
     sosfilt,
     tsec,
 ):
-    _fig, _axs = plt.subplots(1, num_rec, figsize=(15.5, 3.5), sharex=True, sharey=True)
-    _tmax =  tsec[-1]
+    _fig, _axs = plt.subplots(1,
+                              num_rec,
+                              figsize=(15.5, 3.5),
+                              sharex=True,
+                              sharey=True)
+    _tmax = tsec[-1]
     _nmax = int(_tmax * len(tsec) / tsec[-1])
     _src = 1
 
@@ -976,20 +1028,35 @@ def _(
         output="sos",
     )
     _ref_rirs = sosfilt(_highpass_sos, sel_rirs[rec_idx], axis=-1)
-    edc_ref = pyFDN.auxiliary.acoustics.edc(_ref_rirs[:,_start_time:_nmax], axis=-1, normalize=True)
-    edc_fdn = pyFDN.auxiliary.acoustics.edc(Y_src_rec[:,_start_time:_nmax, :].squeeze(), axis=0, normalize=True)
+    edc_ref = pyFDN.auxiliary.acoustics.edc(_ref_rirs[:, _start_time:_nmax],
+                                            axis=-1,
+                                            normalize=True)
+    edc_fdn = pyFDN.auxiliary.acoustics.edc(
+        Y_src_rec[:, _start_time:_nmax, :].squeeze(), axis=0, normalize=True)
 
     # shape noise to generate RIR from Markov ledger
     noise = np.random.normal(0, 1.0, n_samp)
     noise *= np.sqrt(n_samp / np.sum(noise**2))
     rir_markov = np.einsum('tk, t -> tk', np.sqrt(Emarkov_src_rec_new), noise)
-    edc_markov = pyFDN.auxiliary.acoustics.edc(rir_markov, axis=0, normalize=True)
+    edc_markov = pyFDN.auxiliary.acoustics.edc(rir_markov,
+                                               axis=0,
+                                               normalize=True)
 
     for _rec, _ax in zip(range(len(rec_pos)), _axs):
-        _ax.plot(tsec[_start_time:_nmax] * 1000, db(edc_ref[_rec, :]), lw=1.0, color="C0")
-        _ax.plot(tsec[:_nmax] * 1000, db(edc_markov[:, _rec]), lw=1.0, color="C2")
-        _ax.plot(tsec[_start_time:_nmax] * 1000, db(edc_fdn[:, _rec]), lw=1.0, color="C3")
-        _ax.set_title(f"receiver:{np.round(sel_rec[rec_idx[_rec]], 2)}", fontsize=9)
+        _ax.plot(tsec[_start_time:_nmax] * 1000,
+                 db(edc_ref[_rec, :]),
+                 lw=1.0,
+                 color="C0")
+        _ax.plot(tsec[:_nmax] * 1000,
+                 db(edc_markov[:, _rec]),
+                 lw=1.0,
+                 color="C2")
+        _ax.plot(tsec[_start_time:_nmax] * 1000,
+                 db(edc_fdn[:, _rec]),
+                 lw=1.0,
+                 color="C3")
+        _ax.set_title(f"receiver:{np.round(sel_rec[rec_idx[_rec]], 2)}",
+                      fontsize=9)
         _ax.set_xlabel("time (ms)")
         _ax.set_ylabel("$EDC (db)$")
         _ax.grid(True, alpha=0.3)
