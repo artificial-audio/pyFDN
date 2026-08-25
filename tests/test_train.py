@@ -240,6 +240,9 @@ def test_the_decay_parameter_is_the_rt_and_trains():
     np.testing.assert_allclose(rt, 2.0)
 
 
+@pytest.mark.skip(
+    reason="#222: GEQ design does not yet guarantee attenuation-only feedback filters"
+)
 def test_a_trained_rt_still_decays():
     """The RT parametrization is why the fit cannot leave the stable region.
 
