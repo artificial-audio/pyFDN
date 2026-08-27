@@ -46,6 +46,7 @@ __all__ = [
     "spectral_flatness",
     "l1",
     "mse",
+    "energy_decay_relief",
     # packaged references and presets
     "paper_link",
     "paper_reference",
@@ -389,6 +390,8 @@ from .losses.features.stft import (
     stft_magnitude,
     stft_phase,
 )
+
+from .losses.features.EDR import energy_decay_relief
 
 from .losses.features.spectral_flatness import spectral_flatness
 

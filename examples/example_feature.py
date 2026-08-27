@@ -245,5 +245,36 @@ def _(hop_length, ir, mo, n_fft, plt, pyFDN, torch):
     return
 
 
+@app.cell
+def _(hop_length, ir, mo, n_fft, plt, pyFDN, torch):
+
+    edr_db = pyFDN.energy_decay_relief(
+        torch.from_numpy(ir),
+        n_fft=n_fft,
+        hop_length=hop_length,
+        eps=1e-10,
+    )
+
+    print(f"Energy decay relief shape: {edr_db.shape}")
+    print(f"Value range: [{edr_db.min().item():.4f}, {edr_db.max().item():.4f}]")
+    print(f"Mean energy decay relief: {edr_db.mean().item():.4f}")
+
+
+
+    fig_edr, ax_edr = plt.subplots(figsize=(12, 5))
+    im_edr = ax_edr.pcolormesh(edr_db.detach().cpu().numpy(), shading="auto", cmap="viridis")
+    ax_edr.set_xlabel("Time frame")
+    ax_edr.set_ylabel("Decay band")
+    ax_edr.set_title("Energy Decay Relief (dB)")
+    fig_edr.colorbar(im_edr, ax=ax_edr, label="dB")
+    plt.tight_layout()
+
+    mo.vstack([
+        mo.md("### Energy Decay Relief Visualization"),
+        fig_edr
+    ])
+    return
+
+
 if __name__ == "__main__":
     app.run()
