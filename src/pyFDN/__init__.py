@@ -385,14 +385,14 @@ from .graphicEQ import (
 from .presets import available_fdn_presets, load_fdn_preset
 
 # feature extraction (torch-based, differentiable)
-from .losses.features.spectral.stft import (
+from .losses.features.stft import (
     stft_magnitude,
     stft_phase,
 )
 
-from .losses.features.spectral.spectral_flatness import spectral_flatness
+from .losses.features.spectral_flatness import spectral_flatness
 
-from .losses.features.spectral.mel import (
+from .losses.features.mel import (
     MelSpectrogramFeature,
 )
 
