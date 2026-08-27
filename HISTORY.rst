@@ -5,6 +5,12 @@ History
 Unreleased
 ----------
 
+* Add the ``example_multislope_rir_to_fdn`` notebook: a measured room-transition
+  response is fitted with two decay slopes per octave band using DecayFitNet
+  from the ``multislope`` package, and each slope is resynthesised by its own
+  FDN. The response it uses ships with the package as the
+  ``meetingroom_to_hallway_290cm`` audio resource, taken from the coupled-rooms
+  transition dataset.
 * Add nonlinear and pitch-shifting time-domain operators for shimmer
   reverberation -- ``DCBlocker``, ``ControllableFullWaveRect``, ``SDFD``,
   ``RingModulator``, ``PitchShift`` and ``GranularPitchShift`` -- all usable as
