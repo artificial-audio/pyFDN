@@ -3,7 +3,7 @@
 
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -210,6 +210,38 @@ def _(mel_spec, mo, plt):
         mo.md("### Mel-Spectrogram Visualization"),
         fig2
     ])
+    return
+
+
+@app.cell
+def _(hop_length, ir, mo, n_fft, plt, pyFDN, torch):
+    # Spectral flatness feature (library implementation)
+    spec_flat =  pyFDN.spectral_flatness(
+        torch.from_numpy(ir),
+        n_fft=n_fft,
+        hop_length=hop_length,
+        eps=1e-10,
+    )
+
+
+    print(f"Spectral flatness shape: {spec_flat.shape}")
+    print(f"Mean spectral flatness: {spec_flat.mean().item():.4f}")
+    print(f"Range: [{spec_flat.min().item():.4f}, {spec_flat.max().item():.4f}]")
+
+    fig_sf, ax_sf = plt.subplots(figsize=(12, 4))
+    ax_sf.plot(spec_flat.detach().cpu().numpy(), linewidth=2, color="tab:green")
+    ax_sf.set_xlabel("Time frame")
+    ax_sf.set_ylabel("Spectral flatness")
+    ax_sf.set_title("Spectral Flatness over Time")
+    ax_sf.set_ylim(0, 1.05)
+    ax_sf.grid(alpha=0.3)
+    plt.tight_layout()
+
+    mo.vstack([
+        mo.md("### Spectral Flatness Visualization"),
+        fig_sf
+    ])
+
     return
 
 

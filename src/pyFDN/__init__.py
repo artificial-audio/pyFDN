@@ -43,6 +43,7 @@ __all__ = [
     "stft_magnitude",
     "stft_phase",
     "MelSpectrogramFeature",
+    "spectral_flatness",
     "l1",
     "mse",
     # packaged references and presets
@@ -388,6 +389,8 @@ from .losses.features.spectral.stft import (
     stft_magnitude,
     stft_phase,
 )
+
+from .losses.features.spectral.spectral_flatness import spectral_flatness
 
 from .losses.features.spectral.mel import (
     MelSpectrogramFeature,
