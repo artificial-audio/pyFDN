@@ -3,7 +3,7 @@
 from importlib import import_module
 
 __author__ = "Facundo Franchino"
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 __all__ = [
     # acoustics
