@@ -2,6 +2,20 @@
 History
 =======
 
+Unreleased
+----------
+
+* Add nonlinear and pitch-shifting time-domain operators for shimmer
+  reverberation -- ``DCBlocker``, ``ControllableFullWaveRect``, ``SDFD``,
+  ``RingModulator``, ``PitchShift`` and ``GranularPitchShift`` -- all usable as
+  ``process_fdn`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
+  through each one inside the feedback loop of the same 8-line FDN.
+* ``is_uniallpass`` no longer solves a singular Lyapunov equation when ``A`` is
+  itself lossless (as in the allpass-in-FDN structure). The spectral radius is
+  checked first and such a system is reported as not uniallpass, instead of the
+  result depending on whether LAPACK chose to warn or raise on the ill-
+  conditioned solve.
+
 0.4.1 (2026-08-24)
 ------------------
 

@@ -131,7 +131,7 @@ def _(mo):
     `process_fdn` runs the same recursion as above, driven by a dry synth signal
     instead of an impulse. This "plain FDN" render is the baseline every
     nonlinear variant below gets compared against — same input, same delays, same
-    decay, nothing in the `post_matrix` hook yet.
+    decay, nothing else in the loop yet.
     """)
     return
 
@@ -165,9 +165,9 @@ def _(mo):
     mo.md(r"""
     ## Controllable full-wave rectifier
 
-    A tunable rectifier: at `alpha = 0` it's the identity, at `alpha = 1` it's a
-    full-wave rectifier ($y = g_\text{cfwr}\lvert x\rvert$), and in between it
-    blends the two. Rectification folds the negative half of the waveform onto
+    A tunable rectifier: at `alpha = 0` the nonlinearity drops out, at
+    `alpha = 1` it's a full-wave rectifier ($y = g_\text{cfwr}\lvert x\rvert$),
+    and in between it blends the two. Rectification folds the negative half of the waveform onto
     the positive one, generating even harmonics. The operator is followed internally
     by a DC blocker with slow gain compensation. This prevent any DC offset from
     building up over thousands of trips around the loop. Placed in the feedback path, each
@@ -188,9 +188,13 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         B,
         C,
         D,
-        post_delay=td.SOSBank(absorption),
-        post_matrix=td.ControllableFullWaveRect(
-            len(delays), alpha=0.25, active_channels=[-1, -3]
+        post_delay=td.Series(
+            [
+                td.SOSBank(absorption),  # absorption inside the loop
+                td.ControllableFullWaveRect(
+                    len(delays), alpha=0.25, active_channels=[-1, -3]
+                ),
+            ]
         ),
     )
 
@@ -233,8 +237,12 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         B,
         C,
         D,
-        post_matrix=td.SOSBank(absorption),
-        post_delay=td.SDFD(len(delays), d=0.5, active_channels=[4, 5, 6, 7]),
+        post_delay=td.Series(
+            [
+                td.SOSBank(absorption),  # absorption inside the loop
+                td.SDFD(len(delays), d=0.5, active_channels=[4, 5, 6, 7]),
+            ]
+        ),
     )
 
     mo.hstack(
@@ -273,13 +281,17 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
         B,
         C,
         D,
-        post_matrix=td.SOSBank(absorption),
-        post_delay=td.RingModulator(
-            len(delays),
-            mod_freq=10,
-            mod_amp=np.sqrt(2),
-            fs=fs,
-            active_channels=[4, 5, 6, 7],
+        post_delay=td.Series(
+            [
+                td.SOSBank(absorption),  # absorption inside the loop
+                td.RingModulator(
+                    len(delays),
+                    mod_freq=10,
+                    mod_amp=np.sqrt(2),
+                    fs=fs,
+                    active_channels=[4, 5, 6, 7],
+                ),
+            ]
         ),
     )
 
@@ -321,7 +333,7 @@ def _(mo):
 def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
     delays_2 = pyFDN.sample_delay_lengths(
         N,
-        delay_range=(1000, 6000),  # samples: about 21-62 ms at 48 kHz
+        delay_range=(1000, 6000),  # samples: about 21-125 ms at 48 kHz
         distribution="geometric",
         coprime=True,  # avoid coinciding echoes
         rng=2,
@@ -336,14 +348,18 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
         B,
         C,
         D,
-        post_matrix=td.SOSBank(absorption_2),
-        post_delay=td.PitchShift(
-            len(delays_2),
-            max_delay_samps=window_size * 2,
-            window_size=window_size,
-            transpose_cents=-700,
-            fs=fs,
-            active_channels=[-1, -2],
+        post_delay=td.Series(
+            [
+                td.SOSBank(absorption_2),  # absorption inside the loop
+                td.PitchShift(
+                    len(delays_2),
+                    max_delay_samps=window_size * 2,
+                    window_size=window_size,
+                    transpose_cents=-700,
+                    fs=fs,
+                    active_channels=[-1, -2],
+                ),
+            ]
         ),
     )
 
@@ -383,15 +399,20 @@ def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
         B,
         C,
         D,
-        post_matrix=td.SOSBank(absorption_2),
-        post_delay=td.GranularPitchShift(
-            len(delays_2),
-            max_delay_samps=grain_dur_samps * 4,
-            grain_dur_samps=grain_dur_samps,
-            transpose_cents=700,
-            active_channels=[
-                -1,
-            ],
+        post_delay=td.Series(
+            [
+                td.SOSBank(absorption_2),  # absorption inside the loop
+                td.GranularPitchShift(
+                    len(delays_2),
+                    max_delay_samps=grain_dur_samps * 4,
+                    grain_dur_samps=grain_dur_samps,
+                    transpose_cents=700,
+                    active_channels=[
+                        -1,
+                    ],
+                    seed=0,  # grain positions are random; fix them for the docs
+                ),
+            ]
         ),
     )
 
