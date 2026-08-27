@@ -15,6 +15,17 @@ Unreleased
   checked first and such a system is reported as not uniallpass, instead of the
   result depending on whether LAPACK chose to warn or raise on the ill-
   conditioned solve.
+* Fix a device mismatch when a loss built for one run is used in another: every
+  loss that holds a reference impulse response (``MatchCumulativeEnergy``,
+  ``MatchEnergyDecay``, ``MatchMagnitude``, ``MatchImpulseResponse``,
+  ``MatchSpectrogram``, ``MatchMelSpectrogram``) aligned its reference once, on
+  the first response it saw, and then handed that CPU tensor to a later CUDA
+  step -- the way a notebook cell that builds the loss but does not re-run on a
+  runtime switch would hit it. The aligned reference is now keyed on the
+  response's shape, device, dtype and sample rate, and rebuilt when any of them
+  changes. ``MatchSpectrogram`` and ``MatchMelSpectrogram`` also default their
+  ``device`` to the response's rather than to the CPU, so FLAMO builds its
+  filterbanks where the model is.
 
 0.4.1 (2026-08-24)
 ------------------
