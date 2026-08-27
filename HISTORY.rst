@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.4.2 (2026-08-27)
+------------------
 
 * Add the ``example_multislope_rir_to_fdn`` notebook: a measured room-transition
   response is fitted with two decay slopes per octave band using DecayFitNet
