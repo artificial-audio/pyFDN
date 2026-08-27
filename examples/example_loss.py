@@ -134,5 +134,21 @@ def _(pyFDN, stft_ir1, stft_ir2):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Asymmetric Loss
+    """)
+    return
+
+
+@app.cell
+def _(pyFDN, stft_ir1):
+    asym_loss = pyFDN.asymetricLoss.AsymmetricLoss()
+    loss_asym = asym_loss(stft_ir1)
+    print(f"Asymmetric loss: {loss_asym.item():.8f}")
+    return
+
+
 if __name__ == "__main__":
     app.run()

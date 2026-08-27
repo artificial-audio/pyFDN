@@ -46,6 +46,7 @@ __all__ = [
     "spectral_flatness",
     "l1",
     "mse",
+    "asymetricLoss",
     "energy_decay_relief",
     # packaged references and presets
     "paper_link",
@@ -402,6 +403,7 @@ from .losses.features.mel import (
 from .losses.losses import (
     l1,
     mse,
+    asymetricLoss 
 )
 
 # fdn processing
