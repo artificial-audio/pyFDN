@@ -41,7 +41,7 @@
     "source_url": "https://doi.org/10.5281/zenodo.4636068",
     "license": "CC-BY-4.0",
     "license_url": "https://creativecommons.org/licenses/by/4.0/",
-    "modifications": "Omnidirectional (W) component of the 4th-order ambisonic response at receiver position 290 cm in Meeting Room to Hallway / Source in Room / No Line of Sight, peak normalised."
+    "modifications": "Omnidirectional (W) component of the 4th-order ambisonic response at receiver position 290 cm in Meeting Room to Hallway / Source in Meeting Room / No Continuous Line-of-Sight, peak normalised."
   },
   {
     "name": "P1_Set1_8",

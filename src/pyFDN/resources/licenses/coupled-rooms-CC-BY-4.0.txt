@@ -9,7 +9,8 @@ derived from:
 
 The pyFDN copy is the omnidirectional (W) component of the 4th-order
 ambisonic response at receiver position 290 cm in
-Meeting Room to Hallway / Source in Room / No Line of Sight, peak normalised.
+Meeting Room to Hallway / Source in Meeting Room / No Continuous
+Line-of-Sight, peak normalised.
 The full legal code follows.
 
 =======================================================================
