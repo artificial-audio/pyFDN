@@ -55,8 +55,6 @@ def _(mo, pyFDN):
     The response comes from the dataset accompanying {pyFDN.paper_link("Acoustic_Analysis_And_Dataset_Of_Transitions_Between_Coupled_Rooms")}, measured by walking an ambisonic microphone from a meeting room out into the hallway it opens onto, and published at [doi.org/10.5281/zenodo.4636068](https://doi.org/10.5281/zenodo.4636068). The source stays inside the meeting room (the *No Continuous Line-of-Sight* configuration), and this is the receiver 2.9 m along that walk, right about where the direct path to the source is lost — so what reaches it is the hallway's own quick decay riding on the slower one leaking out of the meeting room. Only the omnidirectional component of the ambisonic response is used here.
 
     Measured responses set the terms of what can be recovered. This one carries roughly 40 dB of usable decay per octave band before it reaches the noise floor of the measurement, so the analysis below stays inside that range. The response already starts at its onset, so nothing is trimmed from the front — and with the receiver past the doorway the direct sound is weak enough that trimming to the peak would throw away genuine early energy rather than a dominant direct arrival.
-
-    The **end** does need trimming. The file closes with a 77 ms fade to zero, and although that is only 5% of its length it sits below the noise floor, so the backward integral runs off to −150 dB in places the measurement never reached. A fit then has no flat tail to assign to `N`, and buys the continued fall by stretching the slow slope instead: leaving the fade in lengthens `T_slow` by 40–80% and drives the fitted noise floor to physically meaningless levels. Cutting it is what makes the noise term mean anything.
     """)
     return
 
@@ -67,37 +65,7 @@ def _(np, pyFDN):
     rir = rir / np.linalg.norm(rir)
     nfft = 2**17
 
-    def fade_onset(signal, fs, block=0.005, margin_db=3.0):
-        """First sample of the trailing fade, or the length if there is none.
-
-        A cropped measurement usually ends in a short fade to zero. It is only
-        a few percent of the file, but it is below the noise floor, so it
-        drives the backward integral somewhere the measurement never went.
-        """
-        n_block = int(block * fs)
-        n = len(signal) // n_block
-        level = np.array(
-            [
-                10
-                * np.log10(
-                    np.mean(signal[i * n_block : (i + 1) * n_block] ** 2) + 1e-30
-                )
-                for i in range(n)
-            ]
-        )
-        # the noise plateau, taken from the late file but clear of the fade
-        plateau = np.median(level[int(0.6 * n) : int(0.92 * n)])
-        quiet = level < plateau - margin_db
-        for i in range(int(0.5 * n), n):
-            if quiet[i:].all():
-                return i * n_block
-        return len(signal)
-
-    full_length = len(rir)
-    rir = rir[: fade_onset(rir, fs)]
-
     print(f"RIR: {len(rir)} samples ({len(rir) / fs:.2f} s) at {fs} Hz")
-    print(f"Trailing fade removed: {full_length - len(rir)} samples")
     return fs, nfft, rir
 
 

@@ -30,7 +30,7 @@ small example resources listed below retain their own terms.
   Line-of-Sight*, from *A dataset of measured spatial room impulse responses for
   the transition between coupled rooms* by Thomas McKenzie, Sebastian J.
   Schlecht, and Ville Pulkki: https://doi.org/10.5281/zenodo.4636068. It was
-  peak normalised. The dataset is licensed under Creative Commons Attribution
+  peak normalised and cropped before the trailing fade-out. The dataset is licensed under Creative Commons Attribution
   4.0 International, reproduced in `licenses/coupled-rooms-CC-BY-4.0.txt`. This
   file is **not** covered by pyFDN's MIT license.
 - The colorless-FDN presets contain builds converted from coefficient files in
