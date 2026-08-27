@@ -15,6 +15,10 @@ from scipy.linalg import solve_discrete_lyapunov
 from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.generate.is_almost_zero import is_almost_zero
 
+# How far inside the unit circle the eigenvalues of A must sit for the discrete
+# Lyapunov equation solved by is_uniallpass to be well posed.
+_STABILITY_TOL = 1e-9
+
 
 def poletti_allpass(
     g: float, U: np.ndarray
@@ -72,11 +76,33 @@ def is_uniallpass(
         True if the system is uniallpass.
     P : ndarray
         Solution of discrete Lyapunov A P A' - P + B B' = 0; diagonal if uniallpass.
+        All-NaN when A is not strictly stable, see the note below.
+
+    Notes
+    -----
+    The Lyapunov equation only has a (unique, finite) solution when A is
+    strictly stable.  If A itself is lossless -- as in the allpass-in-FDN
+    structure, where the feedback matrix has all its eigenvalues on the unit
+    circle -- no such P exists, and the linear system scipy solves is exactly
+    singular.  Rather than let that surface as an ill-conditioned solve (which
+    raises or returns garbage depending on the LAPACK build), the spectral
+    radius is checked up front and the system reported as not uniallpass.
     """
     A = np.asarray(A, dtype=float)
     B = np.asarray(B, dtype=float)
     C = np.asarray(C, dtype=float)
     D = np.asarray(D, dtype=float)
+    # P exists only for a strictly stable A; on the unit circle the Lyapunov
+    # operator P -> A P A' - P is singular (eigenvalue pairs with λi·λj = 1).
+    spectral_radius = float(np.max(np.abs(np.linalg.eigvals(A)))) if A.size else 0.0
+    if spectral_radius >= 1.0 - _STABILITY_TOL:
+        warnings.warn(
+            f"A has spectral radius {spectral_radius:.6g} >= 1; the discrete "
+            "Lyapunov equation has no finite solution, so the system is not "
+            "uniallpass.",
+            stacklevel=2,
+        )
+        return False, np.full_like(A, np.nan)
     # P = dlyap(A, B @ B')
     P = solve_discrete_lyapunov(A, B @ B.T)
     # Check P is diagonal
