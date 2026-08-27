@@ -141,6 +141,7 @@ rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Gain
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
+   pyFDN.td.DCBlocker
    pyFDN.td.ControllableFullWaveRect
    pyFDN.td.SDFD
    pyFDN.td.RingModulator
