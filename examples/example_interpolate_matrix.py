@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
 # gallery_title: Interpolate orthogonal matrices
 # gallery_description: Follow a geodesic between two orthogonal feedback matrices and listen to representative interpolated FDNs.
 
@@ -15,12 +15,12 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Interpolate between two orthogonal matrices
 
-    Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via `pyFDN.dss2impz`.
+    Interpolate between two orthogonal matrices so that each interpolant is orthogonal (geodesic on the orthogonal group). Then use three of these matrices as FDN feedback matrices and plot their impulse responses via `pyFDN.dss_to_impz`.
 
     Reference: *{pyFDN.paper_link("Schlecht2015PracticalConsiderationsTimevarying")}* .
 
@@ -33,9 +33,6 @@ def _():
     import math
 
     import numpy as np
-    import plotly.io as pio
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from scipy.linalg import hadamard
 
     import pyFDN
@@ -101,9 +98,9 @@ def _(C, T, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Three impulse responses via dss2impz
+    ## Three impulse responses via dss_to_impz
 
-    Use three feedback matrices (t=0, t=0.63, t=1) in a minimal FDN and compute the impulse response for each with `pyFDN.dss2impz`. Plot the three IRs (mu-law encoded for visibility).
+    Use three feedback matrices (t=0, t=0.63, t=1) in a minimal FDN and compute the impulse response for each with `pyFDN.dss_to_impz`. Plot the three IRs (mu-law encoded for visibility).
     """)
     return
 

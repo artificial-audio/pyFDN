@@ -21,7 +21,7 @@ except ImportError:
     _HAS_FLAMO = False
 
 
-def _get_device(device):
+def _get_device(device: Any) -> Any:
     if device is None and _HAS_FLAMO:
         import torch
 
@@ -228,7 +228,7 @@ def delay_module(
     lengths_seconds: np.ndarray,
     nfft: int,
     *,
-    Fs: float,
+    fs: float,
     device=None,
     dtype=None,
     isint: bool = True,
@@ -238,7 +238,7 @@ def delay_module(
     """
     Build a FLAMO parallelDelay module from delay lengths in seconds.
 
-    Values are assigned directly (no sample conversion); buffer size is derived from Fs.
+    Values are assigned directly (no sample conversion); buffer size is derived from fs.
 
     Parameters
     ----------
@@ -246,8 +246,8 @@ def delay_module(
         1D array of delay lengths in seconds, one per channel.
     nfft : int
         FFT size for the FLAMO module.
-    Fs : float
-        Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * Fs).
+    fs : float
+        Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * fs).
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
     dtype : torch.dtype or None
@@ -271,7 +271,7 @@ def delay_module(
 
     lengths = np.asarray(lengths_seconds, dtype=np.float64).ravel()
     n = len(lengths)
-    max_len = int(np.ceil(np.max(lengths) * Fs)) if n else 1
+    max_len = int(np.ceil(np.max(lengths) * fs)) if n else 1
     max_len = max(1, max_len)
     dev = _get_device(device)
 
@@ -282,7 +282,7 @@ def delay_module(
         nfft=nfft,
         isint=isint,
         unit=1,
-        fs=Fs,
+        fs=fs,
         requires_grad=requires_grad,
         alias_decay_db=alias_decay_db,
         device=dev,
@@ -353,6 +353,7 @@ def sos_filter_module(
     *,
     device=None,
     dtype=None,
+    alias_decay_db: float = 0,
     requires_grad: bool = False,
 ):
     """
@@ -369,8 +370,13 @@ def sos_filter_module(
     dtype : torch.dtype or None
         Optional dtype for module parameters (e.g., torch.float64).
         If None, uses float32 to preserve previous behavior.
+    alias_decay_db : float
+        FLAMO alias decay in dB.
     requires_grad : bool
-        Whether the filter parameters are trainable.
+        Whether the SOS coefficients are trainable. The sections are normalized
+        to ``a0 = 1`` here rather than by flamo's ``normalize_a0`` map, whose
+        in-place writes break autograd; ``a0`` is then held at 1 by masking its
+        gradient, so the trained coefficients stay a valid SOS array.
 
     Returns
     -------
@@ -388,16 +394,32 @@ def sos_filter_module(
     if N == 0:
         raise ValueError("sos must have at least one channel")
 
+    a0 = sos_pad[:, 3:4, :]
+    if np.any(a0 == 0):
+        raise ValueError("sos has a section with a0 = 0")
+    sos_pad = sos_pad / a0
+
     dev = _get_device(device)
     torch_dtype = torch.float32 if dtype is None else dtype
     filt = dsp.parallelSOSFilter(
         size=(N,),
         n_sections=n_sections,
         nfft=nfft,
+        alias_decay_db=alias_decay_db,
         device=dev,
         dtype=torch_dtype,
+        # normalization already done above, in numpy: flamo's normalize_a0 map
+        # writes in place, which autograd refuses to differentiate through.
+        normalize_a0=False,
     )
     filt.assign_value(torch.as_tensor(sos_pad, dtype=torch_dtype, device=dev))
+    if requires_grad:
+        filt.param.requires_grad_(True)
+        # a0 is redundant with the section's overall scale; with the normalizing
+        # map gone, hold it at 1 by dropping its gradient.
+        mask = torch.ones_like(filt.param)
+        mask[:, 3, :] = 0.0
+        filt.param.register_hook(lambda grad, mask=mask: grad * mask)
     return filt
 
 
@@ -497,6 +519,76 @@ def matrix_module(
     return matrix
 
 
+def hook_module(
+    value: Any,
+    nfft: int,
+    *,
+    name: str,
+    device: Any = None,
+    dtype: Any = None,
+    alias_decay_db: float = 0.0,
+) -> Any:
+    """One FLAMO module for a filter hook, from an SOS bank, a module, or several.
+
+    The three hooks of :func:`assemble_fdn_core` each take a single module, but
+    what a caller has is often an ``(n_sections, 6, n_channels)`` SOS array, and
+    occasionally more than one thing to put in the same position. This resolves
+    all three cases:
+
+    * ``None`` -- no module.
+    * an array -- built with :func:`sos_filter_module`.
+    * a FLAMO module -- passed through.
+    * a sequence of the above -- composed into a ``Series`` in the given order,
+      with leaves named ``{name}_0``, ``{name}_1``, ...
+
+    Parameters
+    ----------
+    value : None, array, FLAMO module, or sequence
+        What to put in the hook.
+    nfft : int
+        FFT size, matching the rest of the model.
+    name : str
+        The hook's name (``"post_delay"``, ``"post_matrix"``, ``"post_output"``),
+        used to name the leaves of a composed ``Series``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list | tuple):
+        if not value:
+            return None
+        parts = [
+            hook_module(
+                item,
+                nfft,
+                name=name,
+                device=device,
+                dtype=dtype,
+                alias_decay_db=alias_decay_db,
+            )
+            for item in value
+        ]
+        if len(parts) == 1:
+            return parts[0]
+        if not _HAS_FLAMO:
+            raise ImportError("hook_module requires flamo (pip install flamo)")
+        from collections import OrderedDict
+
+        from flamo.processor import system
+
+        return system.Series(
+            OrderedDict((f"{name}_{i}", part) for i, part in enumerate(parts))
+        )
+    if isinstance(value, np.ndarray) or not hasattr(value, "forward"):
+        return sos_filter_module(
+            np.asarray(value, dtype=np.float64),
+            nfft,
+            device=device,
+            dtype=dtype,
+            alias_decay_db=alias_decay_db,
+        )
+    return value
+
+
 def assemble_fdn_core(
     *,
     input_gain: Any,
@@ -504,9 +596,9 @@ def assemble_fdn_core(
     delays: Any,
     output_gain: Any,
     direct: Any = None,
-    loop_filter: Any = None,
-    output_filter: Any = None,
-    post_delay_module: Any = None,
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
 ) -> Any:
     """
     Wire pre-built FLAMO modules into an FDN core (no FFT/iFFT wrapping).
@@ -516,14 +608,24 @@ def assemble_fdn_core(
     (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
-    :func:`pyFDN.extract_build` looks for).
+    :func:`pyFDN.extract_build` requires).
 
     Signal flow::
 
-        input_gain -> [recursion: delay -> (loop_filter) -> (post_delay_module); fB = feedback]
-                   -> output_gain -> (output_filter)
+        input_gain -> [recursion: fF = delay -> (post_delay)
+                                  fB = feedback -> (post_matrix)]
+                   -> output_gain -> (post_output)
 
     with the direct path ``direct`` summed in parallel when provided.
+
+    The three optional filter slots are the same three hooks, in the same three
+    positions and under the same three names, that :func:`pyFDN.process_fdn`
+    takes in numpy -- ``post_delay`` on the shared delay output (so it shapes
+    both what leaves the network and what is fed back), ``post_matrix`` on the
+    feedback path only, ``post_output`` on the wet signal only. An
+    :class:`~pyFDN.FDNBuild` has a field of each name, holding the SOS bank a
+    hook bakes down to; a hook holding something that does not bake -- a nested
+    core, a time-varying matrix -- simply has no build field to go in.
 
     Parameters
     ----------
@@ -541,13 +643,21 @@ def assemble_fdn_core(
         ``Series`` (no ``Parallel`` wrapper) -- this keeps ``core.feedback_loop``
         reachable for losses such as ``sparsity_loss``. When provided the core
         is ``Parallel(brA=fdn_branch, brB=direct)``.
-    loop_filter : FLAMO module or None
-        Optional in-loop filter after the delays (named ``filter``).
-    output_filter : FLAMO module or None
-        Optional per-output filter after the output gain (named
-        ``output_filter``).
-    post_delay_module : FLAMO module or None
-        Optional module appended after the delay in the recursion.
+    post_delay : FLAMO module or None
+        In-loop filter after the delays (named ``post_delay``). Any module of
+        input/output size N: a :class:`~pyFDN.AttenuationFilter` or a plain
+        :func:`sos_filter_module` for attenuation, or a whole nested core such as
+        a Schroeder allpass. Only an SOS filter here is extractable into an
+        :class:`~pyFDN.FDNBuild`.
+    post_matrix : FLAMO module or None
+        Filter on the feedback path after the feedback matrix (named
+        ``post_matrix``); the position a time-varying mixing stage occupies.
+        Adding it names the feedback branch ``mixing_matrix`` rather than
+        leaving the matrix bare on ``fB``, which is where
+        :func:`pyFDN.extract_build` looks for it either way.
+    post_output : FLAMO module or None
+        Per-output filter after the output gain (named ``post_output``);
+        typically an :class:`OutputEQ`.
 
     Returns
     -------
@@ -560,19 +670,21 @@ def assemble_fdn_core(
 
     from flamo.processor import system
 
-    if loop_filter is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delays, "filter": loop_filter})
+    if post_delay is not None:
+        forward = system.Series(
+            OrderedDict({"delay": delays, "post_delay": post_delay})
         )
     else:
-        delay_chain = delays
+        forward = delays
 
-    if post_delay_module is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
+    if post_matrix is not None:
+        back = system.Series(
+            OrderedDict({"mixing_matrix": feedback, "post_matrix": post_matrix})
         )
+    else:
+        back = feedback
 
-    feedback_loop = system.Recursion(fF=delay_chain, fB=feedback)
+    feedback_loop = system.Recursion(fF=forward, fB=back)
     fdn_modules = OrderedDict(
         {
             "input_gain": input_gain,
@@ -580,8 +692,8 @@ def assemble_fdn_core(
             "output_gain": output_gain,
         }
     )
-    if output_filter is not None:
-        fdn_modules["output_filter"] = output_filter
+    if post_output is not None:
+        fdn_modules["post_output"] = post_output
     fdn_branch = system.Series(fdn_modules)
 
     if direct is not None:
@@ -589,51 +701,55 @@ def assemble_fdn_core(
     return fdn_branch
 
 
-def output_layer(output: str, nfft: int, dtype: Any = None) -> Any:
-    """Build the FLAMO output layer for an output domain.
+def core_alias_decay_db(core: Any) -> float:
+    """The anti-aliasing decay the FLAMO ``core`` was built with, in dB.
 
-    ``"time"`` -> ``iFFT`` (time response); ``"magnitude"`` -> ``|.|`` of the
-    frequency response. The single source of truth for the ``output``-string ->
-    layer mapping, shared by :func:`wrap_fdn_shell` (build time) and the training
-    output-domain swap (:func:`pyFDN.train_fdn`) so the two cannot disagree.
+    FLAMO containers (``Series``/``Parallel``/``Recursion``) assert that every
+    module agrees on ``alias_decay_db``, so the core is the single source of
+    truth -- reading it back beats threading the value through by hand and
+    risking a mismatch with the modules.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("output_layer requires flamo (pip install flamo)")
-    import torch
-
-    torch_dtype = torch.float32 if dtype is None else dtype
-    if output == "time":
-        return dsp.iFFT(nfft, dtype=torch_dtype)
-    if output == "magnitude":
-        return dsp.Transform(transform=torch.abs, dtype=torch_dtype)
-    raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
+    value = getattr(core, "alias_decay_db", None)
+    if value is None:
+        return 0.0
+    return abs(float(value))
 
 
-def wrap_fdn_shell(
-    core: Any, *, nfft: int, dtype: Any = None, output: str = "time"
-) -> Any:
-    """
-    Wrap an FDN core in a FLAMO ``Shell`` with an FFT input layer.
+def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
+    r"""
+    Wrap an FDN core in a FLAMO ``Shell`` that returns the impulse response.
+
+    The shell is FFT in, impulse response out: the input layer is an ``FFT``
+    and the output layer the ``iFFTAntiAlias`` that matches the core's own
+    ``alias_decay_db``. A pyFDN model therefore means one thing wherever it is
+    used -- rendered, analyzed or trained -- and the time domain is a property
+    of how the model was built rather than something a caller sets afterwards.
+
+    The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
+    its response carries a :math:`\gamma^n` envelope; the output layer removes
+    it again. What comes out is the true impulse response, accurate to
+    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`). At
+    ``alias_decay_db=0`` the layer is an ordinary inverse FFT.
 
     Parameters
     ----------
     core : FLAMO module
-        FDN core, e.g. from :func:`assemble_fdn_core`.
+        FDN core, e.g. from :func:`assemble_fdn_core`. Its ``alias_decay_db``
+        is read back off it, so the output layer cannot disagree with the
+        modules it undoes.
     nfft : int
         FFT size.
     dtype : torch.dtype or None
         Dtype for the FFT/iFFT layers; defaults to float32.
-    output : str
-        Output-domain layer:
-
-        * ``"time"`` -- ``iFFT`` time response (the render default, matching
-          :func:`pyFDN.dss_to_flamo`).
-        * ``"magnitude"`` -- ``|.|`` of the frequency response, for
-          magnitude-domain losses (e.g. colorless training).
 
     Returns
     -------
     flamo.processor.system.Shell
+
+    See Also
+    --------
+    pyFDN.model_response : the shell's output as a :class:`~pyFDN.Response`,
+        including the magnitude spectrum a frequency-domain view wants.
     """
     if not _HAS_FLAMO:
         raise ImportError("wrap_fdn_shell requires flamo (pip install flamo)")
@@ -644,5 +760,7 @@ def wrap_fdn_shell(
     return system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-        output_layer=output_layer(output, nfft, torch_dtype),
+        output_layer=dsp.iFFTAntiAlias(
+            nfft, alias_decay_db=core_alias_decay_db(core), dtype=torch_dtype
+        ),
     )

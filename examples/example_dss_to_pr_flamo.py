@@ -1,9 +1,10 @@
-# gallery_category: Translation Examples
+# gallery_category: Representations
+# gallery_title: Poles and residues from a FLAMO model
 # gallery_description: Convert a FLAMO feedback model with an SOS loop filter into poles and residues, including iterative pole refinement.
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -23,7 +24,7 @@ def _(mo):
 
     ## Goals
 
-    1. Build a delay state-space model with a **one-pole absorption (SOS) in the loop** via `dss_to_flamo(..., sos_filter=...)`.
+    1. Build a delay state-space model with a **one-pole absorption (SOS) in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`.
     2. Extract poles/residues via `pyFDN.flamo_to_pr`.
     3. Explain the key math fix: why we evaluate Newton/Ehrlich–Aberth in **w-plane** (`w = z^{-1}`) while FLAMO probing naturally gives derivatives in **z-plane**.
     4. Verify numerically that the derivative identities are consistent.
@@ -48,7 +49,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     - Characteristic matrix of the recursive loop with feedforward $F(z)$ and feedback $G(z)$
@@ -166,7 +167,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     At pole index $i$:
@@ -218,50 +219,39 @@ def _(mo):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
+    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
     np.random.seed(7)
     print("pyFDN version:", getattr(pyFDN, "__version__", "unknown"))
-    return np, plt, pyFDN, torch
+    return go, np, pyFDN, torch
 
 
 @app.cell
-def _(np, pyFDN, torch):
-    # Build a small stable FDN in DSS form with an SOS (first-order absorption) in the loop
-    Fs = 48000.0
-    delays = np.array([531, 673, 798, 977], dtype=int)
+def _(pyFDN, torch):
+    # Build a small stable FDN in DSS form with an SOS (first-order absorption)
+    # in the loop. The gallery designs the per-delay-line first-order absorption
+    # from the two reverberation times and bakes it into the build's post_delay
+    # hook as a canonical (1, 6, N) SOS bank.
+    fs = 48000.0
     build = pyFDN.fdn_build_gallery(
-        fs=Fs,
-        delays=delays,
+        fs=fs,
+        N=4,
+        delay_range=[300, 600],
         io_type="identity",
         direct_gain=0.0,
-        rt=None,
+        rt=0.5,  # reverberation time at DC (seconds)
+        rt_nyquist=0.1,  # ... and at Nyquist
         rng=7,
     )
 
-    # First-order absorption in the loop: canonical (1, 6, N) SOS bank.
-    rt_dc, rt_ny = 0.5, 0.1  # reverb time at DC and Nyquist (seconds)
-    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, build.delays, Fs)
-
-    # DSS -> FLAMO with SOS in the loop (delay -> filter -> A).
-    nfft = 2**16
-    model = pyFDN.dss_to_flamo(
-        A=build.A,
-        B=build.B,
-        C=build.C,
-        D=build.D,
-        m=build.delays,
-        Fs=Fs,
-        nfft=nfft,
-        shell=True,
-        sos_filter=sos,
-        dtype=torch.float64,
-    )
-    return Fs, build.delays, model, sos
+    # Build -> FLAMO: state-space and the in-loop filter in one call
+    # (delay -> post_delay -> A).
+    model = pyFDN.build_to_flamo(build, nfft=2**16, dtype=torch.float64)
+    return fs, build, model
 
 
 @app.cell
@@ -280,22 +270,9 @@ def _(model, pyFDN):
 
 
 @app.cell
-def _(
-    Fs,
-    delays,
-    direct,
-    is_pair,
-    mo,
-    model,
-    np,
-    plt,
-    poles,
-    pyFDN,
-    residues,
-    sos,
-):
+def _(fs, direct, is_pair, model, np, poles, pyFDN, residues):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
-    ir_flamo = pyFDN.flamo_time_response(model, fs=int(Fs)).squeeze()
+    ir_flamo = pyFDN.flamo_time_response(model, fs=int(fs)).squeeze()
     if ir_flamo.ndim > 1:
         ir_flamo = ir_flamo[:, 0, 0]
     ir_flamo = np.asarray(ir_flamo, dtype=np.float64)
@@ -307,41 +284,62 @@ def _(
 
     err = np.max(np.abs(ir_ref - ir_modal))
     print("max |IR_flamo - IR_modal|:", err)
+    return ir_modal, ir_ref
 
-    # Plot poles in the complex plane with SOS gain-per-sample curve
-    angles_sos, mag_sos = pyFDN.sos_gain_per_sample_curves(sos, delays, nfft=512)
-    plt.figure(figsize=(10, 5))
-    plt.plot(
-        pyFDN.rad_to_hertz(angles_sos, Fs),
-        pyFDN.lin_to_db(mag_sos),
-        alpha=0.7,
-        label="SOS gain per sample",
-    )
-    plt.scatter(
-        pyFDN.rad_to_hertz(np.angle(poles), Fs),
-        pyFDN.lin_to_db(np.abs(poles)),
-        marker=".",
-        color="red",
-        label="Poles",
-    )
-    plt.xlabel("Frequency [Hz]")
-    plt.ylabel("Magnitude [dB]")
-    # plt.ylim(-1,1)
-    plt.title("SOS gain per sample and poles in the complex plane")
-    plt.grid(True, alpha=0.4)
-    plt.legend()
-    plt.tight_layout()
-    ax1 = plt.gca()
 
-    # Plot FLAMO vs modal IR
-    _fig_ir = pyFDN.plot_impulse_response(
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Poles against the in-loop absorption
+
+    `plot_db_per_sample` draws one curve per delay line: that line's absorption
+    magnitude divided by its delay length, so every curve is an amplitude loss
+    **per sample** and the four are directly comparable (curve color encodes
+    delay length). Pole magnitudes are a loss per sample too -- $20\log_{10}|z_i|$
+    -- so the poles drop onto the same axis, each one sitting at its own
+    frequency $\angle z_i$. The poles should track the absorption curves: that
+    is what "the filter sets the decay rate" looks like.
+    """)
+    return
+
+
+@app.cell
+def _(fs, build, go, np, poles, pyFDN):
+    _pole_trace = go.Scatter(
+        x=pyFDN.rad_to_hertz(np.angle(poles), fs),
+        y=pyFDN.lin_to_db(np.abs(poles)),
+        mode="markers",
+        marker={"size": 4, "color": "red"},
+        name="Poles",
+    )
+    _fig_decay = pyFDN.plot_db_per_sample(
+        build.post_delay,
+        build.delays,
+        fs=fs,
+        nfft=2**12,
+        title="Absorption gain per sample and extracted poles",
+    )
+    _fig_decay.add_trace(_pole_trace)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Impulse response: FLAMO vs modal reconstruction
+    """)
+    return
+
+
+@app.cell
+def _(fs, ir_modal, ir_ref, pyFDN):
+    pyFDN.plot_impulse_response(
         ir_ref,
         ir_modal,
+        fs=fs,
         labels=["IR from FLAMO", "IR from poles/residues"],
         title="FLAMO time response vs modal reconstruction",
     )
-
-    mo.vstack([ax1, _fig_ir])
     return
 
 
@@ -359,14 +357,12 @@ def _(mo):
       - Deflation and EAI update are done directly in $w$.
       - Conversion to $z=1/w$ happens only once at the end, before residue computation.
 
-    ### Why this is better
+    ### Why the w-plane
 
-    1. **Single-variable formulation:** easier to reason about and debug.
-    2. **Closer to delay-polynomial structure:** delays are naturally polynomial in $w=z^{-1}$.
-    3. **Numerical robustness:** avoids repeated z↔w conversion during iteration.
-    4. **Lower layering:** direct calls into FLAMO recursion APIs, fewer adaptation layers.
-
-    If you want, the next extension is to add a side-by-side diagnostic cell comparing convergence traces of the new fully-w formulation against a legacy z-formulation.
+    1. **Single-variable formulation:** one variable throughout, so there is nothing to convert and nothing to get backwards.
+    2. **Closer to the delay-polynomial structure:** delays are naturally polynomial in $w=z^{-1}$.
+    3. **Numerical robustness:** no repeated z-to-w conversion accumulating error during iteration.
+    4. **Lower layering:** direct calls into FLAMO's recursion API, with fewer adaptation layers in between.
     """)
     return
 

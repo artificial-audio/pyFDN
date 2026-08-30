@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyFDN"
-version = "0.2.0"
+version = "0.4.2"
 description = "Python library for Feedback Delay Networks"
 readme = "README.rst"
 authors = [
@@ -45,6 +45,7 @@ examples = [
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
+    "pyroomacoustics",  # shoebox image-source RIRs for example_reverberation_enhancement
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
@@ -52,6 +53,7 @@ test = [
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
     "multislope>=0.1.1",
+    "pyroomacoustics",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
@@ -81,6 +83,7 @@ docs = [
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
+    "pyroomacoustics",  # rendered by the reverberation-enhancement notebook
     "adac",  # example_fdn_to_faust is rendered into the docs
 ]
 
@@ -110,7 +113,7 @@ include = ["pyFDN*"]
 # triggers on. Usage: bump-my-version bump {major|minor|patch}
 
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.4.2"
 allow_dirty = false
 commit = true
 message = "Bump version: {current_version} → {new_version}"

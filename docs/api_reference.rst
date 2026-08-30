@@ -83,14 +83,9 @@ Acoustics & Absorption
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.absorption_filters
-   pyFDN.first_order_absorption
-   pyFDN.first_order_shelving_eq
-   pyFDN.one_pole_absorption
    pyFDN.sos_gain_per_sample_curves
    pyFDN.echo_density
    pyFDN.edc
-   pyFDN.absorption_to_rt
    pyFDN.estimate_initial_level_bands
    pyFDN.estimate_rt_bands
    pyFDN.octave_bands
@@ -100,30 +95,66 @@ Acoustics & Absorption
    pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
-Graphic EQ
-----------
+EQ Design (``pyFDN.eq``)
+-------------------------
+
+Explicit functions map either decay targets or gain targets onto a named
+filter design. The same functions run in NumPy or Torch; the trainable
+:class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
+mappings inside a training loop. ``EQDesign`` is the literal choice of
+``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
+modules. The target-to-EQ functions accept ``return_design=True`` when their
+JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.design_geq
-   pyFDN.graphic_eq
-   pyFDN.absorption_geq
+   pyFDN.EQDesign
+   pyFDN.decay_to_geq
+   pyFDN.decay_to_first_order_shelf
+   pyFDN.decay_to_one_pole
+   pyFDN.gain_to_geq
+   pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_first_order_shelf
+   pyFDN.gain_to_one_pole
+   pyFDN.geq_design_matrix
+   pyFDN.lowshelf_biquad
+   pyFDN.highshelf_biquad
+   pyFDN.peaking_biquad
+   pyFDN.first_order_shelf_biquad
+   pyFDN.one_pole_biquad
    pyFDN.probe_sos
-   pyFDN.shelving_filter
-   pyFDN.bandpass_filter
 
-DSP Components
---------------
+Time-Domain Graph (``pyFDN.td``)
+--------------------------------
+
+Stateful block-processing operators, wired into a graph by the connectors and
+rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.FeedbackDelay
-   pyFDN.FIRMatrixFilter
-   pyFDN.SOSFilterBank
+   pyFDN.td.TimeOperator
+   pyFDN.td.Identity
+   pyFDN.td.Gain
+   pyFDN.td.Delay
+   pyFDN.td.AbsoluteValue
+   pyFDN.td.DCBlocker
+   pyFDN.td.ControllableFullWaveRect
+   pyFDN.td.SDFD
+   pyFDN.td.RingModulator
+   pyFDN.td.PitchShift
+   pyFDN.td.GranularPitchShift
+   pyFDN.td.SOSBank
+   pyFDN.td.MatrixFIR
+   pyFDN.td.MatrixConvolver
+   pyFDN.td.TimeVaryingMatrix
+   pyFDN.td.RecursionState
+   pyFDN.td.Series
+   pyFDN.td.Parallel
+   pyFDN.td.Recursion
 
 Delay Utilities
 ---------------
@@ -137,6 +168,29 @@ Delay Utilities
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
    pyFDN.flamo_freq_response
+
+Building a FLAMO Graph
+----------------------
+
+An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
+``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
+``post_output`` on the wet signal -- are the same three
+:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.assemble_fdn_core
+   pyFDN.wrap_fdn_shell
+   pyFDN.gain_module
+   pyFDN.delay_module
+   pyFDN.matrix_module
+   pyFDN.fir_matrix_module
+   pyFDN.sos_filter_module
+   pyFDN.hook_module
+   pyFDN.AttenuationFilter
+   pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
 --------------------------
@@ -199,6 +253,11 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
+   pyFDN.get_fdn_preset
+   pyFDN.FDNPreset
+   pyFDN.fdn_preset_to_dict
+   pyFDN.fdn_preset_from_dict
+   pyFDN.save_fdn_preset
    pyFDN.load_fdn_preset
    pyFDN.fdn_build_to_dict
    pyFDN.fdn_build_from_dict
@@ -248,10 +307,43 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
+   pyFDN.trainable_from_preset
    pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
+   pyFDN.LOSSLESS_ALIAS_DECAY_DB
+
+Training Objectives
+-------------------
+
+An objective is a weighted sum of losses, composed with ``+`` and ``*``. Losses
+on the impulse response read a :class:`pyFDN.Response`; losses on a model
+parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.Response
+   pyFDN.model_response
+   pyFDN.param
+   pyFDN.params
+   pyFDN.ParamRef
+   pyFDN.Loss
+   pyFDN.FlatMagnitude
+   pyFDN.AsymmetricFlatMagnitude
+   pyFDN.FlatSpectrogram
+   pyFDN.MatchMagnitude
+   pyFDN.MatchSpectrogram
+   pyFDN.MatchMelSpectrogram
+   pyFDN.MatchImpulseResponse
+   pyFDN.MatchEnergyDecay
+   pyFDN.MatchCumulativeEnergy
+   pyFDN.Energy
+   pyFDN.Sparsity
+   pyFDN.L1
+   pyFDN.L2
 
 Feature Extraction
 ------------------

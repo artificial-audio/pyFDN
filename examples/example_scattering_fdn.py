@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
 # gallery_title: Scattering feedback matrices
 # gallery_description: Compare dense, velvet-noise, elemental, and static feedback matrices by their echo-density buildup.
 
@@ -15,27 +15,23 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Scattering feedback matrices
 
-    Demonstration of different types of scattering (FIR paraunitary) feedback
-    matrices from `filter_matrix_gallery`:
+    Demonstration of different types of scattering (FIR paraunitary) feedback matrices from `filter_matrix_gallery`:
 
     - **RandomDense** — dense cascaded paraunitary matrix;
     - **Velvet** — sparse velvet-noise feedback matrix;
     - **FromElementals** — cascade of degree-one lossless factors;
     - **NoScatter** — plain static orthogonal matrix (for comparison).
 
-    Validation is performed with the normalized echo density measure
-    (Abel & Huang 2006): scattering matrices build up echo density much faster
-    than the static matrix.
+    Validation is performed with the normalized echo density measure (Abel & Huang 2006): scattering matrices build up echo density much faster than the static matrix.
 
     Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*.
 
     """)
-
     return
 
 
@@ -43,11 +39,9 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 
@@ -101,8 +95,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse responses and echo density
 
-    `process_fdn` handles the FIR feedback matrices directly in the time-domain
-    recursion (each matrix entry is an FIR filter with persistent state).
+    `process_fdn` handles the FIR feedback matrices directly in the time-domain recursion (each matrix entry is an FIR filter with persistent state).
     """)
     return
 
@@ -134,9 +127,7 @@ def _(mo):
     mo.md(r"""
     ## Plot
 
-    Solid: impulse responses (offset per type). Dashed: normalized echo
-    density profiles. The scattering matrices reach echo density 1 (Gaussian)
-    long before the static matrix.
+    Solid: impulse responses (offset per type). Dashed: normalized echo density profiles. The scattering matrices reach echo density 1 (Gaussian) long before the static matrix.
     """)
     return
 

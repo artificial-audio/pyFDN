@@ -19,7 +19,9 @@ def _(mo):
     mo.md(r"""
     # Vanilla FDN (FLAMO)
 
-    Build a vanilla FDN with `pyFDN.dss_to_flamo`, optionally alter delays and feedforward (e.g. diagonal gain, no absorption), plot IRs, and run a dry signal through the model.
+    The shortest path from nothing to a reverberator you can listen to. `pyFDN.fdn_build_gallery` picks a complete set of FDN parameters — delays, an orthogonal feedback matrix, input/output gains and frequency-dependent absorption — and `pyFDN.dss_to_flamo` turns them into a FLAMO model, which is a differentiable torch module that also happens to render audio.
+
+    Two things come out of that model here: its impulse response, which is the reverb on its own, and a dry recording pushed through it.
     """)
     return
 
@@ -37,30 +39,19 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Parameters
+    ## Build the model
+
+    Eight delay lines at 48 kHz, decaying over 2 s at DC and half that at Nyquist — the frequency-dependent absorption every real room has. `dss_to_flamo` takes the build's matrices, delays and per-line filters and returns the FLAMO model; `flamo_time_response` renders its impulse response.
     """)
     return
 
 
 @app.cell
-def _(torch):
+def _(pyFDN, torch):
     torch.manual_seed(42)
     n = 8
     fs = 48000
-    print(f"n={n}, fs={fs}")
-    return fs, n
 
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Build model and get original IR
-    """)
-    return
-
-
-@app.cell
-def _(fs, n, pyFDN):
     build = pyFDN.fdn_build_gallery(
         n,
         fs=fs,
@@ -68,8 +59,8 @@ def _(fs, n, pyFDN):
         direct_gain=1.0,
         rt=2.0,
         rt_nyquist=0.5,
-        post_eq_db_dc=0.0,
-        post_eq_db_nyquist=-6.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-6.0,
         rng=42,
     )
     model = pyFDN.dss_to_flamo(
@@ -80,17 +71,19 @@ def _(fs, n, pyFDN):
         build.delays,
         build.fs,
         nfft=2**18,
-        sos_filter=build.filters,
-        output_filter=build.post_eq,
+        post_delay=build.post_delay,
+        post_output=build.post_output,
     )
-    ir_original = pyFDN.flamo_time_response(model).flatten()
-    return build, ir_original, model
+    ir = pyFDN.flamo_time_response(model).flatten()
+    return build, fs, ir, model
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN parameter overview
+    ## What the model is made of
+
+    Feedback matrix, delays, input and output gains, and the magnitude response the absorption filters impose on each delay line.
     """)
     return
 
@@ -104,36 +97,31 @@ def _(build, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot and listen to IRs
+    ## The impulse response
+
+    A dense exponential decay whose high end dies first, which is the audible signature of the Nyquist reverberation time being shorter than the one at DC.
     """)
     return
 
 
 @app.cell
-def _(fs, ir_original, mo, np, pyFDN):
+def _(fs, ir, mo, np, pyFDN):
     _fig = pyFDN.plot_impulse_response(
-        ir_original,
+        ir,
         fs=fs,
-        labels=["Original"],
         title="Vanilla FDN impulse response",
     )
 
-    mo.vstack(
-        [
-            _fig,
-            mo.md("Original:"),
-            mo.audio(np.asanyarray(ir_original), fs),
-        ]
-    )
+    mo.vstack([_fig, mo.audio(np.asanyarray(ir), fs)])
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Process dry audio
+    ## Run audio through it
 
-    Load packaged synth dry, trim to one block of length `n_fft`, run through the model, listen to dry and wet.
+    The same model, driven by a signal instead of an impulse. `flamo_process` renders the model's frequency response once and convolves; `tail_seconds` appends enough silence for the tail to finish rather than wrapping back onto the start.
     """)
     return
 

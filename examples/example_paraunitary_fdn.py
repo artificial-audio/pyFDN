@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Feedback Matrices
 # gallery_title: Paraunitary filter feedback delay network
 # gallery_description: Build an FDN with a lossless FIR scattering matrix and verify its time-domain and modal responses.
 
@@ -15,14 +15,12 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Filter feedback delay network (FFDN) with paraunitary feedback matrix
 
-    An FDN with a *paraunitary* (FIR, lossless) scattering matrix in the loop.
-    The example computes the impulse response by time-domain recursion and by
-    modal decomposition, and verifies that the system is lossless (all poles
+    An FDN with a *paraunitary* (FIR, lossless) scattering matrix in the loop. The example computes the impulse response by time-domain recursion and by modal decomposition, and verifies that the system is lossless (all poles
     on the unit circle).
 
     Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}.*
@@ -33,16 +31,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
-    return go, np, plt, pyFDN, torch
+    return go, np, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -85,15 +80,15 @@ def _(mo):
 
 
 @app.cell
-def _(feedback_matrix, np, plt, pyFDN):
-    pyFDN.plot_impulse_response_matrix(
+def _(feedback_matrix, mo, np, pyFDN):
+    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
         np.arange(feedback_matrix.shape[2]),
         pyFDN.mulaw_encode(feedback_matrix.transpose(2, 0, 1)),
         xlabel="Time (samples)",
         ylabel="Amplitude (mu)",
         title="Paraunitary feedback matrix",
     )
-    plt.show()
+    mo.as_html(_fig)
     return
 
 
@@ -102,8 +97,7 @@ def _(mo):
     mo.md(r"""
     ## Verify paraunitarity
 
-    A paraunitary matrix satisfies $A^T(z^{-1})\,A(z) = I$; in the time domain
-    the matrix impulse response is lossless.
+    A paraunitary matrix satisfies $A^T(z^{-1})\,A(z) = I$; in the time domain the matrix impulse response is lossless.
     """)
     return
 
@@ -123,12 +117,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse response and modal decomposition
 
-    The FIR feedback matrix runs directly in the time-domain recursion.
-    For the modal decomposition the FIR matrix is placed as a FLAMO Filter
-    module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles
-    with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the
-    delay count, so the number of root seeds is set to the degree of the
-    generalized characteristic polynomial.
+    The FIR feedback matrix runs directly in the time-domain recursion. For the modal decomposition the FIR matrix is placed as a FLAMO Filter module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the delay count, so the number of root seeds is set to the degree of the generalized characteristic polynomial.
     """)
     return
 
@@ -160,7 +149,7 @@ def _(
         C=output_gain,
         D=direct,
         m=delays,
-        Fs=fs,
+        fs=fs,
         shell=False,
         dtype=torch.float64,
     )
@@ -210,8 +199,7 @@ def _(mo):
     mo.md(r"""
     ## Poles and residues
 
-    The FFDN is lossless: all pole magnitudes are 0 dB. The residue magnitudes
-    spread over a wide range.
+    The FFDN is lossless: all pole magnitudes are 0 dB. The residue magnitudes spread over a wide range.
     """)
     return
 

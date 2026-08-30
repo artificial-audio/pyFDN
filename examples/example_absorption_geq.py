@@ -1,10 +1,10 @@
-# gallery_category: Absorption & Filters
+# gallery_category: Absorption & Decay
 # gallery_title: Absorption GEQ in an FDN
 # gallery_description: Design per-delay graphic-EQ absorption filters and confirm that the rendered FDN follows a target frequency-dependent reverberation time.
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -15,19 +15,17 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
 
-    Demonstrates `pyFDN.absorption_geq`: frequency-dependent absorption designed
-    as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation
-    time curve.
+    Demonstrates `pyFDN.decay_to_geq`: frequency-dependent attenuation designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
 
     The absorption filters are applied per delay line.  Here we:
 
     1. Design the filters from a target T60 curve.
-    2. Run a one-channel FDN using FLAMO.
+    2. Render a one-channel FDN in the time domain.
     3. Estimate T60 from the impulse response and compare with the target.
 
     Reference: *{pyFDN.paper_link("Scattering_in_Feedback_Delay_Networks")}*
@@ -40,31 +38,33 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import dataclasses
+
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
-    return go, np, pyFDN
+    return dataclasses, go, np, pyFDN
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN parameters
+    ## The FDN to be absorbed
+
+    Eight delay lines with an orthogonal feedback matrix — lossless on its own. All of the decay comes from the filters designed in the next cell.
     """)
     return
 
 
 @app.cell
-def _(np, pyFDN):
-    np.random.seed(5)
+def _(pyFDN):
     fs = 48000
     num_delays = 8
     rir_len = 3 * fs  # 3 seconds
 
+    # rt=None leaves the post_delay hook empty; the GEQ below fills it.
     build = pyFDN.fdn_build_gallery(
         num_delays,
         fs=fs,
@@ -76,16 +76,7 @@ def _(np, pyFDN):
         rt=None,
         rng=5,
     )
-    delays = build.delays
-    feedback_matrix = build.A
-    B_in, C_out, D_dir = build.B, build.C, build.D
-
-    # Target RT at the 10 GEQ bands (seconds)
-    target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
-
-    print(f"Delays: {delays}")
-    print(f"Target RT: {target_rt}")
-    return B_in, C_out, D_dir, delays, feedback_matrix, fs, rir_len, target_rt
+    return build, fs, rir_len
 
 
 @app.cell(hide_code=True)
@@ -93,20 +84,26 @@ def _(mo):
     mo.md(r"""
     ## Design absorption filters
 
-    `absorption_geq` converts T60 to a per-sample dB slope, fits a GEQ, and returns
-    SOS coefficients for each delay line.
+    `decay_to_geq` converts T60 to a per-sample dB slope, fits a graphic EQ, and returns SOS coefficients for each delay line.
     """)
     return
 
 
 @app.cell
-def _(delays, fs, pyFDN, target_rt):
-    # absorption_geq uses the 8 interior RT values (bands 1..8)
+def _(build, dataclasses, np, pyFDN):
+    # Target RT at the 10 GEQ bands (seconds)
+    target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
+
+    # decay_to_geq uses the 8 interior RT values (bands 1..8)
     # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
-    sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, build.delays, build.fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
-    return (sos_absorption,)
+
+    # The bank goes straight into the build's post_delay hook: the filter on the
+    # delay output, inside the loop, which is what sets the decay.
+    geq_build = dataclasses.replace(build, post_delay=sos_absorption)
+    return geq_build, sos_absorption, target_rt
 
 
 @app.cell(hide_code=True)
@@ -114,19 +111,17 @@ def _(mo):
     mo.md(r"""
     ## Absorption filter magnitude responses
 
-    Plot the cascaded per-delay absorption filter response for each of the 8 delay
-    lines.  The curves should decay toward lower dB at higher frequencies (shorter
-    T60 = more attenuation per sample at HF).
+    Plot the cascaded per-delay absorption filter response for each of the 8 delay lines. The curves should decay toward lower dB at higher frequencies (shorter T60 = more attenuation per sample at HF).
     """)
     return
 
 
 @app.cell
-def _(delays, fs, pyFDN, sos_absorption):
+def _(build, pyFDN, sos_absorption):
     pyFDN.plot_db_per_sample(
         sos_absorption,
-        delays,
-        fs=fs,
+        build.delays,
+        fs=build.fs,
         nfft=2**14,
         title="Per-delay absorption filter magnitude (one application)",
     )
@@ -138,61 +133,24 @@ def _(mo):
     mo.md(r"""
     ## Compute impulse response
 
-    Build a FLAMO FDN with the GEQ absorption filters in the loop via `dss_to_flamo`.
-    Signal path: input → B → [delays → SOS → A] → C → output.
+    `build_to_impz` renders the build straight to a time-domain impulse response — one `process_fdn` block simulation. Signal path: input → B → [delays → SOS → A] → C → output.
     """)
     return
 
 
 @app.cell
-def _(
-    B_in,
-    C_out,
-    D_dir,
-    delays,
-    feedback_matrix,
-    fs,
-    np,
-    pyFDN,
-    rir_len,
-    sos_absorption,
-):
-    nfft = int(2 ** np.ceil(np.log2(rir_len)))
-    model = pyFDN.dss_to_flamo(
-        feedback_matrix,
-        B_in,
-        C_out,
-        D_dir,
-        delays,
-        fs,
-        nfft=nfft,
-        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
-        shell=True,
-    )
-    rir = pyFDN.flamo_time_response(model).squeeze()[:rir_len]
-    rir /= np.max(np.abs(rir)) + 1e-300
+def _(geq_build, np, pyFDN, rir_len):
+    rir = pyFDN.peak_normalize(pyFDN.build_to_impz(geq_build, rir_len).squeeze())
     print(f"RIR computed: {rir_len} samples, peak at sample {np.argmax(np.abs(rir))}")
-    return model, rir
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Visualize DSP graph
-    """)
-    return
-
-
-@app.cell
-def _(model, pyFDN):
-    pyFDN.plot_flamo_graph(model)
-    return
+    return (rir,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ## Impulse response
+
+    The high end dies first and the low end rings on, which is the target T60 curve made audible.
     """)
     return
 
@@ -216,8 +174,7 @@ def _(mo):
     mo.md(r"""
     ## RT estimate vs target
 
-    Estimate RT in octave bands (63–8000 Hz) by Butterworth bandpass filtering
-    and compare with the design target.
+    Estimate RT in octave bands (63–8000 Hz) by Butterworth bandpass filtering and compare with the design target.
     """)
     return
 

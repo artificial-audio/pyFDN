@@ -15,11 +15,14 @@ OUTPUT_FILE = DOCS_DIR / "examples_gallery.rst"
 
 CATEGORY_ORDER = (
     "Getting Started",
-    "Absorption & Filters",
-    "Translation Examples",
-    "Allpass FDN Examples",
+    "Feedback Matrices",
+    "Absorption & Decay",
+    "Analysis & Verification",
+    "Optimization",
+    "Allpass FDNs",
     "Special FDNs",
-    "FDN Design & Analysis",
+    "Representations",
+    "Export & Deployment",
 )
 
 

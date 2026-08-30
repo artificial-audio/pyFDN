@@ -78,17 +78,17 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     feedback = pyFDN.random_orthogonal(len(delays))
 
     # one-pole absorption filters targeting RT of 1.2 s at DC and 0.9 s at Nyquist
-    absorption = pyFDN.one_pole_absorption(1.2, 0.9, delays, fs)
+    absorption = pyFDN.decay_to_one_pole(1.2, 0.9, delays, fs)
 
     # convert delay state-space to standard state-space (A_ss, b, c, d)
     A_ss, b, c, d = pyFDN.dss_to_ss(delays, feedback)
 
 Alternatively, import specific functions directly::
 
-    from pyFDN import random_orthogonal, one_pole_absorption, lin_to_db
+    from pyFDN import decay_to_one_pole, lin_to_db, random_orthogonal
 
     feedback = random_orthogonal(4)
-    absorption = one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
+    absorption = decay_to_one_pole(1.2, 0.9, [100, 150, 200, 250], 48_000)
 
 
 Development
@@ -107,7 +107,7 @@ and ``tox.ini`` for multi-environment testing.
 
 
 Helpful links
------------
+-------------
 
 * `List of papers on Feedback Delay Networks <https://github.com/gdalsanto/delay-network-reverbs>`_ .
 * `Multislope Estimation library <https://github.com/artificial-audio/multislope>`_ .

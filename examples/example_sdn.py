@@ -1,4 +1,5 @@
 # gallery_category: Special FDNs
+# gallery_title: Scattering delay network from room geometry
 # gallery_description: Derive a scattering delay network from room geometry and wall absorption, then render its impulse response with FLAMO.
 
 import marimo
@@ -29,21 +30,10 @@ def _(mo):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
-    """)
-    return
-
-
 @app.cell
 def _():
     import numpy as np
-    import plotly.io as pio
     from scipy.linalg import block_diag
-
-    pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
 
     import pyFDN
 
@@ -65,17 +55,17 @@ def _(np, pyFDN):
     room_size = np.array([7, 9, 5])
     source_pos = np.array([0.3, 0.5, 0.9]) * room_size
     receiver_pos = np.array([0.4, 0.1, 0.4]) * room_size
-    Fs = 44100
+    fs = 44100
 
     # Wall filters: one first-order shelving EQ per wall, shared by its 5 outputs.
-    wall_sos = pyFDN.first_order_shelving_eq(
-        db_dc=np.full(6, -1.0),
-        db_nyquist=np.full(6, -6.0),
-        fs=Fs,
-        crossover_frequency=8000.0,
+    wall_sos = pyFDN.gain_to_first_order_shelf(
+        gain_db=np.full(6, -1.0),
+        gain_db_nyquist=np.full(6, -6.0),
+        crossover=8000.0,
+        fs=fs,
     )
     wall_filters = [[wall_sos[:, :, wall] for _ in range(5)] for wall in range(6)]
-    return Fs, receiver_pos, room_size, source_pos, wall_filters
+    return fs, receiver_pos, room_size, source_pos, wall_filters
 
 
 @app.cell(hide_code=True)
@@ -89,12 +79,12 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, pyFDN, receiver_pos, room_size, source_pos, wall_filters):
+def _(fs, pyFDN, receiver_pos, room_size, source_pos, wall_filters):
     sdn = pyFDN.SDN(
         room_size=room_size,
         source_pos=source_pos,
         receiver_pos=receiver_pos,
-        Fs=Fs,
+        fs=fs,
         wall_filters=wall_filters,
     )
     _ = sdn.compute()  # mutates sdn in place; assign to suppress the result-dict output
@@ -160,15 +150,15 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, mo, model, pyFDN):
+def _(fs, mo, model, pyFDN):
     ir = pyFDN.flamo_time_response(model).squeeze()
     fig = pyFDN.plot_impulse_response(
         ir,
-        fs=Fs,
+        fs=fs,
         mulaw=False,
         title="SDN impulse response (FLAMO)",
     )
-    mo.vstack([fig, mo.audio(ir, Fs)])
+    mo.vstack([fig, mo.audio(ir, fs)])
     return
 
 
@@ -189,7 +179,7 @@ def _(block_diag, np, pyFDN, sdn_result):
         @ sdn_result["permutation_matrix"]
     )
     delays_smp = np.rint(
-        np.asarray(sdn_result["delay_lengths_flat"]) * sdn_result["Fs"]
+        np.asarray(sdn_result["delay_lengths_flat"]) * sdn_result["fs"]
     ).astype(int)
     B = sdn_result["input_matrix"] @ np.asarray(sdn_result["input_gains"]).reshape(
         -1, 1
@@ -206,8 +196,8 @@ def _(block_diag, np, pyFDN, sdn_result):
         B,
         C,
         D,
-        attenuation_sos=sdn_result["wall_filters_sos"],
-        fs=sdn_result["Fs"],
+        post_delay_sos=sdn_result["wall_filters_sos"],
+        fs=sdn_result["fs"],
         title="SDN FDN parameters",
     )
     return

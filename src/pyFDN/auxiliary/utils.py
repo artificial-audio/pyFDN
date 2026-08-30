@@ -13,7 +13,7 @@ from scipy.signal import freqz, group_delay
 
 
 def skew(X: ArrayLike) -> np.ndarray:
-    """Return skew-symmetric matrix from upper triangle (Matlab skew convention).
+    """Return skew-symmetric matrix from upper triangle.
 
     Y = triu(X, 1) - triu(X, 1).T so that Y is skew-symmetric. Equivalent to
     skew.m: Y = X - X' with X = triu(X, 1).

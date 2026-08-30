@@ -112,7 +112,7 @@ class SDN:
         room_size,
         source_pos,
         receiver_pos,
-        Fs=44100,
+        fs=44100,
         c=None,
         wall_filters=None,
     ):
@@ -125,7 +125,7 @@ class SDN:
             Source position in metres.
         receiver_pos : tuple (x, y, z)
             Receiver (microphone) position in metres.
-        Fs : int or float
+        fs : int or float
             Sampling frequency in Hz.
         c : float, optional
             Speed of sound in m/s (default 343).
@@ -139,7 +139,7 @@ class SDN:
         self.room_size = tuple(room_size)
         self.source_pos = tuple(source_pos)
         self.receiver_pos = tuple(receiver_pos)
-        self.Fs = float(Fs)
+        self.fs = float(fs)
         self.c = float(c if c is not None else self.DEFAULT_C)
 
         self.wall_filters = wall_filters
@@ -173,7 +173,7 @@ class SDN:
             - direct_path_delay : float, seconds
             - direct_path_gain : float
             - node_positions : list of 6 (x, y, z) tuples, wall node positions in metres.
-            - Fs : float, sampling frequency in Hz.
+            - fs : float, sampling frequency in Hz.
             - c : float, speed of sound in m/s.
 
             Input routing (FDN): 6 gains -> 6 delays -> 6-to-30 matrix (0.5 in matrix).
@@ -202,7 +202,7 @@ class SDN:
         rp = self.receiver_pos
         _eps = 1e-9  # avoid division by zero in gains when nodes coincide
         # Minimum distance so delay is at least 1 sample (avoids delay-free loops when two wall nodes coincide, e.g. at room edges)
-        _d_min_one_sample = self.c / self.Fs
+        _d_min_one_sample = self.c / self.fs
 
         # Wall-to-wall delays (6*5 = 30)
         delay_lengths = np.zeros((self.N_WALLS, self.N_WALLS), dtype=float)
@@ -212,14 +212,14 @@ class SDN:
                 if i == j:
                     continue
                 d = max(_dist(nodes[i], nodes[j]), _d_min_one_sample)
-                delay_lengths[i, j] = round(self.Fs * d / self.c)
+                delay_lengths[i, j] = round(self.fs * d / self.c)
 
         # Order of delay lines: (0,1),(0,2),...,(0,5),(1,0),(1,2),...,(5,4)
         routing = [
             (i, j) for i in range(self.N_WALLS) for j in range(self.N_WALLS) if i != j
         ]
         # All delays in seconds for FLAMO (no conversion in delay_module)
-        delay_lengths_s = delay_lengths.astype(float) / self.Fs
+        delay_lengths_s = delay_lengths.astype(float) / self.fs
         delay_lengths_flat = np.array(
             [delay_lengths_s[i, j] for (i, j) in routing], dtype=float
         )
@@ -238,7 +238,7 @@ class SDN:
         )
         source_to_wall_gains = np.array(
             [
-                (self.c / self.Fs) / max(_dist(sp, nodes[i]), _eps)
+                (self.c / self.fs) / max(_dist(sp, nodes[i]), _eps)
                 for i in range(self.N_WALLS)
             ],
             dtype=float,
@@ -260,7 +260,7 @@ class SDN:
 
         # Direct path (delay in seconds)
         direct_path_delay = _dist(sp, rp) / self.c
-        direct_path_gain = (self.c / self.Fs) / max(_dist(sp, rp), _eps)
+        direct_path_gain = (self.c / self.fs) / max(_dist(sp, rp), _eps)
 
         # Permutation matrix P: P[k_in, k_out]=1 if delay k_out feeds into delay k_in (connectivity only)
         permutation_matrix = _build_fdn_permutation_from_routing(routing)
@@ -341,7 +341,7 @@ class SDN:
             "direct_path_delay": float(direct_path_delay),
             "direct_path_gain": float(direct_path_gain),
             "node_positions": nodes,
-            "Fs": self.Fs,
+            "fs": self.fs,
             "c": self.c,
             # Input routing (FDN): 6 delays -> 6 gains -> 6-to-30 matrix (0.5 in matrix)
             "input_delays": input_delays,
@@ -590,11 +590,11 @@ def _result_to_flamo(r, nfft, device):
             "scattering_matrices"
         ][node]
     feedback_matrix = S_block @ r["permutation_matrix"]
-    Fs = float(r["Fs"])
+    fs = float(r["fs"])
     delays = delay_module(
         np.asarray(r["delay_lengths_flat"], dtype=np.float64),
         nfft,
-        Fs=Fs,
+        fs=fs,
         device=device,
     )
 
@@ -631,7 +631,7 @@ def _result_to_flamo(r, nfft, device):
     input_delays_6 = delay_module(
         np.asarray(r["input_delays"], dtype=np.float64),
         nfft,
-        Fs=Fs,
+        fs=fs,
         device=device,
     )
 
@@ -661,7 +661,7 @@ def _result_to_flamo(r, nfft, device):
     output_delays_6 = delay_module(
         np.asarray(r["output_delays"], dtype=np.float64),
         nfft,
-        Fs=Fs,
+        fs=fs,
         device=device,
     )
 
@@ -695,7 +695,7 @@ def _result_to_flamo(r, nfft, device):
     direct_delay = delay_module(
         np.array([float(r["direct_path_delay"])], dtype=np.float64),
         nfft,
-        Fs=Fs,
+        fs=fs,
         device=device,
     )
 

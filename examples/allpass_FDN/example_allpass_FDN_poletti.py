@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Poletti allpass FDN
 # gallery_description: Construct Poletti's homogeneous allpass FDN topology and inspect its impulse and frequency responses.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Poletti's Allpass FDN (MIMO)
@@ -30,17 +30,8 @@ def _(mo, pyFDN):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
-    """)
-    return
-
-
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
 
     import pyFDN
@@ -57,7 +48,6 @@ def _():
         is_paraunitary,
         is_uniallpass,
         np,
-        plt,
         poletti_allpass,
         pyFDN,
     )
@@ -77,28 +67,29 @@ def _(mo):
 def _(np, poletti_allpass, pyFDN):
     N = 4
     U = pyFDN.random_orthogonal(N)
-    Fs = 48000
+    fs = 48000
     rt = 1
     delays = np.random.randint(200, 1000, size=N)
-    g = pyFDN.rt_to_gain_per_sample(rt, Fs)
+    g = pyFDN.rt_to_gain_per_sample(rt, fs)
 
     average_gain = g ** np.mean(delays)
     A, B, C, D = poletti_allpass(average_gain, U)
-    return A, B, C, D, Fs, N, delays, rt
+    return A, B, C, D, fs, N, delays, rt
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot the system matrix
+    ## The system matrix
+
+    `[A, B; C, D]` as one block heatmap — the four blocks that together make the system allpass.
     """)
     return
 
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    _fig = pyFDN.plot_system_matrix(A, B, C, D)
-    _fig.show()
+    pyFDN.plot_system_matrix(A, B, C, D)
     return
 
 
@@ -150,8 +141,8 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, Fs, delays, is_paraunitary, pyFDN, rt):
-    ir_len = int(rt * Fs * 5)
+def _(A, B, C, D, fs, delays, is_paraunitary, pyFDN, rt):
+    ir_len = int(rt * fs * 5)
     impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)
     # Shape: (ir_len, n_out, n_in)
 
@@ -173,17 +164,17 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np, plt, pyFDN):
-    fig, _, _ = pyFDN.plot_impulse_response_matrix(
+def _(fs, impulse_response, ir_len, mo, np, pyFDN):
+    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
         np.arange(ir_len),
         pyFDN.mulaw_encode(impulse_response),
         xlabel="Time [samples]",
         ylabel="Amplitude [mu-law]",
         title="Poletti allpass FDN — MIMO impulse response",
-        xlim=(-1000, Fs / 2),
+        xlim=(-1000, fs / 2),
     )
 
-    plt.show()
+    mo.as_html(_fig)
     return
 
 
@@ -198,12 +189,12 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, mo, pyFDN):
+def _(fs, impulse_response, mo, pyFDN):
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
-    _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2))
+    _fig = pyFDN.plot_spectrogram(channel_ir, fs, xlim=(0, 2))
 
-    mo.vstack([_fig, mo.audio(channel_ir, Fs)])
+    mo.vstack([_fig, mo.audio(channel_ir, fs)])
     return
 
 

@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 
 import pyFDN
+from pyFDN import td
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.build import FDNBuild
 from pyFDN.train import build_set_decay
 from pyFDN.translate.dss_to_impz import build_to_impz, dss_to_impz
 
@@ -92,13 +92,13 @@ def test_fir_matrix_filter_block_consistency() -> None:
     coeffs = np.random.randn(3, 2, 8)
     x = np.random.randn(200, 2)
 
-    one_shot = FIRMatrixFilter(coeffs).filter(x)
-    blockwise = FIRMatrixFilter(coeffs)
+    one_shot = td.MatrixFIR(coeffs).filter(x)
+    blockwise = td.MatrixFIR(coeffs)
     parts = [blockwise.filter(x[i : i + 32]) for i in range(0, 200, 32)]
     np.testing.assert_allclose(one_shot, np.vstack(parts), atol=1e-12)
 
     # order-1 (static) matrix degenerates to a matrix multiply
-    static = FIRMatrixFilter(coeffs[:, :, :1]).filter(x)
+    static = td.MatrixFIR(coeffs[:, :, :1]).filter(x)
     np.testing.assert_allclose(static, x @ coeffs[:, :, 0].T, atol=1e-12)
 
 
@@ -109,12 +109,12 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos = pyFDN.first_order_absorption(0.3, 0.1, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, None, delays, fs)  # (1, 6, N)
     assert sos.shape == (1, 6, n)
     x = np.random.randn(200, n)
 
     # block-wise filtering with persistent state matches one-shot sosfilt
-    bank = pyFDN.SOSFilterBank(sos, n)
+    bank = td.SOSBank(sos)
     parts = [bank.filter(x[i : i + 32]) for i in range(0, 200, 32)]
     blockwise = np.vstack(parts)
     for i in range(n):
@@ -127,7 +127,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     # only the canonical (n_sections, 6, N) layout is accepted; others raise
     for bad in (sos[0], sos.transpose(2, 0, 1), np.zeros((5, n))):
         with pytest.raises(ValueError, match="shape"):
-            pyFDN.SOSFilterBank(bad, n)
+            td.SOSBank(bad)
 
 
 def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
@@ -153,10 +153,10 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.first_order_absorption(0.15, 0.05, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, None, delays, fs)  # (1, 6, N)
 
     # constract the SOSFilter
-    absorption = pyFDN.SOSFilterBank(sos=sos, num_channels=n)
+    absorption = td.SOSBank(sos)
 
     ir_len = 4096
     impulse = np.zeros(ir_len)
@@ -171,7 +171,7 @@ def test_process_fdn_absorption_matches_flamo() -> None:
         delays,
         fs,
         nfft=2**14,
-        sos_filter=sos,
+        post_delay=sos,
         dtype=torch.float64,
     )
     ir_flamo = pyFDN.flamo_time_response(model).squeeze()[:ir_len]
@@ -192,8 +192,7 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
 
-    eq_sos, _ = pyFDN.design_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
-    eq_sos = eq_sos / eq_sos[:, 3:4]  # a0 = 1
+    eq_sos = pyFDN.gain_to_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
 
     def build(output_filter):
         return pyFDN.dss_to_flamo(
@@ -204,7 +203,7 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
             delays,
             fs,
             nfft=2**14,
-            output_filter=output_filter,
+            post_output=output_filter,
             dtype=torch.float64,
         )
 
@@ -230,13 +229,13 @@ def _siso_build(filters: np.ndarray | None = None) -> FDNBuild:
         D=np.zeros((1, 1)),
         delays=np.array([101, 143, 165, 177]),
         fs=48000.0,
-        filters=filters,
+        post_delay=filters,
     )
 
 
 def test_build_to_impz_lossless_matches_dss_to_impz() -> None:
     np.random.seed(3)
-    build = _siso_build()  # filters=None -> no absorption
+    build = _siso_build()  # post_delay=None -> no absorption
     ir_len = 4096
     got = build_to_impz(build, ir_len)
     ref = dss_to_impz(ir_len, build.delays, build.A, build.B, build.C, build.D)
@@ -248,7 +247,7 @@ def test_build_to_impz_applies_absorption_decay() -> None:
     np.random.seed(3)
     lossless = _siso_build()
     decayed = build_set_decay(lossless, 0.3)
-    assert decayed.filters is not None
+    assert decayed.post_delay is not None
 
     ir_len = 16384
     ir_loss = build_to_impz(lossless, ir_len).squeeze()
@@ -260,7 +259,49 @@ def test_build_to_impz_applies_absorption_decay() -> None:
     assert np.sum(ir_dec[tail] ** 2) < 1e-2 * np.sum(ir_loss[tail] ** 2)
 
 
-def test_build_to_impz_rejects_post_eq() -> None:
-    build = dataclasses.replace(_siso_build(), post_eq=np.zeros((1, 6, 1)))
-    with pytest.raises(ValueError, match="post_eq"):
-        build_to_impz(build, 128)
+def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
+    """A flat gain as a one-section per-channel SOS bank."""
+    sos = np.zeros((1, 6, n_channels))
+    sos[:, 0, :] = gain
+    sos[:, 3, :] = 1.0
+    return sos
+
+
+def test_build_carries_all_three_hooks_and_both_renderers_agree() -> None:
+    """post_matrix is a build field like the other two, and both paths honour it."""
+    pytest.importorskip("flamo")
+    build = dataclasses.replace(
+        _siso_build(),
+        post_matrix=_flat_gain_sos(0.5, 4),
+    )
+    ir_len = 4096
+    numpy_ir = build_to_impz(build, ir_len).squeeze()
+    flamo_ir = np.asarray(
+        pyFDN.flamo_time_response(
+            pyFDN.build_to_flamo(build, nfft=2**14, device="cpu"), fs=build.fs
+        )
+    ).reshape(-1)[:ir_len]
+    np.testing.assert_allclose(numpy_ir, flamo_ir, atol=1e-4)
+
+    # and it is not a no-op: halving the feedback path shortens the decay
+    plain = build_to_impz(_siso_build(), ir_len).squeeze()
+    assert not np.allclose(numpy_ir, plain, atol=1e-3)
+
+    # the graph round-trips it back into the same field
+    extracted = pyFDN.extract_build(
+        pyFDN.build_to_flamo(build, nfft=2**14, device="cpu")
+    )
+    np.testing.assert_allclose(extracted.post_matrix, build.post_matrix, atol=1e-6)
+
+
+def test_build_to_impz_applies_the_post_output_hook() -> None:
+    """post_output reaches the process_fdn argument of the same name."""
+    plain = _siso_build()
+    half = np.zeros((1, 6, 1))
+    half[:, 0, :] = 0.5  # a flat 0.5 gain as a one-section SOS
+    half[:, 3, :] = 1.0
+    quiet = dataclasses.replace(plain, post_output=half)
+
+    np.testing.assert_allclose(
+        build_to_impz(quiet, 256), 0.5 * build_to_impz(plain, 256), atol=1e-12
+    )

@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Visualize how delay count and delay length trade computational cost against modal and echo density.
 
 import marimo
@@ -19,20 +19,17 @@ def _(mo):
     mo.md(r"""
     # FDN design tradeoff
 
-    FDN design typically needs to balance modal and echo density with
-    computational complexity:
+    FDN design typically needs to balance modal and echo density with computational complexity:
 
     - the longer the delays, the more modes, but less echo density;
     - the more delays, the higher modal and echo density, but more expensive.
 
-    We compare a 3×3 grid of settings: FDN size $N \in \{4, 8, 16\}$ and
-    short/medium/long delays. Echo density (Abel & Huang 2006) makes the
-    tradeoff visible: small $N$ with long delays stays sparse for a long time.
+    We compare a 3×3 grid of settings: FDN size $N \in \{4, 8, 16\}$ and short/medium/long delays. Echo density (Abel & Huang 2006) makes the tradeoff visible: small $N$ with long delays stays sparse for a long time.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2020FDNTBFeedbackDelay")}*
@@ -44,12 +41,10 @@ def _(mo, pyFDN):
 @app.cell
 def _():
     import numpy as np
-    import plotly.io as pio
     from plotly.subplots import make_subplots
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return make_subplots, np, pyFDN
 
 
@@ -58,8 +53,7 @@ def _(mo):
     mo.md(r"""
     ## Parameters
 
-    All settings share the same homogeneous decay (RT = 2 s), so the only
-    differences are mode count and reflection density.
+    All settings share the same homogeneous decay (RT = 2 s), so the only differences are mode count and reflection density.
     """)
     return
 
@@ -86,9 +80,7 @@ def _(mo):
     mo.md(r"""
     ## Generate impulse responses
 
-    For each combination, an orthogonal feedback matrix is scaled by the
-    delay-proportional gains (homogeneous decay), and the impulse response is
-    computed with `dss_to_impz`.
+    For each combination, an orthogonal feedback matrix is scaled by the delay-proportional gains (homogeneous decay), and the impulse response is computed with `dss_to_impz`.
     """)
     return
 
@@ -125,11 +117,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse responses and echo density
 
-    Each panel shows the impulse response (gray) and its normalized echo
-    density profile (red). An echo density of 1 means the response is
-    indistinguishable from Gaussian noise (fully mixed). Down a column,
-    longer delays slow down the echo density buildup; across a row, larger
-    $N$ speeds it up.
+    Each panel shows the impulse response (gray) and its normalized echo density profile (red). An echo density of 1 means the response is indistinguishable from Gaussian noise (fully mixed). Down a column, longer delays slow down the echo density buildup; across a row, larger $N$ speeds it up.
     """)
     return
 
@@ -193,9 +181,7 @@ def _(mo):
     mo.md(r"""
     ## Listen
 
-    The perceptual difference is most obvious for the small-$N$ / long-delay
-    setting (flutter echoes) versus the large-$N$ / short-delay setting
-    (smooth reverberation).
+    The perceptual difference is most obvious for the small-$N$ / long-delay setting (flutter echoes) versus the large-$N$ / short-delay setting (smooth reverberation).
     """)
     return
 

@@ -1,4 +1,5 @@
-# gallery_category: Translation Examples
+# gallery_category: Representations
+# gallery_title: Poles and residues from a delay state space
 # gallery_description: Compare three pole-residue solvers by reconstructing an FDN impulse response from its modal decomposition.
 
 import marimo
@@ -19,9 +20,8 @@ def _(mo):
     mo.md(r"""
     # DSS→PR example
 
-    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and
-    ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the
-    time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
+    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with
+    the modal reconstruction from each mode.
     """)
     return
 

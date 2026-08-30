@@ -1,30 +1,62 @@
 """Build a trainable flamo FDN model from a config.
 
-:func:`build_fdn` turns a config (delays/N, decay, what is trainable) into a
+:func:`build_fdn` turns a config (delays/N, decay, which gains train) into a
 trainable flamo ``Shell`` you can render, train, and extract.
 :func:`trainable_from_build` does the same starting from an existing
 :class:`~pyFDN.FDNBuild`.
+
+Both are conveniences over assembling flamo modules yourself with
+:func:`pyFDN.assemble_fdn_core`; a bare build no longer knows anything about
+filter *design*. :func:`trainable_from_preset` bridges that gap when an
+:class:`~pyFDN.FDNPreset` records the target and design name. A trainable filter
+is a module -- :class:`~pyFDN.AttenuationFilter` or :class:`~pyFDN.OutputEQ` --
+initialized with that target and handed to whichever hook it belongs in.
 """
 
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
+    from pyFDN.preset import FDNPreset
 
 # Feedback-matrix parametrization: "orthogonal" keeps the matrix on SO(N) during
 # training (the colorless choice); "random" trains it unconstrained.
 MatrixParam = Literal["orthogonal", "random"]
+TrainableHook = Literal["post_delay", "post_matrix", "post_output"]
+
+# Default anti-time-aliasing decay for a LOSSLESS FDN (``rt=None``), whose poles
+# lie exactly on the unit circle -- so the FFT-domain evaluation of (I - A D(z))^-1
+# is near-singular without it. The value is the accuracy of the resulting impulse
+# response in dB (see ``trainable_from_build``); 60 dB is about the ceiling in
+# float32, where the reconstruction envelope amplifies round-off at the end of
+# the buffer by the same factor. Use float64 to go higher.
+LOSSLESS_ALIAS_DECAY_DB = 60.0
 
 
 @dataclass(frozen=True)
 class Trainable:
-    """Which FDN parameter groups are trained. Delays are always fixed."""
+    """Which of the FDN's gain groups are trained. Delays are always fixed.
+
+    These four are plain arrays: they have no module of their own to carry the
+    flag, so it is named here. The three *filter* hooks are not in this class,
+    because a filter is a module and a module carries its own
+    ``requires_grad`` -- a :class:`~pyFDN.AttenuationFilter` or
+    :class:`~pyFDN.OutputEQ` is trained unless it was built with
+    ``requires_grad=False``.
+
+    A baked SOS bank taken from an :class:`~pyFDN.FDNBuild` is always frozen.
+    Raw biquad coefficients have nothing keeping them inside the unit circle,
+    so a fit that wants more energy raises the loop gain past 1 and the network
+    diverges; training one is therefore a module you build on purpose
+    (:func:`pyFDN.sos_filter_module`), not a flag.
+    """
 
     feedback: bool = True
     input_gain: bool = True
@@ -43,9 +75,10 @@ def build_fdn(
     output_gain: np.ndarray | None = None,
     direct: float | np.ndarray = 0.0,
     trainable: Trainable | None = None,
+    train_rt: bool = False,
     fs: float = 48000.0,
     nfft: int = 2**14,
-    output: str = "time",
+    alias_decay_db: float | None = None,
     device: Any = None,
     dtype: Any = None,
     rng: np.random.Generator | int | None = None,
@@ -60,7 +93,11 @@ def build_fdn(
     N : int, optional
         Number of delay lines when ``delays`` is omitted.
     rt : float, (rt_dc, rt_nyquist), or None
-        Reverberation time in seconds. ``None`` builds a lossless FDN.
+        Reverberation time in seconds, realized as an
+        :class:`~pyFDN.AttenuationFilter` with ``design="first_order_shelf"``.
+        ``None`` builds a lossless FDN.
+        For any other design, build the module yourself and pass it to
+        :func:`trainable_from_build` as ``post_delay=``.
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
     feedback : np.ndarray, optional
@@ -70,8 +107,21 @@ def build_fdn(
     direct : float or np.ndarray
         Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
-        Trainable parameter groups (default :class:`~pyFDN.Trainable`).
-    fs, nfft, output, device, dtype : see :func:`trainable_from_build`.
+        Which gain groups are trained (default :class:`~pyFDN.Trainable`).
+    train_rt : bool
+        Whether ``rt`` is a *parameter* rather than a design. Off by default,
+        since the decay is usually designed from a measured reverberation time.
+        What trains is the reverberation time itself, which keeps the loop
+        contractive for every value it can take -- unlike raw filter
+        coefficients, which nothing holds inside the unit circle.
+    alias_decay_db : float or None
+        Anti-time-aliasing decay, see :func:`trainable_from_build`. ``None``
+        (default) picks it from ``rt``: :data:`LOSSLESS_ALIAS_DECAY_DB` when
+        ``rt is None``, else 0. A lossless FDN has every pole exactly on the
+        unit circle, where the FFT-domain evaluation breaks down entirely; a
+        decaying FDN damps itself within ``nfft`` samples and needs no nudge.
+        Pass ``0.0`` to opt out.
+    fs, nfft, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
         Seed for the sampled delays / default feedback matrix.
 
@@ -79,8 +129,10 @@ def build_fdn(
     -------
     flamo.processor.system.Shell
     """
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
     from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
+
+    trainable = trainable or Trainable()
 
     local_rng = (
         rng if isinstance(rng, np.random.Generator) else np.random.default_rng(rng)
@@ -118,29 +170,35 @@ def build_fdn(
     n_out, n_in = c.shape[0], b.shape[1]
     d = _resolve_direct(direct, n_out, n_in)
 
-    filters = None
+    if alias_decay_db is None:
+        alias_decay_db = LOSSLESS_ALIAS_DECAY_DB if rt is None else 0.0
+
+    post_delay = None
     if rt is not None:
-        from pyFDN.auxiliary.acoustics import first_order_absorption
+        from pyFDN.train.filters import AttenuationFilter
 
-        rt_dc, rt_ny = _rt_pair(rt)
-        filters = first_order_absorption(rt_dc, rt_ny, delays_arr, float(fs))
+        rt_value, rt_nyquist = _rt_pair(rt)
+        post_delay = AttenuationFilter(
+            rt_value,
+            delays_arr,
+            float(fs),
+            rt_nyquist=rt_nyquist,
+            design="first_order_shelf",
+            nfft=nfft,
+            alias_decay_db=float(alias_decay_db),
+            device=device,
+            dtype=dtype,
+            requires_grad=train_rt,
+        )
 
-    build = FDNBuild(
-        A=a,
-        B=b,
-        C=c,
-        D=d,
-        delays=delays_arr,
-        fs=float(fs),
-        filters=filters,
-        post_eq=None,
-    )
+    build = FDNBuild(A=a, B=b, C=c, D=d, delays=delays_arr, fs=float(fs))
     return trainable_from_build(
         build,
         trainable=trainable,
         matrix=matrix,
+        post_delay=post_delay,
         nfft=nfft,
-        output=output,
+        alias_decay_db=alias_decay_db,
         device=device,
         dtype=dtype,
     )
@@ -151,27 +209,81 @@ def trainable_from_build(
     *,
     trainable: Trainable | None = None,
     matrix: MatrixParam = "orthogonal",
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
     nfft: int = 2**14,
-    output: str = "time",
+    alias_decay_db: float = 0.0,
     device: Any = None,
     dtype: Any = None,
 ) -> Any:
     """Build a trainable flamo ``Shell`` initialized from an ``FDNBuild``.
 
+    The gains and the feedback matrix come from the build. The three filter
+    hooks are the build's own baked SOS banks, frozen, unless you hand in a
+    module for that position -- which is how a *designed*, trainable filter
+    gets in, since a baked build no longer remembers the reverberation time or
+    the EQ curve it was designed from::
+
+        model = pyFDN.trainable_from_build(
+            build,
+            post_delay=pyFDN.AttenuationFilter(
+                1.0, build.delays, build.fs, rt_nyquist=1.0,
+                design="first_order_shelf", nfft=nfft),
+            post_output=pyFDN.OutputEQ(
+                0.0, build.C.shape[0], build.fs,
+                design="first_order_shelf", nfft=nfft),
+        )
+
+    Each of those modules is trained because it says so itself (both default to
+    ``requires_grad=True``); pass ``requires_grad=False`` for a designed filter
+    that must not move.
+
     Parameters
     ----------
     build : FDNBuild
         Initial FDN (``A``/``B``/``C``/``D``/``delays``/``fs`` + optional
-        ``filters``/``post_eq``).
+        ``post_delay``/``post_output`` SOS banks).
     trainable : Trainable, optional
-        Trainable parameter groups (default :class:`~pyFDN.Trainable`).
+        Which gain groups are trained (default :class:`~pyFDN.Trainable`). It
+        says nothing about the filter hooks: each module below carries its own
+        ``requires_grad``, and is wired in exactly as it was built.
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
+    post_delay : FLAMO module, optional
+        In-loop filter, replacing ``build.post_delay``. A
+        :class:`~pyFDN.AttenuationFilter` here makes the trained parameter the
+        reverberation time itself, which keeps the loop contractive for every
+        value it can take.
+    post_matrix : FLAMO module, optional
+        Filter on the feedback path, replacing ``build.post_matrix``.
+    post_output : FLAMO module, optional
+        Output EQ, replacing ``build.post_output``; typically an
+        :class:`~pyFDN.OutputEQ`. It sits *outside* the recursion, which makes
+        it the only part of an FDN that can shape the response's spectral
+        envelope without touching the decay -- ``b`` and ``c`` are single
+        numbers per delay line, with no frequency dependence at all.
     nfft : int
         FFT size.
-    output : str
-        ``"time"`` or ``"magnitude"`` output layer (``train_fdn`` sets this to
-        match the mode).
+    alias_decay_db : float
+        **The accuracy of the rendered impulse response, in dB.** Applies a
+        :math:`\\gamma^n` envelope to every module (evaluating the system on a
+        circle of radius :math:`\\gamma < 1`); the shell's output layer
+        removes it again, so the response is the true one and only the
+        time-aliased wrap-around remains, suppressed by exactly
+        ``alias_decay_db``. In float32 the reconstruction amplifies round-off by
+        the same factor, so ~60 dB is the practical ceiling; use
+        ``dtype=torch.float64`` beyond that.
+
+        Leave at 0 for a decaying FDN, which damps itself within ``nfft``
+        samples. A **lossless** FDN needs it: with its poles exactly on the unit
+        circle the FFT-domain evaluation is near-singular and the response comes
+        out wrong, not merely aliased. It does not affect the extracted build
+        (it enters the frequency-domain evaluation, not the parameter ``map``,
+        so :func:`pyFDN.extract_build` still returns the undamped ``A``/``B``/
+        ``C``). A module you pass into a hook must have been built with the same
+        value: it is a change of evaluation radius for the whole system, not a
+        per-module gain.
     device, dtype : optional
         Torch device / dtype (default cpu-or-cuda / float32).
 
@@ -197,11 +309,25 @@ def trainable_from_build(
         else np.zeros((c.shape[0], b.shape[1]))
     )
 
+    # The alias envelope must be identical on every module -- it is a change of
+    # evaluation radius for the whole system, not a per-module gain.
+    alias = float(alias_decay_db)
+
     input_gain = gain_module(
-        b, nfft, device=device, dtype=dtype, requires_grad=trainable.input_gain
+        b,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.input_gain,
     )
     output_gain = gain_module(
-        c, nfft, device=device, dtype=dtype, requires_grad=trainable.output_gain
+        c,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.output_gain,
     )
     feedback = matrix_module(
         build.A,
@@ -209,39 +335,49 @@ def trainable_from_build(
         matrix_type=matrix,
         device=device,
         dtype=dtype,
+        alias_decay_db=alias,
         requires_grad=trainable.feedback,
     )
     # Direct path is ALWAYS wired (zero by default) so the same model serves any
     # objective; the core is therefore a Parallel.
     direct_gain = gain_module(
-        d, nfft, device=device, dtype=dtype, requires_grad=trainable.direct
+        d,
+        nfft,
+        device=device,
+        dtype=dtype,
+        alias_decay_db=alias,
+        requires_grad=trainable.direct,
     )
     delays = _frozen_delays(
-        np.asarray(build.delays, dtype=np.float64).ravel(), fs, nfft, device, dtype
+        np.asarray(build.delays, dtype=np.float64).ravel(),
+        fs,
+        nfft,
+        device,
+        dtype,
+        alias_decay_db=alias,
     )
 
-    # In-loop absorption (decay) is a frozen build property.
-    loop_filter = (
-        sos_filter_module(
-            np.asarray(build.filters, dtype=np.float64),
+    def _hook(module: Any, baked: np.ndarray | None) -> Any:
+        """A hook's module: the one given, else the build's baked SOS, else none.
+
+        A module is wired in exactly as it was built -- what it trains is its
+        own business, which is what lets a composite module (a nested core in
+        the ``post_delay`` hook, say) sit in a hook at all. A baked SOS bank is
+        frozen: see :class:`Trainable` for why raw coefficients are not
+        something to hand an optimizer by default.
+        """
+        if module is not None:
+            return module
+        if baked is None:
+            return None
+        return sos_filter_module(
+            np.asarray(baked, dtype=np.float64),
             nfft,
             device=device,
             dtype=dtype,
-        )
-        if build.filters is not None
-        else None
-    )
-    output_filter = (
-        sos_filter_module(
-            np.asarray(build.post_eq, dtype=np.float64),
-            nfft,
-            device=device,
-            dtype=dtype,
+            alias_decay_db=alias,
             requires_grad=False,
         )
-        if build.post_eq is not None
-        else None
-    )
 
     core = assemble_fdn_core(
         input_gain=input_gain,
@@ -249,10 +385,128 @@ def trainable_from_build(
         delays=delays,
         output_gain=output_gain,
         direct=direct_gain,
-        loop_filter=loop_filter,
-        output_filter=output_filter,
+        post_delay=_hook(post_delay, build.post_delay),
+        post_matrix=_hook(post_matrix, build.post_matrix),
+        post_output=_hook(post_output, build.post_output),
     )
-    return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, output=output)
+    return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
+
+
+def trainable_from_preset(
+    preset: FDNPreset,
+    *,
+    trainable: Trainable | None = None,
+    matrix: MatrixParam = "orthogonal",
+    trainable_hooks: Collection[TrainableHook] = (),
+    nfft: int = 2**14,
+    alias_decay_db: float = 0.0,
+    device: Any = None,
+    dtype: Any = None,
+) -> Any:
+    """Build a FLAMO model while recovering designed filter parameters.
+
+    The baked build is always the source of truth. A hook is recreated as a
+    :class:`~pyFDN.AttenuationFilter` or :class:`~pyFDN.OutputEQ` only when its design
+    record contains a target and the recreated SOS bank matches the baked one.
+    Otherwise the baked coefficients remain a frozen filter, exactly as in
+    :func:`trainable_from_build`.
+
+    ``trainable_hooks`` selects which recovered design targets require
+    gradients. It does not make raw baked SOS coefficients trainable.
+    """
+    from pyFDN.train.filters import AttenuationFilter, OutputEQ
+
+    requested = set(trainable_hooks)
+    known: set[TrainableHook] = {"post_delay", "post_matrix", "post_output"}
+    unknown = requested - known
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ValueError(f"Unknown trainable preset hooks: {names}")
+
+    build = preset.build
+    hook_modules: dict[str, Any] = {
+        "post_delay": None,
+        "post_matrix": None,
+        "post_output": None,
+    }
+
+    decay = preset.design.get("post_delay")
+    if decay is not None and decay.get("rt") is not None:
+        design_type = _preset_filter_type(decay, "post_delay")
+        hook_modules["post_delay"] = AttenuationFilter(
+            decay["rt"],
+            build.delays,
+            build.fs,
+            rt_nyquist=decay.get("rt_nyquist"),
+            design=design_type,
+            rt_crossover=decay.get("rt_crossover"),
+            nfft=nfft,
+            alias_decay_db=alias_decay_db,
+            device=device,
+            dtype=dtype,
+            requires_grad="post_delay" in requested,
+        )
+
+    for name, design, channels in (
+        ("post_matrix", preset.design.get("post_matrix"), build.A.shape[0]),
+        ("post_output", preset.design.get("post_output"), build.C.shape[0]),
+    ):
+        if design is not None and design.get("gain_db") is not None:
+            design_type = _preset_filter_type(design, name)
+            hook_modules[name] = OutputEQ(
+                design["gain_db"],
+                channels,
+                build.fs,
+                gain_db_nyquist=design.get("gain_db_nyquist"),
+                design=design_type,
+                crossover=design.get("crossover"),
+                nfft=nfft,
+                alias_decay_db=alias_decay_db,
+                device=device,
+                dtype=dtype,
+                requires_grad=name in requested,
+            )
+
+    for name in requested:
+        if hook_modules[name] is None:
+            raise ValueError(f"design.{name} needs a target before it can be trainable")
+
+    for name, module in hook_modules.items():
+        if module is not None:
+            _require_matching_hook(name, module, getattr(build, name))
+
+    return trainable_from_build(
+        build,
+        trainable=trainable,
+        matrix=matrix,
+        post_delay=hook_modules["post_delay"],
+        post_matrix=hook_modules["post_matrix"],
+        post_output=hook_modules["post_output"],
+        nfft=nfft,
+        alias_decay_db=alias_decay_db,
+        device=device,
+        dtype=dtype,
+    )
+
+
+def _preset_filter_type(design: dict[str, Any], name: str) -> Any:
+    design_type = design.get("type")
+    if design_type is None:
+        raise ValueError(f"design.{name} needs a type to recover its target")
+    return design_type
+
+
+def _require_matching_hook(name: str, module: Any, baked: np.ndarray | None) -> None:
+    """Reject design information that does not describe the baked SOS bank."""
+    if baked is None:
+        raise ValueError(f"design.{name} is present but build.{name} is null")
+    realized = module.map(module.param).detach().cpu().numpy()
+    if not np.allclose(realized, baked, rtol=1e-5, atol=1e-7):
+        maximum = float(np.max(np.abs(realized - baked)))
+        raise ValueError(
+            f"design.{name} target does not reproduce build.{name} "
+            f"(maximum absolute error {maximum:.3g})"
+        )
 
 
 def build_set_decay(
@@ -263,17 +517,22 @@ def build_set_decay(
 ) -> FDNBuild:
     """Return a copy of ``build`` with homogeneous decay matching ``rt``.
 
-    Sets per-delay first-order absorption (:func:`pyFDN.first_order_absorption`)
-    for ``rt`` (a single value, or ``(rt_dc, rt_nyquist)``). Decay does not change
-    colouration, so this is the natural way to add a tail to a colorless build.
+    Sets the ``post_delay`` hook to per-delay first-order attenuation
+    (:func:`pyFDN.decay_to_first_order_shelf`) for ``rt`` (a single value, or
+    ``(rt_dc, rt_nyquist)``). Decay does not change colouration, so this is the
+    natural way to add a tail to a colorless build.
     """
-    from pyFDN.auxiliary.acoustics import first_order_absorption
+    from pyFDN.eq import decay_to_first_order_shelf
 
     rt_dc, rt_ny = _rt_pair(rt)
-    filters = first_order_absorption(
-        rt_dc, rt_ny, np.asarray(build.delays), float(build.fs), rt_crossover
+    filters = decay_to_first_order_shelf(
+        rt_dc,
+        rt_ny,
+        rt_crossover,
+        np.asarray(build.delays),
+        float(build.fs),
     )
-    return dataclasses.replace(build, filters=filters)
+    return dataclasses.replace(build, post_delay=filters)
 
 
 def _rt_pair(rt: float | tuple[float, float]) -> tuple[float, float]:
@@ -305,7 +564,12 @@ def _random_so_n(n: int, rng: np.random.Generator) -> np.ndarray:
 
 
 def _frozen_delays(
-    delay_samples: np.ndarray, fs: float, nfft: int, device: Any, dtype: Any
+    delay_samples: np.ndarray,
+    fs: float,
+    nfft: int,
+    device: Any,
+    dtype: Any,
+    alias_decay_db: float = 0.0,
 ) -> Any:
     """Frozen integer parallelDelay from delay lengths in samples."""
     from pyFDN.auxiliary.flamo import delay_module
@@ -313,9 +577,10 @@ def _frozen_delays(
     return delay_module(
         np.asarray(delay_samples, dtype=np.float64) / float(fs),
         nfft,
-        Fs=fs,
+        fs=fs,
         device=device,
         dtype=dtype,
         isint=True,
+        alias_decay_db=alias_decay_db,
         requires_grad=False,
     )

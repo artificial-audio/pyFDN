@@ -1,7 +1,6 @@
 """Tests for NumPy-facing FLAMO helpers."""
 
 import numpy as np
-import pytest
 import torch
 
 from pyFDN.auxiliary.flamo import (
@@ -73,7 +72,7 @@ def test_dss_to_flamo_render_matches_impz():
     # time-domain dss_to_impz recursion over the early (pre-wrap) samples.
     _, a, b, c, d, m = _small_fdn()
     nfft = 2**13
-    model = dss_to_flamo(a, b, c, d, m, Fs=48000, nfft=nfft, device="cpu")
+    model = dss_to_flamo(a, b, c, d, m, fs=48000, nfft=nfft, device="cpu")
     ir = np.asarray(flamo_time_response(model, fs=48000)).reshape(-1)
     ref = dss_to_impz(200, m, a, b, c, d).reshape(-1)
     np.testing.assert_allclose(ir[:120], ref[:120], atol=1e-4)
@@ -83,7 +82,7 @@ def test_dss_to_flamo_roundtrips_through_extractor():
     # Leaf names / topology survive the refactor: the extractor recovers A, B,
     # C, D and the delays from the named graph dss_to_flamo builds.
     n, a, b, c, d, m = _small_fdn()
-    model = dss_to_flamo(a, b, c, d, m, Fs=48000, nfft=2**12, device="cpu")
+    model = dss_to_flamo(a, b, c, d, m, fs=48000, nfft=2**12, device="cpu")
     params = extract_build(model)
     np.testing.assert_allclose(params.A, a, atol=1e-5)
     np.testing.assert_allclose(params.B.reshape(n, 1), b, atol=1e-5)
@@ -97,7 +96,7 @@ def test_assemble_fdn_core_direct_toggles_parallel():
     kw = {
         "input_gain": gain_module(b, nfft, device="cpu"),
         "feedback": gain_module(a, nfft, device="cpu"),
-        "delays": delay_module(m / 48000.0, nfft, Fs=48000, device="cpu"),
+        "delays": delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
         "output_gain": gain_module(c, nfft, device="cpu"),
     }
     # No direct path -> plain Series core whose feedback matrix stays reachable
@@ -110,24 +109,18 @@ def test_assemble_fdn_core_direct_toggles_parallel():
     assert type(parallel_core).__name__ == "Parallel"
 
 
-def test_wrap_fdn_shell_output_modes():
+def test_wrap_fdn_shell_returns_the_time_response():
     n, a, b, c, d, m = _small_fdn()
     nfft = 2**11
     core = assemble_fdn_core(
         input_gain=gain_module(b, nfft, device="cpu"),
         feedback=gain_module(a, nfft, device="cpu"),
-        delays=delay_module(m / 48000.0, nfft, Fs=48000, device="cpu"),
+        delays=delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
         output_gain=gain_module(c, nfft, device="cpu"),
     )
     impulse = torch.zeros(1, nfft, 1)
     impulse[:, 0, :] = 1.0
 
-    mag = wrap_fdn_shell(core, nfft=nfft, output="magnitude")(impulse)
-    assert mag.shape == (1, nfft // 2 + 1, 1)
-    assert bool((mag >= 0).all())
-
-    time = wrap_fdn_shell(core, nfft=nfft, output="time")(impulse)
+    time = wrap_fdn_shell(core, nfft=nfft)(impulse)
     assert time.shape == (1, nfft, 1)
-
-    with pytest.raises(ValueError, match="output"):
-        wrap_fdn_shell(core, nfft=nfft, output="phase")
+    assert not time.is_complex()

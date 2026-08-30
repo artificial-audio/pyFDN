@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Compute and visualize FDN mode shapes from the left and right eigenvectors of the loop polynomial.
 
 import marimo
@@ -19,21 +19,18 @@ def _(mo):
     mo.md(r"""
     # FDN eigenvectors (mode shapes)
 
-    Demonstrates how to compute the mode shapes of an FDN from the left and
-    right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
+    Demonstrates how to compute the mode shapes of an FDN from the left and right eigenvectors of the loop polynomial $P(z) = D_m(z) - A$.
 
     Each residue factors into the input/output drive and an undriven part:
 
     $$\rho_i = \frac{(c\, r_i)\,(l_i^H b)}{l_i^H P'(\lambda_i)\, r_i},$$
 
-    where $r_i$ and $l_i$ are the right/left null vectors of $P(\lambda_i)$.
-    The eigenvectors live on the delay lines; expanding each entry along its
-    delay line with $\lambda_i^k$ gives the mode shape over the full state.
+    where $r_i$ and $l_i$ are the right/left null vectors of $P(\lambda_i)$. The eigenvectors live on the delay lines; expanding each entry along its delay line with $\lambda_i^k$ gives the mode shape over the full state.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2024ModalExcitationFeedback")}.*
@@ -46,11 +43,9 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 
@@ -97,8 +92,7 @@ def _(mo):
     mo.md(r"""
     ## Residues from eigenvectors
 
-    Reassemble the residues from the eigenvectors and the undriven part; the
-    result matches the residues returned by the modal decomposition.
+    Reassemble the residues from the eigenvectors and the undriven part; the result matches the residues returned by the modal decomposition.
     """)
     return
 
@@ -150,9 +144,7 @@ def _(mo):
     mo.md(r"""
     ## Mode shapes over the full state space
 
-    Expand the eigenvectors along each delay line: state $k$ of delay line $j$
-    carries $r_{j,i}\,\lambda_i^k$. Horizontal lines mark the delay-line
-    boundaries.
+    Expand the eigenvectors along each delay line: state $k$ of delay line $j$ carries $r_{j,i}\,\lambda_i^k$. Horizontal lines mark the delay-line boundaries.
     """)
     return
 

@@ -1,11 +1,12 @@
-# gallery_category: Translation Examples
+# gallery_category: Export & Deployment
+# gallery_title: Compile an FDN to FAUST
 # gallery_description: Compile a pyFDN design through FLAMO and adac into certified FAUST source for browser, offline, and plugin deployment.
 # references: Franchino2026ADAC
 # requires: adac
 
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -13,7 +14,7 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    from docs.references import paper_link
+    from pyFDN import paper_link
 
     return mo, paper_link
 
@@ -23,11 +24,7 @@ def _(mo):
     mo.md(r"""
     # FDN to FAUST: compiling a pyFDN design to real-time DSP
 
-    A pyFDN design lives as NumPy arrays and, through `dss_to_flamo`, as a
-    differentiable FLAMO graph. Neither runs in a DAW. [`adac`](https://github.com/cucuwritescode/adac)
-    closes that gap: it walks the FLAMO graph, extracts every delay, gain,
-    matrix and filter into a JSON intermediate representation, and emits
-    [FAUST](https://faust.grame.fr) source that compiles to a plugin.
+    A pyFDN design lives as NumPy arrays and, through `dss_to_flamo`, as a differentiable FLAMO graph. Neither runs in a DAW. [`adac`](https://github.com/cucuwritescode/adac) closes that gap: it walks the FLAMO graph, extracts every delay, gain, matrix and filter into a JSON intermediate representation, and emits [FAUST](https://faust.grame.fr) source that compiles to a plugin.
 
     **The pipeline:**
 
@@ -37,8 +34,7 @@ def _(mo):
     4. `adac.json_to_faust` — emit FAUST, with optional `rt60` / `dry_wet` macro knobs;
     5. run it: one click in the browser IDE, or `faust2juce` / `adac.export_juce` for a VST3.
 
-    The last section renders the *compiled* FAUST and overlays it on the FLAMO
-    reference, so the translation is checked, not assumed.
+    The last section renders the *compiled* FAUST and overlays it on the FLAMO reference, so the translation is checked, not assumed.
     """)
     return
 
@@ -91,13 +87,11 @@ def _(mo):
     mo.md(r"""
     ## 1. Design the FDN
 
-    A six-line FDN from the gallery, mono in and stereo out: random orthogonal
-    feedback, one-pole absorption per delay line giving 1.8 s at DC and 0.4 s at
-    Nyquist, unity direct path. The output matrix `C` is `(2, 6)` with random
-    gains, so the two channels are decorrelated mixes of the same delay lines —
-    with `io_type="ones"` both columns would be identical and the result would
-    be dual mono. Nothing here is FAUST-specific: this is the ordinary pyFDN
-    design loop, and the rest of the notebook never assumes a channel count.
+    A six-line FDN from the gallery, mono in and stereo out: random orthogonal feedback, one-pole absorption per delay line giving 1.8 s at DC and 0.4 s at Nyquist, unity direct path.
+
+    The output matrix `C` is `(2, 6)` with random gains, so the two channels are decorrelated mixes of the same delay lines — with `io_type="ones"` both columns would be identical and the result would be dual mono.
+
+    Nothing here is FAUST-specific: this is the ordinary pyFDN design loop, and the rest of the notebook never assumes a channel count.
     """)
     return
 
@@ -127,8 +121,8 @@ def _(pyFDN, torch):
         build.delays,
         build.fs,
         nfft=2**18,
-        sos_filter=build.filters,
-        output_filter=build.post_eq,
+        post_delay=build.post_delay,
+        post_output=build.post_output,
     )
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
     ir_flamo = pyFDN.flamo_time_response(model)[0]
@@ -149,39 +143,14 @@ def _(mo):
     mo.md(r"""
     ## 2. Extract the parameters
 
-    `flamo_to_json` traverses the FLAMO graph and detaches every parameter into
-    a plain dict. Extraction is map-aware: a matrix with a non-identity
-    parametrisation (orthogonal, Householder, Hadamard) serialises the
-    *effective* matrix the model applies, so what FAUST gets is what FLAMO ran.
+    `flamo_to_json` traverses the FLAMO graph and detaches every parameter into a plain dict. Extraction is map-aware: a matrix with a non-identity parametrisation (orthogonal, Householder, Hadamard) serialises the *effective* matrix the model applies, so what FAUST gets is what FLAMO ran.
     """)
     return
 
 
 @app.cell
-def _(adac, fs, model):
+def _(adac, fs, json, mo, model):
     config = adac.flamo_to_json(model, fs, name="PyFDNReverb")
-
-    def graph_lines(node, depth=0, tag=""):
-        """Flatten the JSON IR into an indented outline of module types."""
-        label = node.get("module_type") or node["type"]
-        name = node.get("name")
-        shape = node.get("flamo", {}).get("size")
-        detail = f" {tuple(shape)}" if shape else ""
-        lines = [f"{'  ' * depth}{tag}{label}{f' [{name}]' if name else ''}{detail}"]
-        for child in node.get("children", []):
-            lines += graph_lines(child, depth + 1)
-        # A Recursion holds its forward path in fF and its feedback path in fB.
-        for key, marker in (("fF", "forward: "), ("fB", "feedback: ")):
-            if isinstance(node.get(key), dict):
-                lines += graph_lines(node[key], depth + 1, marker)
-        return lines
-
-    print("\n".join(graph_lines(config)))
-    return (config,)
-
-
-@app.cell
-def _(config, json, mo):
     _pretty = json.dumps(config, indent=1)
     mo.accordion(
         {
@@ -190,7 +159,7 @@ def _(config, json, mo):
             )
         }
     )
-    return
+    return (config,)
 
 
 @app.cell(hide_code=True)
@@ -198,12 +167,9 @@ def _(mo):
     mo.md(r"""
     ## 3. Certify stability
 
-    Before anything is emitted, `certify` bounds the loop gain around every
-    feedback path: the product of per-element spectral norms, evaluated at the
-    parameter values *as they will be written into the FAUST source* (single
-    precision, ten significant figures). Below one at every frequency is a
-    sufficient condition for BIBO stability, so a `certified-stable` verdict
-    rules out a plugin that blows up after the rounding a code generator does.
+    Before anything is emitted, `certify` bounds the loop gain around every feedback path: the product of per-element spectral norms, evaluated at the parameter values *as they will be written into the FAUST source* (single precision, ten significant figures).
+
+    Below one at every frequency is a sufficient condition for BIBO stability, so a `certified-stable` verdict rules out a plugin that blows up after the rounding a code generator does.
     """)
     return
 
@@ -256,7 +222,7 @@ def _(adac, config):
     return faust_code, faust_plain
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(faust_code, mo):
     mo.md(f"```faust\n{faust_code}\n```")
     return
@@ -265,11 +231,8 @@ def _(faust_code, mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    The whole reverberator is one `process` line. The FDN core is FAUST's `~`
-    feedback operator wrapped around `delays : absorption`, with the feedback
-    matrix hoisted into a sum-of-products function `fB`. Note the delay lengths:
-    `~` inserts one implicit sample of delay, and adac subtracts it from every
-    line so the network keeps the exact delays pyFDN designed.
+    The whole reverberator is one `process` line. The FDN core is FAUST's `~` feedback operator wrapped around `delays : absorption`, with the feedback matrix hoisted into a sum-of-products function `fB`. Note the delay lengths:
+    `~` inserts one implicit sample of delay, and adac subtracts it from every line so the network keeps the exact delays pyFDN designed.
     """)
     return
 
@@ -299,11 +262,7 @@ def _(mo):
     mo.md(r"""
     ## 5. Run it
 
-    The shortest path to a running artifact needs no toolchain at all: the FAUST
-    web IDE accepts a whole program as a base64 `inline=` parameter, compiles it
-    to WebAssembly in the browser and starts it. The link below carries this
-    exact FDN, sliders and all — open it, allow audio, and the `rt60` and
-    `dry/wet` knobs are live.
+    The shortest path to a running artifact needs no toolchain at all: the FAUST web IDE accepts a whole program as a base64 `inline=` parameter, compiles it to WebAssembly in the browser and starts it. The link below carries this exact FDN, sliders and all — open it, allow audio, and the `rt60` and `dry/wet` knobs are live.
     """)
     return
 
@@ -332,9 +291,7 @@ def _(mo):
     mo.md(r"""
     ### Native targets
 
-    With the FAUST distribution installed, the same file goes to C++, a JUCE
-    plugin project, or a standalone app. The cell below runs the compiler if it
-    is on `PATH` and otherwise just lists the commands.
+    With the FAUST distribution installed, the same file goes to C++, a JUCE plugin project, or a standalone app. The cell below runs the compiler if it is on `PATH` and otherwise just lists the commands.
     """)
     return
 
@@ -399,13 +356,9 @@ def _(mo):
     mo.md(r"""
     ## 6. Does the plugin match the design?
 
-    Emitting code is only useful if the compiled DSP is the network pyFDN
-    designed. [DawDreamer](https://github.com/DBraun/DawDreamer) embeds libfaust,
-    so the generated `.dsp` can be compiled and rendered offline right here and
-    compared sample by sample against FLAMO's frequency-domain response.
+    Emitting code is only useful if the compiled DSP is the network pyFDN designed. [DawDreamer](https://github.com/DBraun/DawDreamer) embeds libfaust, so the generated `.dsp` can be compiled and rendered offline right here and compared sample by sample against FLAMO's frequency-domain response.
 
-    Optional: `pip install dawdreamer`. Without it the rest of the notebook still
-    runs; this section reports as skipped.
+    Optional: `pip install dawdreamer`. Without it the rest of the notebook still runs; this section reports as skipped.
     """)
     return
 
@@ -492,27 +445,36 @@ def _(mo):
     mo.md(r"""
     ### Listen
 
-    A dry synth phrase through the FLAMO model and, when DawDreamer is
-    available, through the compiled FAUST plugin. Same network, two runtimes.
+    A dry synth phrase through the FLAMO model and, when DawDreamer is available, through the compiled FAUST plugin. Same network, two runtimes. The phrase is trimmed to what fits in one `nfft` block alongside the 2 s tail, so both runtimes get the same excerpt.
     """)
     return
 
 
 @app.cell
 def _(HAS_DAWDREAMER, fs, mo, model, np, pyFDN, render_faust, work_dir):
+    _tail = 2 * fs
+    # FLAMO convolves inside a single nfft block, so only nfft minus the tail
+    # is usable input. Trim the phrase to that window: otherwise flamo_process
+    # silently drops whatever does not fit and the two runtimes are compared on
+    # different excerpts.
+    _usable = int(model.get_inputLayer().nfft) - _tail
     dry, _ = pyFDN.load_audio("synth_dry.wav", fs=fs)
-    wet_flamo = pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=2.0)
+    dry = np.asanyarray(dry, dtype=np.float32)[:_usable]
+    _n = len(dry) + _tail
+    wet_flamo = np.asarray(
+        pyFDN.flamo_process(model, dry, fs=fs, tail_seconds=_tail / fs)
+    )[:_n]
 
     # mo.audio wants (n_channels, n_samples), the transpose of the plotting shape.
     _players = [
-        pyFDN.labeled_audio("Dry", np.asanyarray(dry), fs=fs),
-        pyFDN.labeled_audio("Wet — FLAMO", np.asarray(wet_flamo).T, fs=fs),
+        pyFDN.labeled_audio("Dry", dry, fs=fs),
+        pyFDN.labeled_audio("Wet — FLAMO", wet_flamo.T, fs=fs),
     ]
 
     if HAS_DAWDREAMER:
-        # Same 2 s of trailing silence as flamo_process, so the tail is not cut.
-        _padded = np.zeros(len(dry) + 2 * fs, dtype=np.float32)
-        _padded[: len(dry)] = np.asanyarray(dry, dtype=np.float32)
+        # Same trailing silence as flamo_process, so the tail is not cut.
+        _padded = np.zeros(_n, dtype=np.float32)
+        _padded[: len(dry)] = dry
         wet_faust = render_faust(work_dir / "PyFDNReverb_plain.dsp", _padded, fs)
         _players.append(pyFDN.labeled_audio("Wet — compiled FAUST", wet_faust.T, fs=fs))
 
@@ -525,16 +487,11 @@ def _(mo):
     mo.md(r"""
     ## Where this lands
 
-    The design stays in Python — gallery matrices, absorption fitting,
-    optimisation, the analysis tools in the rest of this gallery — and the
-    deployment artifact is generated, not re-implemented by hand. A colourless
-    FDN trained with `pyFDN.train`, or an FDN fitted to a measured RIR by
-    `example_rir_to_fdn`, compiles through exactly the same three calls, because
-    the compiler reads the FLAMO graph rather than any particular design recipe.
+    The design stays in Python — gallery matrices, absorption fitting, optimisation, the analysis tools in the rest of this gallery — and the deployment artifact is generated, not re-implemented by hand.
 
-    `adac.HotReload` closes the loop further: it republishes the model to a
-    running FAUST plugin during training, so the optimisation is audible while
-    it runs.
+    A colourless FDN trained with `pyFDN.train`, or an FDN fitted to a measured RIR by `example_rir_to_fdn`, compiles through exactly the same three calls, because the compiler reads the FLAMO graph rather than any particular design recipe.
+
+    `adac.HotReload` closes the loop further: it republishes the model to a running FAUST plugin during training, so the optimisation is audible while it runs.
     """)
     return
 

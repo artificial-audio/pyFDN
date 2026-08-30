@@ -14,7 +14,7 @@ import numpy as np
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
 try:
     import flamo.processor  # noqa: F401
@@ -30,21 +30,21 @@ def dss_to_flamo(
     C: np.ndarray,
     D: np.ndarray,
     m: np.ndarray,
-    Fs: float,
+    fs: float,
     nfft: int = 2**16,
     device: Any = None,
     *,
     shell: bool = True,
     dtype: Any = None,
-    sos_filter: np.ndarray | None = None,
-    output_filter: np.ndarray | None = None,
-    post_delay_module: Any = None,
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
 ) -> Any:
     """
     Build a FLAMO model from delay state-space (A, B, C, D, m).
 
-    Signal flow: input -> B -> [recursion: delay -> (optional filter/module) -> A] -> C -> output,
-    with direct path D summed in parallel.
+    Signal flow: input -> B -> [recursion: delay -> (post_delay); fB = A -> (post_matrix)]
+    -> C -> (post_output) -> output, with direct path D summed in parallel.
 
     Parameters
     ----------
@@ -59,7 +59,7 @@ def dss_to_flamo(
         Direct gain.
     m : (N,) array
         Delay lengths in samples (one per delay line).
-    Fs : float
+    fs : float
         Sampling rate in Hz.
     nfft : int
         FFT size for FLAMO (default 2**16).
@@ -68,19 +68,21 @@ def dss_to_flamo(
     shell : bool
         If True (default), wrap the core in a Shell with FFT/iFFT. Use
         :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
-        If False, return only the core (e.g. for use as post_delay_module in another dss_to_flamo).
+        If False, return only the core (e.g. for use as post_delay in another dss_to_flamo).
     dtype : torch.dtype or None
         Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
         If None, wrapper defaults are used.
-    sos_filter : (n_sections, 6, N) array or None
-        Optional SOS filter in the loop after delays.
-    output_filter : (n_sections, 6, num_out) array or None
-        Optional SOS filter cascade applied per output channel after the
-        output gain C (e.g. an output equalizer), matching the output
-        filters of the MATLAB ``dss2impz``.
-    post_delay_module : FLAMO module or None
-        Optional module to append after the delay in the recursion (e.g. a Schroeder allpass core).
-        Must have input/output size N. Loop becomes: delay -> post_delay_module -> A.
+    post_delay : array, FLAMO module, sequence, or None
+        In-loop filter applied to the delay output, inside the recursion -- the
+        same hook :func:`pyFDN.process_fdn` calls ``post_delay``. An
+        ``(n_sections, 6, N)`` SOS bank, a FLAMO module of input/output size N
+        (e.g. a Schroeder allpass core from ``shell=False``), or a sequence of
+        both applied in order. See :func:`pyFDN.hook_module`.
+    post_matrix : array, FLAMO module, sequence, or None
+        Filter applied to the feedback path after ``A``.
+    post_output : array, FLAMO module, sequence, or None
+        Per-output filter applied to the wet signal after ``C``; an
+        ``(n_sections, 6, num_out)`` SOS bank, or a module.
 
     Returns
     -------
@@ -97,7 +99,7 @@ def dss_to_flamo(
     from pyFDN.auxiliary.flamo import (
         assemble_fdn_core,
         fir_matrix_module,
-        sos_filter_module,
+        hook_module,
         wrap_fdn_shell,
     )
 
@@ -114,8 +116,8 @@ def dss_to_flamo(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Delays: convert samples to seconds for FLAMO
-    lengths_sec = m / float(Fs)
-    delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device, dtype=dtype)
+    lengths_sec = m / float(fs)
+    delays = delay_module(lengths_sec, nfft, fs=fs, device=device, dtype=dtype)
     if A.ndim == 3:
         gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
     else:
@@ -123,16 +125,14 @@ def dss_to_flamo(
     gain_B = gain_module(B, nfft, device=device, dtype=dtype)
     gain_C = gain_module(C, nfft, device=device, dtype=dtype)
     gain_D = gain_module(D, nfft, device=device, dtype=dtype)
-    loop_filter = (
-        sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
-        if sos_filter is not None
-        else None
-    )
-    out_filter = (
-        sos_filter_module(output_filter, nfft, device=device, dtype=dtype)
-        if output_filter is not None
-        else None
-    )
+    hooks = {
+        name: hook_module(value, nfft, name=name, device=device, dtype=dtype)
+        for name, value in (
+            ("post_delay", post_delay),
+            ("post_matrix", post_matrix),
+            ("post_output", post_output),
+        )
+    }
 
     # Wiring is delegated to the shared assembler so the render path here and the
     # training builder (pyFDN.train) stay byte-for-byte identical in topology.
@@ -142,9 +142,7 @@ def dss_to_flamo(
         delays=delays,
         output_gain=gain_C,
         direct=gain_D,
-        loop_filter=loop_filter,
-        output_filter=out_filter,
-        post_delay_module=post_delay_module,
+        **hooks,
     )
 
     if shell:
@@ -159,22 +157,25 @@ def build_to_flamo(
     *,
     shell: bool = True,
     dtype: Any = None,
-    post_delay_module: Any = None,
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
 ) -> Any:
     """
     Build a FLAMO model from a complete :class:`FDNBuild` config.
 
     Thin wrapper over :func:`dss_to_flamo` that unpacks an
-    :class:`~pyFDN.generate.fdn_matrix_gallery.FDNBuild` (as returned by
-    :func:`pyFDN.fdn_build_gallery`) into its state-space arguments, mapping the
-    in-loop absorption ``build.filters`` to ``sos_filter`` and the per-output
-    ``build.post_eq`` to ``output_filter``.
+    :class:`~pyFDN.FDNBuild` (as returned by
+    :func:`pyFDN.fdn_build_gallery`) into its state-space arguments. The build's
+    three filter hooks go straight through under the same names: ``post_delay``
+    for the in-loop absorption, ``post_matrix`` for the feedback path, and
+    ``post_output`` for the per-output EQ.
 
     Parameters
     ----------
     build : FDNBuild
         Complete FDN parameters (``A``, ``B``, ``C``, ``D``, ``delays``,
-        ``fs``, optional ``filters`` and ``post_eq``), e.g. from
+        ``fs``, optional ``post_delay`` and ``post_output``), e.g. from
         :func:`pyFDN.fdn_build_gallery`.
     nfft : int
         FFT size for FLAMO (default 2**16).
@@ -187,10 +188,11 @@ def build_to_flamo(
     dtype : torch.dtype or None
         Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
         If None, wrapper defaults are used.
-    post_delay_module : FLAMO module or None
-        Optional module to append after the delay in the recursion (e.g. a
-        Schroeder allpass core). Must have input/output size N. Loop becomes:
-        delay -> post_delay_module -> A.
+    post_delay, post_matrix, post_output : array, FLAMO module, sequence, or None
+        Extra modules for the three filter hooks, appended *after* whatever the
+        build already carries in that position -- so ``post_delay=schroeder_core``
+        on a build with absorption gives ``delay -> absorption -> schroeder``.
+        See :func:`pyFDN.hook_module`.
 
     Returns
     -------
@@ -209,7 +211,19 @@ def build_to_flamo(
         device=device,
         shell=shell,
         dtype=dtype,
-        sos_filter=build.filters,
-        output_filter=build.post_eq,
-        post_delay_module=post_delay_module,
+        post_delay=_appended(build.post_delay, post_delay),
+        post_matrix=_appended(build.post_matrix, post_matrix),
+        post_output=_appended(build.post_output, post_output),
     )
+
+
+def _appended(baked: Any, extra: Any) -> Any:
+    """The build's own hook contents, then whatever the caller adds to it."""
+    parts = [] if baked is None else [baked]
+    if isinstance(extra, list | tuple):
+        parts.extend(extra)
+    elif extra is not None:
+        parts.append(extra)
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else parts

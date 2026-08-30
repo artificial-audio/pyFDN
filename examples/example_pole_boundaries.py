@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Bound the poles of an FDN with frequency-dependent absorption using loop-transfer singular values.
 
 import marimo
@@ -19,19 +19,14 @@ def _(mo):
     mo.md(r"""
     # Frequency-dependent pole boundaries
 
-    FDN with frequency-dependent absorption filters, but *not* with homogeneous
-    (delay-proportional) decay. Still, boundaries for the pole magnitudes can be
-    computed from the singular values of the loop transfer function and tested
-    against the actual poles.
+    FDN with frequency-dependent absorption filters, but *not* with homogeneous (delay-proportional) decay. Still, boundaries for the pole magnitudes can be computed from the singular values of the loop transfer function and tested against the actual poles.
 
-    The loop here is $P(z) = \mathrm{diag}(z^{m}) - A\,\mathrm{diag}(h(z))$ with
-    a two-tap FIR absorption filter $h(z) = 0.65 + 0.3 z^{-1}$ on every delay
-    line and a non-orthogonal feedback matrix $A = Q/1.5$.
+    The loop here is $P(z) = \mathrm{diag}(z^{m}) - A\,\mathrm{diag}(h(z))$ with a two-tap FIR absorption filter $h(z) = 0.65 + 0.3 z^{-1}$ on every delay line and a non-orthogonal feedback matrix $A = Q/1.5$.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}.*
@@ -46,12 +41,10 @@ def _():
 
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return SimpleNamespace, go, np, pyFDN, torch
 
 
@@ -100,12 +93,7 @@ def _(mo):
     mo.md(r"""
     ## Pole boundaries and modal decomposition
 
-    `pole_boundaries` combines the singular values of the feedback matrix with
-    the absorption magnitude responses and group delays. For the poles, the
-    FIR absorption is placed as an SOS filter behind the delays in a FLAMO
-    model (loop: delay → absorption → $A$) via `dss_to_flamo`, and
-    `flamo_to_pr` extracts the poles with Ehrlich–Aberth refinement in the
-    $w = z^{-1}$ domain.
+    `pole_boundaries` combines the singular values of the feedback matrix with the absorption magnitude responses and group delays. For the poles, the FIR absorption is placed as an SOS filter  behind the delays in a FLAMO model (loop: delay → absorption → $A$) via `dss_to_flamo`, and `flamo_to_pr` extracts the poles with Ehrlich–Aberth refinement in the $w = z^{-1}$ domain.
     """)
     return
 
@@ -139,9 +127,9 @@ def _(
         C=output_gain,
         D=direct,
         m=delays,
-        Fs=fs,
+        fs=fs,
         shell=False,
-        sos_filter=sos_loop,
+        post_delay=sos_loop,
         dtype=torch.float64,
     )
     _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(
@@ -162,8 +150,7 @@ def _(mo):
     mo.md(r"""
     ## Poles between the boundaries
 
-    Pole magnitudes converted to T60 over frequency. All poles lie between the
-    minimum and maximum boundary curves.
+    Pole magnitudes converted to T60 over frequency. All poles lie between the minimum and maximum boundary curves.
     """)
     return
 

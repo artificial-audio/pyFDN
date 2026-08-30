@@ -1,19 +1,46 @@
-"""Readable, versioned serialization for :class:`pyFDN.FDNBuild`."""
+"""Baked feedback-delay-network builds and their JSON representation."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from .generate.fdn_matrix_gallery import FDNBuild
-
 FDN_BUILD_FORMAT = "pyfdn-fdn-build"
-FDN_BUILD_VERSION = 1
+FDN_BUILD_VERSION = 2
+
+
+@dataclass(frozen=True)
+class FDNBuild:
+    """Complete, renderable parameters of a vanilla FDN.
+
+    Every field is a plain NumPy value consumed by :func:`pyFDN.process_fdn`
+    and :func:`pyFDN.build_to_impz`. A build does not remember how its numbers
+    were designed; that optional information belongs to :class:`pyFDN.FDNPreset`.
+
+    The three optional SOS banks correspond directly to pyFDN's filter hooks:
+
+    * ``post_delay`` has shape ``(sections, 6, N)`` and sets the decay inside
+      the loop after the delays.
+    * ``post_matrix`` has shape ``(sections, 6, N)`` and filters the feedback
+      path after the feedback matrix.
+    * ``post_output`` has shape ``(sections, 6, outputs)`` and filters the wet
+      signal outside the recursion.
+    """
+
+    A: np.ndarray
+    B: np.ndarray
+    C: np.ndarray
+    D: np.ndarray
+    delays: np.ndarray
+    fs: float
+    post_delay: np.ndarray | None = None
+    post_matrix: np.ndarray | None = None
+    post_output: np.ndarray | None = None
 
 
 def _optional_array(value: Any, name: str) -> np.ndarray | None:
@@ -26,10 +53,9 @@ def _optional_array(value: Any, name: str) -> np.ndarray | None:
 
 
 def fdn_build_to_dict(
-    build: FDNBuild, *, metadata: Mapping[str, Any] | None = None
+    build: FDNBuild, *, metadata: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Convert an :class:`FDNBuild` to the versioned JSON-compatible format."""
-
+    """Convert an :class:`FDNBuild` to its JSON-compatible format."""
     data: dict[str, Any] = {
         "format": FDN_BUILD_FORMAT,
         "version": FDN_BUILD_VERSION,
@@ -39,34 +65,37 @@ def fdn_build_to_dict(
         "direct_matrix": np.asarray(build.D).tolist(),
         "delays": np.asarray(build.delays).tolist(),
         "sample_rate": float(build.fs),
-        "absorption_filters": (
-            None if build.filters is None else np.asarray(build.filters).tolist()
+        "post_delay": (
+            None if build.post_delay is None else np.asarray(build.post_delay).tolist()
         ),
-        "output_filters": (
-            None if build.post_eq is None else np.asarray(build.post_eq).tolist()
+        "post_matrix": (
+            None
+            if build.post_matrix is None
+            else np.asarray(build.post_matrix).tolist()
+        ),
+        "post_output": (
+            None
+            if build.post_output is None
+            else np.asarray(build.post_output).tolist()
         ),
     }
     if metadata:
         data["metadata"] = dict(metadata)
-    # Validate shape, values, and schema before exposing or writing the data.
     fdn_build_from_dict(data)
     return data
 
 
-def fdn_build_from_dict(
-    data: Mapping[str, Any], *, fs: float | None = None
-) -> FDNBuild:
-    """Construct an :class:`FDNBuild` from its versioned dictionary format.
+def fdn_build_from_dict(data: dict[str, Any], *, fs: float | None = None) -> FDNBuild:
+    """Construct an :class:`FDNBuild` from its JSON-compatible dictionary.
 
-    Args:
-        data: Parsed JSON-compatible build dictionary.
-        fs: Optional sample-rate override in Hz.
+    ``fs`` is an optional override retained for loading standalone legacy build
+    files. Preset loading always uses the sample rate stored in the build.
     """
-
     if data.get("format") != FDN_BUILD_FORMAT:
         raise ValueError(f"Expected format '{FDN_BUILD_FORMAT}'")
-    if data.get("version") != FDN_BUILD_VERSION:
-        raise ValueError(f"Unsupported FDN build version: {data.get('version')!r}")
+    version = data.get("version")
+    if version != FDN_BUILD_VERSION:
+        raise ValueError(f"Unsupported FDN build version: {version!r}")
 
     required = (
         "feedback_matrix",
@@ -109,30 +138,41 @@ def fdn_build_from_dict(
     if not np.isfinite(sample_rate) or sample_rate <= 0:
         raise ValueError("sample_rate must be positive and finite")
 
-    filters = _optional_array(data.get("absorption_filters"), "absorption_filters")
-    post_eq = _optional_array(data.get("output_filters"), "output_filters")
-    if filters is not None and (
-        filters.ndim != 3 or filters.shape[1] != 6 or filters.shape[2] != num_delays
+    post_delay = _optional_array(data.get("post_delay"), "post_delay")
+    post_matrix = _optional_array(data.get("post_matrix"), "post_matrix")
+    post_output = _optional_array(data.get("post_output"), "post_output")
+    for name, hook in (("post_delay", post_delay), ("post_matrix", post_matrix)):
+        if hook is not None and (
+            hook.ndim != 3 or hook.shape[1] != 6 or hook.shape[2] != num_delays
+        ):
+            raise ValueError(f"{name} must have shape (sections, 6, delay lines)")
+    if post_output is not None and (
+        post_output.ndim != 3
+        or post_output.shape[1] != 6
+        or post_output.shape[2] != C.shape[0]
     ):
-        raise ValueError(
-            "absorption_filters must have shape (sections, 6, delay lines)"
-        )
-    if post_eq is not None and (
-        post_eq.ndim != 3 or post_eq.shape[1] != 6 or post_eq.shape[2] != C.shape[0]
-    ):
-        raise ValueError("output_filters must have shape (sections, 6, outputs)")
+        raise ValueError("post_output must have shape (sections, 6, outputs)")
 
-    return FDNBuild(A, B, C, D, delays, sample_rate, filters, post_eq)
+    return FDNBuild(
+        A,
+        B,
+        C,
+        D,
+        delays,
+        sample_rate,
+        post_delay=post_delay,
+        post_matrix=post_matrix,
+        post_output=post_output,
+    )
 
 
 def save_fdn_build(
     path: str | PathLike[str],
     build: FDNBuild,
     *,
-    metadata: Mapping[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """Write an :class:`FDNBuild` as indented, human-readable JSON."""
-
     Path(path).write_text(
         json.dumps(
             fdn_build_to_dict(build, metadata=metadata), indent=2, allow_nan=False
@@ -143,9 +183,19 @@ def save_fdn_build(
 
 
 def load_fdn_build(path: str | PathLike[str], *, fs: float | None = None) -> FDNBuild:
-    """Load an :class:`FDNBuild` from the versioned JSON format."""
-
+    """Load an :class:`FDNBuild` from its JSON format."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("FDN build JSON must contain an object")
     return fdn_build_from_dict(data, fs=fs)
+
+
+__all__ = [
+    "FDNBuild",
+    "FDN_BUILD_FORMAT",
+    "FDN_BUILD_VERSION",
+    "fdn_build_from_dict",
+    "fdn_build_to_dict",
+    "load_fdn_build",
+    "save_fdn_build",
+]
