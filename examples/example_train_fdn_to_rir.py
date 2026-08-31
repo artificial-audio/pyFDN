@@ -62,12 +62,13 @@ def _(mo):
     mo.md(r"""
     ## Settings — the two switches worth having up front
 
-    **Runtime.** The fit is 300 gradient steps through a $2^{17}$-point frequency
-    grid, which is a couple of minutes of CPU. If the runtime has an NVIDIA GPU
-    it appears in the dropdown; pick it and everything downstream moves. Apple's
-    MPS backend is deliberately *not* offered — the frequency-domain recursion is
-    a complex matrix solve, and MPS implements neither `matrix_exp` nor complex
-    `linalg.solve`.
+    **Runtime.** The fit is 300 gradient steps through a $2^{16}$-point frequency
+    grid, which is about a minute of CPU. The step cost is linear in the grid
+    size, and step 3 explains why the fit runs on a shorter grid than the metrics
+    are measured on. If the runtime has an NVIDIA GPU it appears in the dropdown;
+    pick it and everything downstream moves. Apple's MPS backend is deliberately
+    *not* offered — the frequency-domain recursion is a complex matrix solve, and
+    MPS implements neither `matrix_exp` nor complex `linalg.solve`.
 
     Precision is paired with the device rather than left free. `float64` is the
     reference: a cumulative-energy loss reads the quietest samples in the buffer,
@@ -84,7 +85,7 @@ def _(mo):
     names a design class, so switching the whole notebook is switching one word.
 
     The shelf is the default because it is the cheaper run by a wide margin —
-    eleven biquads per delay line instead of one is roughly five times the wall
+    eleven biquads per delay line instead of one is three to four times the wall
     clock for the same 300 steps — and because on this room it is *not* the worse
     answer. Both results are tabulated further down, so the comparison is
     readable without paying for it.
@@ -155,8 +156,8 @@ def _(design_choice, runtime_choice, torch):
     # Try this:
     #   pick the other EQ design -> the whole notebook re-fits and re-measures.
     #      Ten numbers reach a 35% lower loss than two and a *worse* mean RT
-    #      error, by being wrong in completely different bands. Budget five
-    #      times the wall clock for it.
+    #      error, by being wrong in completely different bands. Budget three to
+    #      four times the wall clock for it.
     #   pick float64 -> the same answer, twice the wall clock. Worth doing once,
     #      to see that it is the same answer.
     return design, device, dtype, n_sections, param_frequencies
@@ -371,22 +372,34 @@ def _(mo):
     residual between the target's band levels and the FDN's. Here it is another
     parameter, and the last section checks what residual is left over.
     """),
-            "Why nfft = 2**17, and why it is not a performance knob": mo.md(r"""
-    $2^{17}$ is 2.73 s at 48 kHz, and it is chosen once and used for everything.
-    Both jobs it has to do put a floor under it. The loss compares this window
-    against the target, so it has to hold the decay being fitted; and the *same*
-    render is what the octave-band estimators at the bottom measure, where
-    Schroeder integration over a window shorter than the decay under-reads it.
-    2.73 s clears both: the target has only $-72$ dB of its energy left after it,
-    and the band RTs come out equal to three decimals against a render four times
-    as long.
+            "Why two values of nfft, and what each one is for": mo.md(r"""
+    `nfft` has two jobs here and they do not want the same number, so the
+    notebook uses one value for each and moves between them.
 
-    That is what lets the trained model be measured directly, rather than
-    exported to an `FDNBuild` and re-rendered at some larger `nfft`. The reason
-    such a round trip is otherwise needed is that `nfft` is **structural** in
-    FLAMO — it fixes the frequency grid, the delay phase ramps and the alias
-    envelope of every module at construction, and there is no setter — so a
-    render at a different length means rebuilding.
+    The **render** length, $2^{17}$ — 2.73 s at 48 kHz — is set by measurement.
+    The octave-band estimators at the bottom run Schroeder integration over the
+    render, and a window shorter than the decay under-reads it. 2.73 s clears
+    that: the target has only $-72$ dB of its energy left after it, and the band
+    RTs come out equal to three decimals against a render four times as long.
+
+    The **training** length, $2^{16}$ — 1.37 s — is set by the loss, which only
+    has to see enough of the decay to tell which way to move. Every step costs
+    time linear in `nfft`: the FDN is evaluated as $(I - A D(z))^{-1}$ on the
+    rfft grid, so halving the grid halves the work. Halving it here costs
+    nothing — the fit is fractionally *better* at $2^{16}$ than at $2^{17}$
+    (7.6 % against 9.1 % mean band error) — and the run takes half as long.
+    Below that it does start to cost: $2^{15}$ still fits, $2^{14}$ visibly
+    loses the bottom octaves.
+
+    Moving between them is `model.set_nfft(...)`, new in FLAMO 0.2.18. `nfft`
+    is otherwise **structural** — it fixes the frequency grid, the delay phase
+    ramps and the alias envelope of every module at construction — and before
+    that setter existed, a render at a different length meant rebuilding the
+    model or exporting to an `FDNBuild` first. The setter propagates the new
+    length through every wrapped module and rebuilds what depends on it, so the
+    trained model can simply be measured at a longer window than it was fitted
+    at. The parameters do not depend on `nfft`; only the grid they are evaluated
+    on does.
 
     One argument is deliberately *not* passed: `alias_decay_db`. Evaluating an
     FDN as $(I - A D(z))^{-1}$ on the DFT grid renders one period of a *periodic*
@@ -406,7 +419,9 @@ def _(mo):
 
 @app.cell
 def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
-    nfft = 2**17  # 2.73 s at 48 kHz — long enough for the loss and the metrics
+    # Two lengths, because the loss and the metrics want different things.
+    train_nfft = 2**16  # 1.37 s — enough of the decay for the loss to steer on
+    render_nfft = 2**17  # 2.73 s — enough for Schroeder integration to read the RT
 
     model = pyFDN.trainable_from_build(
         init_build,
@@ -418,7 +433,7 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
             init_build.delays,
             fs,
             design=design,
-            nfft=nfft,
+            nfft=train_nfft,
             device=device,
             dtype=dtype,
         ),
@@ -428,21 +443,29 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
             1,
             fs,
             design=design,
-            nfft=nfft,
+            nfft=train_nfft,
             device=device,
             dtype=dtype,
         ),
-        nfft=nfft,
+        nfft=train_nfft,
         device=device,
         dtype=dtype,
     )
 
-    # One excitation, reused by every render. Building it explicitly is what
-    # keeps this working on a GPU: the default one is made on the CPU.
-    excitation = pyFDN.impulse_excitation(1, nfft, device=device, dtype=dtype)
+    def render(m, nfft=None):
+        """The FDN's impulse response, straight out of the FLAMO model.
 
-    def render(m):
-        """The FDN's impulse response, straight out of the FLAMO model."""
+        ``nfft`` switches the model to that length first, so one render can
+        serve both the training grid and the longer measurement grid. The
+        excitation is built to match rather than cached, because its length has
+        to follow the model's; building it explicitly is also what keeps this
+        working on a GPU, since the default one is made on the CPU.
+        """
+        if nfft is not None:
+            m.set_nfft(nfft)
+        excitation = pyFDN.impulse_excitation(
+            1, int(m.nfft), device=device, dtype=dtype
+        )
         h = pyFDN.model_response(m, excitation).h.detach().cpu()
         return np.asarray(h, dtype=np.float64).reshape(-1)[:rir_len]
 
@@ -454,15 +477,22 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
             p.value().detach().cpu().numpy().copy(),
         )
 
-    # the only thing the target tells the initial model: how loud it is
-    energy_gain = float(np.linalg.norm(rir[:nfft]) / np.linalg.norm(render(model)))
+    # the only thing the target tells the initial model: how loud it is. Matched
+    # on the measurement window, so the level means the same thing here as it
+    # does in the metrics at the bottom.
+    energy_gain = float(
+        np.linalg.norm(rir[:render_nfft]) / np.linalg.norm(render(model, render_nfft))
+    )
     with torch.no_grad():
         pyFDN.param(model, "output_gain").raw().mul_(energy_gain)
 
     # the untrained FDN, before the optimizer touches it. Taken here, in this
     # same cell, because train_fdn steps `model` in place -- once the next cell
-    # has run there is no "before" left.
-    ir_init = render(model)
+    # has run there is no "before" left. Rendered at render_nfft so that the
+    # two rows of the metrics table are measured the same way, then the model
+    # goes back to the training length for the fit.
+    ir_init = render(model, render_nfft)
+    model.set_nfft(train_nfft)
     _, init_sos = read("post_delay")
 
     for _p in pyFDN.params(model):
@@ -474,7 +504,7 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
     # energy, so an FDN two decades too quiet starts on the flat part of the
     # compression curve where there is little gradient to follow. What the
     # scalar cannot do is say *when* that energy arrives, which is the problem.
-    return init_sos, ir_init, model, nfft, read, render
+    return init_sos, ir_init, model, read, render, render_nfft
 
 
 @app.cell(hide_code=True)
@@ -560,7 +590,7 @@ def _(mo):
     does *not* fix it (15.4 % at `window=4096`, 63 Hz still at 0.20 s), which is
     the evidence that the problem is weighting rather than frequency resolution.
 
-    Those rows were measured at a different feedback-matrix seed and a shorter
+    Those rows were measured at a different feedback-matrix seed and a different
     `nfft` than this notebook now uses. Compare the rows against each other, not
     against the result further down: the gaps between them are far larger than
     the offset.
@@ -592,8 +622,10 @@ def _(mo):
     mo.md(r"""
     ## Step 5 — train
 
-    300 Adam steps at `lr=3e-2`. On a CPU that is a minute or two; watch the loss
-    curve below rather than the clock.
+    300 Adam steps at `lr=3e-2`, on the $2^{16}$ training grid — about 45 s of
+    CPU; watch the loss curve below rather than the clock. The render that
+    follows switches the model to the longer measurement grid with
+    `set_nfft`.
 
     The trained response is rendered at the end of the same cell, out of the same
     model, through the same `render` the untrained one went through: two FDNs
@@ -603,7 +635,7 @@ def _(mo):
 
 
 @app.cell
-def _(device, dtype, loss, model, pyFDN, read, render):
+def _(device, dtype, loss, model, pyFDN, read, render, render_nfft):
     log = pyFDN.train_fdn(
         model,
         loss,
@@ -618,7 +650,9 @@ def _(device, dtype, loss, model, pyFDN, read, render):
 
     trained_rt, trained_sos = read("post_delay")
     trained_eq_db, trained_eq_sos = read("post_output")
-    ir_trained = render(model)
+    # measured on the long grid, the same one the untrained render used. The
+    # parameters are what they are; only the grid they are evaluated on changes.
+    ir_trained = render(model, render_nfft)
 
     print(
         f"ran {log.steps_run} steps, loss {log.train_loss[0]:.4g} -> "
@@ -900,9 +934,9 @@ def _(mo):
 
     | | mean RT error | level offset | level shape | final loss |
     |---|---|---|---|---|
-    | untrained (flat 1 s) | 52.4 % | -1.3 dB | 1.71 dB | 0.0932 |
-    | trained, **first-order shelf** (2 numbers) | 9.8 % | +0.4 dB | 0.79 dB | 0.00393 |
-    | trained, **ten-band graphic EQ** (10 numbers) | 10.6 % | +0.2 dB | 0.71 dB | 0.00256 |
+    | untrained (flat 1 s) | 52.2 % | -1.6 dB | 1.91 dB | 0.132 |
+    | trained, **first-order shelf** (2 numbers) | 7.6 % | +0.4 dB | 1.00 dB | 0.00514 |
+    | trained, **ten-band graphic EQ** (10 numbers) | 9.2 % | +0.2 dB | 0.81 dB | 0.00341 |
 
     Read the two trained rows against each other and the headline is not the one
     you would expect. Five times the parameters and eleven times the biquads
@@ -914,16 +948,16 @@ def _(mo):
 
     | | 63 | 125 | 250 | 500 | 1k | 2k | 4k | 8k |
     |---|---|---|---|---|---|---|---|---|
-    | RT error, shelf | 10 % | 7 % | 13 % | 5 % | 0 % | 5 % | 14 % | **25 %** |
-    | RT error, graphic EQ | **30 %** | 8 % | 13 % | 4 % | 7 % | 5 % | **9 %** | **9 %** |
+    | RT error, shelf | 6 % | 6 % | 5 % | 5 % | 1 % | 3 % | 12 % | **24 %** |
+    | RT error, graphic EQ | **22 %** | 7 % | 13 % | 3 % | 9 % | 3 % | **9 %** | **8 %** |
 
     The shelf carries its error at the two ends, which is what a monotone tilt
     pinned at two endpoints has to do: the room holds a 2.8 s plateau across 63
     and 125 Hz and has already dropped to 2.5 s by 250 Hz, and a shelf cannot
     hold a plateau and then step down. The graphic EQ spends its extra freedom
-    exactly where you would expect — the top two octaves go from 14 % and 25 % to
-    9 % and 9 % — and then throws it all away in the bottom octave, which goes
-    from 10 % to 30 %.
+    exactly where you would expect — the top two octaves go from 12 % and 24 % to
+    9 % and 8 % — and then throws it all away in the bottom octave, which goes
+    from 6 % to 22 %.
 
     That is not a defect of the design. It is the `frequency` table restated:
     cumulating the energy leaves the bottom octave with the least gradient of any
@@ -1011,7 +1045,7 @@ def _(mo):
     `gain_to_bounded_geq` call would still be asked to correct is what the fit
     did not manage.
 
-    It takes the band-level shape error from 1.71 dB down to about 0.8 dB. So the
+    It takes the band-level shape error from 1.91 dB down to about 1.0 dB. So the
     answer is "most of it, not all of it" — a designed GEQ on the residual would
     still buy the remainder, and nothing stops you from running one afterwards.
     What the fit does buy is that the EQ was chosen *while* the decay and the

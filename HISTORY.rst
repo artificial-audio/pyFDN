@@ -2,6 +2,20 @@
 History
 =======
 
+0.4.3 (unreleased)
+------------------
+
+* ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
+  on. The loss only needs enough of the decay to steer on, while the octave-band
+  estimators need a window longer than the decay, so the notebook trains at
+  ``nfft=2**16`` (1.37 s) and switches to ``2**17`` (2.73 s) with FLAMO's new
+  ``Shell.set_nfft`` before rendering. The step cost is linear in ``nfft``, so
+  the fit runs in half the wall clock -- and comes out fractionally better
+  (7.6 % against 9.1 % mean band error), since nothing in the objective needed
+  the longer window. Requires ``flamo>=0.2.18``, where ``set_nfft`` was added;
+  the numbers quoted in the notebook's tables were re-measured for both EQ
+  designs.
+
 0.4.2 (2026-08-27)
 ------------------
 
