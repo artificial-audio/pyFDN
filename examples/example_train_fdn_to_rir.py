@@ -1,6 +1,6 @@
 # gallery_category: Getting Started
 # gallery_title: Train an FDN to match a measured room
-# gallery_description: Hands-on walk-through of fitting an FDN to a measured room impulse response by gradient descent - a generic 1 s reverberator in, decay and output EQ trained out - with the objective, the parametrization and the runtime each a switch you can turn. Every step has experiments to try.
+# gallery_description: Hands-on walk-through of fitting an FDN to a measured room impulse response by gradient descent - a generic 1 s reverberator in, decay and output EQ trained out - with the objective and the parametrization each a switch you can turn. Every step has experiments to try.
 # references: Concert_Hall_Impulse_Responses
 
 import marimo
@@ -60,106 +60,54 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Settings — the two switches worth having up front
+    ## Settings
 
-    **Runtime.** The fit is 300 gradient steps through a $2^{17}$-point frequency
-    grid, which is a couple of minutes of CPU. If the runtime has an NVIDIA GPU
-    it appears in the dropdown; pick it and everything downstream moves. Apple's
-    MPS backend is deliberately *not* offered — the frequency-domain recursion is
-    a complex matrix solve, and MPS implements neither `matrix_exp` nor complex
-    `linalg.solve`.
+    The fit is 300 gradient steps through a $2^{17}$-point frequency grid, on the
+    CPU in `float32` — a couple of minutes. `float64` is the reference here: a
+    cumulative-energy loss reads the quietest samples in the buffer, so it is the
+    one objective where round-off at the end of a render could plausibly matter.
+    On *this* fit it does not — the two precisions land within 0.2 % of the same
+    loss — so `float32` is what runs, and the run is half as long.
 
-    Precision is paired with the device rather than left free. `float64` is the
-    reference: a cumulative-energy loss reads the quietest samples in the buffer,
-    so it is the one objective where round-off at the end of a render could
-    plausibly matter. On *this* fit it does not — the two precisions land within
-    0.2 % of the same loss — so `float32` is the default and the run is half as
-    long. On a consumer GPU it is not a close call: `float64` there is a factor
-    of 32 down on throughput.
-
-    **EQ design.** The two filters the FDN needs — the in-loop attenuation that
-    sets the decay, and the output EQ that colours it — take the same
-    `pyFDN.EQDesign` name. A ten-band graphic EQ spends ten numbers and eleven
-    biquads on each; a first-order shelf spends two and one. Nothing downstream
-    names a design class, so switching the whole notebook is switching one word.
-
-    The shelf is the default because it is the cheaper run by a wide margin —
-    eleven biquads per delay line instead of one is roughly five times the wall
-    clock for the same 300 steps — and because on this room it is *not* the worse
-    answer. Both results are tabulated further down, so the comparison is
-    readable without paying for it.
+    Both filters the FDN needs — the in-loop attenuation that sets the decay, and
+    the output EQ that colours it — are **first-order shelves**: two numbers and
+    one biquad each. Nothing downstream names a design class, so switching the
+    whole notebook to a ten-band graphic EQ is switching one word, and the Try
+    this block below spells it out. The shelf is what runs because it is the
+    cheaper fit by a wide margin — eleven biquads per delay line instead of one
+    is roughly five times the wall clock for the same 300 steps — and because on
+    this room it is *not* the worse answer. Both results are tabulated further
+    down, so the comparison is readable without paying for it.
     """)
     return
 
 
 @app.cell
-def _(mo, np, torch):
-    from pyFDN.eq import CENTER_FREQUENCIES
-
+def _(np, torch):
     fs = 48000
+    device, dtype = "cpu", torch.float32
 
-    # Where the fit runs, and in what precision. float64 on a consumer GPU is a
-    # factor of 32 down on throughput, so it is not offered there.
-    _runtimes = {"CPU — float32": ("cpu", torch.float32)}
-    if torch.cuda.is_available():
-        _runtimes[f"GPU — {torch.cuda.get_device_name(0)}, float32"] = (
-            "cuda",
-            torch.float32,
-        )
-    _runtimes["CPU — float64, the reference run"] = ("cpu", torch.float64)
-    _default_runtime = next(k for k in _runtimes if "GPU" in k or "float32" in k)
-
-    runtime_choice = mo.ui.dropdown(
-        options=_runtimes, value=_default_runtime, label="Run on"
-    )
-
-    # Everything that differs between the two designs, in one place: the name,
-    # its dimensions, and where on the frequency axis its parameters sit (the
-    # design's own band layout, not the estimator's -- they coincide at the
-    # octave centres and nowhere else).
-    _designs = {
-        "First-order shelf — 2 numbers, 1 biquad": (
-            "first_order_shelf",
-            2,
-            1,
-            np.array([1.0, fs / 2]),
-        ),
-        "Ten-band graphic EQ — 10 numbers, 11 biquads": (
-            "graphic_eq",
-            10,
-            11,
-            np.concatenate(([1.0], CENTER_FREQUENCIES, [fs / 2])),
-        ),
-    }
-    design_choice = mo.ui.dropdown(
-        options=_designs,
-        value="First-order shelf — 2 numbers, 1 biquad",
-        label="EQ design",
-    )
-
-    mo.hstack([runtime_choice, design_choice], justify="start", gap=3)
-    return design_choice, fs, runtime_choice
-
-
-@app.cell
-def _(design_choice, runtime_choice, torch):
-    device, dtype = runtime_choice.value
-    design, n_parameters, n_sections, param_frequencies = design_choice.value
+    # Everything the EQ design decides, in one place: the name, how many biquads
+    # it costs, and where on the frequency axis its parameters sit (the design's
+    # own band layout, not the estimator's -- they coincide at the octave centres
+    # and nowhere else).
+    design = "first_order_shelf"
+    n_sections = 1
+    param_frequencies = np.array([1.0, fs / 2])
 
     print(f"device:      {device} ({torch.get_num_threads()} CPU threads available)")
     print(f"dtype:       {str(dtype).removeprefix('torch.')}")
-    _plural = "biquad" if n_sections == 1 else "biquads"
-    print(f"design:      {design}  —  {n_parameters} numbers, {n_sections} {_plural}")
+    print(f"design:      {design}  —  {n_sections} biquad")
     print(f"parameters sit at (Hz): {param_frequencies.round(0)}")
 
-    # Try this:
-    #   pick the other EQ design -> the whole notebook re-fits and re-measures.
-    #      Ten numbers reach a 35% lower loss than two and a *worse* mean RT
-    #      error, by being wrong in completely different bands. Budget five
-    #      times the wall clock for it.
-    #   pick float64 -> the same answer, twice the wall clock. Worth doing once,
-    #      to see that it is the same answer.
-    return design, device, dtype, n_sections, param_frequencies
+    # Try this: swap in the ten-band graphic EQ -> the whole notebook re-fits and
+    # re-measures. Ten numbers reach a 35% lower loss than two and a *worse* mean
+    # RT error, by being wrong in completely different bands. Budget five times
+    # the wall clock for it.
+    #   from pyFDN.eq import CENTER_FREQUENCIES
+    #   design, n_sections = "graphic_eq", 11
+    #   param_frequencies = np.concatenate(([1.0], CENTER_FREQUENCIES, [fs / 2]))
+    return design, device, dtype, fs, n_sections, param_frequencies
 
 
 @app.cell(hide_code=True)
@@ -295,7 +243,7 @@ def _(fs, np, pyFDN):
     #                        part of the tail stops resembling the target
     #   rt=2.5            -> start near the answer instead of far from it, and
     #                        watch the loss curve start an order of magnitude down
-    return delays, init_build, num_delays
+    return delays, init_build
 
 
 @app.cell(hide_code=True)
@@ -316,91 +264,17 @@ def _(mo):
     | when the echoes fall | delays | **fixed** — integer sample counts, no gradient to take |
 
     Both filters are parametrized by the **quantity you would plot**, not by
-    biquad coefficients. That is not a convenience; it is what makes the fit
-    converge at all. The two panels below are the argument.
+    biquad coefficients, and that is what makes the fit converge at all. Trained
+    as raw SOS coefficients the decay diverges within fifty steps at any learning
+    rate: nothing holds the poles inside the unit circle, and more loop gain is
+    the cheapest direction any loss can offer. `AttenuationFilter` instead maps
+    one reverberation time per band through $-60 d_i / (\mathrm{RT} f_s)$ dB per
+    round trip, so **every** value the parameter can take is a contractive loop,
+    with a softplus floor to keep a band that dips through zero from turning the
+    attenuation into a gain. `OutputEQ` is the same move on the one module that
+    can place band *levels* rather than band decays — it sits outside the
+    recursion, so it starts flat and needs no bound at all.
     """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.accordion(
-        {
-            "Why the decay is trained as a reverberation time": mo.md(r"""
-    Training the attenuation filter's *coefficients* does not work, and not for
-    want of tuning. A too-quiet FDN offers any loss the same cheap direction —
-    more loop gain — so a raw SOS cascade, with nothing holding its poles inside
-    the unit circle, walks straight out of it. At `lr=3e-2` and at `lr=1e-3`
-    alike the fit diverges within fifty steps, the loss ends four orders of
-    magnitude *above* where it started, and the extracted FDN renders as `nan`.
-
-    `pyFDN.AttenuationFilter` rewrites the filter as a differentiable function of the
-    reverberation time:
-
-    $$\mathrm{RT}_k \;\longrightarrow\; \underbrace{-60\,d_i / (\mathrm{RT}_k f_s)}_\text{dB per round trip} \;\longrightarrow\; \text{design} \;\longrightarrow\; \text{biquads}$$
-
-    A positive RT means a negative dB attenuation, which means a contractive loop
-    — for **every** value the parameter can take. One RT per band is shared by
-    all $N$ delay lines, and what differs between them is only the round-trip
-    length $d_i$: exactly the homogeneous decay an FDN is designed for.
-
-    What the RT still needs a floor for is the *sign*. A gradient step that puts
-    a band at or below zero turns $-60 d_i / (\mathrm{RT} f_s)$ from an
-    attenuation into a gain. `AttenuationFilter` floors it the same way whatever the
-    design — softplus, one round trip of the longest delay line, a knee one floor
-    wide — so a band that dips across zero still has a gradient to come back on.
-    """),
-            "Why an output EQ has to be in the model at all": mo.md(r"""
-    The gains $b$ and $c$ are one frequency-flat number per delay line, so no
-    setting of them is a filter: on its own, an FDN can place its band *decays*
-    but not its band *levels*. `pyFDN.OutputEQ` adds the one module that can —
-    the output EQ, which sits outside the recursion — and parametrizes it the
-    same way the decay is parametrized, by gain in dB rather than by free biquad
-    coefficients. It starts flat. Being outside the loop it constrains nothing,
-    so unlike the decay it needs no floor and no bound.
-
-    "Outside the recursion" invites one wrong reading, so: the output EQ **is**
-    an ordinary member of the FLAMO graph. `assemble_fdn_core` wires it in after
-    the output gain as a leaf named `post_output`, the same optimizer steps it as
-    steps the feedback matrix, and it is in every render below. Outside the
-    *recursion* is a statement about where it sits in the signal flow — which is
-    exactly why it can shape the spectrum without touching the decay — not about
-    it being applied separately afterwards.
-
-    In the analytic pipeline this same filter is *designed*, once, from the
-    residual between the target's band levels and the FDN's. Here it is another
-    parameter, and the last section checks what residual is left over.
-    """),
-            "Why nfft = 2**17, and why it is not a performance knob": mo.md(r"""
-    $2^{17}$ is 2.73 s at 48 kHz, and it is chosen once and used for everything.
-    Both jobs it has to do put a floor under it. The loss compares this window
-    against the target, so it has to hold the decay being fitted; and the *same*
-    render is what the octave-band estimators at the bottom measure, where
-    Schroeder integration over a window shorter than the decay under-reads it.
-    2.73 s clears both: the target has only $-72$ dB of its energy left after it,
-    and the band RTs come out equal to three decimals against a render four times
-    as long.
-
-    That is what lets the trained model be measured directly, rather than
-    exported to an `FDNBuild` and re-rendered at some larger `nfft`. The reason
-    such a round trip is otherwise needed is that `nfft` is **structural** in
-    FLAMO — it fixes the frequency grid, the delay phase ramps and the alias
-    envelope of every module at construction, and there is no setter — so a
-    render at a different length means rebuilding.
-
-    One argument is deliberately *not* passed: `alias_decay_db`. Evaluating an
-    FDN as $(I - A D(z))^{-1}$ on the DFT grid renders one period of a *periodic*
-    signal, so whatever the true response still has beyond `nfft` wraps back
-    around to the start of the buffer. A **lossless** FDN cannot do without the
-    correction, since its poles sit exactly on the unit circle where the inverse
-    is near-singular. This one decays, far enough down by the end of the training
-    window that the wrap-around is inaudible against it. In `float32` the setting
-    is actively *harmful*: the $\gamma^n$ reconstruction amplifies round-off at
-    the end of the buffer by the same factor it suppresses aliasing, which is
-    exactly where backward integration reads.
-    """),
-        }
-    )
     return
 
 
@@ -474,7 +348,7 @@ def _(design, device, dtype, fs, init_build, np, pyFDN, rir, rir_len, torch):
     # energy, so an FDN two decades too quiet starts on the flat part of the
     # compression curve where there is little gradient to follow. What the
     # scalar cannot do is say *when* that energy arrives, which is the problem.
-    return init_sos, ir_init, model, nfft, read, render
+    return init_sos, ir_init, model, read, render
 
 
 @app.cell(hide_code=True)
@@ -573,7 +447,7 @@ def _(mo):
 @app.cell
 def _(pyFDN, rir):
     loss = pyFDN.MatchCumulativeEnergy(rir, window=1024, power=0.5, frequency="both")
-
+    # loss = pyFDN.MatchEnergyDecay(rir, window=4096)   # bands, not cumulation
     # Try this — each one is a row of the tables above, run for yourself:
     #   frequency="descending"  -> the bottom octave is abandoned; look at the
     #                              trained RT curve at 63 Hz
@@ -637,7 +511,14 @@ def _(device, dtype, loss, model, pyFDN, read, render):
     #   rng=1, rng=2     -> a different random start. The mean RT error moves by
     #                       a few tenths of a point, not by points: the result is
     #                       a property of the fit, not of one lucky matrix.
-    return ir_trained, log, trained_eq_db, trained_eq_sos, trained_rt, trained_sos
+    return (
+        ir_trained,
+        log,
+        trained_eq_db,
+        trained_eq_sos,
+        trained_rt,
+        trained_sos,
+    )
 
 
 @app.cell
@@ -748,7 +629,7 @@ def _(
         f"{np.interp(f_centre, curve_f, rt_curve).round(2)}"
     )
     print(f"measured, octave bands (s):          {est_rt.round(2)}")
-    return curve_f, rt_curve
+    return (rt_curve,)
 
 
 @app.cell
@@ -895,8 +776,7 @@ def _(mo):
         {
             "What ten times the parameters actually buys — both designs, side by side": mo.md(r"""
     From a flat 1 s decay and a flat EQ, one energy match and 300 gradient steps,
-    with the design switch in each of its two positions and everything else
-    identical:
+    with the EQ design in each of its two settings and everything else identical:
 
     | | mean RT error | level offset | level shape | final loss |
     |---|---|---|---|---|
@@ -1003,40 +883,6 @@ def _(fs, ir_init, ir_trained, mo, pyFDN, rir):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### What is left for a designed EQ to fix
-
-    The analytic pipeline ends by designing an output GEQ from the residual
-    between the target's band levels and the FDN's. That filter is now a trained
-    parameter, so the same residual is a test of it: whatever a
-    `gain_to_bounded_geq` call would still be asked to correct is what the fit
-    did not manage.
-
-    It takes the band-level shape error from 1.71 dB down to about 0.8 dB. So the
-    answer is "most of it, not all of it" — a designed GEQ on the residual would
-    still buy the remainder, and nothing stops you from running one afterwards.
-    What the fit does buy is that the EQ was chosen *while* the decay and the
-    matrix were still moving, rather than as a correction applied to something
-    already fixed.
-    """)
-    return
-
-
-@app.cell
-def _(est_level, f_centre, level_trained, np, pyFDN, trained_eq_db):
-    residual_db = pyFDN.lin_to_db(est_level) - pyFDN.lin_to_db(level_trained)
-    print(f"bands (Hz):         {f_centre.round(0)}")
-    print(f"residual left (dB): {residual_db.round(1)}")
-    print(
-        f"\ntrained output EQ: {trained_eq_db.round(1)} dB"
-        f"\nresidual: {residual_db.mean():+.1f} dB offset, "
-        f"{np.abs(residual_db - residual_db.mean()).mean():.2f} dB of shape"
-    )
-    return (residual_db,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
     ## The deliverable — back to plain NumPy
 
     `extract_build` reads the trained model back out as an `FDNBuild` — no torch
@@ -1070,7 +916,7 @@ def _(model, np, pyFDN, trained_eq_sos, trained_sos):
     #       post_delay=td.SOSBank(b.post_delay),
     #       post_output=td.SOSBank(b.post_output),
     #   )
-    return (trained_build,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -1086,9 +932,10 @@ def _(mo):
     knew nothing about the room ends up substantially closer to it, in the mean
     and in every band the loss can resolve.
 
-    Note that the stability check is on the *curve*, not on the parameters. On
-    the graphic EQ the Nyquist parameter is allowed to go negative, and does;
-    what has to stay positive is the RT the designed filter actually realizes.
+    Note that the stability check is on the *curve*, not on the parameters. A
+    design's parameters are allowed to go negative — on the graphic EQ the
+    Nyquist one does; what has to stay positive is the RT the designed filter
+    actually realizes.
     """)
     return
 
