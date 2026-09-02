@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import auraloss.time
+
 from ._targets import _CachedTarget, response_key
 from .base import ResponseLoss
 
@@ -351,3 +353,151 @@ class MatchCumulativeEnergy(ResponseLoss):
             )
         ]
         return sum(terms[1:], terms[0]) / len(terms)
+
+
+class AuralossResponseLoss(ResponseLoss):
+    r"""Adapter to use Auraloss time-domain loss functions in pyFDN.
+
+        Handles three main differences:
+        1. **Interface**: Wraps Auraloss's ``loss(pred, target)`` into pyFDN's ``loss(response)``.
+        2. **Target Setup**: Automatically matches target length, device, and data type using :class:`_CachedTarget`.
+        3. **Tensor Shape**: Converts pyFDN's ``(time, out, in)`` layout to Auraloss's ``(batch, channels, time)``.
+        Parameters
+        ----------
+        target : Any
+            Reference impulse response (NumPy array, PyTorch tensor, or list).
+        loss : torch.nn.Module
+            An Auraloss loss module.
+        """
+    @staticmethod
+    def _to_auraloss_layout(h: torch.Tensor, n_samples: int) -> torch.Tensor:
+        """Convert pyFDN's (n_samples, n_out, n_in) to Auraloss's (batch, 1, time)."""
+        return h.permute(2, 1, 0).reshape(-1, 1, n_samples)
+
+    def __init__(self, target: Any, loss: torch.nn.Module) -> None:
+        self._target = _CachedTarget(target)
+        self.loss = loss
+
+    def __call__(self, response: Response) -> torch.Tensor:
+        target = self._target(response)
+
+        pred_layout = self._to_auraloss_layout(response.h, response.n_samples)
+        target_layout = self._to_auraloss_layout(target, response.n_samples)
+
+        return self.loss(pred_layout, target_layout)
+
+
+class MatchESR(AuralossResponseLoss):
+    """Error-to-signal ratio loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.ESRLoss(
+                eps=eps,
+                reduction=reduction,
+            ),
+        )
+
+
+class MatchDC(AuralossResponseLoss):
+    """DC error loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.DCLoss(
+                eps=eps,
+                reduction=reduction,
+            ),
+        )
+
+
+class MatchLogCosh(AuralossResponseLoss):
+    """Log-cosh loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        a: float = 1.0,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.LogCoshLoss(
+                a=a,
+                eps=eps,
+                reduction=reduction,
+            ),
+        )
+
+
+class MatchSNR(AuralossResponseLoss):
+    """Signal-to-noise ratio loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        zero_mean: bool = True,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.SNRLoss(
+                zero_mean=zero_mean,
+                eps=eps,
+                reduction=reduction,
+            ),
+        )
+
+
+class MatchSISDR(AuralossResponseLoss):
+    """Scale-invariant signal-to-distortion ratio loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        zero_mean: bool = True,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.SISDRLoss(
+                zero_mean=zero_mean,
+                eps=eps,
+                reduction=reduction,
+            ),
+        )
+
+
+class MatchSDSDR(AuralossResponseLoss):
+    """Scale-dependent signal-to-distortion ratio loss."""
+
+    def __init__(
+        self,
+        target: Any,
+        zero_mean: bool = True,
+        eps: float = 1e-8,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__(
+            target,
+            auraloss.time.SDSDRLoss(
+                zero_mean=zero_mean,
+                eps=eps,
+                reduction=reduction,
+            ),
+        )

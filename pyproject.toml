@@ -57,6 +57,7 @@ test = [
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
+    "auraloss>=0.4.0",
 ]
 dev = [
     "pyFDN[test]",  # everything from [test] (and transitively [examples])
@@ -165,6 +166,7 @@ module = [
     "plotly.*",
     "scipy.*",
     "soundfile",
+    "auraloss.*",
 ]
 ignore_missing_imports = true
 

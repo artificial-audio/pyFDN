@@ -340,6 +340,12 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.MatchImpulseResponse
    pyFDN.MatchEnergyDecay
    pyFDN.MatchCumulativeEnergy
+   pyFDN.MatchDC
+   pyFDN.MatchESR
+   pyFDN.MatchLogCosh
+   pyFDN.MatchSDSDR
+   pyFDN.MatchSISDR
+   pyFDN.MatchSNR
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1

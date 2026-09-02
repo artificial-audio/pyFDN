@@ -19,6 +19,12 @@ from .temporal import (
     MatchCumulativeEnergy,
     MatchEnergyDecay,
     MatchImpulseResponse,
+    MatchDC,
+    MatchESR,
+    MatchLogCosh,
+    MatchSDSDR,
+    MatchSISDR,
+    MatchSNR,
 )
 
 __all__ = [

@@ -44,6 +44,12 @@ from .losses import (
     ParameterLoss,
     ResponseLoss,
     Sparsity,
+    MatchDC,
+    MatchESR,
+    MatchLogCosh,
+    MatchSDSDR,
+    MatchSISDR,
+    MatchSNR,
 )
 from .params import ParamRef, param, params
 from .response import Response, impulse_excitation, model_response
@@ -87,4 +93,10 @@ __all__ = [
     "Sparsity",
     "L1",
     "L2",
+    "MatchDC",
+    "MatchESR",
+    "MatchLogCosh",
+    "MatchSDSDR",
+    "MatchSISDR",
+    "MatchSNR",
 ]
