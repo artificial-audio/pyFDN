@@ -5,6 +5,7 @@ import pytest
 
 pytest.importorskip("torch")
 pytest.importorskip("flamo")
+pytest.importorskip("auraloss")
 
 import pyFDN  # noqa: E402
 from pyFDN.build import FDNBuild  # noqa: E402
@@ -1493,3 +1494,98 @@ def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
     long_ir = np.concatenate([ir, np.zeros(2**12)])
     moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
     assert float(loss(moved)) == pytest.approx(float(make_loss(reference)(moved)))
+
+# --- auraloss matching losses -----------------------------------------------
+
+@pytest.mark.parametrize(
+    "loss_cls",
+    [
+        pyFDN.MatchESR,
+        pyFDN.MatchSISDR,
+    ],
+)
+
+def test_auraloss_reused_on_new_response_rebuilds_reference(loss_cls):
+    """Ensure _CachedTarget dynamically handles length, device, and dtype changes."""
+    import torch
+    from pyFDN.train import Response
+
+    fs = 48000.0
+    rng = np.random.default_rng(7)
+    reference = _decaying_noise(2**12, fs, 0.4, rng)
+    ir = _decaying_noise(2**12, fs, 0.3, rng)
+
+    loss = loss_cls(reference)
+    val1 = float(loss(Response(h=_as_h(ir), fs=fs)).detach())
+    assert np.isfinite(val1)
+
+    # Re-evaluate with altered length and dtype to test cache invalidation
+    long_ir = np.concatenate([ir, np.zeros(2**11)])
+    moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
+    val2 = float(loss(moved).detach())
+
+    assert np.isfinite(val2)
+    assert val2 == pytest.approx(float(loss_cls(reference)(moved).detach()))
+
+@pytest.mark.parametrize(
+    "loss_cls",
+    [
+        pyFDN.MatchESR,
+        pyFDN.MatchSISDR,
+    ],
+)    
+def test_auraloss_trains_fdn_and_propagates_gradients(loss_cls):
+    """Ensure train_fdn successfully steps and updates trainable parameters."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
+
+    fb_before = param(fresh, "feedback").raw().detach().numpy().copy()
+
+    log = train_fdn(
+        fresh,
+        loss_cls(target_ir),
+        max_steps=5,
+        rng=0,
+        **_FAST,
+    )
+
+    assert log.steps_run == 5
+    assert np.isfinite(log.train_loss[-1])
+    assert not np.allclose(fb_before, param(fresh, "feedback").raw().detach().numpy())
+
+
+def test_auraloss_mimo_target():
+    """Verify that multi-channel MIMO IRs (n_samples, n_out, n_in) train correctly."""
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(0)
+    ref = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=0,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=9,
+    )
+    log = train_fdn(
+        fresh,
+        pyFDN.MatchSISDR(target),
+        max_steps=5,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
