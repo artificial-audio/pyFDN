@@ -44,6 +44,12 @@ __all__ = [
     "MatchImpulseResponse",
     "MatchEnergyDecay",
     "MatchCumulativeEnergy",
+    "MatchDC",
+    "MatchESR",
+    "MatchLogCosh",
+    "MatchSDSDR",
+    "MatchSISDR",
+    "MatchSNR",
     "Energy",
     # parameter losses
     "Sparsity",

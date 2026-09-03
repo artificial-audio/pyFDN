@@ -189,6 +189,8 @@ __all__ = [
     "Sparsity",
     "L1",
     "L2",
+    # features
+    "mimo_rir_eigenvalues_per_frequency",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -491,6 +493,10 @@ from .train import (
     trainable_from_build,
     trainable_from_preset,
 )
+# features
+from .train import (
+    mimo_rir_eigenvalues_per_frequency,
+    )
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo

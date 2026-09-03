@@ -51,6 +51,11 @@ from .losses import (
     MatchSISDR,
     MatchSNR,
 )
+
+from .features import (
+    mimo_rir_eigenvalues_per_frequency,
+) 
+
 from .params import ParamRef, param, params
 from .response import Response, impulse_excitation, model_response
 
@@ -98,5 +103,7 @@ __all__ = [
     "MatchLogCosh",
     "MatchSDSDR",
     "MatchSISDR",
-    "MatchSNR",
+    "MatchSNR", 
+    # features
+    "mimo_rir_eigenvalues_per_frequency",
 ]
