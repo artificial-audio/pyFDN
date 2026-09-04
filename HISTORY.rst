@@ -14,7 +14,7 @@ History
 * Add nonlinear and pitch-shifting time-domain operators for shimmer
   reverberation -- ``DCBlocker``, ``ControllableFullWaveRect``, ``SDFD``,
   ``RingModulator``, ``PitchShift`` and ``GranularPitchShift`` -- all usable as
-  ``process_fdn`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
+  ``process_dss`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
   through each one inside the feedback loop of the same 8-line FDN.
 * ``is_uniallpass`` no longer solves a singular Lyapunov equation when ``A`` is
   itself lossless (as in the allpass-in-FDN structure). The spectral radius is

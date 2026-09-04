@@ -130,7 +130,7 @@ Time-Domain Graph (``pyFDN.td``)
 --------------------------------
 
 Stateful block-processing operators, wired into a graph by the connectors and
-rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
+rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
 
 .. autosummary::
    :toctree: generated/
@@ -175,7 +175,8 @@ Building a FLAMO Graph
 An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
 ``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
 ``post_output`` on the wet signal -- are the same three
-:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+:func:`pyFDN.process_dss` takes, in the same positions and under the same
+names.
 
 .. autosummary::
    :toctree: generated/
@@ -276,6 +277,7 @@ State-Space Translators
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
    pyFDN.build_to_impz
+   pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
@@ -295,6 +297,7 @@ FDN Processing
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.process_dss
    pyFDN.process_fdn
    pyFDN.flamo_process
 

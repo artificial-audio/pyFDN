@@ -42,7 +42,7 @@ def test_time_varying_matrix_filter_matches_pairwise_rotations():
     x = np.random.default_rng(0).standard_normal((32, 4))
 
     expected = _explicit_pairwise_rotation(tvm, x)
-    out = tvm.filter(x)
+    out = tvm.process_block(x)
 
     np.testing.assert_allclose(out, expected)
     assert tvm.sample_index == x.shape[0]
@@ -53,8 +53,8 @@ def test_time_varying_matrix_filter_keeps_state_across_blocks():
     single_block = _make_time_varying_matrix()
     split_block = _make_time_varying_matrix()
 
-    expected = single_block.filter(x)
-    out = np.vstack([split_block.filter(x[:17]), split_block.filter(x[17:])])
+    expected = single_block.process_block(x)
+    out = np.vstack([split_block.process_block(x[:17]), split_block.process_block(x[17:])])
 
     np.testing.assert_allclose(out, expected)
     assert split_block.sample_index == x.shape[0]
@@ -65,10 +65,10 @@ def test_time_varying_matrix_filter_rejects_wrong_shape():
 
     # As a TimeOperator, a 1-D block is one channel of 4 samples -- not 4 channels.
     with pytest.raises(ValueError, match="expects 4 input channels"):
-        tvm.filter(np.zeros(4))
+        tvm.process_block(np.zeros(4))
 
     with pytest.raises(ValueError, match="expects 4 input channels"):
-        tvm.filter(np.zeros((8, 3)))
+        tvm.process_block(np.zeros((8, 3)))
 
     with pytest.raises(ValueError, match="signal block must be 1-D or 2-D"):
-        tvm.filter(np.zeros((2, 8, 4)))
+        tvm.process_block(np.zeros((2, 8, 4)))

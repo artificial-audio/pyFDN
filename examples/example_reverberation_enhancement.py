@@ -28,7 +28,7 @@ def _(mo):
 
     * `pyroomacoustics` places a performer, a listener, **6 microphones** over the stage and **6 loudspeakers** over the audience, and computes every room impulse response — including the loudspeaker→microphone coupling that closes the loop.
     * the reverberator is a 6-in/6-out FDN built from `pyFDN.td` operators, with an optional `td.TimeVaryingMatrix` on its feedback path.
-    * the **entire** system — room paths, coupling and FDN — is assembled as a single `td` operator tree and run by one `.process(source)` call. The whole electroacoustic feedback loop is just a `td.Recursion` whose feedback path is the room coupling and whose forward path is the FDN.
+    * the **entire** system — room paths, coupling and FDN — is assembled as a single `td` operator tree and run by one `.process_signal(source)` call. The whole electroacoustic feedback loop is just a `td.Recursion` whose feedback path is the room coupling and whose forward path is the FDN.
 
     We then (1) confirm the RES enhances reverberation and (2) show the time-varying FDN stays stable at a loop gain where the static one already rings.
     """)
@@ -278,7 +278,7 @@ def _(mo):
     ```
 
     The feedback loop `loudspeaker → room → mic → FDN → loudspeaker` is literally a `td.Recursion`. A short `Delay` (the RES processing latency, ~5 ms) leads its forward path, which is what lets the block recursion break the loop — the same role the FDN's own delays play inside the FDN. A `Recursion` processes `block_size` samples at a time and so inserts that many samples of delay into
-    its loop, which is why the latency delay (and, inside the FDN, the delay lines) is shortened by exactly one block. One `.process(source)` runs the whole system.
+    its loop, which is why the latency delay (and, inside the FDN, the delay lines) is shortened by exactly one block. One `.process_signal(source)` runs the whole system.
     """)
     return
 
@@ -326,7 +326,7 @@ def _(
 
     def render(time_varying, g):
         """Listener impulse response of the RES at loop gain ``g``."""
-        return build_res(time_varying, g).process(impulse).squeeze()
+        return build_res(time_varying, g).process_signal(impulse).squeeze()
 
     return (render,)
 

@@ -2,7 +2,7 @@
 Graph processing
 
 The audio processing of graphs built with ``pyFDN.td`` is tested agains
-:func:`pyFDN.process_fdn`.
+:func:`pyFDN.process_dss`.
 This needs no FLAMO install.
 """
 
@@ -111,7 +111,7 @@ def test_series_filter() -> None:
         delays_ref.advance(block_size)
 
         # td
-        out_sig_td[start : start + block_size, :] = series_conn.filter(block_in)
+        out_sig_td[start : start + block_size, :] = series_conn.process_block(block_in)
 
         start += block_size
 
@@ -167,7 +167,7 @@ def test_parallel_filter() -> None:
         delays_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size, :] = parallel_conn.filter(block_in)
+        out_sig_td[start : start + block_size, :] = parallel_conn.process_block(block_in)
 
         start += block_size
 
@@ -211,7 +211,7 @@ def test_recursion_filter_forward_delay() -> None:
     out_sig_ref = np.zeros((n_samples, N), dtype=float)
     out_sig_td = np.zeros((n_samples, N), dtype=float)
 
-    out_sig_ref = pyFDN.process_fdn(
+    out_sig_ref = pyFDN.process_dss(
         input_signal=in_sig,
         delays=fdnbuild.delays + BLOCK_SIZE,
         A=A_ref,
@@ -220,7 +220,7 @@ def test_recursion_filter_forward_delay() -> None:
         D=0 * I_ref,
     )
 
-    out_sig_td = recursion_conn.filter(in_sig)
+    out_sig_td = recursion_conn.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-12, rtol=0)
@@ -279,7 +279,7 @@ def test_recursion_filter_forward_delay_in_block_processing() -> None:
         delay_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size] = recursion_conn.filter(block_in)
+        out_sig_td[start : start + block_size] = recursion_conn.process_block(block_in)
 
         start += block_size
 
@@ -348,7 +348,7 @@ def test_recursion_filter_feedback_delay_in_block_processing() -> None:
         delay_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size] = recursion_conn.filter(block_in)
+        out_sig_td[start : start + block_size] = recursion_conn.process_block(block_in)
 
         start += block_size
 
@@ -408,7 +408,7 @@ def test_recursion_filter_forward_delay_compensation() -> None:
         delay_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size] = recursion_conn.filter(block_in)
+        out_sig_td[start : start + block_size] = recursion_conn.process_block(block_in)
 
         start += block_size
 
@@ -468,7 +468,7 @@ def test_recursion_filter_feedback_delay_compensation() -> None:
         delay_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size] = recursion_conn.filter(block_in)
+        out_sig_td[start : start + block_size] = recursion_conn.process_block(block_in)
 
         start += block_size
 
@@ -543,13 +543,13 @@ def test_res_mcr_block_process() -> None:
         # output
         out_sig_ref[n : n + block_size, :] = mix_out
         # feedback convolution
-        feedback = feedback_ref.filter(mix_out)
+        feedback = feedback_ref.process_block(mix_out)
         # update buffers
         delay_ref.set_values(block_in + feedback)
         delay_ref.advance(block_size)
 
         # ------------- td processing ------------
-        out_sig_td[n : n + block_size, :] = res.filter(block_in)
+        out_sig_td[n : n + block_size, :] = res.process_block(block_in)
 
         n += block_size
 
@@ -650,8 +650,8 @@ def test_res_tvfdn_block_process():
 
         # fdn
         delay_out = delay_ref.get_values(block_size)
-        delay_out = absorp_ref.filter(delay_out)
-        internal_feedback = tvm_ref.filter(delay_out @ A_ref.T)
+        delay_out = absorp_ref.process_block(delay_out)
+        internal_feedback = tvm_ref.process_block(delay_out @ A_ref.T)
 
         delay_ref.set_values((block_in + state) @ B_ref.T + internal_feedback)
         fdn_out = delay_out @ C_ref.T
@@ -660,14 +660,14 @@ def test_res_tvfdn_block_process():
         delay_ref.advance(block_size)
 
         # acoustic feedback
-        ac_fb_out = acoustic_feedback_ref.filter(fdn_out)
+        ac_fb_out = acoustic_feedback_ref.process_block(fdn_out)
 
         # future system state
         add_delay_ref.set_values(ac_fb_out)
         add_delay_ref.advance(block_size)
 
         # ------------- td processing ------------
-        out_sig_td[n : n + block_size, :] = res.filter(block_in)
+        out_sig_td[n : n + block_size, :] = res.process_block(block_in)
 
         n += block_size
 

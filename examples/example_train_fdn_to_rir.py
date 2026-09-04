@@ -908,14 +908,9 @@ def _(model, np, pyFDN, trained_eq_sos, trained_sos):
     np.testing.assert_allclose(trained_build.post_output, trained_eq_sos, atol=1e-12)
 
     # Try this: run dry audio through the reverb you just trained.
-    #   from pyFDN import td
     #   b = trained_build
     #   dry, _ = pyFDN.load_audio("synth_dry", fs=b.fs)
-    #   wet = pyFDN.process_fdn(
-    #       np.pad(dry, (0, 3 * int(b.fs))), b.delays, b.A, b.B, b.C, b.D,
-    #       post_delay=td.SOSBank(b.post_delay),
-    #       post_output=td.SOSBank(b.post_output),
-    #   )
+    #   wet = pyFDN.process_fdn(np.pad(dry, (0, 3 * int(b.fs))), b)
     return
 
 

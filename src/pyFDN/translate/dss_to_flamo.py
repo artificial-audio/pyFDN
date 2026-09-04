@@ -74,7 +74,7 @@ def dss_to_flamo(
         If None, wrapper defaults are used.
     post_delay : array, FLAMO module, sequence, or None
         In-loop filter applied to the delay output, inside the recursion -- the
-        same hook :func:`pyFDN.process_fdn` calls ``post_delay``. An
+        same hook :func:`pyFDN.process_dss` calls ``post_delay``. An
         ``(n_sections, 6, N)`` SOS bank, a FLAMO module of input/output size N
         (e.g. a Schroeder allpass core from ``shell=False``), or a sequence of
         both applied in order. See :func:`pyFDN.hook_module`.
