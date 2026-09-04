@@ -41,6 +41,12 @@ def dss_to_ss(
     A = np.asarray(A)
     N = A.shape[0]
 
+    if np.any(m_arr < 3):
+        raise ValueError(
+            "All delays in `m` must be at least 3 samples, "
+            f"got minimum {int(m_arr.min())}."
+        )
+
     # Default gains
     if b is None:
         b = np.ones((N, 1))
@@ -54,12 +60,14 @@ def dss_to_ss(
     R = np.zeros((0, N))  # start with 0 rows
 
     for it in range(N):
-        # U_j: (m_arr[it]-3) x (m_arr[it]-3) with 1's on first superdiagonal
+        # U_j: (m_arr[it]-2) x (m_arr[it]-2) with 1's on first superdiagonal.
+        # np.diag(np.ones(n), 1) has shape (n+1, n+1), so passing
+        # size_Uj = m_arr[it] - 3 directly (including the size_Uj == 0 case,
+        # which yields the (1, 1) zero block needed for the minimum delay of
+        # 3 samples) already produces the correct (m_arr[it]-2, m_arr[it]-2)
+        # block, matching the sizes of the corresponding P_j/R_j blocks.
         size_Uj = m_arr[it] - 3
-        if size_Uj > 0:
-            U_j = np.diag(np.ones(size_Uj), 1)
-        else:
-            U_j = np.zeros((0, 0))
+        U_j = np.diag(np.ones(size_Uj), 1)
         U_blocks.append(U_j)
 
         # R_j: (m_arr[it]-2) x N, last row = 1 at column it
