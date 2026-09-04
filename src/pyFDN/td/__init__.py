@@ -37,6 +37,7 @@ from pyFDN.td.operators import (
     Gain,
     GranularPitchShift,
     Identity,
+    KroneckerMatrix,
     MatrixConvolver,
     MatrixFIR,
     PitchShift,
@@ -44,6 +45,7 @@ from pyFDN.td.operators import (
     RingModulator,
     SOSBank,
     TimeOperator,
+    TimeVaryingKroneckerMatrix,
     TimeVaryingMatrix,
 )
 
@@ -62,7 +64,9 @@ __all__ = [
     "SOSBank",
     "MatrixFIR",
     "MatrixConvolver",
+    "KroneckerMatrix",
     "TimeVaryingMatrix",
+    "TimeVaryingKroneckerMatrix",
     "RecursionState",
     "Series",
     "Parallel",
