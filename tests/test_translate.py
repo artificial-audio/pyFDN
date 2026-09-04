@@ -10,8 +10,8 @@ from pyFDN.translate.dss_to_ss import dss_to_ss
 from pyFDN.translate.dss_to_tf import dss_to_tf
 
 
-def test_dss_to_ss_raises_for_inconsistent_delay_blocks():
-    delays = np.array([3, 4])
+def test_dss_to_ss_raises_for_delay_below_minimum():
+    delays = np.array([2, 4])
     A = np.eye(2)
     bb = np.ones((2, 1))
     cc = np.ones((1, 2))
@@ -19,6 +19,32 @@ def test_dss_to_ss_raises_for_inconsistent_delay_blocks():
 
     with pytest.raises(ValueError):
         dss_to_ss(delays, A, bb, cc, dd)
+
+
+def test_dss_to_ss_supports_mixed_delays_including_minimum():
+    # Regression test for #240: delays that mix the documented minimum of
+    # 3 samples with larger delays must not raise a shape-mismatch error.
+    delays = np.array([3, 4])
+    A = np.eye(2)
+    bb = np.ones((2, 1))
+    cc = np.ones((1, 2))
+    dd = np.eye(1)
+
+    AA, _, _, _ = dss_to_ss(delays, A, bb, cc, dd)
+
+    total = int(np.sum(delays))
+    assert AA.shape == (total, total)
+
+
+def test_dss_to_ss_handles_minimum_delay_of_three():
+    # Regression test for #240: m=[3] previously raised a dimension
+    # mismatch instead of returning a (3, 3) state-space matrix.
+    AA, bb, cc, dd = dss_to_ss(m=np.array([3]), A=np.array([[0.5]]))
+
+    assert AA.shape == (3, 3)
+    assert bb.shape == (3, 1)
+    assert cc.shape == (1, 3)
+    assert dd.shape == (1, 1)
 
 
 def test_dss_to_impz_produces_delayed_impulse():
