@@ -647,7 +647,7 @@ def plot_fdn_parameter(
     """Plot all FDN parameters in one figure.
 
     Extends :func:`plot_system_matrix` with the delay lengths and, optionally,
-    any of the three filter hooks, named as :func:`pyFDN.process_fdn` and
+    any of the three filter hooks, named as :func:`pyFDN.process_dss` and
     :class:`pyFDN.FDNBuild` name them:
 
     - the system matrix blocks ``A``, ``b``, ``c``, ``d`` as heatmaps with a

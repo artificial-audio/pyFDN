@@ -142,14 +142,15 @@ documentation sources, and tests:
 
 * ``src/pyFDN/`` contains the library. The top-level ``__init__.py`` defines
   the public API, while ``process.py``, ``build_io.py``, and ``presets.py``
-  provide the main processing and persistence entry points.
+  provide the main build-processing and persistence entry points.
 * ``src/pyFDN/generate/`` contains feedback-matrix and FDN construction
   algorithms, including the allpass and scattering-delay-network builders.
 * ``src/pyFDN/td/`` contains stateful block-processing operators and the
   connectors (``Series``, ``Parallel``, ``Recursion``) that wire them into a
-  time-domain graph. ``process_fdn`` uses ``MatrixFIR`` for polynomial feedback
-  matrices; ``SOSBank`` implements per-delay-line filter cascades used for
-  frequency-dependent absorption.
+  time-domain graph. ``pyFDN.process_dss`` uses ``MatrixFIR`` for polynomial
+  feedback matrices; ``SOSBank`` implements per-delay-line filter cascades used
+  for frequency-dependent absorption. ``build_to_td`` assembles a complete
+  ``FDNBuild`` from these operators.
 * ``src/pyFDN/eq/`` contains every EQ and absorption-filter design, while
   ``src/pyFDN/translate/`` converts between delay state-space, transfer
   function, pole-residue, impulse-response, and FLAMO representations.

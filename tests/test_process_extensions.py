@@ -51,7 +51,7 @@ def test_general_char_poly_polynomial_matches_det(
         assert det_p == pytest.approx(gcp_val, rel=1e-8)
 
 
-def test_process_fdn_fir_matrix_matches_frequency_inversion(
+def test_process_dss_fir_matrix_matches_frequency_inversion(
     paraunitary_fdn: FDNFixture,
 ) -> None:
     A = paraunitary_fdn["A"]
@@ -92,13 +92,13 @@ def test_fir_matrix_filter_block_consistency() -> None:
     coeffs = np.random.randn(3, 2, 8)
     x = np.random.randn(200, 2)
 
-    one_shot = td.MatrixFIR(coeffs).filter(x)
+    one_shot = td.MatrixFIR(coeffs).process_block(x)
     blockwise = td.MatrixFIR(coeffs)
-    parts = [blockwise.filter(x[i : i + 32]) for i in range(0, 200, 32)]
+    parts = [blockwise.process_block(x[i : i + 32]) for i in range(0, 200, 32)]
     np.testing.assert_allclose(one_shot, np.vstack(parts), atol=1e-12)
 
     # order-1 (static) matrix degenerates to a matrix multiply
-    static = td.MatrixFIR(coeffs[:, :, :1]).filter(x)
+    static = td.MatrixFIR(coeffs[:, :, :1]).process_block(x)
     np.testing.assert_allclose(static, x @ coeffs[:, :, 0].T, atol=1e-12)
 
 
@@ -115,7 +115,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
 
     # block-wise filtering with persistent state matches one-shot sosfilt
     bank = td.SOSBank(sos)
-    parts = [bank.filter(x[i : i + 32]) for i in range(0, 200, 32)]
+    parts = [bank.process_block(x[i : i + 32]) for i in range(0, 200, 32)]
     blockwise = np.vstack(parts)
     for i in range(n):
         one_shot = sosfilt(
@@ -140,7 +140,7 @@ def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
     assert is_p
 
 
-def test_process_fdn_absorption_matches_flamo() -> None:
+def test_process_dss_absorption_matches_flamo() -> None:
     torch = pytest.importorskip("torch")
     pytest.importorskip("flamo")
 
@@ -161,7 +161,9 @@ def test_process_fdn_absorption_matches_flamo() -> None:
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_fdn(impulse, delays, A, B, C, D, post_delay=absorption)
+    ir_td = pyFDN.process_dss(
+        impulse, delays, A, B, C, D, post_delay=absorption
+    )
 
     model = pyFDN.dss_to_flamo(
         A,
@@ -234,6 +236,104 @@ def _siso_build(filters: np.ndarray | None = None) -> FDNBuild:
     )
 
 
+def test_build_to_td_matches_process_dss_with_all_hooks() -> None:
+    """The build graph creates and connects all three SOS hook nodes."""
+    post_delay = pyFDN.first_order_absorption(
+        0.3, 0.1, np.array([101, 143, 165, 177]), 48_000.0
+    )
+    build = dataclasses.replace(
+        _siso_build(post_delay),
+        post_matrix=_flat_gain_sos(0.8, 4),
+        post_output=_flat_gain_sos(0.5, 1),
+    )
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    graph = pyFDN.build_to_td(build)
+    got = graph.process_signal(signal, squeeze=True)
+    expected = pyFDN.process_dss(
+        signal,
+        build.delays,
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        post_delay=td.SOSBank(build.post_delay),
+        post_matrix=td.SOSBank(build.post_matrix),
+        post_output=td.SOSBank(build.post_output),
+    )
+    np.testing.assert_allclose(got, expected)
+
+
+def test_build_to_td_fir_feedback_mimo_and_direct_path() -> None:
+    rng = np.random.default_rng(17)
+    n, num_inputs, num_outputs = 4, 2, 3
+    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(
+        n, 2, matrix_type="random"
+    )
+    build = FDNBuild(
+        A=0.8 * A,
+        B=rng.standard_normal((n, num_inputs)),
+        C=rng.standard_normal((num_outputs, n)),
+        D=rng.standard_normal((num_outputs, num_inputs)),
+        delays=np.array([19, 31, 42, 57]),
+        fs=48_000.0,
+    )
+    signal = rng.standard_normal((512, num_inputs))
+
+    got = pyFDN.build_to_td(build, block_size=16).process_signal(signal)
+    expected = pyFDN.process_dss(
+        signal, build.delays, build.A, build.B, build.C, build.D
+    )
+    np.testing.assert_allclose(got, expected, atol=1e-12)
+
+
+def test_build_to_td_process_block_matches_process_signal() -> None:
+    build = build_set_decay(_siso_build(), 0.3)
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    whole = pyFDN.build_to_td(build, block_size=32).process_signal(signal)
+    streamed_graph = pyFDN.build_to_td(build, block_size=32)
+    streamed = np.vstack(
+        [
+            streamed_graph.process_block(signal[start : start + 47])
+            for start in range(0, signal.size, 47)
+        ]
+    )
+    np.testing.assert_allclose(streamed, whole, atol=1e-12)
+
+
+def test_process_fdn_wraps_a_fresh_build_graph() -> None:
+    build = build_set_decay(_siso_build(), 0.3)
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    expected = pyFDN.build_to_td(build).process_signal(signal, squeeze=True)
+    np.testing.assert_allclose(pyFDN.process_fdn(signal, build), expected)
+    np.testing.assert_allclose(pyFDN.process_fdn(signal, build), expected)
+
+
+def test_build_to_td_reset_restores_initial_state() -> None:
+    build = build_set_decay(_siso_build(), 0.3)
+    graph = pyFDN.build_to_td(build, block_size=32)
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    first = graph.process_signal(signal)
+    assert not np.allclose(graph.process_signal(signal), first)
+    graph.reset()
+    np.testing.assert_allclose(graph.process_signal(signal), first)
+
+
+def test_build_to_td_rejects_invalid_block_size() -> None:
+    build = _siso_build()
+    with pytest.raises(ValueError, match="positive integer"):
+        pyFDN.build_to_td(build, block_size=0)
+    with pytest.raises(ValueError, match="shortest FDN delay"):
+        pyFDN.build_to_td(build, block_size=102)
+
+
 def test_build_to_impz_lossless_matches_dss_to_impz() -> None:
     np.random.seed(3)
     build = _siso_build()  # post_delay=None -> no absorption
@@ -296,7 +396,7 @@ def test_build_carries_all_three_hooks_and_both_renderers_agree() -> None:
 
 
 def test_build_to_impz_applies_the_post_output_hook() -> None:
-    """post_output reaches the process_fdn argument of the same name."""
+    """post_output becomes the build graph's wet-output SOS node."""
     plain = _siso_build()
     half = np.zeros((1, 6, 1))
     half[:, 0, :] = 0.5  # a flat 0.5 gain as a one-section SOS

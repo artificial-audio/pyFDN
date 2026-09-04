@@ -956,8 +956,8 @@ def assemble_fdn_core(
     with the direct path ``direct`` summed in parallel when provided.
 
     The three optional filter slots are the same three hooks, in the same three
-    positions and under the same three names, that :func:`pyFDN.process_fdn`
-    takes in numpy -- ``post_delay`` on the shared delay output (so it shapes
+    positions and under the same three names, that :func:`pyFDN.process_dss`
+    takes in NumPy -- ``post_delay`` on the shared delay output (so it shapes
     both what leaves the network and what is fed back), ``post_matrix`` on the
     feedback path only, ``post_output`` on the wet signal only. An
     :class:`~pyFDN.FDNBuild` has a field of each name, holding the SOS bank a

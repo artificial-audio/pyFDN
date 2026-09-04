@@ -22,7 +22,7 @@ def _(mo, pyFDN):
 
     The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
 
-    1. **`process_fdn`** — block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
+    1. **`pyFDN.process_dss`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
     The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the absorption is a 10-band graphic EQ (`absorption_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
@@ -96,7 +96,7 @@ def _(mo):
     mo.md(r"""
     ## Render with both implementations
 
-    `process_fdn` filters the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
+    `pyFDN.process_dss` processes the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
     """)
     return
 
@@ -118,7 +118,7 @@ def _(
 ):
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_fdn(
+    ir_td = pyFDN.process_dss(
         impulse,
         delays,
         feedback_matrix,
@@ -165,8 +165,8 @@ def _(ir_flamo, ir_td, np, pyFDN):
     pyFDN.plot_impulse_response(
         ir_td,
         ir_flamo,
-        labels=["process_fdn (time domain)", "FLAMO (frequency domain)"],
-        title="Impulse response: process_fdn vs FLAMO",
+        labels=["pyFDN.process_dss (time domain)", "FLAMO (frequency domain)"],
+        title="Impulse response: pyFDN.process_dss vs FLAMO",
     )
     return (t_axis,)
 

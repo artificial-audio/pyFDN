@@ -28,17 +28,18 @@ class FDNSystem(NamedTuple):
 class FDNBuild:
     """Complete FDN parameters returned by :func:`fdn_build_gallery`.
 
-    A **baked** description: every field is a plain array, which is what
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.build_to_impz` consume and what
-    :func:`pyFDN.save_fdn_build` writes. Nothing here remembers how a filter was
+    A **baked** description: every field is a plain array, which
+    :func:`pyFDN.build_to_td`, :func:`pyFDN.process_fdn`, and
+    :func:`pyFDN.build_to_impz` consume and what :func:`pyFDN.save_fdn_build`
+    writes. Nothing here remembers how a filter was
     designed -- a reverberation time, an EQ curve -- because nothing that reads
     a build needs to know. That knowledge lives in the design
     (:class:`~pyFDN.eq.EQDesign`) at the moment the filter is built, and in the
     trainable modules of :mod:`pyFDN.train`.
 
-    The three optional filter fields are the three filter hooks of
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core`, under the
-    same names, in the same positions, and in signal-flow order:
+    The three optional filter fields become the three filter hooks of
+    :func:`pyFDN.build_to_td` and :func:`pyFDN.assemble_fdn_core`, under the same
+    names, in the same positions, and in signal-flow order:
 
     * ``post_delay`` -- ``None`` (lossless) or a per-delay-line SOS bank of
       shape ``(num_sections, 6, N)``, applied to the delay output inside the
@@ -51,11 +52,12 @@ class FDNBuild:
       recursion. This is what colours it.
 
     A build carries each hook as an SOS bank because that is what bakes and what
-    serializes. The hooks themselves are wider than that at runtime:
-    :func:`pyFDN.process_fdn` and :func:`pyFDN.assemble_fdn_core` take any
-    filter in any of the three -- a nested allpass core in ``post_delay``, a
-    :class:`pyFDN.td.TimeVaryingMatrix` in ``post_matrix`` -- and those simply
-    have no field here, since neither is a bank of biquads.
+    serializes. The runtime APIs are wider than that:
+    :func:`pyFDN.process_dss` accepts arbitrary ``td`` operators, such as a
+    :class:`pyFDN.td.TimeVaryingMatrix`, while
+    :func:`pyFDN.assemble_fdn_core` accepts arbitrary FLAMO modules, such as a
+    nested allpass core. Those simply have no field here, since neither bakes
+    down to a bank of biquads.
     """
 
     A: np.ndarray

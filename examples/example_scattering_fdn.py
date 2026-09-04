@@ -97,7 +97,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse responses and echo density
 
-    `process_fdn` handles the FIR feedback matrices directly in the time-domain recursion (each matrix entry is an FIR filter with persistent state).
+    `pyFDN.process_dss` handles the FIR feedback matrices directly in the time-domain recursion (each matrix entry is an FIR filter with persistent state).
     """)
     return
 

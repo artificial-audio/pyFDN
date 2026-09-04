@@ -69,7 +69,7 @@ def test_identity() -> None:
 
     # Test
     out_sig_ref = in_sig @ I_ref.T
-    out_sig_td = I_td.filter(in_sig)
+    out_sig_td = I_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -93,7 +93,7 @@ def test_gain() -> None:
 
     # Test
     out_sig_ref = in_sig @ gain_ref.T
-    out_sig_td = gain_td.filter(in_sig)
+    out_sig_td = gain_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -134,7 +134,7 @@ def test_delay() -> None:
         delay_ref.advance(block_size)
 
         # td
-        out_sig_td[start : start + block_size, :] = delay_td.filter(block_in)
+        out_sig_td[start : start + block_size, :] = delay_td.process_block(block_in)
 
         start += block_size
 
@@ -175,7 +175,7 @@ def test_sosbank() -> None:
     absorption_td = td.SOSBank(sos)
 
     # Test
-    out_sig_td = absorption_td.filter(in_sig)
+    out_sig_td = absorption_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -201,12 +201,12 @@ def test_sosbank_block_consistency_and_reset() -> None:
 
     # td engine
     absorption_td = td.SOSBank(sos)
-    out_sig_one_shot = absorption_td.filter(in_sig)
+    out_sig_one_shot = absorption_td.process_block(in_sig)
 
     absorption_td.reset()
     out_sig_blockwise = np.vstack(
         [
-            absorption_td.filter(in_sig[i : i + block])
+            absorption_td.process_block(in_sig[i : i + block])
             for i in range(0, n_samples, block)
         ]
     )
@@ -238,7 +238,7 @@ def test_matrixfir() -> None:
 
     # td engine
     matrixFIR_td = td.MatrixFIR(coeffs)
-    out_sig_td = matrixFIR_td.filter(in_sig)
+    out_sig_td = matrixFIR_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-10, rtol=0)
@@ -260,11 +260,11 @@ def test_matrixfir_block_consistency_and_reset() -> None:
 
     # td engine
     matrixFIR_td = td.MatrixFIR(coeffs)
-    out_sig_one_shot = matrixFIR_td.filter(in_sig)
+    out_sig_one_shot = matrixFIR_td.process_block(in_sig)
 
     matrixFIR_td.reset()
     out_sig_blockwise = np.vstack(
-        [matrixFIR_td.filter(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [matrixFIR_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
     )
 
     # Test
@@ -291,8 +291,8 @@ def test_matrixconv() -> None:
     matrixConv_td = td.MatrixConvolver(coeffs)
 
     # filter signal
-    out_sig_ref = matrixFIR_td.filter(in_sig)
-    out_sig_td = matrixConv_td.filter(in_sig)
+    out_sig_ref = matrixFIR_td.process_block(in_sig)
+    out_sig_td = matrixConv_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-10, rtol=0)
@@ -332,7 +332,7 @@ def test_tvmatrix() -> None:
         out_sig_ref[n] = rotation @ in_sig[n]
 
     # filter signal
-    out_sig_td = tvmatrix_td.filter(in_sig)
+    out_sig_td = tvmatrix_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
@@ -356,7 +356,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     in_sig = _noise(rng=rng, length=n_samples, channels=N)
 
     # filter signal
-    out_sig = tvmatrix_td.filter(in_sig)
+    out_sig = tvmatrix_td.process_block(in_sig)
 
     # Test: orthogonal -> per-sample norm preserved
     np.testing.assert_allclose(
@@ -370,7 +370,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     assert tvmatrix_td.sample_index == n_samples
     tvmatrix_td.reset()
     assert tvmatrix_td.sample_index == 0
-    np.testing.assert_allclose(tvmatrix_td.filter(in_sig), out_sig, atol=1e-12, rtol=0)
+    np.testing.assert_allclose(tvmatrix_td.process_block(in_sig), out_sig, atol=1e-12, rtol=0)
 
 
 def test_tvmatrix_rejects_odd_channel_count() -> None:
@@ -403,16 +403,16 @@ def test_absolute_value() -> None:
     abs_td = td.AbsoluteValue(channels=N)
 
     # Test: memoryless and stateless, so blockwise equals one-shot
-    out_sig_td = abs_td.filter(in_sig)
+    out_sig_td = abs_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_td, np.abs(in_sig), atol=1e-12, rtol=0)
     assert np.all(out_sig_td >= 0.0)
 
     block = 128
     out_sig_blockwise = np.vstack(
-        [abs_td.filter(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [abs_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
     )
     np.testing.assert_allclose(out_sig_blockwise, out_sig_td, atol=1e-12, rtol=0)
 
     # Test: channel count is enforced, like every other operator
     with pytest.raises(ValueError, match="expects 4 input channels"):
-        abs_td.filter(_noise(rng=rng, length=16, channels=N + 1))
+        abs_td.process_block(_noise(rng=rng, length=16, channels=N + 1))

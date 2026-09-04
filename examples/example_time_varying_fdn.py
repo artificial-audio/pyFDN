@@ -45,13 +45,13 @@ def _():
     from pyFDN import td
     from pyFDN.auxiliary.acoustics import one_pole_absorption
     from pyFDN.generate.random_orthogonal import random_orthogonal
-    from pyFDN.process import process_fdn
+    from pyFDN.process import process_dss
 
     return (
         la,
         np,
         one_pole_absorption,
-        process_fdn,
+        process_dss,
         pyFDN,
         random_orthogonal,
         td,
@@ -174,7 +174,7 @@ def _(
     fs,
     input_gain,
     output_gain,
-    process_fdn,
+    process_dss,
     synth,
     td,
 ):
@@ -202,7 +202,7 @@ def _(
             N, modulation_frequency, modulation_amplitude, fs, spread
         )
 
-        reverbed_synth[matrix_type] = process_fdn(
+        reverbed_synth[matrix_type] = process_dss(
             synth,
             delays,
             feedback_matrix,
