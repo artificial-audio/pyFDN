@@ -71,10 +71,15 @@ __all__ = [
     "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
+    "kronecker_angles",
+    "kronecker_matrix",
+    "kronecker_transform",
     "nearest_orthogonal",
     "nearest_sign_agnostic_orthogonal",
     "random_matrix_shift",
     "random_orthogonal",
+    "reflection_kernel",
+    "rotation_kernel",
     "rotation_matrix_from_angles",
     "sample_delay_lengths",
     "schroeder_reverberator",
@@ -419,6 +424,13 @@ from .generate.fdn_matrix_gallery import (
 )
 from .generate.householder_matrix import householder_matrix
 from .generate.is_almost_zero import is_almost_zero
+from .generate.kronecker_matrix import (
+    kronecker_angles,
+    kronecker_matrix,
+    kronecker_transform,
+    reflection_kernel,
+    rotation_kernel,
+)
 from .generate.nearest_orthogonal import nearest_orthogonal
 from .generate.nearest_sign_agnostic_orthogonal import nearest_sign_agnostic_orthogonal
 from .generate.random_matrix_shift import random_matrix_shift

@@ -17,12 +17,15 @@ delay lines.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.fft import irfft, next_fast_len, rfft
 from scipy.signal import lfilter, sosfilt
+
+from pyFDN.generate.kronecker_matrix import kronecker_transform
 
 
 def _as_2d(block: ArrayLike) -> np.ndarray:
@@ -954,6 +957,178 @@ class TimeVaryingMatrix(TimeOperator):
     def reset(self) -> None:
         # Rewind the modulation clock without re-drawing the random modulation
         # parameters, so a reset render is reproducible.
+        self.sample_index = 0
+
+
+class KroneckerMatrix(TimeOperator):
+    """Stateless Kronecker feedback matrix applied with the fast ``O(N log2 N)`` butterfly.
+
+    The operator form of :func:`pyFDN.kronecker_matrix`: an orthogonal
+    ``N x N`` mixing matrix (``N = 2**M``) described by ``M`` kernel angles,
+    applied without ever forming the matrix. Drop-in replacement for
+    ``Gain(kronecker_matrix(angles))`` that costs ``log2(N)`` butterfly levels
+    per sample instead of a dense matrix product.
+
+    See :class:`TimeVaryingKroneckerMatrix` for the modulated counterpart, and
+    :mod:`pyFDN.generate.kronecker_matrix` for what the individual angles
+    control.
+
+    Parameters
+    ----------
+    angles : array-like
+        ``M`` kernel angles in radians, innermost (``theta_1``, the even/odd
+        kernel) first.
+    kernel_type : str or sequence of str
+        ``"rotation"`` or ``"reflection"``, either once for all kernels or one
+        per kernel.
+
+    Example::
+
+        td.KroneckerMatrix(pyFDN.kronecker_angles(32, theta5=np.pi / 16))
+    """
+
+    def __init__(
+        self,
+        angles: ArrayLike,
+        kernel_type: str | Sequence[str] = "rotation",
+    ) -> None:
+        self.angles = np.asarray(angles, dtype=float).reshape(-1)
+        self.kernel_type = kernel_type
+        self.N = 1 << self.angles.size
+        self.in_channels = self.out_channels = self.N
+        # Validate the angle/kernel combination up front rather than on the
+        # first block.
+        kronecker_transform(np.zeros(self.N), self.angles, kernel_type)
+
+    def filter(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.N:
+            raise ValueError(f"KroneckerMatrix expects {self.N} input channels")
+        return kronecker_transform(x, self.angles, self.kernel_type)
+
+
+class TimeVaryingKroneckerMatrix(TimeOperator):
+    """Kronecker feedback matrix with per-kernel angle modulation (time-varying feedback).
+
+    Each kernel angle follows ``theta_i(t) = angles[i] + depth[i] * w(2 * pi *
+    rate[i] * t + phase[i])`` with ``w`` a unit-amplitude sine or triangle, so
+    the matrix is orthogonal at every sample yet never constant. This is the
+    matrix modulation of Coppola (2026, Section 5.4): unlike delay-line
+    modulation it changes only the routing coefficients between delay lines,
+    which breaks up fixed modal resonances without the chorusing that
+    modulated delays introduce.
+
+    Because the angles are consumed by the fast butterfly, per-sample
+    modulation costs no more than the static matrix -- there is no ``N x N``
+    matrix to rebuild when an angle moves.
+
+    Sits on the feedback path of a :class:`~pyFDN.td.connectors.Recursion`, or
+    goes straight into the ``post_matrix`` argument of
+    :func:`pyFDN.process_fdn` with ``A`` left as the identity, in which case
+    this operator *is* the feedback matrix.
+
+    Parameters
+    ----------
+    angles : array-like
+        ``M`` unmodulated kernel angles in radians, innermost first. The
+        modulation is centred on these.
+    fs : float
+        Sampling rate in Hz; the modulation clock.
+    rate : float or array-like
+        Modulation frequency in Hz, one value or one per kernel.
+    depth : float or array-like
+        Modulation amplitude in radians, one value or one per kernel. Zero
+        leaves a kernel static, which is how a single level is singled out for
+        modulation (the paper modulates ``theta_{M-1}``).
+    phase : float or array-like
+        Initial modulation phase in radians, one value or one per kernel.
+    kernel_type : str or sequence of str
+        ``"rotation"`` or ``"reflection"``, either once for all kernels or one
+        per kernel.
+    waveform : {"sine", "triangle"}
+        Modulation shape.
+
+    Attributes
+    ----------
+    sample_index : int
+        Current sample index; the modulation clock. :meth:`reset` rewinds it.
+
+    Example::
+
+        # 16 channels, stereo halves decoupled, theta_3 modulated at 0.2 Hz
+        depth = [0.0, 0.0, 0.2 * np.pi, 0.0]
+        td.TimeVaryingKroneckerMatrix(
+            pyFDN.kronecker_angles(16, theta4=0.0), fs, rate=0.2, depth=depth
+        )
+    """
+
+    def __init__(
+        self,
+        angles: ArrayLike,
+        fs: float,
+        *,
+        rate: ArrayLike = 0.0,
+        depth: ArrayLike = 0.0,
+        phase: ArrayLike = 0.0,
+        kernel_type: str | Sequence[str] = "rotation",
+        waveform: str = "sine",
+    ) -> None:
+        self.angles = np.asarray(angles, dtype=float).reshape(-1)
+        self.num_kernels = self.angles.size
+        self.N = 1 << self.num_kernels
+        self.in_channels = self.out_channels = self.N
+        self.fs = float(fs)
+        self.kernel_type = kernel_type
+
+        if waveform not in ("sine", "triangle"):
+            raise ValueError(f"waveform must be 'sine' or 'triangle', got {waveform!r}")
+        self.waveform = waveform
+
+        self.rate = self._per_kernel(rate, "rate")
+        self.depth = self._per_kernel(depth, "depth")
+        self.phase = self._per_kernel(phase, "phase")
+
+        self.sample_index = 0
+        kronecker_transform(np.zeros(self.N), self.angles, kernel_type)
+
+    def _per_kernel(self, value: ArrayLike, name: str) -> np.ndarray:
+        """Broadcast a scalar or length-M sequence to one value per kernel."""
+        v = np.asarray(value, dtype=float).reshape(-1)
+        if v.size == 1:
+            return np.full(self.num_kernels, v.item())
+        if v.size != self.num_kernels:
+            raise ValueError(
+                f"{name} has {v.size} entries but there are {self.num_kernels} kernels"
+            )
+        return v
+
+    def angles_at(self, sample_indices: ArrayLike) -> np.ndarray:
+        """Kernel angles at the given sample indices, shape ``(len(indices), M)``.
+
+        Exposed so the modulation trajectory can be plotted or fed to
+        :func:`pyFDN.kronecker_matrix` for analysis without rendering audio.
+        """
+        n = np.asarray(sample_indices, dtype=float).reshape(-1, 1)
+        argument = 2 * np.pi * self.rate * (n / self.fs) + self.phase
+        if self.waveform == "sine":
+            shape = np.sin(argument)
+        else:  # triangle: unit amplitude, same period as the sine
+            shape = (2 / np.pi) * np.arcsin(np.sin(argument))
+        return self.angles + self.depth * shape
+
+    def filter(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.N:
+            raise ValueError(
+                f"TimeVaryingKroneckerMatrix expects {self.N} input channels"
+            )
+        indices = self.sample_index + np.arange(x.shape[0])
+        out = kronecker_transform(x, self.angles_at(indices), self.kernel_type)
+        self.sample_index += x.shape[0]
+        return out
+
+    def reset(self) -> None:
+        """Rewind the modulation clock to sample zero."""
         self.sample_index = 0
 
 
