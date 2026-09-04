@@ -10,7 +10,7 @@ composites (:class:`~pyFDN.td.connectors.Series`,
 
 :class:`RecursionState` is not an operator but the delay-line buffer bank the
 graph is built on: it is what :class:`~pyFDN.td.connectors.Recursion` uses to
-break its feedback loop, and what :func:`pyFDN.process_fdn` uses for the FDN
+break its feedback loop, and what :func:`pyFDN.process_dss` uses for the DSS
 delay lines.
 """
 
@@ -38,7 +38,7 @@ class TimeOperator(ABC):
     """Abstract class. Parent of all classes belonging to the td-graph group.
     A stateful ``(T, in_channels) -> (T, out_channels)`` time-domain block.
     Subclasses set ``in_channels`` / ``out_channels`` and implement
-    :meth:`filter`. :meth:`reset` returns the operator to its initial
+    :meth:`process_block`. :meth:`reset` returns the operator to its initial
     (zero) state.
     """
 
@@ -46,20 +46,22 @@ class TimeOperator(ABC):
     out_channels: int
 
     @abstractmethod
-    def filter(self, block: ArrayLike) -> np.ndarray:
-        """Filter one block and advance internal state."""
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        """Process one block and advance internal state."""
 
     def reset(self) -> None:  # noqa: B027 -- intentional no-op default for stateless ops
         """Clear internal state (no-op for stateless operators)."""
 
-    def process(self, signal: ArrayLike, *, squeeze: bool = False) -> np.ndarray:
-        """Filter a whole signal in one call, from the current state.
+    def process_signal(
+        self, signal: ArrayLike, *, squeeze: bool = False
+    ) -> np.ndarray:
+        """Process a whole signal in one call, from the current state.
 
-        Convenience wrapper around :meth:`filter` for the common case of
+        Convenience wrapper around :meth:`process_block` for the common case of
         rendering an operator tree offline. Operators that process in blocks
         internally (:class:`~pyFDN.td.connectors.Recursion`) do so regardless of
         how the signal is handed to them, so this gives the same result as
-        streaming ``signal`` through :meth:`filter` block by block.
+        streaming ``signal`` through :meth:`process_block` block by block.
 
         Parameters
         ----------
@@ -73,7 +75,7 @@ class TimeOperator(ABC):
         np.ndarray
             Output of shape ``(num_samples, out_channels)``.
         """
-        out = self.filter(_as_2d(signal))
+        out = self.process_block(_as_2d(signal))
         return out.squeeze() if squeeze else out
 
 
@@ -84,7 +86,7 @@ class Identity(TimeOperator):
     def __init__(self, channels: int) -> None:
         self.in_channels = self.out_channels = int(channels)
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"Identity expects {self.in_channels} input channels")
@@ -103,7 +105,7 @@ class Gain(TimeOperator):
         self.out_channels, self.in_channels = m.shape
         self.matrix = m
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"Gain expects {self.in_channels} input channels")
@@ -124,7 +126,7 @@ class AbsoluteValue(TimeOperator):
     def __init__(self, channels: int) -> None:
         self.in_channels = self.out_channels = int(channels)
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"AbsoluteValue expects {self.in_channels} input channels")
@@ -145,7 +147,7 @@ class Delay(TimeOperator):
         self.max_delay = int(d.max()) if self.in_channels else 0
         self._tail = np.zeros((self.max_delay, self.in_channels), dtype=float)
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"Delay expects {self.in_channels} input channels")
@@ -167,7 +169,8 @@ class SOSBank(TimeOperator):
     """Stateful per-channel SOS filter cascade (e.g. in-loop absorption).
 
     One cascade of second-order sections per channel, filtered with
-    :func:`scipy.signal.sosfilt`. State persists across :meth:`filter` calls, so
+    :func:`scipy.signal.sosfilt`. State persists across
+    :meth:`process_block` calls, so
     a long signal can be processed in consecutive blocks.
 
     Parameters
@@ -188,10 +191,10 @@ class SOSBank(TimeOperator):
 
     Notes
     -----
-    Pass an instance as ``post_delay`` to :func:`pyFDN.process_fdn` to apply
+    Pass an instance as ``post_delay`` to :func:`pyFDN.process_dss` to apply
     frequency-dependent absorption inside the feedback loop.
-    :func:`pyFDN.build_to_impz` also constructs this class internally when an
-    :class:`pyFDN.FDNBuild` contains per-delay-line ``filters``.
+    :func:`pyFDN.build_to_td` constructs this class for every populated SOS hook
+    in an :class:`pyFDN.FDNBuild`.
     """
 
     def __init__(self, sos: ArrayLike) -> None:
@@ -206,7 +209,7 @@ class SOSBank(TimeOperator):
         self.num_sections = sos_arr.shape[0]
         self._state = np.zeros((self.in_channels, self.num_sections, 2), dtype=float)
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"SOSBank expects {self.in_channels} input channels")
@@ -225,8 +228,9 @@ class MatrixFIR(TimeOperator):
     """Stateful matrix of FIR filters (e.g. a paraunitary scattering feedback matrix).
 
     Every matrix entry is an FIR filter run with :func:`scipy.signal.lfilter`;
-    state persists across :meth:`filter` calls. For long impulse responses use
-    :class:`MatrixConvolver` instead, which computes the same convolution by FFT.
+    state persists across :meth:`process_block` calls. For long impulse
+    responses use :class:`MatrixConvolver` instead, which computes the same
+    convolution by FFT.
 
     Parameters
     ----------
@@ -237,7 +241,7 @@ class MatrixFIR(TimeOperator):
 
     Notes
     -----
-    :func:`pyFDN.process_fdn` constructs this filter automatically when its
+    :func:`pyFDN.process_dss` constructs this filter automatically when its
     feedback matrix ``A`` has shape ``(n_out, n_in, n_taps)``.
     """
 
@@ -251,7 +255,7 @@ class MatrixFIR(TimeOperator):
             (self.out_channels, self.in_channels, max(self.num_taps - 1, 1))
         )
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"MatrixFIR expects {self.in_channels} input channels")
@@ -275,8 +279,8 @@ class MatrixConvolver(TimeOperator):
     The FFT counterpart of :class:`MatrixFIR`: same ``(n_out, n_in, n_taps)``
     coefficient layout, but built for **long** impulse responses (e.g. room
     RIRs) where time-domain ``lfilter`` would be prohibitively slow. State
-    persists across :meth:`filter` calls, so it works both whole-signal and
-    block-by-block -- including as the feedback path of a
+    persists across :meth:`process_block` calls, so it works both whole-signal
+    and block-by-block -- including as the feedback path of a
     :class:`~pyFDN.td.connectors.Recursion` (the loudspeaker -> microphone room
     coupling of a reverberation enhancement system). Output equals the linear
     convolution to numerical precision."""
@@ -293,7 +297,7 @@ class MatrixConvolver(TimeOperator):
 
     def _filters(self, nfft: int) -> np.ndarray:
         """Convenience cache: filters' frequency-domain representation
-        are computed only ones per :meth:``nfft`` value, at the first :meth:``filter`` call."""
+        is computed only once per ``nfft`` value, on first use."""
         cached = self._filter_fft.get(nfft)
         if cached is None:
             c_transp = np.transpose(self._coeffs, (2, 0, 1))
@@ -301,7 +305,7 @@ class MatrixConvolver(TimeOperator):
             self._filter_fft[nfft] = cached
         return cached
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(f"MatrixConvolver expects {self.in_channels} channels")
@@ -329,7 +333,7 @@ class TimeVaryingMatrix(TimeOperator):
     ``Series([Gain(A), TimeVaryingMatrix(N, 1.5, 0.35, fs, 0.1)])``, it makes the
     loop genuinely time-varying -- there is no static transfer function. This is
     the operator form of the ``post_matrix`` argument of
-    :func:`pyFDN.process_fdn`.
+    :func:`pyFDN.process_dss`.
 
     Translation of the MATLAB implementation ``timeVaryingMatrix.m`` from
     fdnToolbox. Original MATLAB code: (c) Sebastian Jiro Schlecht, 2019.
@@ -401,7 +405,7 @@ class TimeVaryingMatrix(TimeOperator):
         # Global time tracker index, initialized to 0
         self.sample_index = 0
 
-    def filter(self, block: ArrayLike) -> np.ndarray:
+    def process_block(self, block: ArrayLike) -> np.ndarray:
         """Apply the time-varying orthogonal transformation to one block.
 
         The operation is equivalent to constructing the block-diagonal rotation
@@ -447,7 +451,8 @@ class RecursionState:
     whole block can be computed at once.
 
     Used by :class:`~pyFDN.td.connectors.Recursion` (all lines the length of one
-    processing block) and by :func:`pyFDN.process_fdn` (one line per FDN delay).
+    processing block) and by :func:`pyFDN.process_dss` (one line per FDN
+    delay).
 
     Parameters
     ----------

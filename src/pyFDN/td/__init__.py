@@ -17,7 +17,7 @@ Typical use::
         td.Recursion(forward, td.Gain(A), block_size=block_size),
         td.Gain(C),
     ])
-    ir = fdn.process(impulse)
+    ir = fdn.process_signal(impulse)
 
 The feedback :class:`Recursion` is the only non-trivial piece: it processes in
 blocks and therefore inserts ``block_size`` samples of delay into the loop,
@@ -40,7 +40,6 @@ from pyFDN.td.operators import (
     TimeOperator,
     TimeVaryingMatrix,
 )
-
 __all__ = [
     "TimeOperator",
     "Identity",
