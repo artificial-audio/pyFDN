@@ -1,4 +1,4 @@
-"""FDN processing functions."""
+"""Compact DSS processing and convenience rendering of complete FDN builds."""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 from pyFDN.td.operators import MatrixFIR, RecursionState
+from pyFDN.translate.dss_to_td import build_to_td
 
 
-def process_fdn(
+def process_dss(
     input_signal: ArrayLike,
     delays: ArrayLike,
     A: ArrayLike,
@@ -22,40 +24,39 @@ def process_fdn(
     post_matrix: Any | None = None,
     post_output: Any | None = None,
 ) -> np.ndarray:
-    """Simulate the feedback delay network using block processing.
+    """Process a delay state-space system using block processing.
 
-    Recursion per block:
-    delay output -> optional post-delay filter -> output gains C, and in the feedback
-    path: absorbed delay output -> feedback matrix A -> optional post-matrix filter -> + B input.
-    The wet signal is processed with an optional post-output filter before being added to the direct signal.
+    This is a compact, pre-wired alternative to manually assembling a
+    :mod:`pyFDN.td` graph. The three optional hooks are runtime objects that
+    implement ``process_block(block)``. To process an :class:`pyFDN.FDNBuild`,
+    use :func:`pyFDN.build_to_td` or :func:`pyFDN.process_fdn`; those functions
+    convert the build's baked SOS arrays into :class:`pyFDN.td.SOSBank` nodes.
+
+    The recursion is
+
+    ``delay -> post_delay -> C`` on the wet path and
+    ``delay -> post_delay -> A -> post_matrix -> + B input`` in the loop.
+    ``post_output`` processes the wet signal before the direct ``D`` path is
+    added.
 
     Parameters
     ----------
-    input_signal : array
-        Input of shape (num_samples,) or (num_samples, num_inputs).
-    delays : array
-        Delay lengths in samples, shape (N,).
-    A : array
-        Feedback matrix: static (N, N) or FIR polynomial (N, N, order) in
-        z^{-1} convention.
-    B, C, D : array
-        Static input, output, and direct gains.
-    post_delay : object or None, optional
-        An optional filter applied to the delay output before feedback processing.
-        Must implement a `filter` method that accepts and processes the delay output.
-        Typically per-delay-line absorption, e.g. :class:`pyFDN.td.SOSBank`.
-    post_matrix : object or None, optional
-        An optional filter applied to the feedback signal after the feedback matrix
-        multiplication. Must implement a `filter` method that accepts and processes the feedback signal
-        (e.g. :class:`pyFDN.td.TimeVaryingMatrix`).
-    post_output : object or None, optional
-        An optional filter applied to the wet signal (output signal) before it is
-        added to the direct signal. Must implement a `filter` method that accepts and processes the wet signal.
+    input_signal
+        Input of shape ``(num_samples,)`` or ``(num_samples, num_inputs)``.
+    delays
+        Positive delay lengths in samples, shape ``(N,)``.
+    A
+        Static feedback matrix ``(N, N)`` or FIR polynomial matrix
+        ``(N, N, order)`` in the ``z^-1`` convention.
+    B, C, D
+        Static input, output, and direct gain matrices.
+    post_delay, post_matrix, post_output
+        Optional runtime operators implementing ``process_block(block)``.
 
     Returns
     -------
-    output : ndarray
-        Shape (num_samples, num_outputs), squeezed.
+    np.ndarray
+        Processed signal with singleton dimensions removed.
     """
     x = np.asarray(input_signal, dtype=float)
     if x.ndim == 1:
@@ -91,20 +92,20 @@ def process_fdn(
         block_size = min(max_block_size, num_samples - start)
         block_in = x[start : start + block_size, :]
 
-        delay_out = delay_bank.get_values(block_size)  # (block, N)
+        delay_out = delay_bank.get_values(block_size)
         if post_delay is not None:
-            delay_out = post_delay.filter(delay_out)
+            delay_out = post_delay.process_block(delay_out)
 
         if feedback_filter is not None:
-            feedback = feedback_filter.filter(delay_out)
+            feedback = feedback_filter.process_block(delay_out)
         else:
             feedback = delay_out @ A_mat.T
         if post_matrix is not None:
-            feedback = post_matrix.filter(feedback)
+            feedback = post_matrix.process_block(feedback)
 
         wet_signal = delay_out @ C_mat.T
         if post_output is not None:
-            wet_signal = post_output.filter(wet_signal)
+            wet_signal = post_output.process_block(wet_signal)
 
         delay_bank.set_values(block_in @ B_mat.T + feedback)
 
@@ -113,3 +114,29 @@ def process_fdn(
         start += block_size
 
     return output.squeeze()
+
+
+def process_fdn(input_signal: ArrayLike, build: FDNBuild) -> np.ndarray:
+    """Process a signal through a fresh time-domain graph built from ``build``.
+
+    This is the one-shot convenience form of
+    ``build_to_td(build).process_signal(input_signal)``. A fresh graph is built
+    for every call, so delay and filter state cannot leak between independent
+    renders. Use :func:`pyFDN.build_to_td` directly to process a stream over
+    multiple calls to :meth:`pyFDN.td.TimeOperator.process_block` or to reset
+    and reuse the graph.
+
+    Parameters
+    ----------
+    input_signal
+        Input of shape ``(num_samples,)`` or ``(num_samples, num_inputs)``.
+    build
+        Complete baked FDN configuration.
+
+    Returns
+    -------
+    np.ndarray
+        Processed signal with singleton dimensions removed, matching the
+        historical ``process_fdn`` output convention.
+    """
+    return build_to_td(build).process_signal(input_signal, squeeze=True)

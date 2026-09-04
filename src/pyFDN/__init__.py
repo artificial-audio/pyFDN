@@ -129,6 +129,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_td",
     "build_to_impz",
     "build_to_flamo",
     "dss_to_flamo",
@@ -144,6 +145,7 @@ __all__ = [
     "mtf_to_impz",
     "pr_to_impz",
     # fdn processing
+    "process_dss",
     "process_fdn",
     # training
     "build_fdn",
@@ -429,7 +431,7 @@ from .generate.shift_matrix_distribute import shift_matrix_distribute
 from .presets import available_fdn_presets, load_fdn_preset
 
 # fdn processing
-from .process import process_fdn
+from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
@@ -468,6 +470,7 @@ from .train import (
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import build_to_impz, dss_to_impz
+from .translate.dss_to_td import build_to_td
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_tf import dss_to_tf
