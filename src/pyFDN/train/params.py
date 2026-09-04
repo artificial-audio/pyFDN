@@ -72,8 +72,8 @@ class ParamRef:
         """The parameter *before* the map -- what the optimizer actually steps.
 
         Usually the mapped :meth:`value` is what you want. The pre-image is,
-        when the map is the point: the RT in seconds behind an absorption
-        filter (:class:`~pyFDN.DecayFilter`), where the mapped value is the SOS
+        when the map is the point: the RT in seconds behind an attenuation
+        filter (:class:`~pyFDN.AttenuationFilter`), where the mapped value is the SOS
         bank designed from it.
         """
         return self.module.param

@@ -11,7 +11,7 @@ import pytest
 import pyFDN
 from pyFDN import td
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.build import FDNBuild
 from pyFDN.train import build_set_decay
 from pyFDN.translate.dss_to_impz import build_to_impz, dss_to_impz
 
@@ -109,7 +109,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos = pyFDN.first_order_absorption(0.3, 0.1, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, None, delays, fs)  # (1, 6, N)
     assert sos.shape == (1, 6, n)
     x = np.random.randn(200, n)
 
@@ -153,7 +153,7 @@ def test_process_dss_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.first_order_absorption(0.15, 0.05, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, None, delays, fs)  # (1, 6, N)
 
     # constract the SOSFilter
     absorption = td.SOSBank(sos)
@@ -194,8 +194,7 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
 
-    eq_sos, _ = pyFDN.design_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
-    eq_sos = eq_sos / eq_sos[:, 3:4]  # a0 = 1
+    eq_sos = pyFDN.gain_to_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
 
     def build(output_filter):
         return pyFDN.dss_to_flamo(
@@ -238,8 +237,8 @@ def _siso_build(filters: np.ndarray | None = None) -> FDNBuild:
 
 def test_build_to_td_matches_process_dss_with_all_hooks() -> None:
     """The build graph creates and connects all three SOS hook nodes."""
-    post_delay = pyFDN.first_order_absorption(
-        0.3, 0.1, np.array([101, 143, 165, 177]), 48_000.0
+    post_delay = pyFDN.decay_to_first_order_shelf(
+        0.3, 0.1, None, np.array([101, 143, 165, 177]), 48_000.0
     )
     build = dataclasses.replace(
         _siso_build(post_delay),

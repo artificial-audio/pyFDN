@@ -39,12 +39,10 @@ def _(mo):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
     from pyFDN import td
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN, td
 
 
@@ -224,7 +222,7 @@ def _(fs, np, pyFDN, td):
     C_fdn = gen.standard_normal((6, n_lines)) / np.sqrt(
         n_lines
     )  # lines -> loudspeakers
-    fdn_absorption = pyFDN.first_order_absorption(1.2, 0.6, fdn_delays, fs, None)
+    fdn_absorption = pyFDN.decay_to_first_order_shelf(1.2, 0.6, None, fdn_delays, fs)
     fdn_block = 64  # Recursion block size; must be at most half the shortest delay
 
     def make_reverberator(time_varying, g):

@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike
 from pyFDN.process import process_dss, process_fdn
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
 
 def dss_to_impz(

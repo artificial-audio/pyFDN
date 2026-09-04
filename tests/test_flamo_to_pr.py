@@ -36,7 +36,7 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
         C=c,
         D=d,
         m=delays,
-        Fs=1.0,
+        fs=1.0,
         nfft=1024,
         shell=False,
         dtype=torch.float64,
@@ -54,7 +54,7 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
             c,
             d,
             mode="eai",
-            Fs=1.0,
+            fs=1.0,
             nfft=1024,
             verbose=False,
         )
@@ -79,7 +79,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     from pyFDN.generate.random_orthogonal import random_orthogonal
     from pyFDN.translate.pr_to_impz import pr_to_impz
 
-    Fs = 48000.0
+    fs = 48000.0
     nfft = 2**13
     delays = np.array([13, 17, 19, 23], dtype=int)
     n = delays.size
@@ -100,7 +100,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
         C=c,
         D=d,
         m=delays,
-        Fs=Fs,
+        fs=fs,
         nfft=nfft,
         shell=True,
         post_delay=sos_loop,
@@ -127,7 +127,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     # Modal reconstruction matches FLAMO's true impulse response (the only IR
     # reference once there is an IIR filter in the loop).
     ir_flamo = np.asarray(
-        model.get_time_response(fs=int(Fs)).squeeze(), dtype=np.float64
+        model.get_time_response(fs=int(fs)).squeeze(), dtype=np.float64
     )
     if ir_flamo.ndim == 3:
         ir_flamo = ir_flamo[:, 0, 0]

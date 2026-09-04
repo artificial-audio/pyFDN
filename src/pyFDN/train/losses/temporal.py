@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._targets import _CachedTarget
+from ._targets import _CachedTarget, response_key
 from .base import ResponseLoss
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ class MatchEnergyDecay(ResponseLoss):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
-    trained parameter (a :class:`~pyFDN.DecayFilter` in the ``post_delay``
+    trained parameter (a :class:`~pyFDN.AttenuationFilter` in the ``post_delay``
     hook). A magnitude
     spectrogram distance is not a substitute for fitting a decay; see :doc:`the
     design note </training_losses>`.
@@ -111,6 +111,7 @@ class MatchEnergyDecay(ResponseLoss):
         self.floor_db = float(floor_db)
         self._target = _CachedTarget(target)
         self._reference: torch.Tensor | None = None
+        self._key: tuple[Any, ...] | None = None
         self._mask: torch.Tensor | None = None
 
     def check(self, model: Any) -> None:
@@ -155,7 +156,9 @@ class MatchEnergyDecay(ResponseLoss):
     def __call__(self, response: Response) -> torch.Tensor:
         import torch
 
-        if self._reference is None:
+        key = response_key(response)
+        if self._reference is None or self._key != key:
+            self._key = key
             self._reference = self._band_edc_db(self._target(response), response.fs)
             self._mask = self._reference > self.floor_db
             if not bool(self._mask.any()):
@@ -263,6 +266,7 @@ class MatchCumulativeEnergy(ResponseLoss):
         self._target = _CachedTarget(target)
         self._reference: list[torch.Tensor] | None = None
         self._scale: list[torch.Tensor] | None = None
+        self._key: tuple[Any, ...] | None = None
 
     def check(self, model: Any) -> None:
         nfft = int(model.nfft)
@@ -317,7 +321,9 @@ class MatchCumulativeEnergy(ResponseLoss):
         import torch
 
         # Both are set together, and mypy needs the guard to say so.
-        if self._reference is None or self._scale is None:
+        key = response_key(response)
+        if self._reference is None or self._scale is None or self._key != key:
+            self._key = key
             references = self._surfaces(self._target(response))
             # The largest value on a surface is the total energy: everything
             # after frame 0, on whichever side of the spectrum the cumulation

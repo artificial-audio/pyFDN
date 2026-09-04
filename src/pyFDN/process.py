@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.build import FDNBuild
 from pyFDN.td.operators import MatrixFIR, RecursionState
 from pyFDN.translate.dss_to_td import build_to_td
 

@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Optimization
 # gallery_title: Colorless FDN presets
 # gallery_description: Load optimized colorless FDN builds, add a chosen decay time, and compare their magnitude responses and impulse responses.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Colorless FDN
@@ -23,7 +23,7 @@ def _(mo, pyFDN):
     FDN optimized for reduced metallic ringing (perceptually colorless reverberation).
     Original method published in *{pyFDN.paper_link("Differentiable_FDN_For_Colorless_Reverberation")}.*
 
-    Parameters are loaded from readable, versioned JSON `FDNBuild` files converted from the [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless) companion material. The impulse response is computed with `pyFDN.dss_to_impz`. The modal decomposition (residue histogram) is omitted here: pyFDN provides it via `pyFDN.dss_to_pr_direct` / `pyFDN.dss_to_pr_flamo`, but for these FDNs it means solving for `sum(delays)` ≈ 9000 modes, which is too heavy for this quick example.
+    Parameters are loaded from readable, versioned JSON `FDNBuild` files converted from the [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless) companion material. The impulse response is computed with `pyFDN.dss_to_impz`.
     """)
     return
 
@@ -40,7 +40,9 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Parameters
+    ## Listening parameters
+
+    The optimization fixes the lossless part of the FDN; decay is added afterwards, so the reverberation time here is a free choice and not part of what was trained.
     """)
     return
 
@@ -81,7 +83,7 @@ def _(mo, pyFDN):
         value=_default if _default in _options else next(iter(_options)),
         label="Parameter file",
     )
-    mo.vstack([param_choice])
+    mo.output.replace(param_choice)
     return (param_choice,)
 
 
@@ -97,15 +99,17 @@ def _(mo):
     mo.md(r"""
     ## Load the packaged preset
 
-    `pyFDN.load_fdn_preset` returns the coefficients as an `FDNBuild`. We add the desired decay with `pyFDN.build_set_decay` and render it directly.
+    `pyFDN.get_fdn_preset` retrieves the packaged preset. We take its baked
+    `FDNBuild`, add the desired decay with `pyFDN.build_set_decay`, and render
+    it directly.
     """)
     return
 
 
 @app.cell
-def _(N, delay_set, fs, ir_len, pyFDN, rt):
+def _(N, delay_set, ir_len, pyFDN, rt):
     _preset = f"colorless_N{N}_d{delay_set}"
-    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _lossless = pyFDN.get_fdn_preset(_preset).build
     _build = pyFDN.build_set_decay(_lossless, rt)
     ir_optim = pyFDN.build_to_impz(_build, ir_len).squeeze()
     A, B, C, D, m = (
@@ -121,15 +125,17 @@ def _(N, delay_set, fs, ir_len, pyFDN, rt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Compare to initialization parameters
+    ## Against the initialization
+
+    The same delays and the same random draw, before the optimizer touched them. What changed is the feedback matrix and the input/output gains — the difference between a colorless FDN and the arbitrary one it started as.
     """)
     return
 
 
 @app.cell
-def _(N, delay_set, fs, ir_len, pyFDN, rt):
+def _(N, delay_set, ir_len, pyFDN, rt):
     _preset = f"colorless_init_N{N}_d{delay_set}"
-    _lossless = pyFDN.load_fdn_preset(_preset, fs=fs)
+    _lossless = pyFDN.get_fdn_preset(_preset).build
     _build = pyFDN.build_set_decay(_lossless, rt)
     ir_init = pyFDN.build_to_impz(_build, ir_len).squeeze()
     A_i, B_i, C_i, D_i, m_i = (
@@ -181,7 +187,9 @@ def _(A, B, C, D, m, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot impulse responses
+    ## Optimized versus initial
+
+    The two impulse responses, and both to listen to. They look much alike — the optimization targets the *magnitude response*, not the waveform — so the difference is one to hear rather than to see: the initialization rings, the optimized build does not.
     """)
     return
 

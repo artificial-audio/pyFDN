@@ -95,34 +95,36 @@ Acoustics & Absorption
    pyFDN.slope_amplitude_to_level
    pyFDN.slope_to_rt
 
-EQ & Absorption Design (``pyFDN.eq``)
---------------------------------------
+EQ Design (``pyFDN.eq``)
+-------------------------
 
-Three designs of the same two filters -- an FDN's in-loop absorption and its
-output EQ -- behind one interface. A design carries its own target and maps it
-to biquad sections in numpy or in torch from a single implementation, which is
-what a trainable :class:`pyFDN.DecayFilter` or :class:`pyFDN.OutputEQ` runs
-inside a training loop.
+Explicit functions map either decay targets or gain targets onto a named
+filter design. The same functions run in NumPy or Torch; the trainable
+:class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
+mappings inside a training loop. ``EQDesign`` is the literal choice of
+``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
+modules. The target-to-EQ functions accept ``return_design=True`` when their
+JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
    pyFDN.EQDesign
-   pyFDN.GraphicEQ
-   pyFDN.FirstOrderShelf
-   pyFDN.OnePole
-   pyFDN.design_geq
-   pyFDN.geq_sos
+   pyFDN.decay_to_geq
+   pyFDN.decay_to_first_order_shelf
+   pyFDN.decay_to_one_pole
+   pyFDN.gain_to_geq
+   pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_first_order_shelf
+   pyFDN.gain_to_one_pole
    pyFDN.geq_design_matrix
-   pyFDN.graphic_eq
-   pyFDN.absorption_geq
-   pyFDN.first_order_absorption
-   pyFDN.first_order_shelving_eq
-   pyFDN.one_pole_absorption
+   pyFDN.lowshelf_biquad
+   pyFDN.highshelf_biquad
+   pyFDN.peaking_biquad
+   pyFDN.first_order_shelf_biquad
+   pyFDN.one_pole_biquad
    pyFDN.probe_sos
-   pyFDN.shelving_filter
-   pyFDN.bandpass_filter
 
 Time-Domain Graph (``pyFDN.td``)
 --------------------------------
@@ -139,6 +141,12 @@ rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Gain
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
+   pyFDN.td.DCBlocker
+   pyFDN.td.ControllableFullWaveRect
+   pyFDN.td.SDFD
+   pyFDN.td.RingModulator
+   pyFDN.td.PitchShift
+   pyFDN.td.GranularPitchShift
    pyFDN.td.SOSBank
    pyFDN.td.MatrixFIR
    pyFDN.td.MatrixConvolver
@@ -182,7 +190,7 @@ names.
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
    pyFDN.hook_module
-   pyFDN.DecayFilter
+   pyFDN.AttenuationFilter
    pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
@@ -246,6 +254,11 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
+   pyFDN.get_fdn_preset
+   pyFDN.FDNPreset
+   pyFDN.fdn_preset_to_dict
+   pyFDN.fdn_preset_from_dict
+   pyFDN.save_fdn_preset
    pyFDN.load_fdn_preset
    pyFDN.fdn_build_to_dict
    pyFDN.fdn_build_from_dict
@@ -297,6 +310,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
+   pyFDN.trainable_from_preset
    pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn

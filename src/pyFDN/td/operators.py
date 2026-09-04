@@ -17,6 +17,7 @@ delay lines.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -133,6 +134,525 @@ class AbsoluteValue(TimeOperator):
         return np.abs(x)
 
 
+class DCBlocker(TimeOperator):
+    """Stateful per-channel first-order DC blocker with optional slow energy
+    compensation, ``y[n, c] = x[n, c] - x[n-1, c] + R * y[n-1, c]``.
+
+    The differencing term removes the DC offset a nonlinearity such as
+    :class:`ControllableFullWaveRect` would otherwise inject into a feedback
+    loop, at the cost of also attenuating content near DC. When
+    ``correct_loss`` is enabled, a slowly-varying gain tracks the ratio of
+    input to output power through two exponential envelope followers -- one
+    over the signal power, one smoothing the resulting gain -- and rescales
+    the output to compensate for that loss.
+
+    Parameters
+    ----------
+    channels : int
+        Number of channels processed independently.
+    R : float
+        Pole location of the blocker, ``0 < R < 1``. Closer to 1 pushes the
+        cutoff frequency down and preserves more low-frequency content.
+    correct_loss : bool
+        If ``True``, apply the energy-compensation gain described above.
+    fs : float
+        Sampling rate in Hz, used to convert the time constants below into
+        per-sample smoothing coefficients.
+    env_tau_s : float
+        Time constant of the power envelope followers, in seconds.
+    gain_tau_s : float
+        Time constant of the gain smoothing, in seconds.
+    max_gain : float
+        Ceiling on the compensation gain. A signal the blocker removes almost
+        entirely -- anything close to pure DC -- has an output power near zero,
+        so the uncapped ratio grows without bound: it would undo the blocking
+        it is compensating for and run away inside a feedback loop.
+    """
+
+    def __init__(
+        self,
+        channels: int,
+        R: float = 0.995,
+        correct_loss: bool = False,
+        fs: float = 48000.0,
+        env_tau_s: float = 0.05,  # RMS tracking time constant (50 ms)
+        gain_tau_s: float = 0.02,  # gain smoothing time constant (20 ms)
+        max_gain: float = 4.0,  # +12 dB
+    ) -> None:
+        self.in_channels = self.out_channels = int(channels)
+        self.R = float(R)
+        self.correct_loss = bool(correct_loss)
+        self.max_gain = float(max_gain)
+
+        self.prev_x = np.zeros(self.in_channels)
+        self.prev_y = np.zeros(self.in_channels)
+
+        # Envelope follower states (power domain)
+        self.eps = 1e-12
+        self.in_pow = np.full(self.in_channels, 1e-12)
+        self.out_pow = np.full(self.in_channels, 1e-12)
+        self.gain = np.ones(self.in_channels)
+
+        self.alpha_env = float(np.exp(-1.0 / (fs * env_tau_s)))
+        self.alpha_gain = float(np.exp(-1.0 / (fs * gain_tau_s)))
+
+    def _one_pole(
+        self, signal: np.ndarray, alpha: float, state: np.ndarray
+    ) -> np.ndarray:
+        """Run ``s[n] = alpha * s[n-1] + (1 - alpha) * signal[n]`` over a block.
+
+        ``state`` holds ``s[-1]`` on entry and is updated in place to ``s[T-1]``.
+        """
+        out, _ = lfilter(
+            [1.0 - alpha], [1.0, -alpha], signal, axis=0, zi=alpha * state[np.newaxis]
+        )
+        state[:] = out[-1]
+        return np.asarray(out)
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"DCBlocker expects {self.in_channels} input channels")
+        if x.shape[0] == 0:
+            return x
+
+        # y[n] = x[n] - x[n-1] + R * y[n-1]. The transposed direct form II state
+        # of that recursion is -x[-1] + R * y[-1], which is what carries the
+        # blocker across block boundaries.
+        y, _ = lfilter(
+            [1.0, -1.0],
+            [1.0, -self.R],
+            x,
+            axis=0,
+            zi=(-self.prev_x + self.R * self.prev_y)[np.newaxis],
+        )
+        self.prev_x[:] = x[-1]
+        self.prev_y[:] = y[-1]  # pre-compensation, i.e. the actual filter state
+
+        if not self.correct_loss:
+            return np.asarray(y)
+
+        in_pow = self._one_pole(x * x, self.alpha_env, self.in_pow)
+        out_pow = self._one_pole(y * y, self.alpha_env, self.out_pow)
+        target_gain = np.sqrt((in_pow + self.eps) / (out_pow + self.eps))
+        # Cap before smoothing so the smoothed gain inherits the same ceiling.
+        np.minimum(target_gain, self.max_gain, out=target_gain)
+        return np.asarray(y * self._one_pole(target_gain, self.alpha_gain, self.gain))
+
+    def reset(self) -> None:
+        self.prev_x[:] = 0.0
+        self.prev_y[:] = 0.0
+        self.in_pow[:] = 1e-12
+        self.out_pow[:] = 1e-12
+        self.gain[:] = 1.0
+
+
+class ControllableFullWaveRect(TimeOperator):
+    """Stateful, controllable, memoryless nonlinearity,
+    ``y[n, c] = g_cfwr * ((1 - alpha) * x[n, c] + alpha * abs(x[n, c]))``,
+    applied to ``active_channels`` only; the rest pass through unchanged.
+
+    At ``alpha = 0`` the nonlinearity drops out and only the DC blocker below
+    is left, at ``alpha = 1`` it is a full-wave rectifier;
+    ``g_cfwr = sqrt(2 - 2 * abs(alpha - 0.5))`` keeps the output
+    power roughly constant across ``alpha``. ``abs(x)`` here is not the plain
+    absolute value but its first-order antiderivative-antialiasing
+    approximation (Parker et al. 2016), which reduces the aliasing that
+    rectification  would otherwise fold back from above Nyquist.
+    The result is passed through an internal :class:`DCBlocker` with energy
+    compensation, since rectification also injects a DC offset that would
+    otherwise accumulate in a feedback loop.
+    """
+
+    def __init__(self, channels: int, alpha: float, active_channels: ArrayLike) -> None:
+        self.in_channels = self.out_channels = int(channels)
+        self.state = np.zeros((1, self.in_channels), dtype=float)
+        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+        self.alpha = float(alpha)
+        self.g_cfwr = np.sqrt(2 - 2 * abs(self.alpha - 0.5))
+        self._mask = np.zeros(self.in_channels, dtype=bool)
+        self._mask[np.asarray(active_channels)] = True
+
+    def anti_dev(self, x: np.ndarray) -> np.ndarray:
+        y = 0.5 * x * np.abs(x)
+        return y
+
+    def abs(self, x: np.ndarray) -> np.ndarray:
+        # x_prev[n] = x[n - 1], carrying the last sample of the previous block
+        x_prev = np.concatenate([self.state, x[:-1]], axis=0)
+        den = x - x_prev
+        num = self.anti_dev(x) - self.anti_dev(x_prev)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            y = np.where(np.abs(den) <= 1e-8, np.abs(x + x_prev) / 2, num / den)
+        self.state = x[-1:, :].copy()
+        return y
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(
+                f"ControllableFullWaveRect expects {self.in_channels} input channels"
+            )
+        y = self.g_cfwr * ((1 - self.alpha) * x + self.alpha * self.abs(x))
+        y = self.dc_blocker.process_block(y)
+        out = x.copy()
+        out[:, self._mask] = y[:, self._mask]
+        return out
+
+    def reset(self) -> None:
+        self.state[:] = 0.0
+        self.dc_blocker.reset()
+
+
+class SDFD(TimeOperator):
+    """Stateful, controllable Signal-Dependent Fractional Delay,
+    ``y[n, c] = (1 - d) n[n-1, c] + d n[n, c] + d p[n-2, c] + (1 - d) p[n-1, c]``,
+    applied to ``active_channels`` only; the rest pass through unchanged.
+
+    ``p = max(x, 0)`` and ``n = min(x, 0)`` are the positive and negative
+    half-wave rectified branches of the input, each delayed by a different,
+    ``d``-dependent amount: the positive branch by roughly ``1 + d`` samples,
+    the negative one by roughly ``1 - d``. Recombining the two smears the
+    signal's zero crossings without reshaping the rest of the waveform, which
+    reads as a soft, amplitude-dependent distortion rather than a hard clip.
+    """
+
+    def __init__(self, channels: int, d: float, active_channels: ArrayLike) -> None:
+        self.in_channels = self.out_channels = int(channels)
+        self.d = float(d)
+        self._mask = np.zeros(self.in_channels, dtype=bool)
+        self._mask[np.asarray(active_channels)] = True
+        # p_state[0] = p[n-2], p_state[1] = p[n-1]
+        self.p_state = np.zeros((2, self.in_channels), dtype=float)
+        self.n_state = np.zeros(self.in_channels, dtype=float)
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"SDFD expects {self.in_channels} input channels")
+
+        p = np.maximum(x, 0.0)
+        n = np.minimum(x, 0.0)
+
+        p_ext = np.concatenate([self.p_state, p], axis=0)  # (T + 2, C)
+        n_ext = np.concatenate([self.n_state[np.newaxis], n], axis=0)  # (T + 1, C)
+
+        p1 = p_ext[1:-1]
+        p2 = p_ext[:-2]
+        n1 = n_ext[:-1]
+
+        d = self.d
+        y = (1 - d) * n1 + d * n + d * p2 + (1 - d) * p1
+
+        self.p_state = p_ext[-2:].copy()
+        self.n_state = n_ext[-1].copy()
+
+        out = x.copy()
+        out[:, self._mask] = y[:, self._mask]
+        return out
+
+    def reset(self) -> None:
+        self.p_state[:] = 0.0
+        self.n_state[:] = 0.0
+
+
+class RingModulator(TimeOperator):
+    """Stateful, controllable ring modulator,
+    ``y[n, c] = mod_amp * x[n, c] * sin(2 * pi * mod_freq * n / fs)``, applied
+    to ``active_channels`` only; the rest pass through unchanged.
+
+    Multiplying by a sine shifts the spectrum of the active channels by
+    ``+-mod_freq`` rather than adding harmonics on top of it, so the effect
+    reads as tremolo at low ``mod_freq`` and as an inharmonic, bell-like
+    retuning once ``mod_freq`` enters the audible range. A unit-amplitude
+    sine carries only half the power of the signal it multiplies, so
+    ``mod_amp = sqrt(2)`` keeps the operator energy-preserving. The
+    modulation phase runs continuously across :meth:`process_block` calls, tracked
+    by ``sample_index``.
+    """
+
+    def __init__(
+        self,
+        channels: int,
+        mod_freq: float,
+        mod_amp: float,
+        fs: float,
+        active_channels: ArrayLike,
+    ) -> None:
+        self.in_channels = self.out_channels = int(channels)
+        self.mod_freq = float(mod_freq)
+        self.mod_amp = float(mod_amp)
+        self.fs = float(fs)
+        self._mask = np.zeros(self.in_channels, dtype=bool)
+        self._mask[np.asarray(active_channels)] = True
+        self.sample_index = 0
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"RingModulator expects {self.in_channels} input channels")
+
+        length = x.shape[0]
+        n = self.sample_index + np.arange(length)
+        mod = self.mod_amp * np.sin(2 * np.pi * self.mod_freq * n / self.fs)
+        self.sample_index += length
+
+        out = x.copy()
+        out[:, self._mask] = x[:, self._mask] * mod[:, np.newaxis]
+        return out
+
+    def reset(self) -> None:
+        self.sample_index = 0
+
+
+class PitchShift(TimeOperator):
+    """Stateful, controllable dual-read-head pitch shifter.
+
+    Writes into one circular buffer per channel and reads it back with two
+    read heads spaced half a window apart, each sliding at a rate set by
+    ``transpose_cents`` and crossfaded with a complementary sine window so
+    the head that is about to wrap is always faded out. Only
+    ``active_channels`` are shifted; the rest pass through unchanged.
+    """
+
+    def __init__(
+        self,
+        channels: int,
+        max_delay_samps: int,
+        window_size: int,
+        transpose_cents: float,
+        fs: float,
+        active_channels: ArrayLike,
+        # 3 is the smallest delay that keeps the cubic interpolator, which
+        # reaches two samples forward, off the sample just written.
+        min_delay_samps: int = 3,
+    ) -> None:
+        if max_delay_samps <= window_size + min_delay_samps:
+            raise ValueError("max_delay_samps must be > window_size + min_delay_samps")
+
+        self.in_channels = self.out_channels = int(channels)
+        self.max_delay = int(max_delay_samps)
+        self.window_size = int(window_size)
+        self.min_delay = int(min_delay_samps)
+        self.fs = float(fs)
+        self._mask = np.zeros(self.in_channels, dtype=bool)
+        self._mask[np.asarray(active_channels)] = True
+        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+
+        self.buffer = np.zeros((self.max_delay, self.in_channels), dtype=float)
+        self.write_ptr = 0
+        self.phase_1 = 0.0
+        self.phase_2 = 0.5  # 180 degrees offset
+
+        self.set_transpose_cents(transpose_cents)
+
+    def set_transpose_cents(self, cents: float) -> None:
+        self.transpose_cents = float(cents)
+        self.pitch_ratio = 2.0 ** (self.transpose_cents / 1200.0)
+        # Delay slope: dD/dn = 1 - ratio, with D = min_delay + phase * window
+        self.phase_inc = (1.0 - self.pitch_ratio) / float(self.window_size)
+
+    def _read_interpolated(self, ptr: float) -> np.ndarray:
+        """Cubic interpolated read from the buffer, one value per channel."""
+        ptr = ptr % self.max_delay
+        i = int(ptr)
+        f = ptr - i
+
+        y0 = self.buffer[(i - 1) % self.max_delay]
+        y1 = self.buffer[i]
+        y2 = self.buffer[(i + 1) % self.max_delay]
+        y3 = self.buffer[(i + 2) % self.max_delay]
+
+        a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3
+        b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3
+        c = -0.5 * y0 + 0.5 * y2
+        d = y1
+        return a * f**3 + b * f**2 + c * f + d
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(f"PitchShift expects {self.in_channels} input channels")
+
+        # The read heads only ever see the buffer, so the DC blocker is applied
+        # to the whole block at the end rather than once per sample.
+        y = np.empty_like(x)
+        for i in range(x.shape[0]):
+            w = self.write_ptr
+            self.buffer[w] = x[i]
+            self.write_ptr = (w + 1) % self.max_delay
+
+            d1 = self.min_delay + self.phase_1 * self.window_size
+            d2 = self.min_delay + self.phase_2 * self.window_size
+
+            s1 = self._read_interpolated(w - d1)
+            s2 = self._read_interpolated(w - d2)
+
+            f1 = np.sin(np.pi * self.phase_1)
+            f2 = np.sin(np.pi * self.phase_2)
+
+            y[i] = s1 * f1 + s2 * f2
+
+            self.phase_1 = (self.phase_1 + self.phase_inc) % 1.0
+            self.phase_2 = (self.phase_2 + self.phase_inc) % 1.0
+
+        y = self.dc_blocker.process_block(y)
+        out = x.copy()
+        out[:, self._mask] = y[:, self._mask]
+        return out
+
+    def reset(self) -> None:
+        self.buffer[:] = 0.0
+        self.write_ptr = 0
+        self.phase_1 = 0.0
+        self.phase_2 = 0.5
+        self.dc_blocker.reset()
+
+
+class _Grain(TypedDict):
+    read_ptr: float
+    pos: int
+
+
+class GranularPitchShift(TimeOperator):
+    """Stateful, controllable granular pitch shifter.
+
+    Two grains, triggered half a grain apart, read a shared per-channel
+    circular buffer at a rate set by ``transpose_cents``. Each grain is
+    windowed by a raised-cosine envelope and, on reaching ``grain_dur_samps``,
+    restarts at a new random position inside the buffer -- trading the
+    continuous read-head wraparound of :class:`PitchShift` for grain-boundary
+    clicks disguised by the envelope. Only ``active_channels`` are shifted;
+    the rest pass through unchanged.
+    """
+
+    def __init__(
+        self,
+        channels: int,
+        max_delay_samps: int,
+        grain_dur_samps: int,
+        transpose_cents: float,
+        active_channels: ArrayLike,
+        fade_ratio: float = 0.25,
+        seed: int | None = None,
+    ) -> None:
+        if max_delay_samps <= 2 * grain_dur_samps:
+            raise ValueError("max_delay_samps must be greater than 2 * grain_dur_samps")
+        if not (0 < fade_ratio <= 0.5):
+            raise ValueError("fade_ratio must be in (0, 0.5]")
+
+        self.in_channels = self.out_channels = int(channels)
+        self.max_delay = int(max_delay_samps)
+        self.grain_dur = int(grain_dur_samps)
+        self.fade_ratio = float(fade_ratio)
+        self.seed = seed  # kept so reset() can rewind the grain positions too
+        self.rng = np.random.default_rng(seed)
+        self._mask = np.zeros(self.in_channels, dtype=bool)
+        self._mask[np.asarray(active_channels)] = True
+        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+
+        self.set_transpose_cents(transpose_cents)
+
+        self.buffer = np.zeros((self.max_delay, self.in_channels), dtype=float)
+        self.write_ptr = 0
+        self.samples_written = 0
+
+        # Two grains interleaved with 180 degrees phase offset
+        self.grains = [
+            self._new_grain(phase_offset=0),
+            self._new_grain(phase_offset=self.grain_dur // 2),
+        ]
+
+    def set_transpose_cents(self, cents: float) -> None:
+        self.transpose_cents = float(cents)
+        self.pitch_ratio = 2.0 ** (self.transpose_cents / 1200.0)
+
+    def _random_read_start(self) -> float:
+        """Pick a random starting read position inside the filled buffer."""
+        filled = min(self.samples_written, self.max_delay)
+        max_age = max(filled - self.grain_dur, 1)
+        age = self.rng.integers(self.grain_dur, max_age + self.grain_dur)
+        return float((self.write_ptr - int(age)) % self.max_delay)
+
+    def _new_grain(self, phase_offset: int = 0) -> _Grain:
+        return {
+            "read_ptr": self._random_read_start(),
+            "pos": phase_offset % self.grain_dur,
+        }
+
+    def _grain_envelope(self, pos: int) -> float:
+        fade_len = int(self.fade_ratio * self.grain_dur)
+        if fade_len == 0:
+            return 1.0
+        if pos < fade_len:
+            return np.sin(0.5 * np.pi * pos / fade_len)
+        elif pos >= self.grain_dur - fade_len:
+            pos_in_fade = pos - (self.grain_dur - fade_len)
+            return np.cos(0.5 * np.pi * pos_in_fade / fade_len)
+        else:
+            return 1.0
+
+    def _read_interpolated(self, ptr: float) -> np.ndarray:
+        """Cubic interpolated read from the buffer, one value per channel."""
+        ptr = ptr % self.max_delay
+        i = int(ptr)
+        f = ptr - i
+
+        y0 = self.buffer[(i - 1) % self.max_delay]
+        y1 = self.buffer[i]
+        y2 = self.buffer[(i + 1) % self.max_delay]
+        y3 = self.buffer[(i + 2) % self.max_delay]
+
+        a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3
+        b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3
+        c = -0.5 * y0 + 0.5 * y2
+        d = y1
+        return a * f**3 + b * f**2 + c * f + d
+
+    def process_block(self, block: ArrayLike) -> np.ndarray:
+        x = _as_2d(block)
+        if x.shape[1] != self.in_channels:
+            raise ValueError(
+                f"GranularPitchShift expects {self.in_channels} input channels"
+            )
+
+        # The grains only ever read the buffer, so the DC blocker is applied to
+        # the whole block at the end rather than once per sample.
+        y = np.zeros_like(x)
+        for i in range(x.shape[0]):
+            self.buffer[self.write_ptr] = x[i]
+            self.write_ptr = (self.write_ptr + 1) % self.max_delay
+            self.samples_written += 1
+
+            for g in self.grains:
+                val = self._read_interpolated(g["read_ptr"])
+                env = self._grain_envelope(g["pos"])
+                y[i] += val * env
+                g["read_ptr"] = (g["read_ptr"] + self.pitch_ratio) % self.max_delay
+                g["pos"] += 1
+
+                if g["pos"] >= self.grain_dur:
+                    g["read_ptr"] = self._random_read_start()
+                    g["pos"] = 0
+
+        y = self.dc_blocker.process_block(y)
+        out = x.copy()
+        out[:, self._mask] = y[:, self._mask]
+        return out
+
+    def reset(self) -> None:
+        self.buffer[:] = 0.0
+        self.write_ptr = 0
+        self.samples_written = 0
+        self.dc_blocker.reset()
+        # Rewind the draw as well, so a seeded operator repeats exactly.
+        self.rng = np.random.default_rng(self.seed)
+        self.grains = [
+            self._new_grain(phase_offset=0),
+            self._new_grain(phase_offset=self.grain_dur // 2),
+        ]
+
+
 class Delay(TimeOperator):
     """Stateful per-channel integer feed-forward delay line, ``y[n, c] = x[n - m_c, c]``.
     It is not equivalent to :class:`RecursionState`, as it does not accept direct
@@ -180,8 +700,8 @@ class SOSBank(TimeOperator):
         ``N = num_channels``. Section rows are ``[b0, b1, b2, a0, a1, a2]``.
         This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
         ``parallelSOSFilter`` input and the output of
-        :func:`pyFDN.first_order_absorption`, :func:`pyFDN.one_pole_absorption`,
-        and :func:`pyFDN.absorption_geq`.
+        :func:`pyFDN.decay_to_first_order_shelf`,
+        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_geq`.
 
     Attributes
     ----------

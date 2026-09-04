@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Homogeneous allpass FDN (SISO)
 # gallery_description: Build a single-input, single-output homogeneous allpass FDN and validate its allpass response.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Homogeneous allpass FDN (SISO)
@@ -28,14 +28,6 @@ def _(mo, pyFDN):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
-    """)
-    return
-
-
 @app.cell
 def _():
     import numpy as np
@@ -43,7 +35,8 @@ def _():
     import pyFDN
 
     np.random.seed(1)
-    return np, pyFDN
+    fs = 48000
+    return fs, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -57,18 +50,15 @@ def _(mo):
 
 
 @app.cell
-def _(np, pyFDN):
-    Fs = 48000
+def _(fs, np, pyFDN):
     N = 6
-    delays = np.random.randint(300, 700, size=N)  # delays in samples, 1..30
-    g = pyFDN.rt_to_gain_per_sample(0.5, Fs)
-    G = np.diag(g**delays)  # gain matrix
+    delays = np.random.randint(300, 700, size=N)
+    g = pyFDN.rt_to_gain_per_sample(0.5, fs)
+    G = np.diag(g**delays)
 
     X = pyFDN.rand_admissible_homogeneous_allpass(G, (0.7, 0.99))
-    X @ G @ G
-
-    A, b, c, d, U = pyFDN.homogeneous_allpass_fdn(G, X, verbose=False)
-    return A, Fs, b, c, d, delays
+    A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(G, X, verbose=False)
+    return A, b, c, d, delays
 
 
 @app.cell(hide_code=True)
@@ -101,8 +91,7 @@ def _(mo):
 
 @app.cell
 def _(A, b, c, d, pyFDN):
-    _fig = pyFDN.plot_system_matrix(A, b, c, d)
-    _fig.show()
+    pyFDN.plot_system_matrix(A, b, c, d)
     return
 
 
@@ -117,9 +106,8 @@ def _(mo):
 
 
 @app.cell
-def _(A, Fs, b, c, d, delays, pyFDN):
-    ir_len = 2 * Fs  # 2 seconds
-    impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, b, c, d).squeeze()
+def _(A, b, c, d, delays, fs, pyFDN):
+    impulse_response = pyFDN.dss_to_impz(2 * fs, delays, A, b, c, d).squeeze()
     return (impulse_response,)
 
 
@@ -134,15 +122,14 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, mo, pyFDN):
+def _(fs, impulse_response, mo, pyFDN):
     _fig = pyFDN.plot_impulse_response(
         impulse_response,
-        fs=Fs,
-        title="Homogeneous allpass FDN — impulse response (time domain)",
+        fs=fs,
+        title="Homogeneous allpass FDN — impulse response",
     )
-    _fig.show()
 
-    mo.vstack([mo.audio(impulse_response, Fs)])
+    mo.vstack([_fig, mo.audio(impulse_response, fs)])
     return
 
 

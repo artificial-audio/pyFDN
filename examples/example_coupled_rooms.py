@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Coupled Rooms FDN Example
@@ -77,9 +77,9 @@ def _(pyFDN):
         rt=0.825,
         rt_nyquist=0.6,
         rt_crossover=1000.0,
-        eq_db_dc=0.0,
-        eq_db_nyquist=-8.0,
-        eq_crossover=1000.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-8.0,
+        output_crossover=1000.0,
         io_type="ones",
         rng=5,
     )
@@ -91,9 +91,9 @@ def _(pyFDN):
         rt=4.2,
         rt_nyquist=1.5,
         rt_crossover=2000.0,
-        eq_db_dc=2.0,
-        eq_db_nyquist=-12.0,
-        eq_crossover=2000.0,
+        output_gain_db=2.0,
+        output_gain_db_nyquist=-12.0,
+        output_crossover=2000.0,
         io_type="ones",
         rng=6,
     )
@@ -143,7 +143,9 @@ def _(N, block_diag, ix1, ix2, np, num_input, num_output, room1, room2):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Build FDN (FLAMO)
+    ## Build the coupled model
+
+    `dss_to_flamo` turns the concatenated parameters into a FLAMO model: the block-diagonal feedback matrix plus the coupling rotation, the stacked delays, and each room's absorption and output EQ as per-line filter banks.
     """)
     return
 
@@ -168,6 +170,8 @@ def _(A, B, C, D, attenuation_sos, delays, fs, nfft, post_eq_sos, pyFDN):
 def _(mo):
     mo.md(r"""
     ## Impulse response
+
+    Two outputs, one per room. The tail of a coupled space is not a single exponential: energy that has crossed into the large room comes back, so the small room's decay bends towards the large room's rate instead of following its own.
     """)
     return
 
@@ -181,7 +185,9 @@ def _(model, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN signal-flow graph
+    ## Signal-flow graph
+
+    The FLAMO graph, showing where the coupling matrix sits relative to the two rooms' loops.
     """)
     return
 
@@ -195,7 +201,9 @@ def _(model, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## FDN parameters
+    ## The parameters side by side
+
+    The block structure is visible in the feedback matrix: two independent rooms on the diagonal, and the coupling in the off-diagonal blocks. Setting the coupling angle to zero would leave two unrelated reverberators.
     """)
     return
 
@@ -219,7 +227,9 @@ def _(A, B, C, D, attenuation_sos, delays, fs, post_eq_sos, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plots and audio
+    ## Listen from each room
+
+    The same source heard at each of the two receivers. The small room is drier and brighter early on, but both share the same late tail — the signature of coupling.
     """)
     return
 

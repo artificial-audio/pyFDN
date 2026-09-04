@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
-from ._targets import _CachedTarget
+from ._targets import _CachedTarget, response_key
 from .base import ResponseLoss
 
 if TYPE_CHECKING:
@@ -309,12 +309,24 @@ class _FlamoSpectrogramLoss(ResponseLoss):
         self.kwargs = kwargs
         self._target = _CachedTarget(target)
         self._criterion: Any = None
+        self._key: tuple[Any, ...] | None = None
 
     def _build_criterion(self, response: Response) -> Any:
         raise NotImplementedError
 
+    def _criterion_device(self, response: Response) -> Any:
+        """Where FLAMO should put its filterbanks.
+
+        FLAMO rebuilds them per call and moves them to the device it was given,
+        so an unset ``device`` has to follow the response rather than stay on
+        the CPU the loss was constructed on.
+        """
+        return response.h.device if self.device is None else self.device
+
     def __call__(self, response: Response) -> torch.Tensor:
-        if self._criterion is None:
+        key = response_key(response)
+        if self._criterion is None or self._key != key:
+            self._key = key
             self._criterion = self._build_criterion(response)
         reference = self._target(response)
         # FLAMO's spectrogram losses take (batch, n_samples, n_channels).
@@ -337,7 +349,7 @@ class MatchSpectrogram(_FlamoSpectrogramLoss):
         return mss_loss(
             nfft=list(self.nfft),
             sample_rate=int(response.fs),
-            device=self.device,
+            device=self._criterion_device(response),
             **self.kwargs,
         )
 
@@ -351,6 +363,6 @@ class MatchMelSpectrogram(_FlamoSpectrogramLoss):
         return mel_mss_loss(
             nfft=list(self.nfft),
             sample_rate=int(response.fs),
-            device=self.device,
+            device=self._criterion_device(response),
             **self.kwargs,
         )

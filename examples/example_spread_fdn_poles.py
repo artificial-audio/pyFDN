@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Absorption & Decay
 # gallery_description: Contrast homogeneous modal decay with a rotated absorption design that spreads reverberation times across modes.
 
 import marimo
@@ -29,7 +29,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2019ModalDecompositionFeedback")}*.
@@ -42,11 +42,9 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 

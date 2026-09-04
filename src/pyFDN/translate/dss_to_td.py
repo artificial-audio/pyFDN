@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+from pyFDN.build import FDNBuild
 from pyFDN.td.connectors import Parallel, Recursion, Series
 from pyFDN.td.operators import Delay, Gain, MatrixFIR, SOSBank, TimeOperator
 

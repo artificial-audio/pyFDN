@@ -1,4 +1,4 @@
-# gallery_category: Allpass FDN Examples
+# gallery_category: Allpass FDNs
 # gallery_title: Homogeneous allpass FDN (MIMO)
 # gallery_description: Construct and verify a multi-input, multi-output homogeneous allpass FDN from delay-line gains and an orthogonal mixing matrix.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Homogeneous allpass FDN (MIMO)
@@ -24,14 +24,6 @@ def _(mo, pyFDN):
 
     See {pyFDN.paper_link("Allpass_Feedback_Delay_Networks")}.
 
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Setup
     """)
     return
 
@@ -58,18 +50,18 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    Fs = 48000
+    fs = 48000
     N = 8
     numio = N
 
-    delays = np.random.randint(800, 1800, size=N)  # delays in samples, 1..30
-    g = pyFDN.rt_to_gain_per_sample(0.6, Fs)
-    G = np.diag(g**delays)  # gain matrix
+    delays = np.random.randint(800, 1800, size=N)
+    g = pyFDN.rt_to_gain_per_sample(0.6, fs)
+    G = np.diag(g**delays)
     U = pyFDN.random_orthogonal(N)
     A = G @ U
 
     B, C, D, X = pyFDN.complete_fdn(A, N, str(numio))
-    return A, B, C, D, Fs, delays
+    return A, B, C, D, fs, delays
 
 
 @app.cell(hide_code=True)
@@ -93,17 +85,16 @@ def _(A, B, C, D, pyFDN):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Plot system matrix
+    ## The system matrix
 
-    Visualize system matrix as 2×2 block heatmaps.
+    `[A, B; C, D]` as one block heatmap. Losslessness is a property of the whole matrix, not of `A` alone, which is why it is worth seeing the four blocks together.
     """)
     return
 
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    _fig = pyFDN.plot_system_matrix(A, B, C, D)
-    _fig.show()
+    pyFDN.plot_system_matrix(A, B, C, D)
     return
 
 
@@ -112,38 +103,23 @@ def _(mo):
     mo.md(r"""
     ## Impulse response
 
-    Compute the impulse response with **dss_to_impz** (MIMO).
+    One second of the response, taken from output 3 driven by input 2. Every input/output pair of a MIMO allpass FDN is a different filter; the allpass property belongs to the matrix as a whole, so no single pair has to look special.
     """)
     return
 
 
 @app.cell
-def _(A, B, C, D, Fs, delays, pyFDN):
-    ir_len = Fs  # 2 seconds
-    impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)
-    return (impulse_response,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Time domain and play
-
-    Plot the impulse response in the time domain and use the audio widget to play it.
-    """)
-    return
-
-
-@app.cell
-def _(Fs, impulse_response, mo, pyFDN):
+def _(A, B, C, D, delays, fs, mo, pyFDN):
+    impulse_response = pyFDN.dss_to_impz(fs, delays, A, B, C, D)
     ir_channel = impulse_response[:, 2, 1]
+
     _fig = pyFDN.plot_impulse_response(
         ir_channel,
-        fs=Fs,
-        title="Homogeneous allpass FDN — impulse response (time domain)",
+        fs=fs,
+        title="Homogeneous allpass FDN — impulse response",
     )
-    _fig.show()
-    mo.vstack([mo.audio(ir_channel, Fs)])
+
+    mo.vstack([_fig, mo.audio(ir_channel, fs)])
     return
 
 

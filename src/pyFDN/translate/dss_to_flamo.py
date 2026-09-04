@@ -14,7 +14,7 @@ import numpy as np
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
 try:
     import flamo.processor  # noqa: F401
@@ -30,7 +30,7 @@ def dss_to_flamo(
     C: np.ndarray,
     D: np.ndarray,
     m: np.ndarray,
-    Fs: float,
+    fs: float,
     nfft: int = 2**16,
     device: Any = None,
     *,
@@ -59,7 +59,7 @@ def dss_to_flamo(
         Direct gain.
     m : (N,) array
         Delay lengths in samples (one per delay line).
-    Fs : float
+    fs : float
         Sampling rate in Hz.
     nfft : int
         FFT size for FLAMO (default 2**16).
@@ -116,8 +116,8 @@ def dss_to_flamo(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Delays: convert samples to seconds for FLAMO
-    lengths_sec = m / float(Fs)
-    delays = delay_module(lengths_sec, nfft, Fs=Fs, device=device, dtype=dtype)
+    lengths_sec = m / float(fs)
+    delays = delay_module(lengths_sec, nfft, fs=fs, device=device, dtype=dtype)
     if A.ndim == 3:
         gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
     else:
@@ -165,7 +165,7 @@ def build_to_flamo(
     Build a FLAMO model from a complete :class:`FDNBuild` config.
 
     Thin wrapper over :func:`dss_to_flamo` that unpacks an
-    :class:`~pyFDN.generate.fdn_matrix_gallery.FDNBuild` (as returned by
+    :class:`~pyFDN.FDNBuild` (as returned by
     :func:`pyFDN.fdn_build_gallery`) into its state-space arguments. The build's
     three filter hooks go straight through under the same names: ``post_delay``
     for the in-loop absorption, ``post_matrix`` for the feedback path, and

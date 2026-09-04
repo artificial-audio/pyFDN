@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
 
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
@@ -421,7 +421,7 @@ def extract_build(model: Any) -> FDNBuild:
     if fs_value is None:
         raise ValueError("FLAMO delay module exposes no sample rate; cannot extract fs")
 
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+    from pyFDN.build import FDNBuild
 
     return FDNBuild(
         A=A,

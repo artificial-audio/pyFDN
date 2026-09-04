@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_title: Time-domain FDN versus FLAMO
 # gallery_description: Render the same paraunitary FDN with GEQ absorption in two independent engines and verify sample-accurate agreement.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # Time-domain FDN vs FLAMO with GEQ absorption
@@ -25,7 +25,7 @@ def _(mo, pyFDN):
     1. **`pyFDN.process_dss`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
-    The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the absorption is a 10-band graphic EQ (`absorption_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
+    The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the attenuation is a 10-band graphic EQ (`decay_to_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
 
     Reference: *{pyFDN.paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
@@ -36,13 +36,11 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
     import torch
 
     import pyFDN
     from pyFDN import td
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN, td, torch
 
 
@@ -76,7 +74,7 @@ def _(mo):
     mo.md(r"""
     ## Design GEQ absorption filters
 
-    `absorption_geq` converts the target T60 to a per-sample dB slope, fits a graphic EQ, and returns one SOS cascade per delay line, shape (N, 11, 6).
+    `decay_to_geq` converts the target T60 to a per-sample dB slope, fits a graphic EQ, and returns one SOS cascade per delay line, shape (N, 11, 6).
     """)
     return
 
@@ -86,7 +84,7 @@ def _(delays, fs, np, pyFDN):
     # Target RT at the 10 GEQ bands (seconds), decaying towards high frequencies
     target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
 
-    sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     return (sos_absorption,)
 

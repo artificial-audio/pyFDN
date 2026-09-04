@@ -2,9 +2,58 @@
 History
 =======
 
+0.4.2 (2026-08-27)
+------------------
+
+* Add the ``example_multislope_rir_to_fdn`` notebook: a measured room-transition
+  response is fitted with two decay slopes per octave band using DecayFitNet
+  from the ``multislope`` package, and each slope is resynthesised by its own
+  FDN. The response it uses ships with the package as the
+  ``meetingroom_to_hallway_290cm`` audio resource, taken from the coupled-rooms
+  transition dataset.
+* Add nonlinear and pitch-shifting time-domain operators for shimmer
+  reverberation -- ``DCBlocker``, ``ControllableFullWaveRect``, ``SDFD``,
+  ``RingModulator``, ``PitchShift`` and ``GranularPitchShift`` -- all usable as
+  ``process_dss`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
+  through each one inside the feedback loop of the same 8-line FDN.
+* ``is_uniallpass`` no longer solves a singular Lyapunov equation when ``A`` is
+  itself lossless (as in the allpass-in-FDN structure). The spectral radius is
+  checked first and such a system is reported as not uniallpass, instead of the
+  result depending on whether LAPACK chose to warn or raise on the ill-
+  conditioned solve.
+* Fix a device mismatch when a loss built for one run is used in another: every
+  loss that holds a reference impulse response (``MatchCumulativeEnergy``,
+  ``MatchEnergyDecay``, ``MatchMagnitude``, ``MatchImpulseResponse``,
+  ``MatchSpectrogram``, ``MatchMelSpectrogram``) aligned its reference once, on
+  the first response it saw, and then handed that CPU tensor to a later CUDA
+  step -- the way a notebook cell that builds the loss but does not re-run on a
+  runtime switch would hit it. The aligned reference is now keyed on the
+  response's shape, device, dtype and sample rate, and rebuilt when any of them
+  changes. ``MatchSpectrogram`` and ``MatchMelSpectrogram`` also default their
+  ``device`` to the response's rather than to the CPU, so FLAMO builds its
+  filterbanks where the model is.
+
+0.4.1 (2026-08-24)
+------------------
+
+* Let ``fdn_build_gallery`` and the target-to-EQ functions optionally return
+  the design choices used to produce their coefficients, ready to store in an
+  ``FDNPreset``. Build generation now also exposes the delay distribution and
+  coprimality options and lives separately from the matrix galleries.
+* **Breaking:** rename the ``Fs`` parameter to ``fs`` everywhere it is still
+  spelled with a capital -- ``dss_to_flamo``, ``dss_to_pr``, ``delay_module``
+  and ``SDN``. Every other sampling-rate argument in the package was already
+  ``fs``, and the odd one out forced callers to remember which spelling each
+  function wanted. ``SDN`` also renames its ``fs`` attribute and the ``"fs"``
+  key of the dictionary ``SDN.compute()`` returns.
+
 0.4.0 (2026-08-23)
 ------------------
 
+* Add ``FDNPreset`` JSON documents: a baked ``FDNBuild`` plus catalog
+  metadata and a controlled vocabulary for delays, matrices, and the three
+  filter hooks. ``trainable_from_preset`` restores filter targets as meaningful
+  FLAMO parameters only when they reproduce the baked coefficients.
 * **Breaking:** replace ``train_fdn``'s ``mode`` string, and the ``target``,
   ``criteria``, ``sparsity_alpha`` and ``mss_nfft`` arguments that went with
   it, with a composed loss object. An objective is now written out --
@@ -27,7 +76,7 @@ History
   from ``rt`` (``LOSSLESS_ALIAS_DECAY_DB`` when ``rt`` is None) and
   ``trainable_from_build`` threads it into every module, so a magnitude
   objective sees a bounded response.
-* Train the decay: ``DecayFilter`` parametrizes the in-loop absorption filter
+* Train the decay: ``AttenuationFilter`` parametrizes the in-loop absorption filter
   by reverberation time per band, so the loop stays contractive for every value
   the parameter can take, and takes either one RT curve for the network or one
   per delay line. ``OutputEQ`` trains the output filter outside the recursion,
@@ -43,7 +92,7 @@ History
   enumerates them.
 * Export the FLAMO graph builders (``assemble_fdn_core``, ``wrap_fdn_shell``,
   ``gain_module``, ``delay_module``, ``matrix_module``, ``fir_matrix_module``,
-  ``sos_filter_module``, ``hook_module``, ``DecayFilter``, ``OutputEQ``) from
+  ``sos_filter_module``, ``hook_module``, ``AttenuationFilter``, ``OutputEQ``) from
   the top-level namespace.
 * Make ``build_to_impz`` apply all three hooks, so it no longer rejects builds
   that carry an output EQ, and make ``extract_build`` refuse a hook it cannot

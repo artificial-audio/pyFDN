@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Getting Started
 # gallery_title: FDN matrix and system gallery
 # gallery_description: Explore pyFDN's catalog of feedback matrices and complete FDN systems while checking their lossless and allpass properties.
 
@@ -15,7 +15,7 @@ def _():
     return (mo,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     # FDN Gallery
@@ -34,14 +34,11 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
-    return np, plt, pyFDN
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -125,7 +122,7 @@ def _(mo, pyFDN, results):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(rf"""
     ---
@@ -160,19 +157,22 @@ def _(mo):
 
 
 @app.cell
-def _(filter_types, np, plt, pyFDN):
+def _(filter_types, mo, np, pyFDN):
     N_filter = 4
+    _figures = []
     for _t in filter_types:
         _mat = pyFDN.filter_matrix_gallery(N_filter, _t, num_stages=2)
         _is_pu, _, _ = pyFDN.is_paraunitary(_mat.transpose(2, 0, 1))
-        pyFDN.plot_impulse_response_matrix(
+        _fig, _, _ = pyFDN.plot_impulse_response_matrix(
             np.arange(_mat.shape[2]),
             _mat.transpose(2, 0, 1),
             xlabel="Time (samples)",
             ylabel="Amplitude (lin)",
             title=f"{_t} — {_mat.shape[2]} taps, paraunitary={bool(_is_pu)}",
         )
-        plt.show()
+        _figures.append(_fig)
+
+    mo.vstack(_figures)
     return
 
 
@@ -199,8 +199,8 @@ def _(pyFDN):
             8,
             rt=2.0,
             rt_nyquist=0.5,
-            eq_db_dc=0.0,
-            eq_db_nyquist=-6.0,
+            output_gain_db=0.0,
+            output_gain_db_nyquist=-6.0,
             rng=0,
         ),
         "multichannel post EQ": pyFDN.fdn_build_gallery(
@@ -208,8 +208,8 @@ def _(pyFDN):
             num_outputs=3,
             rt=2.0,
             rt_nyquist=0.5,
-            eq_db_dc=[0.0, -3.0, -6.0],
-            eq_db_nyquist=-6.0,
+            output_gain_db=[0.0, -3.0, -6.0],
+            output_gain_db_nyquist=-6.0,
             rng=0,
         ),
     }

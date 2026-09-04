@@ -1,4 +1,4 @@
-# gallery_category: FDN Design & Analysis
+# gallery_category: Analysis & Verification
 # gallery_description: Compute and visualize FDN mode shapes from the left and right eigenvectors of the loop polynomial.
 
 import marimo
@@ -30,7 +30,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pyFDN):
     mo.md(f"""
     Reference: *{pyFDN.paper_link("Schlecht2024ModalExcitationFeedback")}.*
@@ -43,11 +43,9 @@ def _(mo, pyFDN):
 def _():
     import numpy as np
     import plotly.graph_objects as go
-    import plotly.io as pio
 
     import pyFDN
 
-    pio.renderers.default = "sphinx_gallery"
     return go, np, pyFDN
 
 

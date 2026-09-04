@@ -121,7 +121,7 @@ def test_dss_to_pr_eai_matches_roots():
             c,
             d,
             mode="eai",
-            Fs=1.0,
+            fs=1.0,
             nfft=1024,
             verbose=False,
         )
