@@ -1,4 +1,12 @@
-"""Baked feedback-delay-network builds and their JSON representation."""
+"""Baked feedback-delay-network builds and their JSON representation.
+
+An :class:`FDNBuild` is a delay state-space (DSS) system -- ``A``, ``B``, ``C``,
+``D``, and ``delays`` -- plus the sample rate and three optional baked filter
+hooks. A build is designed around a DSS system, not the other way around: use
+the raw DSS arrays (and ``dss_to_*`` functions) for pure state-space math, and
+an :class:`FDNBuild` (and ``build_to_*`` functions) once ``fs`` or the filter
+hooks matter, e.g. for rendering.
+"""
 
 from __future__ import annotations
 
@@ -18,9 +26,12 @@ FDN_BUILD_VERSION = 2
 class FDNBuild:
     """Complete, renderable parameters of a vanilla FDN.
 
-    Every field is a plain NumPy value consumed by :func:`pyFDN.process_fdn`
-    and :func:`pyFDN.build_to_impz`. A build does not remember how its numbers
-    were designed; that optional information belongs to :class:`pyFDN.FDNPreset`.
+    ``A``, ``B``, ``C``, ``D``, and ``delays`` are a delay state-space (DSS)
+    system; ``fs`` and the three optional filter hooks turn that system into a
+    complete, renderable build. Every field is a plain NumPy value consumed by
+    :func:`pyFDN.process_fdn` and :func:`pyFDN.build_to_impz`. A build does not
+    remember how its numbers were designed; that optional information belongs
+    to :class:`pyFDN.FDNPreset`.
 
     The three optional SOS banks correspond directly to pyFDN's filter hooks:
 

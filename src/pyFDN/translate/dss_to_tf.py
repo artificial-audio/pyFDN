@@ -23,7 +23,11 @@ def dss_to_tf(
     D: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    From delay state-space to transfer function matrix (numerator and denominator).
+    From a delay state-space (DSS) system to a transfer function matrix.
+
+    No ``build_to_tf`` counterpart exists: the result does not depend on
+    ``fs`` or an :class:`~pyFDN.FDNBuild`'s filter hooks, so pass
+    ``build.delays`` and ``build.A``/``B``/``C``/``D`` directly.
 
     Parameters
     ----------
