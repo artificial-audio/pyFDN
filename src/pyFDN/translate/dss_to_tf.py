@@ -17,7 +17,7 @@ from pyFDN.auxiliary.math import general_char_poly
 
 def dss_to_tf(
     delays: ArrayLike,
-    A: np.ndarray,
+    A: ArrayLike,
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
@@ -33,7 +33,7 @@ def dss_to_tf(
     ----------
     delays : array-like
         Delays in samples, shape (N,).
-    A : ndarray
+    A : array-like
         Feedback matrix, shape (N, N) or (N, N, order) for polynomial matrix.
     B : array-like
         Input gains, shape (N, num_input).

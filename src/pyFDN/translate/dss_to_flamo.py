@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
@@ -26,11 +27,11 @@ except ImportError:
 
 
 def dss_to_flamo(
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    D: np.ndarray,
-    delays: np.ndarray,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
+    delays: ArrayLike,
     fs: float,
     nfft: int = 2**16,
     device: Any = None,
@@ -49,16 +50,16 @@ def dss_to_flamo(
 
     Parameters
     ----------
-    A : (N, N) or (N, N, L) array
+    A : array-like, (N, N) or (N, N, L)
         Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
         convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
-    B : (N, num_in) array
+    B : array-like, (N, num_in)
         Input gain.
-    C : (num_out, N) array
+    C : array-like, (num_out, N)
         Output gain.
-    D : (num_out, num_in) array
+    D : array-like, (num_out, num_in)
         Direct gain.
-    delays : (N,) array
+    delays : array-like, (N,)
         Delay lengths in samples (one per delay line).
     fs : float
         Sampling rate in Hz.

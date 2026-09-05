@@ -20,21 +20,21 @@ def _feedback_operator(A: np.ndarray) -> TimeOperator:
     raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
 
 
-def _append_sos(ops: list[TimeOperator], sos: np.ndarray | None) -> None:
+def _append_sos(ops: list[TimeOperator], sos: ArrayLike | None) -> None:
     if sos is not None:
         ops.append(SOSBank(sos))
 
 
 def dss_to_td(
     delays: ArrayLike,
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    D: np.ndarray,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
     *,
-    post_delay: np.ndarray | None = None,
-    post_matrix: np.ndarray | None = None,
-    post_output: np.ndarray | None = None,
+    post_delay: ArrayLike | None = None,
+    post_matrix: ArrayLike | None = None,
+    post_output: ArrayLike | None = None,
     block_size: int | None = None,
 ) -> TimeOperator:
     """Assemble a delay state-space (DSS) system as a stateful ``td`` graph.
@@ -54,11 +54,11 @@ def dss_to_td(
     ----------
     delays : array-like
         Positive delay lengths in samples, one per delay line.
-    A : ndarray
+    A : array-like
         Feedback matrix, ``(N, N)`` static or ``(N, N, order)`` FIR.
-    B, C, D : ndarray
+    B, C, D : array-like
         Input, output, and direct gain matrices.
-    post_delay, post_matrix, post_output : ndarray, optional
+    post_delay, post_matrix, post_output : array-like, optional
         Optional SOS filter banks for the in-loop, feedback-path, and wet-signal
         hooks, in the same positions :func:`pyFDN.process_dss` uses.
     block_size : int, optional

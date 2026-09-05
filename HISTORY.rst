@@ -5,6 +5,13 @@ History
 Unreleased
 ----------
 
+* Type every DSS matrix parameter (``A``/``B``/``C``/``D`` and the ``b``/``c``/``d``
+  gains in ``dss_to_ss``) as ``ArrayLike`` instead of ``ndarray`` across
+  ``dss_to_flamo``, ``dss_to_impz``, ``dss_to_td``, ``dss_to_tf``, ``dss_to_ss``,
+  ``general_char_poly``, and ``loop_tf`` -- matching what these functions
+  already do internally (``np.asarray(...)``) and how ``delays`` was already
+  typed. Also fixes ``dss_to_ss`` silently returning a non-array ``dd`` when
+  ``d`` was passed as a list rather than an ``ndarray``.
 * Add ``dss_to_td``, the raw delay state-space (DSS) counterpart of
   ``build_to_td`` -- matching the ``dss_to_*``/``build_to_*`` pattern already
   used by ``dss_to_flamo``/``build_to_flamo`` and ``dss_to_impz``/

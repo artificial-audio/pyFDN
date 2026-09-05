@@ -6,9 +6,9 @@ from scipy.linalg import block_diag
 def dss_to_ss(
     delays: ArrayLike,
     A: ArrayLike,
-    b: np.ndarray | None = None,
-    c: np.ndarray | None = None,
-    d: np.ndarray | None = None,
+    b: ArrayLike | None = None,
+    c: ArrayLike | None = None,
+    d: ArrayLike | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Convert a delay state-space (DSS) system to standard state-space.
@@ -21,15 +21,15 @@ def dss_to_ss(
 
     Parameters
     ----------
-    delays : list or array
+    delays : array-like
         Delay lengths in samples (min 3 samples).
-    A : ndarray
+    A : array-like
         Feedback matrix (NxN).
-    b : ndarray, optional
+    b : array-like, optional
         Input gains (Nx1). Defaults to ones(N,1).
-    c : ndarray, optional
+    c : array-like, optional
         Output gains (1xN). Defaults to ones(1,N).
-    d : ndarray, optional
+    d : array-like, optional
         Direct gains (1x1). Defaults to np.ones((1,1)).
 
     Returns
@@ -54,12 +54,9 @@ def dss_to_ss(
         )
 
     # Default gains
-    if b is None:
-        b = np.ones((N, 1))
-    if c is None:
-        c = np.ones((1, N))
-    if d is None:
-        d = np.ones((1, 1))
+    b = np.ones((N, 1)) if b is None else np.asarray(b, dtype=float)
+    c = np.ones((1, N)) if c is None else np.asarray(c, dtype=float)
+    d = np.ones((1, 1)) if d is None else np.asarray(d, dtype=float)
 
     U_blocks = []
     P = np.zeros((N, 0))  # start with 0 columns
