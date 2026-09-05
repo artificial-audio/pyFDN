@@ -14,6 +14,13 @@ Unreleased
 * Clarify docs and docstrings on the relationship between a delay state-space
   (DSS) system and an ``FDNBuild``: a build is a DSS system plus ``fs`` and
   baked filter hooks.
+* Fix ``dss_to_ss`` raising a dimension-mismatch error for delays at the
+  documented minimum of 3 samples.
+* **Breaking:** ``process_fdn`` now takes an ``FDNBuild`` and assembles a
+  stateful ``td`` graph (new ``build_to_td``) instead of taking raw DSS
+  arguments; the old signature is renamed to ``process_dss``. ``td`` operators
+  rename ``filter(block)``/``process(signal)`` to
+  ``process_block(block)``/``process_signal(signal)``.
 
 0.4.2 (2026-08-27)
 ------------------
