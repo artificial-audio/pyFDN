@@ -141,7 +141,7 @@ The repository separates the installable package, executable examples,
 documentation sources, and tests:
 
 * ``src/pyFDN/`` contains the library. The top-level ``__init__.py`` defines
-  the public API, while ``process.py``, ``build_io.py``, and ``presets.py``
+  the public API, while ``process.py``, ``build.py``, and ``preset.py``
   provide the main build-processing and persistence entry points.
 * ``src/pyFDN/generate/`` contains feedback-matrix and FDN construction
   algorithms, including the allpass and scattering-delay-network builders.

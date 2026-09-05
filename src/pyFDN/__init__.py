@@ -145,6 +145,7 @@ __all__ = [
     "flamo_extract_pr_decomposition",
     "FlamoDecompositionForPR",
     "dss_to_ss",
+    "dss_to_td",
     "dss_to_tf",
     "impz_to_res",
     "mtf_to_impz",
@@ -485,9 +486,9 @@ from .train import (
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import build_to_impz, dss_to_impz
-from .translate.dss_to_td import build_to_td
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
+from .translate.dss_to_td import build_to_td, dss_to_td
 from .translate.dss_to_tf import dss_to_tf
 from .translate.flamo_to_pr import (
     FlamoDecompositionForPR,

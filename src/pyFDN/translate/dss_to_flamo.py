@@ -1,5 +1,6 @@
 """
-Convert delay state-space (A, B, C, D, m) to a FLAMO model for rendering.
+Convert a delay state-space (DSS) system (A, B, C, D, delays) to a FLAMO model
+for rendering.
 
 Uses gain_module and delay_module from pyFDN.auxiliary.flamo.
 Optionally place an allpass (or other) filter behind the delays in the loop.
@@ -10,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
@@ -25,11 +27,11 @@ except ImportError:
 
 
 def dss_to_flamo(
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    D: np.ndarray,
-    m: np.ndarray,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
+    delays: ArrayLike,
     fs: float,
     nfft: int = 2**16,
     device: Any = None,
@@ -41,23 +43,23 @@ def dss_to_flamo(
     post_output: Any = None,
 ) -> Any:
     """
-    Build a FLAMO model from delay state-space (A, B, C, D, m).
+    Build a FLAMO model from a delay state-space (DSS) system (A, B, C, D, delays).
 
     Signal flow: input -> B -> [recursion: delay -> (post_delay); fB = A -> (post_matrix)]
     -> C -> (post_output) -> output, with direct path D summed in parallel.
 
     Parameters
     ----------
-    A : (N, N) or (N, N, L) array
+    A : array-like, (N, N) or (N, N, L)
         Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
         convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
-    B : (N, num_in) array
+    B : array-like, (N, num_in)
         Input gain.
-    C : (num_out, N) array
+    C : array-like, (num_out, N)
         Output gain.
-    D : (num_out, num_in) array
+    D : array-like, (num_out, num_in)
         Direct gain.
-    m : (N,) array
+    delays : array-like, (N,)
         Delay lengths in samples (one per delay line).
     fs : float
         Sampling rate in Hz.
@@ -107,17 +109,17 @@ def dss_to_flamo(
     B = np.asarray(B, dtype=np.float64)
     C = np.asarray(C, dtype=np.float64)
     D = np.asarray(D, dtype=np.float64)
-    m = np.asarray(m, dtype=np.float64).ravel()
+    delays_arr = np.asarray(delays, dtype=np.float64).ravel()
     N = A.shape[0]
-    if m.shape[0] != N:
-        raise ValueError("m must have length N (number of delay lines)")
+    if delays_arr.shape[0] != N:
+        raise ValueError("delays must have length N (number of delay lines)")
 
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Delays: convert samples to seconds for FLAMO
-    lengths_sec = m / float(fs)
-    delays = delay_module(lengths_sec, nfft, fs=fs, device=device, dtype=dtype)
+    lengths_sec = delays_arr / float(fs)
+    delay_lines = delay_module(lengths_sec, nfft, fs=fs, device=device, dtype=dtype)
     if A.ndim == 3:
         gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
     else:
@@ -139,7 +141,7 @@ def dss_to_flamo(
     core = assemble_fdn_core(
         input_gain=gain_B,
         feedback=gain_A,
-        delays=delays,
+        delays=delay_lines,
         output_gain=gain_C,
         direct=gain_D,
         **hooks,

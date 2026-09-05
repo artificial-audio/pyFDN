@@ -270,6 +270,11 @@ Build Files, Packaged Examples & References
 State-Space Translators
 -----------------------
 
+Convert a delay state-space (DSS) system -- ``A``, ``B``, ``C``, ``D``,
+``delays`` -- to another representation. Each ``build_to_*`` function is a
+thin wrapper over its ``dss_to_*`` counterpart that unpacks an
+:class:`~pyFDN.FDNBuild` instead.
+
 .. autosummary::
    :toctree: generated/
    :nosignatures:
@@ -277,6 +282,7 @@ State-Space Translators
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
    pyFDN.build_to_impz
+   pyFDN.dss_to_td
    pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr

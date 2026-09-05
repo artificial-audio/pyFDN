@@ -263,7 +263,7 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     return determinant
 
 
-def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
+def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     """
     Generalized characteristic polynomial (GCP) for delay state-space.
 
@@ -275,7 +275,7 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
     ----------
     delays : array-like
         Vector of delays in samples (length ND); used with z^{-1} convention.
-    A : ndarray
+    A : array-like
         Feedback matrix. If 2D (scalar matrix), GCP is built via submatrix
         determinants. If 3D of shape (N, N, L), polynomial matrix in z^{-1}.
 
@@ -401,7 +401,7 @@ def adj_poly(
     return adj
 
 
-def loop_tf(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
+def loop_tf(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     """Loop transfer function ``P(z) = diag(z^m) - A`` as a polynomial matrix.
 
     Coefficients are stored in the ``z^1`` convention along axis 2

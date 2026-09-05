@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 def dss_to_impz(
     ir_len: int,
     delays: ArrayLike,
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    D: np.ndarray,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
 ) -> np.ndarray:
     """
     Compute MIMO impulse response from delay state-space (DSS) representation.
@@ -32,7 +32,7 @@ def dss_to_impz(
         Length of impulse response in samples
     delays : list or array
         Delay lengths in samples
-    A, B, C, D : ndarray
+    A, B, C, D : array-like
         Delay state-space matrices (static, numeric only).
         For a complete :class:`pyFDN.FDNBuild` with filter hooks, use
         :func:`pyFDN.build_to_impz`.
