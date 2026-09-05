@@ -37,9 +37,9 @@ def test_dss_to_ss_supports_mixed_delays_including_minimum():
 
 
 def test_dss_to_ss_handles_minimum_delay_of_three():
-    # Regression test for #240: m=[3] previously raised a dimension
+    # Regression test for #240: delays=[3] previously raised a dimension
     # mismatch instead of returning a (3, 3) state-space matrix.
-    AA, bb, cc, dd = dss_to_ss(m=np.array([3]), A=np.array([[0.5]]))
+    AA, bb, cc, dd = dss_to_ss(delays=np.array([3]), A=np.array([[0.5]]))
 
     assert AA.shape == (3, 3)
     assert bb.shape == (3, 1)

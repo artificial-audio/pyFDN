@@ -173,7 +173,7 @@ def dss_to_pr(
             B=np.asarray(B, dtype=np.float64),
             C=np.asarray(C, dtype=np.float64),
             D=np.asarray(D, dtype=np.float64),
-            m=delays_arr,
+            delays=delays_arr,
             fs=float(fs),
             nfft=int(nfft),
             device=device,

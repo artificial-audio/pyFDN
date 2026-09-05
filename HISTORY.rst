@@ -2,6 +2,19 @@
 History
 =======
 
+Unreleased
+----------
+
+* Add ``dss_to_td``, the raw delay state-space (DSS) counterpart of
+  ``build_to_td`` -- matching the ``dss_to_*``/``build_to_*`` pattern already
+  used by ``dss_to_flamo``/``build_to_flamo`` and ``dss_to_impz``/
+  ``build_to_impz``.
+* **Breaking:** rename the ``m`` parameter to ``delays`` in ``dss_to_ss`` and
+  ``dss_to_flamo``, matching every other DSS-related function.
+* Clarify docs and docstrings on the relationship between a delay state-space
+  (DSS) system and an ``FDNBuild``: a build is a DSS system plus ``fs`` and
+  baked filter hooks.
+
 0.4.2 (2026-08-27)
 ------------------
 

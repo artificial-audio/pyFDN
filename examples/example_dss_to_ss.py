@@ -48,9 +48,9 @@ def _():
     np.random.seed(1)
     impulse_response_length = 1000
 
-    m = np.array([13, 19, 23])
+    delays = np.array([13, 19, 23])
     build = pyFDN.fdn_build_gallery(
-        delays=m,
+        delays=delays,
         io_type="random",
         direct_gain=None,
         rt=0.02,
@@ -64,10 +64,10 @@ def _():
         build,
         c,
         d,
+        delays,
         dimpulse,
         dlti,
         impulse_response_length,
-        m,
         np,
         pyFDN,
     )
@@ -84,14 +84,16 @@ def _(mo):
 
 
 @app.cell
-def _(A, b, c, d, dimpulse, dlti, impulse_response_length, m, np, pyFDN):
-    aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)
+def _(A, b, c, d, delays, dimpulse, dlti, impulse_response_length, np, pyFDN):
+    aa, bb, cc, dd = pyFDN.dss_to_ss(delays, A, b, c, d)
 
     system = dlti(aa, bb, cc, dd, dt=1.0)
     _, ir_state_space = dimpulse(system, n=impulse_response_length)
     ir_state_space = np.squeeze(ir_state_space)
 
-    ir_delay_state_space = pyFDN.dss_to_impz(impulse_response_length, m, A, b, c, d)
+    ir_delay_state_space = pyFDN.dss_to_impz(
+        impulse_response_length, delays, A, b, c, d
+    )
     ir_delay_state_space = np.asarray(ir_delay_state_space).squeeze()
 
     assert pyFDN.is_almost_zero(ir_state_space - ir_delay_state_space, tol=0.001)
