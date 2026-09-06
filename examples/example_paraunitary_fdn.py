@@ -148,7 +148,7 @@ def _(
         B=input_gain,
         C=output_gain,
         D=direct,
-        m=delays,
+        delays=delays,
         fs=fs,
         shell=False,
         dtype=torch.float64,

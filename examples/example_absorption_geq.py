@@ -133,7 +133,7 @@ def _(mo):
     mo.md(r"""
     ## Compute impulse response
 
-    `build_to_impz` renders the build straight to a time-domain impulse response — one `process_fdn` block simulation. Signal path: input → B → [delays → SOS → A] → C → output.
+    `build_to_impz` renders the build straight to a time-domain impulse response through its assembled `td` graph. Signal path: input → B → [delays → SOS → A] → C → output.
     """)
     return
 
