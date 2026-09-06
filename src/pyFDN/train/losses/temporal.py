@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import auraloss.time
-
 from ._targets import _CachedTarget, response_key
 from .base import ResponseLoss
 
@@ -397,6 +395,8 @@ class MatchESR(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+
         super().__init__(
             target,
             auraloss.time.ESRLoss(
@@ -415,6 +415,8 @@ class MatchDC(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+
         super().__init__(
             target,
             auraloss.time.DCLoss(
@@ -434,6 +436,8 @@ class MatchLogCosh(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+
         super().__init__(
             target,
             auraloss.time.LogCoshLoss(
@@ -454,6 +458,8 @@ class MatchSNR(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+
         super().__init__(
             target,
             auraloss.time.SNRLoss(
@@ -474,6 +480,8 @@ class MatchSISDR(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+
         super().__init__(
             target,
             auraloss.time.SISDRLoss(
@@ -494,6 +502,8 @@ class MatchSDSDR(AuralossResponseLoss):
         eps: float = 1e-8,
         reduction: str = "mean",
     ) -> None:
+        import auraloss.time
+        
         super().__init__(
             target,
             auraloss.time.SDSDRLoss(
