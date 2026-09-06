@@ -172,91 +172,6 @@ class MatchEnergyDecay(ResponseLoss):
         return torch.sqrt((difference**2).mean())
 
 
-class MatchEnergyDecayRelief(ResponseLoss):
-    """RMS dB error of the per-bin energy decay relief against a reference.
-
-    The full-resolution sibling of :class:`MatchEnergyDecay`: every STFT bin
-    gets its own Schroeder decay curve instead of being pooled into octave
-    bands, so a local resonance's decay is fit on its own rather than diluted
-    by the rest of its band. The cost is variance -- a single bin sees far less
-    energy per frame than a whole band, so the curve is noisier to fit; reach
-    for :class:`MatchEnergyDecay` unless that resolution is worth it.
-
-    Parameters
-    ----------
-    target : array_like
-        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
-        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
-        ``nfft``.
-    window, hop : int
-        STFT window and hop in samples for the per-bin energies.
-    floor_db : float
-        Only the part of each bin's curve where the **target** is still above
-        this level is compared; see :class:`MatchEnergyDecay`.
-    """
-
-    def __init__(
-        self,
-        target: Any,
-        *,
-        window: int = 2048,
-        hop: int | None = None,
-        floor_db: float = -45.0,
-    ) -> None:
-        self.window = int(window)
-        self.hop = int(hop) if hop is not None else int(window) // 4
-        self.floor_db = float(floor_db)
-        self._target = _CachedTarget(target)
-        self._reference: torch.Tensor | None = None
-        self._key: tuple[Any, ...] | None = None
-        self._mask: torch.Tensor | None = None
-
-    def check(self, model: Any) -> None:
-        nfft = int(model.nfft)
-        if self.window > nfft:
-            raise ValueError(
-                f"{type(self).__name__} window ({self.window}) is longer than the "
-                f"model's nfft ({nfft}); there is no decay to read."
-            )
-
-    def _edr_db(self, h: torch.Tensor) -> torch.Tensor:
-        """``(n_channels, n_freq, n_frames)`` normalized per-bin Schroeder curves in dB."""
-        import torch
-
-        # (n_samples, n_out, n_in) -> (n_out * n_in, n_samples), the batch layout
-        # torch.stft wants.
-        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
-        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
-        spectrum = torch.stft(
-            x,
-            n_fft=self.window,
-            hop_length=self.hop,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        power = spectrum.real**2 + spectrum.imag**2  # (batch, freq, frames)
-        edc = torch.flip(torch.cumsum(torch.flip(power, [-1]), dim=-1), [-1])
-        eps = torch.finfo(edc.dtype).tiny
-        return 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        key = response_key(response)
-        if self._reference is None or self._key != key:
-            self._key = key
-            self._reference = self._edr_db(self._target(response))
-            self._mask = self._reference > self.floor_db
-            if not bool(self._mask.any()):
-                raise ValueError(
-                    f"the reference never rises above floor_db={self.floor_db}; "
-                    "it carries no decay to fit"
-                )
-        difference = (self._edr_db(response.h) - self._reference)[self._mask]
-        return torch.sqrt((difference**2).mean())
-
-
 def _reverse_cumsum(x: torch.Tensor, axis: int) -> torch.Tensor:
     """Cumulative sum running from the far end of ``axis`` back towards the near one."""
     import torch
@@ -305,7 +220,7 @@ class MatchCumulativeEnergy(ResponseLoss):
         Hard floor on the normalized surface, in energy dB below the reference's
         total energy. It bounds the gradient of the compression near zero and
         keeps the fit off the numerical floor of the render; ``clamp`` means no
-        gradient flows from anything below it.
+        gradient flows from anything below it.n
     frequency : {"descending", "ascending", "both"}
         Which way the frequency cumulation runs, and with it the loss's balance
         between the ends of the spectrum. The default ``"descending"`` (the
