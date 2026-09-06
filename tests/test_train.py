@@ -3,6 +3,13 @@
 import numpy as np
 import pytest
 
+# Force PyTorch to use CPU only for the test suite
+import torch
+if hasattr(torch, "set_default_device"):
+    torch.set_default_device("cpu")
+# Disable CUDA detection so downstream libraries (e.g., flamo) stay on CPU
+torch.cuda.is_available = lambda: False
+
 pytest.importorskip("torch")
 pytest.importorskip("flamo")
 pytest.importorskip("auraloss")
