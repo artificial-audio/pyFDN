@@ -11,13 +11,18 @@ from .spectral import (
     FlatMagnitude,
     FlatSpectrogram,
     MatchMagnitude,
+    MatchMelMagnitude,
     MatchMelSpectrogram,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
+    SpectralFlatness,
 )
 from .temporal import (
     Energy,
     MatchCumulativeEnergy,
     MatchEnergyDecay,
+    MatchEnergyDecayRelief,
     MatchImpulseResponse,
 )
 
@@ -32,11 +37,16 @@ __all__ = [
     "FlatMagnitude",
     "AsymmetricFlatMagnitude",
     "FlatSpectrogram",
+    "SpectralFlatness",
     "MatchMagnitude",
+    "MatchPhase",
+    "MatchPhaseSpectrogram",
+    "MatchMelMagnitude",
     "MatchSpectrogram",
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
     "MatchEnergyDecay",
+    "MatchEnergyDecayRelief",
     "MatchCumulativeEnergy",
     "Energy",
     # parameter losses
