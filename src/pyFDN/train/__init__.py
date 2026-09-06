@@ -54,6 +54,7 @@ from .losses import (
 
 from .features import (
     mimo_rir_eigenvalues_per_frequency,
+    energy_decay_curve,
 ) 
 
 from .params import ParamRef, param, params
@@ -106,4 +107,5 @@ __all__ = [
     "MatchSNR", 
     # features
     "mimo_rir_eigenvalues_per_frequency",
+    "energy_decay_curve",
 ]

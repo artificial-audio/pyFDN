@@ -191,6 +191,7 @@ __all__ = [
     "L2",
     # features
     "mimo_rir_eigenvalues_per_frequency",
+    "energy_decay_curve",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -496,6 +497,7 @@ from .train import (
 # features
 from .train import (
     mimo_rir_eigenvalues_per_frequency,
+    energy_decay_curve,    
     )
 
 # state-space translators
