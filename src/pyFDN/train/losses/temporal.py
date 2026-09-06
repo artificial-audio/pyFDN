@@ -358,17 +358,18 @@ class MatchCumulativeEnergy(ResponseLoss):
 class AuralossResponseLoss(ResponseLoss):
     r"""Adapter to use Auraloss time-domain loss functions in pyFDN.
 
-        Handles three main differences:
-        1. **Interface**: Wraps Auraloss's ``loss(pred, target)`` into pyFDN's ``loss(response)``.
-        2. **Target Setup**: Automatically matches target length, device, and data type using :class:`_CachedTarget`.
-        3. **Tensor Shape**: Converts pyFDN's ``(time, out, in)`` layout to Auraloss's ``(batch, channels, time)``.
-        Parameters
-        ----------
-        target : Any
-            Reference impulse response (NumPy array, PyTorch tensor, or list).
-        loss : torch.nn.Module
-            An Auraloss loss module.
-        """
+    Handles three main differences:
+    1. **Interface**: Wraps Auraloss's ``loss(pred, target)`` into pyFDN's ``loss(response)``.
+    2. **Target Setup**: Automatically matches target length, device, and data type using :class:`_CachedTarget`.
+    3. **Tensor Shape**: Converts pyFDN's ``(time, out, in)`` layout to Auraloss's ``(batch, channels, time)``.
+    Parameters
+    ----------
+    target : Any
+        Reference impulse response (NumPy array, PyTorch tensor, or list).
+    loss : torch.nn.Module
+        An Auraloss loss module.
+    """
+
     @staticmethod
     def _to_auraloss_layout(h: torch.Tensor, n_samples: int) -> torch.Tensor:
         """Convert pyFDN's (n_samples, n_out, n_in) to Auraloss's (batch, 1, time)."""

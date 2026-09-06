@@ -457,6 +457,7 @@ from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
+# features
 from .train import (
     L1,
     L2,
@@ -468,17 +469,17 @@ from .train import (
     FlatSpectrogram,
     Loss,
     MatchCumulativeEnergy,
+    MatchDC,
     MatchEnergyDecay,
+    MatchESR,
     MatchImpulseResponse,
+    MatchLogCosh,
     MatchMagnitude,
     MatchMelSpectrogram,
-    MatchSpectrogram,
-    MatchDC,
-    MatchESR,
-    MatchLogCosh,
     MatchSDSDR,
     MatchSISDR,
     MatchSNR,
+    MatchSpectrogram,
     OutputEQ,
     ParameterLoss,
     ParamRef,
@@ -489,7 +490,9 @@ from .train import (
     TrainLog,
     build_fdn,
     build_set_decay,
+    energy_decay_curve,
     impulse_excitation,
+    mimo_rir_eigenvalues_per_frequency,
     model_response,
     param,
     params,
@@ -497,11 +500,6 @@ from .train import (
     trainable_from_build,
     trainable_from_preset,
 )
-# features
-from .train import (
-    mimo_rir_eigenvalues_per_frequency,
-    energy_decay_curve,    
-    )
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo

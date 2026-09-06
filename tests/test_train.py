@@ -1495,7 +1495,9 @@ def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
     moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
     assert float(loss(moved)) == pytest.approx(float(make_loss(reference)(moved)))
 
+
 # --- auraloss matching losses -----------------------------------------------
+
 
 @pytest.mark.parametrize(
     "loss_cls",
@@ -1504,10 +1506,10 @@ def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
         pyFDN.MatchSISDR,
     ],
 )
-
 def test_auraloss_reused_on_new_response_rebuilds_reference(loss_cls):
     """Ensure _CachedTarget dynamically handles length, device, and dtype changes."""
     import torch
+
     from pyFDN.train import Response
 
     fs = 48000.0
@@ -1527,13 +1529,14 @@ def test_auraloss_reused_on_new_response_rebuilds_reference(loss_cls):
     assert np.isfinite(val2)
     assert val2 == pytest.approx(float(loss_cls(reference)(moved).detach()))
 
+
 @pytest.mark.parametrize(
     "loss_cls",
     [
         pyFDN.MatchESR,
         pyFDN.MatchSISDR,
     ],
-)    
+)
 def test_auraloss_trains_fdn_and_propagates_gradients(loss_cls):
     """Ensure train_fdn successfully steps and updates trainable parameters."""
     nfft = 2**11

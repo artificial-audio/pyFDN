@@ -5,9 +5,8 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
-from pyFDN import mimo_rir_eigenvalues_per_frequency
-from pyFDN import energy_decay_curve
 
+from pyFDN import energy_decay_curve, mimo_rir_eigenvalues_per_frequency
 
 
 def test_mimo_eigenvalues_identity_system():

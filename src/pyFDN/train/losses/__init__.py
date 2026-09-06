@@ -17,10 +17,10 @@ from .spectral import (
 from .temporal import (
     Energy,
     MatchCumulativeEnergy,
-    MatchEnergyDecay,
-    MatchImpulseResponse,
     MatchDC,
+    MatchEnergyDecay,
     MatchESR,
+    MatchImpulseResponse,
     MatchLogCosh,
     MatchSDSDR,
     MatchSISDR,

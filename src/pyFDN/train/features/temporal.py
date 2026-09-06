@@ -43,9 +43,7 @@ def energy_decay_curve(
         raise TypeError(f"Expected torch.Tensor, got {type(ir).__name__}")
 
     if not ir.is_floating_point():
-        raise TypeError(
-            f"Expected real floating-point tensor, got {ir.dtype}"
-        )
+        raise TypeError(f"Expected real floating-point tensor, got {ir.dtype}")
 
     energy = ir.pow(2)
 
