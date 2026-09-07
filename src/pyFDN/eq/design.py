@@ -30,7 +30,11 @@ EQ_DESIGNS = get_args(EQDesign)
 def decay_to_geq(
     rt: Any, delays: Any, fs: float, *, return_design: bool = False
 ) -> Any:
-    """Design attenuation GEQs from ten reverberation times in seconds."""
+    """Design attenuation GEQs from ten reverberation times in seconds.
+
+    ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES`
+    (31.25 Hz through 16 kHz).
+    """
     gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
     sos = gain_to_geq(gain_db, fs)
     return with_design(
@@ -41,8 +45,9 @@ def decay_to_geq(
 
 
 def _shelf_crossover_omega(fs: float, crossover: float | None) -> float:
+    # bilinear prewarp tan(ω/2) is singular at Nyquist
     crossover_hz = fs / 8.0 if crossover is None else float(crossover)
-    return min(crossover_hz, fs / 5.0) / fs * 2.0 * math.pi
+    return min(crossover_hz, fs / 2.1) / fs * 2.0 * math.pi
 
 
 def gain_to_first_order_shelf(

@@ -91,11 +91,9 @@ def _(mo):
 
 @app.cell
 def _(build, dataclasses, np, pyFDN):
-    # Target RT at the 10 GEQ bands (seconds)
+    # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
-    # decay_to_geq uses the 8 interior RT values (bands 1..8)
-    # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
     sos_absorption = pyFDN.decay_to_geq(target_rt, build.delays, build.fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
@@ -183,7 +181,7 @@ def _(mo):
 def _(fs, go, pyFDN, rir, target_rt):
     rt_est, f_centre = pyFDN.estimate_rt_bands(rir, fs)
 
-    # target_rt[1:9] covers the same 8 octave bands (63–8k Hz)
+    # target_rt[1:9] covers the same 8 octave bands (62.5 Hz – 8 kHz)
     fig_rt = go.Figure()
     fig_rt.add_trace(
         go.Scatter(

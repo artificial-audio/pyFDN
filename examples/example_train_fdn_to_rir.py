@@ -104,9 +104,9 @@ def _(np, torch):
     # re-measures. Ten numbers reach a 35% lower loss than two and a *worse* mean
     # RT error, by being wrong in completely different bands. Budget five times
     # the wall clock for it.
-    #   from pyFDN.eq import CENTER_FREQUENCIES
+    #   from pyFDN.eq import COMMAND_FREQUENCIES
     #   design, n_sections = "graphic_eq", 11
-    #   param_frequencies = np.concatenate(([1.0], CENTER_FREQUENCIES, [fs / 2]))
+    #   param_frequencies = COMMAND_FREQUENCIES
     return design, device, dtype, fs, n_sections, param_frequencies
 
 
