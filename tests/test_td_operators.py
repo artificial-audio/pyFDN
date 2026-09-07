@@ -69,7 +69,7 @@ def test_identity() -> None:
 
     # Test
     out_sig_ref = in_sig @ I_ref.T
-    out_sig_td = I_td.filter(in_sig)
+    out_sig_td = I_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -93,7 +93,7 @@ def test_gain() -> None:
 
     # Test
     out_sig_ref = in_sig @ gain_ref.T
-    out_sig_td = gain_td.filter(in_sig)
+    out_sig_td = gain_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -134,7 +134,7 @@ def test_delay() -> None:
         delay_ref.advance(block_size)
 
         # td
-        out_sig_td[start : start + block_size, :] = delay_td.filter(block_in)
+        out_sig_td[start : start + block_size, :] = delay_td.process_block(block_in)
 
         start += block_size
 
@@ -175,7 +175,7 @@ def test_sosbank() -> None:
     absorption_td = td.SOSBank(sos)
 
     # Test
-    out_sig_td = absorption_td.filter(in_sig)
+    out_sig_td = absorption_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
 
 
@@ -201,12 +201,12 @@ def test_sosbank_block_consistency_and_reset() -> None:
 
     # td engine
     absorption_td = td.SOSBank(sos)
-    out_sig_one_shot = absorption_td.filter(in_sig)
+    out_sig_one_shot = absorption_td.process_block(in_sig)
 
     absorption_td.reset()
     out_sig_blockwise = np.vstack(
         [
-            absorption_td.filter(in_sig[i : i + block])
+            absorption_td.process_block(in_sig[i : i + block])
             for i in range(0, n_samples, block)
         ]
     )
@@ -238,7 +238,7 @@ def test_matrixfir() -> None:
 
     # td engine
     matrixFIR_td = td.MatrixFIR(coeffs)
-    out_sig_td = matrixFIR_td.filter(in_sig)
+    out_sig_td = matrixFIR_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-10, rtol=0)
@@ -260,11 +260,11 @@ def test_matrixfir_block_consistency_and_reset() -> None:
 
     # td engine
     matrixFIR_td = td.MatrixFIR(coeffs)
-    out_sig_one_shot = matrixFIR_td.filter(in_sig)
+    out_sig_one_shot = matrixFIR_td.process_block(in_sig)
 
     matrixFIR_td.reset()
     out_sig_blockwise = np.vstack(
-        [matrixFIR_td.filter(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [matrixFIR_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
     )
 
     # Test
@@ -291,8 +291,8 @@ def test_matrixconv() -> None:
     matrixConv_td = td.MatrixConvolver(coeffs)
 
     # filter signal
-    out_sig_ref = matrixFIR_td.filter(in_sig)
-    out_sig_td = matrixConv_td.filter(in_sig)
+    out_sig_ref = matrixFIR_td.process_block(in_sig)
+    out_sig_td = matrixConv_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-10, rtol=0)
@@ -332,7 +332,7 @@ def test_tvmatrix() -> None:
         out_sig_ref[n] = rotation @ in_sig[n]
 
     # filter signal
-    out_sig_td = tvmatrix_td.filter(in_sig)
+    out_sig_td = tvmatrix_td.process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_ref, out_sig_td, atol=1e-12, rtol=0)
@@ -356,7 +356,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     in_sig = _noise(rng=rng, length=n_samples, channels=N)
 
     # filter signal
-    out_sig = tvmatrix_td.filter(in_sig)
+    out_sig = tvmatrix_td.process_block(in_sig)
 
     # Test: orthogonal -> per-sample norm preserved
     np.testing.assert_allclose(
@@ -370,7 +370,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     assert tvmatrix_td.sample_index == n_samples
     tvmatrix_td.reset()
     assert tvmatrix_td.sample_index == 0
-    np.testing.assert_allclose(tvmatrix_td.filter(in_sig), out_sig, atol=1e-12, rtol=0)
+    np.testing.assert_allclose(tvmatrix_td.process_block(in_sig), out_sig, atol=1e-12, rtol=0)
 
 
 def test_tvmatrix_rejects_odd_channel_count() -> None:
@@ -403,19 +403,19 @@ def test_absolute_value() -> None:
     abs_td = td.AbsoluteValue(channels=N)
 
     # Test: memoryless and stateless, so blockwise equals one-shot
-    out_sig_td = abs_td.filter(in_sig)
+    out_sig_td = abs_td.process_block(in_sig)
     np.testing.assert_allclose(out_sig_td, np.abs(in_sig), atol=1e-12, rtol=0)
     assert np.all(out_sig_td >= 0.0)
 
     block = 128
     out_sig_blockwise = np.vstack(
-        [abs_td.filter(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [abs_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
     )
     np.testing.assert_allclose(out_sig_blockwise, out_sig_td, atol=1e-12, rtol=0)
 
     # Test: channel count is enforced, like every other operator
     with pytest.raises(ValueError, match="expects 4 input channels"):
-        abs_td.filter(_noise(rng=rng, length=16, channels=N + 1))
+        abs_td.process_block(_noise(rng=rng, length=16, channels=N + 1))
 
 
 # ============================================================
@@ -456,11 +456,14 @@ def test_shimmer_operator_block_consistency_and_reset(name: str) -> None:
 
     # td engine
     operator = _shimmer_operators(N, fs)[name]
-    out_sig_one_shot = operator.filter(in_sig)
+    out_sig_one_shot = operator.process_block(in_sig)
 
     operator.reset()
     out_sig_blockwise = np.vstack(
-        [operator.filter(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [
+            operator.process_block(in_sig[i : i + block])
+            for i in range(0, n_samples, block)
+        ]
     )
 
     # Test
@@ -471,7 +474,7 @@ def test_shimmer_operator_block_consistency_and_reset(name: str) -> None:
 
     # Test: channel count is enforced, like every other operator
     with pytest.raises(ValueError, match="expects 4 input channels"):
-        operator.filter(_noise(rng=rng, length=16, channels=N + 1))
+        operator.process_block(_noise(rng=rng, length=16, channels=N + 1))
 
 
 def test_dc_blocker_matches_difference_equation() -> None:
@@ -493,13 +496,13 @@ def test_dc_blocker_matches_difference_equation() -> None:
         out_sig_ref[n] = in_sig[n] - prev_x + R * prev_y
 
     # td engine
-    out_sig_td = td.DCBlocker(N, R=R).filter(in_sig)
+    out_sig_td = td.DCBlocker(N, R=R).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-10, rtol=0)
 
     # Test: a constant input decays away, i.e. DC really is rejected
-    settled_dc = td.DCBlocker(N, R=R).filter(np.ones((2000, N)))[-1]
+    settled_dc = td.DCBlocker(N, R=R).process_block(np.ones((2000, N)))[-1]
     assert np.abs(settled_dc).max() < 1e-6
 
 
@@ -519,7 +522,7 @@ def test_dc_blocker_compensation_gain_is_bounded() -> None:
 
     # td engine
     blocker = td.DCBlocker(1, correct_loss=True, max_gain=max_gain)
-    out_sig_td = blocker.filter(in_sig)
+    out_sig_td = blocker.process_block(in_sig)
 
     # Test
     assert blocker.gain.max() <= max_gain
@@ -539,7 +542,7 @@ def test_controllable_full_wave_rect_blocks_the_dc_it_injects() -> None:
 
     # td engine
     rect_td = td.ControllableFullWaveRect(N, alpha=1.0, active_channels=[0])
-    out_sig_td = rect_td.filter(in_sig)
+    out_sig_td = rect_td.process_block(in_sig)
 
     # Test: |x| has a large positive mean, the operator's output does not
     assert np.abs(in_sig[:, 0]).mean() > 0.5
@@ -559,7 +562,7 @@ def test_sdfd_is_a_unit_delay_at_zero_depth() -> None:
     out_sig_ref = np.vstack([np.zeros((1, N)), in_sig[:-1]])
 
     # td engine
-    out_sig_td = td.SDFD(N, d=0.0, active_channels=[0, 1]).filter(in_sig)
+    out_sig_td = td.SDFD(N, d=0.0, active_channels=[0, 1]).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-12, rtol=0)
@@ -582,7 +585,7 @@ def test_ring_modulator_matches_sine_product() -> None:
     out_sig_ref[:, :1] *= mod_amp * np.sin(2 * np.pi * mod_freq * n / fs)
 
     # td engine
-    out_sig_td = td.RingModulator(N, mod_freq, mod_amp, fs, [0]).filter(in_sig)
+    out_sig_td = td.RingModulator(N, mod_freq, mod_amp, fs, [0]).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-12, rtol=0)
@@ -605,7 +608,7 @@ def test_pitch_shifters_transpose_a_sine(operator_name: str, cents: float) -> No
         shifter: td.TimeOperator = td.PitchShift(1, 8192, 2048, cents, fs, [0])
     else:
         shifter = td.GranularPitchShift(1, 8192, 2048, cents, [0], seed=0)
-    out_sig_td = shifter.filter(in_sig)
+    out_sig_td = shifter.process_block(in_sig)
 
     # Test: the dominant partial sits at f0 * 2 ** (cents / 1200), give or take
     # the spread the window/grain modulation adds around it
@@ -629,9 +632,9 @@ def test_granular_pitch_shift_seed_controls_the_grain_positions() -> None:
 
     # td engine
     def render(seed: int) -> np.ndarray:
-        return td.GranularPitchShift(1, 8192, 2048, 700.0, [0], seed=seed).filter(
-            in_sig
-        )
+        return td.GranularPitchShift(
+            1, 8192, 2048, 700.0, [0], seed=seed
+        ).process_block(in_sig)
 
     # Test
     np.testing.assert_array_equal(render(0), render(0))

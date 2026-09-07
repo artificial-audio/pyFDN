@@ -447,9 +447,9 @@ def _(mo):
     mo.md(r"""
     ### Run audio through it
 
-    `process_fdn` is the same recursion, driven by a signal instead of an impulse.
-    The absorption filters go into the `post_delay` hook — the point in the loop
-    just after the delay outputs, which is where `build_to_impz` put them too.
+    `process_fdn` turns the complete build into a `td` graph and drives it with
+    a signal instead of an impulse. The build's absorption filters become
+    `SOSBank` nodes at the `post_delay` hook, just after the delay outputs.
 
     Pad the input with silence, or the tail is cut off where the signal ends.
     """)
@@ -457,19 +457,11 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td):
+def _(build, fs, mo, np, pyFDN):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_fdn(
-        x,
-        delays,
-        A,
-        B,
-        C,
-        D,
-        post_delay=td.SOSBank(absorption),  # absorption inside the loop
-    )
+    wet = pyFDN.process_fdn(x, build)
 
     mo.hstack(
         [
@@ -485,7 +477,7 @@ def _(mo):
     mo.md(r"""
     ## Three hooks, one loop
 
-    `process_fdn` takes a filter at three points, and each one is an entire family
+    `pyFDN.process_dss` takes an operator at three points, and each one is an entire family
     of reverbs:
 
     | hook | where it sits | what it buys |
@@ -494,7 +486,7 @@ def _(mo):
     | `post_matrix` | after the feedback matrix | time variation, non-linearity |
     | `post_output` | on the wet signal | output EQ, voicing |
 
-    A hook is any object with a `.filter(block)` method, so your own DSP drops
+    A hook is any object with a `.process_block(block)` method, so your own DSP drops
     straight in. The cell below is the same FDN with a moving matrix in the loop:
     `TimeVaryingMatrix` stays orthogonal at every sample, so the decay is
     unchanged — but the modes never sit still, and the metallic ringing of a
@@ -506,7 +498,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
     np.random.seed(11)  # TimeVaryingMatrix draws its phases from the global stream
-    wet_moving = pyFDN.process_fdn(
+    wet_moving = pyFDN.process_dss(
         x,
         delays,
         A,
