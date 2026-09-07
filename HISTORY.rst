@@ -5,6 +5,18 @@ History
 Unreleased
 ----------
 
+* **Breaking:** the ten-band graphic EQ's command grid is now the octave
+  centres 31.25 Hz through 16 kHz, with nearest-neighbour hold below 31.25 Hz
+  and above 16 kHz, instead of dummy DC and Nyquist anchors at 1 Hz and
+  ``fs``. The 10-vector of ``gain_to_geq`` / ``decay_to_geq`` /
+  ``AttenuationFilter`` / ``OutputEQ`` targets is ordered on
+  ``pyFDN.eq.COMMAND_FREQUENCIES``. The 11-section cascade itself is
+  unchanged.
+* Fix the first-order shelf bilinear prewarp: ``first_order_shelf_biquad``
+  used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
+  twice the named frequency. High crossovers are now clamped at ``fs/2.1``
+  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``.
+
 * Type every DSS matrix parameter (``A``/``B``/``C``/``D`` and the ``b``/``c``/``d``
   gains in ``dss_to_ss``) as ``ArrayLike`` instead of ``ndarray`` across
   ``dss_to_flamo``, ``dss_to_impz``, ``dss_to_td``, ``dss_to_tf``, ``dss_to_ss``,

@@ -100,7 +100,7 @@ def _(mo):
     mo.md(r"""
     ## Define FDN and absorption filters
 
-    A 16-delay FDN with a random orthogonal feedback matrix. The target RT at the 10 GEQ design bands (DC, 63 Hz … 8 kHz, Nyquist) extends the octave band estimates, shortening the lowest and the two highest bands (air and boundary absorption shortens the decay at the spectral edges).
+    A 16-delay FDN with a random orthogonal feedback matrix. The target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz) extends the octave band estimates, shortening the lowest and the two highest bands (air and boundary absorption shortens the decay at the spectral edges).
     """)
     return
 
@@ -183,7 +183,7 @@ def _(mo):
     mo.md(r"""
     ## Output equalization
 
-    The initial level of the unequalized FDN is roughly flat; an output GEQ shapes it to the spectral envelope of the target RIR. The GEQ target is the band-wise dB difference between target and FDN initial levels, with extra attenuation at the extrapolated DC and Nyquist bands.
+    The initial level of the unequalized FDN is roughly flat; an output GEQ shapes it to the spectral envelope of the target RIR. The GEQ target is the band-wise dB difference between target and FDN initial levels, with extra attenuation at the extrapolated 31.25 Hz and 16 kHz bands.
 
     The equalizer is placed at the end of the FLAMO graph (`output_filter`), so the final model renders the complete RIR in one pass: input → B → [delays → SOS → A] → C → GEQ → output.
     """)

@@ -20,6 +20,11 @@ from ._design_record import design_value, with_design
 from .biquads import highshelf_biquad, lowshelf_biquad, peaking_biquad
 from .probe_sos import probe_sos
 
+# Ten command frequencies: octave centres 31.25 Hz through 16 kHz. The 10-vector
+# of GEQ targets is ordered on this grid. Below 31.25 Hz and above 16 kHz the
+# fitted response holds the nearest command value, rather than ramping toward
+# a DC or Nyquist dummy band.
+COMMAND_FREQUENCIES = 16000.0 / 2.0 ** np.arange(9, -1, -1)
 CENTER_FREQUENCIES = np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000], float)
 SHELVING_CROSSOVER = np.array([46.0, 11360.0])
 BANDWIDTH_R = 2.7
@@ -72,13 +77,14 @@ def _geq_sections(
 @lru_cache(maxsize=8)
 def _geq_control_problem(fs: float) -> tuple[np.ndarray, np.ndarray]:
     control_frequencies = np.round(np.logspace(0, np.log10(fs / 2.1), _NUM_CONTROL + 1))
-    target_frequencies = np.concatenate([[1.0], CENTER_FREQUENCIES, [float(fs)]])
     interpolation = np.empty((len(control_frequencies), N_GRAPHIC_EQ_BANDS))
     for band in range(N_GRAPHIC_EQ_BANDS):
         unit = np.zeros(N_GRAPHIC_EQ_BANDS)
         unit[band] = 1.0
+        # np.interp holds the endpoint values outside the command range, which
+        # is the nearest-neighbour extrapolation of the target curve.
         interpolation[:, band] = np.interp(
-            control_frequencies, target_frequencies, unit
+            control_frequencies, COMMAND_FREQUENCIES, unit
         )
 
     center_omega, shelving_omega = _band_omega(fs)
@@ -107,8 +113,9 @@ def gain_to_geq(
 ) -> Any:
     """Design a ten-band graphic EQ from amplitudes in dB.
 
-    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered as
-    DC, 63 Hz through 8 kHz, and Nyquist.
+    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered on
+    :data:`COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz). Below the lowest
+    band and above the highest, the fitted response holds the nearest command.
     """
     xp = array_namespace(gain_db)
     if xp is np:
@@ -142,8 +149,9 @@ def gain_to_bounded_geq(
     The flat-gain section remains unbounded; each of the ten frequency-shaped
     sections is limited to ``max_command_gain_db`` in either direction.
 
-    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered as
-    DC, 63 Hz through 8 kHz, and Nyquist.
+    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered on
+    :data:`COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz). Below the lowest
+    band and above the highest, the fitted response holds the nearest command.
     """
     if type(gain_db).__module__.split(".", 1)[0] == "torch":
         raise TypeError("gain_to_bounded_geq is NumPy-only")
@@ -185,6 +193,7 @@ def gain_to_bounded_geq(
 __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
+    "COMMAND_FREQUENCIES",
     "N_GRAPHIC_EQ_BANDS",
     "N_GRAPHIC_EQ_SECTIONS",
     "SHELVING_CROSSOVER",

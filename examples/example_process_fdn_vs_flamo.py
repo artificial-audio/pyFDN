@@ -81,7 +81,7 @@ def _(mo):
 
 @app.cell
 def _(delays, fs, np, pyFDN):
-    # Target RT at the 10 GEQ bands (seconds), decaying towards high frequencies
+    # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz), decaying towards high frequencies
     target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
 
     sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)

@@ -323,8 +323,9 @@ def _(mo):
     Real rooms absorb high frequencies faster than low ones, so a single number
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
-    `decay_to_geq` designs those filters from a target curve at ten bands (DC,
-    the eight octave bands 63 Hz – 8 kHz, and Nyquist).
+    `decay_to_geq` designs those filters from a target curve at ten octave
+    centres (31.25 Hz – 16 kHz). Below 31.25 Hz and above 16 kHz the fitted
+    response holds the nearest command.
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
     the plain lossless `A` — all the decay is now in the filters. Bundling the
