@@ -402,7 +402,7 @@ def _(fs, go, np, render):
         )
         return starts / fs, env
 
-    g_challenge = 1.6
+    g_challenge = 1.8
     rec_static = render(time_varying=False, g=g_challenge)
     rec_varying = render(time_varying=True, g=g_challenge)
 
