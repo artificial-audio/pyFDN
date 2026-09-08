@@ -40,11 +40,8 @@ from .losses import (
     FlatSpectrogram,
     Loss,
     MatchCumulativeEnergy,
-    MatchDC,
     MatchEnergyDecay,
-    MatchESR,
     MatchImpulseResponse,
-    MatchLogCosh,
     MatchMagnitude,
     MatchMelMagnitude,
     MatchMelSpectrogram,
@@ -55,9 +52,6 @@ from .losses import (
     ResponseLoss,
     Sparsity,
     SpectralFlatness,
-    MatchSDSDR,
-    MatchSISDR,
-    MatchSNR,
 )
 from .params import ParamRef, param, params
 from .response import Response, impulse_excitation, model_response
@@ -105,12 +99,6 @@ __all__ = [
     "Sparsity",
     "L1",
     "L2",
-    "MatchDC",
-    "MatchESR",
-    "MatchLogCosh",
-    "MatchSDSDR",
-    "MatchSISDR",
-    "MatchSNR",
     # features
     "mimo_rir_eigenvalues_per_frequency",
     "energy_decay_curve",
