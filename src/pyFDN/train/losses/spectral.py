@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .match import CircularDistance, Magnitude, Match, Mean, Phase, SquaredError
+
 # How the output channels of |H| are combined before comparing with the target.
 ChannelReduction = Literal["sum", "mean", "none"]
 
@@ -323,50 +325,28 @@ class FlatSpectrogram(ResponseLoss):
         return total / len(self.nfft)
 
 
-class MatchMagnitude(ResponseLoss):
-    """Mean squared error of :math:`|H|` against a reference impulse response.
-
-    The magnitude-only sibling of :class:`MatchImpulseResponse`: fits the
-    spectral envelope while ignoring phase.
-    """
-
+class MatchMagnitude(Match):
+    """Mean squared error of :math:`|H|` against a reference impulse response."""
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
-        self.channels = channels
         _reduce_channels_check(channels)
-        self._target = _CachedTarget(target)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        reference = torch.fft.rfft(self._target(response), dim=0).abs()
-        return torch.nn.functional.mse_loss(
-            _reduce_channels(response.magnitude, self.channels),
-            _reduce_channels(reference, self.channels),
+        super().__init__(
+            target=target,
+            feature=Magnitude(channels=channels),
+            distance=SquaredError(),
+            reduction=Mean(),
         )
 
 
-class MatchPhase(ResponseLoss):
-    r"""Circular distance of :math:`\angle H` against a reference impulse response.
-
-    The phase-only sibling of :class:`MatchMagnitude`: fits the spectral phase
-    while ignoring magnitude. The distance is
-    :math:`1 - \cos(\angle H - \angle H_\text{ref})` bin by bin -- 0 where the
-    phases agree and up to 2 where they oppose -- rather than a raw
-    difference, which would be discontinuous across the :math:`\pm\pi` wrap.
-    """
-
+class MatchPhase(Match):
+    r"""Circular distance of :math:`\angle H` against a reference impulse response."""
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
-        self.channels = channels
         _reduce_channels_check(channels)
-        self._target = _CachedTarget(target)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        reference_phase = torch.angle(torch.fft.rfft(self._target(response), dim=0))
-        phase = torch.angle(response.spectrum)
-        distance = 1.0 - torch.cos(phase - reference_phase)
-        return _reduce_channels(distance, self.channels).mean()
+        super().__init__(
+            target=target,
+            feature=Phase(channels=channels),
+            distance=CircularDistance(),
+            reduction=Mean(),
+        )
 
 
 class MatchPhaseSpectrogram(ResponseLoss):

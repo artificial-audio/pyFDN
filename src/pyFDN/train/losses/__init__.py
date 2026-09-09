@@ -25,7 +25,27 @@ from .temporal import (
     MatchImpulseResponse,
 )
 
+from .match import (
+    Match,
+    Mean,
+    Sum,
+    SquaredError,
+    CircularDistance,
+    Waveform,
+    Magnitude,
+    Phase,
+)
+
 __all__ = [
+    # match
+    "Match",
+    "Mean",
+    "Sum",
+    "SquaredError",
+    "CircularDistance",
+    "Waveform",
+    "Magnitude",
+    "Phase",
     # composition
     "Loss",
     "ResponseLoss",

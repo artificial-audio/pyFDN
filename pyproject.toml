@@ -46,7 +46,6 @@ examples = [
     "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
     "pyroomacoustics",  # shoebox image-source RIRs for example_reverberation_enhancement
-    "auraloss>=0.4.0",
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
