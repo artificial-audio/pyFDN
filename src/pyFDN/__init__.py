@@ -186,6 +186,9 @@ __all__ = [
     "Sparsity",
     "L1",
     "L2",
+    # features
+    "mimo_rir_eigenvalues_per_frequency",
+    "energy_decay_curve",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -448,6 +451,7 @@ from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
+# features
 from .train import (
     L1,
     L2,
@@ -474,7 +478,9 @@ from .train import (
     TrainLog,
     build_fdn,
     build_set_decay,
+    energy_decay_curve,
     impulse_excitation,
+    mimo_rir_eigenvalues_per_frequency,
     model_response,
     param,
     params,
