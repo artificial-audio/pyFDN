@@ -61,7 +61,18 @@ def _():
     # length is about 6 MB of cell output, inside marimo's 8 MB default cap
     # (``output_max_bytes``); six 6-second players would be over twice that.
     AUDIO_SECONDS = 4.0
-    return AUDIO_SECONDS, correlate, fs, go, hadamard, np, pyFDN, square, td, time
+    return (
+        AUDIO_SECONDS,
+        correlate,
+        fs,
+        go,
+        hadamard,
+        np,
+        pyFDN,
+        square,
+        td,
+        time,
+    )
 
 
 @app.cell(hide_code=True)
@@ -193,6 +204,66 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    The clear advantage comes in play when we modulate the matrix per sample. A matrix-multiplication approach must rebuild the feedback matrix whenever any \(\theta_i\) changes, while the proposed algorithm only refreshes the affected \(2 \times 2\) kernel.
+
+    Below, \(\theta_{M-1}\) moves every sample, as in §4. The dense side is given its best NumPy form — all \(T\) matrices built at once, applied with one batched `matmul`.
+    """)
+    return
+
+
+@app.cell
+def _(mo, np, pyFDN, time):
+    _rng = np.random.default_rng(0)
+    _T, _reps = 2048, 5
+
+    def _dense_batched(signal, theta):
+        """All per-sample matrices built at once, applied with one batched matmul."""
+        _n, _M = theta.shape
+        _c, _s = np.cos(theta), np.sin(theta)
+        _P = np.ones((_n, 1, 1))
+        for _level in range(_M):
+            _K = np.empty((_n, 2, 2))
+            _K[:, 0, 0] = _c[:, _level]
+            _K[:, 0, 1] = -_s[:, _level]
+            _K[:, 1, 0] = _s[:, _level]
+            _K[:, 1, 1] = _c[:, _level]
+            _p = _P.shape[-1]
+            _P = np.einsum("bij,bkl->bikjl", _K, _P).reshape(_n, 2 * _p, 2 * _p)
+        return (_P @ signal[:, :, None])[:, :, 0]
+
+    def _mean_ms(fn):
+        fn()  # warm up
+        _runs = []
+        for _ in range(_reps):
+            _t0 = time.perf_counter()
+            fn()
+            _runs.append(time.perf_counter() - _t0)
+        return float(np.mean(_runs)) * 1e3
+
+    _rows = ["| N | dense (ms) | butterfly (ms) | speed-up |", "|---|---|---|---|"]
+    for _M in (3, 4, 5, 6):
+        _size = 2**_M
+        _x = _rng.standard_normal((_T, _size))
+        # Only theta_{M-1} moves, exactly as the modulation section drives it.
+        _theta = np.tile(_rng.uniform(-np.pi, np.pi, _M), (_T, 1))
+        _theta[:, _M - 2] += 0.4 * np.pi * np.sin(np.linspace(0, 40, _T))
+
+        assert np.allclose(
+            pyFDN.kronecker_transform(_x, _theta), _dense_batched(_x, _theta)
+        )
+        _dense_ms = _mean_ms(lambda x=_x, t=_theta: _dense_batched(x, t))
+        _fast_ms = _mean_ms(lambda x=_x, t=_theta: pyFDN.kronecker_transform(x, t))
+        _rows.append(
+            f"| {_size} | {_dense_ms:.1f} | {_fast_ms:.1f} | {_dense_ms / _fast_ms:.1f}x |"
+        )
+
+    mo.output.replace(mo.md("\n".join(_rows)))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 3. Stereo cross-coupling on θ_M
 
     Split the delay lines into two halves and give each half one stereo channel: the left input feeds lines 0–15 and is read back off them, the right input feeds lines 16–31. The outermost angle is then exactly the knob that decides how much the two sides hear of each other.
@@ -215,15 +286,24 @@ def _(fs, np, pyFDN):
     N_stereo = 32
     T60_stereo = 10.0  # seconds
 
-    _sorted_delays = pyFDN.sample_delay_lengths(
-        N_stereo,
+    _left_delays = pyFDN.sample_delay_lengths(
+        N_stereo // 2,
         (int(0.020 * fs), int(0.200 * fs)),
         coprime=True,
         sort=True,
-        rng=2026,
+        distribution="geometric",
+        rng=808,
+    )
+    _right_delays = pyFDN.sample_delay_lengths(
+        N_stereo // 2,
+        (int(0.020 * fs), int(0.200 * fs)),
+        coprime=True,
+        sort=True,
+        distribution="geometric",
+        rng=808,
     )
     # Deal alternately into the two halves so both span 20-200 ms.
-    delays_stereo = _sorted_delays.reshape(-1, 2).T.reshape(-1)
+    delays_stereo = np.hstack([_left_delays, _right_delays])
 
     absorption_stereo = np.diag(
         pyFDN.rt_to_gain_per_sample(T60_stereo, fs) ** delays_stereo
@@ -397,6 +477,7 @@ def _(correlate, coupling_percent, fs, go, mo, np, stereo_ir):
         xaxis_title="Time [s]",
         yaxis_title="IACC",
         yaxis_range=[0, 1],
+        xaxis_range=[0, 2],
         height=420,
         legend_title="coupling",
     )
@@ -465,7 +546,7 @@ def _(
         percent: pyFDN.process_fdn(
             stereo_note,
             delays_stereo,
-            pyFDN.kronecker_matrix(angles) @ absorption_stereo,
+            pyFDN.kronecker_matrix(angles, "rotation") @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
@@ -529,10 +610,10 @@ def _(mo):
 @app.cell
 def _(fs, np, pyFDN):
     N_mod = 16
-    T60_mod = 3.0  # seconds
+    T60_mod = 6.0  # seconds
 
     _sorted_delays = pyFDN.sample_delay_lengths(
-        N_mod, (int(0.020 * fs), int(0.200 * fs)), coprime=True, sort=True, rng=7
+        N_mod, (int(0.020 * fs), int(0.050 * fs)), coprime=True, sort=True, rng=303
     )
     delays_mod = _sorted_delays.reshape(-1, 2).T.reshape(-1)
 
