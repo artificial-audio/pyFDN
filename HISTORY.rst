@@ -5,6 +5,18 @@ History
 Unreleased
 ----------
 
+* ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
+  on. The loss only needs enough of the decay to steer on, while the octave-band
+  estimators need a longer measurement window, so the notebook trains at
+  ``nfft=2**16`` (1.37 s) and switches to ``2**17`` (2.73 s) with FLAMO's new
+  ``Shell.set_nfft`` before rendering. The step cost is linear in ``nfft``, so
+  shorter grid reduces training time. Each training-cell run resets the grid
+  before fitting. Requires ``flamo>=0.2.18``, where ``set_nfft`` was added.
+  The walkthrough now focuses on the implemented workflow and ends with
+  octave-band validation.
+  Keep a CPU/CUDA float32 selector and use first-order shelves for absorption
+  and output EQ. Cite the filter-learning paper with a TODO for publication.
+
 * Type every DSS matrix parameter (``A``/``B``/``C``/``D`` and the ``b``/``c``/``d``
   gains in ``dss_to_ss``) as ``ArrayLike`` instead of ``ndarray`` across
   ``dss_to_flamo``, ``dss_to_impz``, ``dss_to_td``, ``dss_to_tf``, ``dss_to_ss``,
