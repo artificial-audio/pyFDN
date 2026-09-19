@@ -13,22 +13,10 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
-from .match import (
-    AbsoluteError,
-    CircularDistance,
-    ConstantTargetDistance,
-    FlatnessRatioDistance,
-    Magnitude,
-    Match,
-    Mean,
-    MeanPerGroup,
-    MelMagnitude,
-    OnesTargetDistance,
-    Phase,
-    PhaseSpectrogramFeature,
-    SpectrogramFeature,
-    SquaredError,
-)
+from .match import Match
+from .reductions import Mean, MeanPerGroup
+from .distances import SquaredError, CircularDistance, ConstantTargetDistance, FlatnessRatioDistance, OnesTargetDistance
+from .features import Magnitude, Phase, MelMagnitude, SpectrogramFeature, PhaseSpectrogramFeature
 
 # How the output channels of |H| are combined before comparing with the target.
 ChannelReduction = Literal["sum", "mean", "none"]

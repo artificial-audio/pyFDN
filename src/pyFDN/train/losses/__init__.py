@@ -25,16 +25,10 @@ from .temporal import (
     MatchImpulseResponse,
 )
 
-from .match import (
-    Match,
-    Mean,
-    Sum,
-    SquaredError,
-    CircularDistance,
-    Waveform,
-    Magnitude,
-    Phase,
-)
+from .match import Match
+from .reductions import Mean, Sum
+from .distances import SquaredError, CircularDistance
+from .features import Waveform, Magnitude, Phase
 
 __all__ = [
     # match

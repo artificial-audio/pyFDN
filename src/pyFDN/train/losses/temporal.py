@@ -12,7 +12,10 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
-from .match import Match, Mean, SquaredError, Waveform
+from .match import Match
+from .reductions import Mean
+from .distances import SquaredError
+from .features import Waveform
 
 
 class MatchImpulseResponse(Match):
