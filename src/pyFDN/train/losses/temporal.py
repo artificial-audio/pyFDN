@@ -12,30 +12,19 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .match import Match, Mean, SquaredError, Waveform
 
-class MatchImpulseResponse(ResponseLoss):
-    """Mean squared error against a reference impulse response, sample by sample.
 
-    The strictest of the matching losses -- it fits phase as well as magnitude,
-    which for a reverberator is usually more than you want. Reach for
-    :class:`~pyFDN.MatchSpectrogram` unless you are fitting an early part or a
-    short filter.
-
-    Parameters
-    ----------
-    target : array_like
-        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
-        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
-        ``nfft``.
-    """
+class MatchImpulseResponse(Match):
+    """Mean squared error against a reference impulse response, sample by sample."""
 
     def __init__(self, target: Any) -> None:
-        self._target = _CachedTarget(target)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        return torch.nn.functional.mse_loss(response.h, self._target(response))
+            super().__init__(
+                target=target,
+                feature=Waveform(),
+                distance=SquaredError(),
+                reduction=Mean(),
+            )
 
 
 class Energy(ResponseLoss):
@@ -220,7 +209,7 @@ class MatchCumulativeEnergy(ResponseLoss):
         Hard floor on the normalized surface, in energy dB below the reference's
         total energy. It bounds the gradient of the compression near zero and
         keeps the fit off the numerical floor of the render; ``clamp`` means no
-        gradient flows from anything below it.
+        gradient flows from anything below it.n
     frequency : {"descending", "ascending", "both"}
         Which way the frequency cumulation runs, and with it the loss's balance
         between the ends of the spectrum. The default ``"descending"`` (the

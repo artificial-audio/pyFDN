@@ -13,6 +13,20 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .match import (
+    AbsoluteError,
+    CircularDistance,
+    ConstantTargetDistance,
+    FlatnessRatioDistance,
+    Magnitude,
+    Match,
+    MelMagnitude,
+    Mean,
+    OnesTargetDistance,
+    Phase,
+    SquaredError,
+)
+
 # How the output channels of |H| are combined before comparing with the target.
 ChannelReduction = Literal["sum", "mean", "none"]
 
@@ -20,14 +34,6 @@ ChannelReduction = Literal["sum", "mean", "none"]
 def _reduce_channels_check(how: ChannelReduction) -> None:
     if how not in ("sum", "mean", "none"):
         raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")
-
-
-def _reduce_channels(magnitude: torch.Tensor, how: ChannelReduction) -> torch.Tensor:
-    if how == "sum":
-        return magnitude.sum(dim=1)
-    if how == "mean":
-        return magnitude.mean(dim=1)
-    return magnitude
 
 
 def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -> None:
@@ -52,7 +58,7 @@ def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -
     )
 
 
-class FlatMagnitude(ResponseLoss):
+class FlatMagnitude(Match):
     """Mean squared error of :math:`|H|` against a flat target -- *colorless*.
 
     Fits the magnitude spectrum of the (rectangularly truncated) impulse
@@ -86,17 +92,17 @@ class FlatMagnitude(ResponseLoss):
     def __init__(
         self, target: float = 1.0, *, channels: ChannelReduction = "sum"
     ) -> None:
-        self.target = float(target)
-        self.channels = channels
         _reduce_channels_check(channels)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        magnitude = _reduce_channels(response.magnitude, self.channels)
-        return torch.nn.functional.mse_loss(
-            magnitude, torch.full_like(magnitude, self.target)
+        # Use a dummy target IR; the ConstantTargetDistance ignores it
+        import numpy as np
+        dummy_target = np.array([1.0])
+        super().__init__(
+            target=dummy_target,
+            feature=Magnitude(channels=channels),
+            distance=ConstantTargetDistance(target),
+            reduction=Mean(),
         )
+        self._flat_target_value = float(target)
 
     def check(self, model: Any) -> None:
         _warn_if_magnitude_unbounded(
@@ -174,6 +180,54 @@ class AsymmetricFlatMagnitude(ResponseLoss):
             model,
             "AsymmetricFlatMagnitude",
             "its peaks are numerical artefacts rather than modes.",
+        )
+
+
+class SpectralFlatness(Match):
+    r"""Spectral flatness measure of :math:`|H|` fit to flat -- *colorless*.
+
+    The ratio of the geometric to the arithmetic mean of :math:`|H|`, the
+    classic flatness measure: 1 for a perfectly flat spectrum, towards 0 for a
+    peaky one. Unlike :class:`FlatMagnitude`, both means scale the same way
+    with an overall gain, so the loss is gain-invariant without needing to
+    assume :math:`|H| \approx 1`.
+
+    Parameters
+    ----------
+    target : float
+        The flatness to fit, at most 1 (perfectly flat). Default 1.0.
+    channels : {"sum", "mean", "none"}
+        How the output channels are combined before the flatness ratio is
+        computed. ``"none"`` (default) scores each input/output path on its
+        own flatness.
+
+    Notes
+    -----
+    A lossless FDN has every pole exactly on the unit circle, where the
+    frequency-domain evaluation breaks down; :meth:`check` warns if the model
+    was built without the ``alias_decay_db`` that avoids it.
+    """
+
+    def __init__(
+        self, target: float = 1.0, *, channels: ChannelReduction = "none"
+    ) -> None:
+        _reduce_channels_check(channels)
+        # Use a dummy target IR; FlatnessRatioDistance computes the flatness ratio
+        import numpy as np
+        dummy_target = np.array([1.0])
+        super().__init__(
+            target=dummy_target,
+            feature=Magnitude(channels=channels),
+            distance=FlatnessRatioDistance(),
+            reduction=Mean(),
+        )
+        self._flat_target = float(target)
+
+    def check(self, model: Any) -> None:
+        _warn_if_magnitude_unbounded(
+            model,
+            "SpectralFlatness",
+            "the ratio measures numerical noise rather than the response.",
         )
 
 
@@ -271,25 +325,159 @@ class FlatSpectrogram(ResponseLoss):
         return total / len(self.nfft)
 
 
-class MatchMagnitude(ResponseLoss):
-    """Mean squared error of :math:`|H|` against a reference impulse response.
+class MatchMagnitude(Match):
+    """Mean squared error of :math:`|H|` against a reference impulse response."""
+    def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
+        _reduce_channels_check(channels)
+        super().__init__(
+            target=target,
+            feature=Magnitude(channels=channels),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
 
-    The magnitude-only sibling of :class:`MatchImpulseResponse`: fits the
-    spectral envelope while ignoring phase.
+
+class MatchPhase(Match):
+    r"""Circular distance of :math:`\angle H` against a reference impulse response."""
+    def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
+        _reduce_channels_check(channels)
+        super().__init__(
+            target=target,
+            feature=Phase(channels=channels),
+            distance=CircularDistance(),
+            reduction=Mean(),
+        )
+
+
+class MatchPhaseSpectrogram(ResponseLoss):
+    r"""Circular distance of the STFT phase against a reference, multi-resolution.
+
+    The windowed sibling of :class:`MatchPhase`: rather than a single FFT over
+    the whole response, phase is compared frame by frame at each of ``nfft``'s
+    window sizes and averaged across scales -- what :class:`MatchSpectrogram`
+    is to :class:`MatchMagnitude`, but for phase. The per-bin distance is
+    :math:`1 - \cos(\Delta\phi)`, circular so the :math:`\pm\pi` wrap costs
+    nothing extra.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    nfft : tuple of int
+        STFT window sizes, each no longer than the model's ``nfft``.
+    overlap : float
+        Fractional overlap between frames (0.75 -> hop of a quarter window).
     """
 
-    def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
-        self.channels = channels
-        _reduce_channels_check(channels)
+    def __init__(
+        self,
+        target: Any,
+        *,
+        nfft: tuple[int, ...] = (256, 512, 1024, 2048),
+        overlap: float = 0.75,
+    ) -> None:
+        self.nfft = tuple(int(n) for n in nfft)
+        self.overlap = float(overlap)
+        if not 0.0 <= self.overlap < 1.0:
+            raise ValueError(f"overlap must be in [0, 1); got {self.overlap}")
         self._target = _CachedTarget(target)
+        self._windows: dict[Any, Any] = {}
+
+    def _window(self, n: int, response: Response) -> Any:
+        """Hann window for size ``n``, cached per device/dtype across steps."""
+        import torch
+
+        key = (n, response.h.device, response.h.dtype)
+        if key not in self._windows:
+            self._windows[key] = torch.hann_window(
+                n, device=response.h.device, dtype=response.h.dtype
+            )
+        return self._windows[key]
+
+    def _phase(self, signal: torch.Tensor, n: int, response: Response) -> torch.Tensor:
+        import torch
+
+        return torch.angle(
+            torch.stft(
+                signal,
+                n_fft=n,
+                hop_length=max(1, int(n * (1.0 - self.overlap))),
+                window=self._window(n, response),
+                center=False,  # no zero-padded edge frames to skew the average
+                return_complex=True,
+            )
+        )
 
     def __call__(self, response: Response) -> torch.Tensor:
         import torch
 
-        reference = torch.fft.rfft(self._target(response), dim=0).abs()
-        return torch.nn.functional.mse_loss(
-            _reduce_channels(response.magnitude, self.channels),
-            _reduce_channels(reference, self.channels),
+        # torch.stft takes (batch, n_samples); fold every input/output pair into
+        # the batch so each transfer path is scored on its own phase.
+        signal = response.h.permute(1, 2, 0).reshape(-1, response.n_samples)
+        reference = (
+            self._target(response).permute(1, 2, 0).reshape(-1, response.n_samples)
+        )
+
+        total: Any = None
+        for n in self.nfft:
+            if n > response.n_samples:
+                raise ValueError(
+                    f"STFT window {n} is longer than the response "
+                    f"({response.n_samples} samples); shorten nfft= or build "
+                    "the model with a larger nfft."
+                )
+            term = (
+                1.0
+                - torch.cos(
+                    self._phase(signal, n, response)
+                    - self._phase(reference, n, response)
+                )
+            ).mean()
+            total = term if total is None else total + term
+        return total / len(self.nfft)
+
+
+class MatchMelMagnitude(Match):
+    """Mel-scaled mean squared error of :math:`|H|` against a reference.
+
+    The mel sibling of :class:`MatchMagnitude`: both spectra are reduced to
+    ``n_mels`` mel bands (via ``torchaudio``'s triangular filterbank) before
+    comparing, weighting the fit towards the low frequencies where mel spacing
+    resolves more finely, at the cost of resolution in the high ones.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    n_mels : int
+        Number of mel bands. Default 128.
+    f_min, f_max : float, optional
+        Mel filterbank frequency range in Hz. ``f_max`` defaults to Nyquist.
+    channels : {"sum", "mean", "none"}
+        How the output channels are combined before the comparison. ``"none"``
+        (default) fits each input/output pair on its own, the well-posed choice
+        for a multi-output FDN.
+    """
+
+    def __init__(
+        self,
+        target: Any,
+        *,
+        n_mels: int = 128,
+        f_min: float = 0.0,
+        f_max: float | None = None,
+        channels: ChannelReduction = "none",
+    ) -> None:
+        _reduce_channels_check(channels)
+        super().__init__(
+            target=target,
+            feature=MelMagnitude(n_mels=n_mels, f_min=f_min, f_max=f_max, channels=channels),
+            distance=SquaredError(),
+            reduction=Mean(),
         )
 
 

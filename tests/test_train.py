@@ -3,6 +3,13 @@
 import numpy as np
 import pytest
 
+# Force PyTorch to use CPU only for the test suite
+import torch
+if hasattr(torch, "set_default_device"):
+    torch.set_default_device("cpu")
+# Disable CUDA detection so downstream libraries (e.g., flamo) stay on CPU
+torch.cuda.is_available = lambda: False
+
 pytest.importorskip("torch")
 pytest.importorskip("flamo")
 
@@ -14,8 +21,13 @@ from pyFDN.train import (  # noqa: E402
     FlatSpectrogram,
     MatchCumulativeEnergy,
     MatchEnergyDecay,
+    MatchMagnitude,
+    MatchMelMagnitude,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
     Sparsity,
+    SpectralFlatness,
     Trainable,
     build_fdn,
     build_set_decay,
@@ -860,6 +872,239 @@ def test_match_energy_decay_rejects_a_window_longer_than_the_response():
     model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than"):
         MatchEnergyDecay(np.zeros(2**10), window=2**12).check(model)
+
+
+# --- spectral flatness loss ------
+
+
+def test_spectral_flatness_is_between_zero_and_one():
+    """Spectral flatness should be 1 for flat spectrum, approaching 0 for peaky."""
+    from pyFDN.train import Response
+
+    # Flat spectrum: all bins equal magnitude
+    flat_spectrum = np.ones(256)
+    loss = SpectralFlatness()
+    flat_ir = np.fft.irfft(flat_spectrum)
+    score_flat = float(loss(Response(h=_as_h(flat_ir), fs=48000.0)).detach())
+    assert 0.0 <= score_flat <= 1.0
+    # The ideal flat should be closest to target 1.0, so loss should be small
+    assert score_flat < 0.01
+
+    # Peaky spectrum: single dominant bin
+    peaky = np.zeros(256)
+    peaky[50] = 1.0
+    peaky_ir = np.fft.irfft(peaky)
+    score_peaky = float(loss(Response(h=_as_h(peaky_ir), fs=48000.0)).detach())
+    assert score_peaky > score_flat
+
+
+def test_spectral_flatness_is_gain_invariant():
+    """Flatness (geometric/arithmetic mean ratio) is invariant to overall gain."""
+    from pyFDN.train import Response
+
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=4)
+    loss = SpectralFlatness()
+    r = model_response(model)
+    scaled = Response(h=r.h * 50.0, fs=r.fs)
+    np.testing.assert_allclose(
+        float(loss(r).detach()), float(loss(scaled).detach()), rtol=1e-5
+    )
+
+
+def test_spectral_flatness_warns_without_alias_decay():
+    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    with pytest.warns(UserWarning, match="alias_decay_db=0"):
+        train_fdn(model, SpectralFlatness(), max_steps=2, rng=0, **_FAST)
+
+
+# --- phase matching loss ------
+
+
+def test_match_phase_circular_distance():
+    """Phase distance should be 0 when phases match, up to 2 for phase opposition."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**12
+    # Create target with some phase
+    target_ir = np.sin(2 * np.pi * np.arange(n) * 440 / fs)
+    loss = MatchPhase(target_ir)
+
+    # Matching phase: same signal should give low loss
+    r1 = Response(h=_as_h(target_ir), fs=fs)
+    score1 = float(loss(r1).detach())
+    assert score1 < 0.1, "Same phase should give near-zero loss"
+
+    # Opposite phase: negated signal
+    r2 = Response(h=_as_h(-target_ir), fs=fs)
+    score2 = float(loss(r2).detach())
+    assert score2 > score1, "Opposite phase should give higher loss"
+
+
+def test_match_phase_runs_and_improves():
+    """MatchPhase should integrate into training loop."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
+
+    log = train_fdn(
+        fresh,
+        MatchPhase(target_ir),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+# --- phase spectrogram matching loss ------
+
+
+def test_match_phase_spectrogram_runs():
+    """MatchPhaseSpectrogram should compute loss across multiple STFT scales."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
+
+    log = train_fdn(
+        fresh,
+        MatchPhaseSpectrogram(target_ir, nfft=(256, 512, 1024)),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+def test_match_phase_spectrogram_rejects_window_longer_than_response():
+    model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="longer than the response"):
+        MatchPhaseSpectrogram(np.zeros(2**9), nfft=(2048,))(model_response(model))
+
+
+def test_match_phase_spectrogram_mimo_target():
+    """MatchPhaseSpectrogram should handle MIMO targets correctly."""
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(5)
+    ref = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=16,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=17,
+    )
+    log = train_fdn(
+        fresh,
+        MatchPhaseSpectrogram(target, nfft=(256, 512)),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+
+
+# --- mel magnitude matching loss ------
+
+
+def test_match_mel_magnitude_runs():
+    """MatchMelMagnitude should compute loss on mel-scaled bins."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
+
+    log = train_fdn(
+        fresh,
+        MatchMelMagnitude(target_ir, n_mels=64),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+def test_match_mel_magnitude_focuses_on_low_freq():
+    """Mel scaling should weight low frequencies more heavily."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**12
+    # Target with energy mostly at low frequencies
+    t = np.arange(n) / fs
+    low_freq = 0.5 * np.sin(2 * np.pi * 100 * t)  # 100 Hz
+    high_freq = 0.1 * np.sin(2 * np.pi * 8000 * t)  # 8000 Hz
+    target_ir = low_freq + high_freq
+
+    loss = MatchMelMagnitude(target_ir, n_mels=64)
+
+    # Response that matches high freq well but low freq poorly
+    bad_low = 0.1 * np.sin(2 * np.pi * 100 * t)
+    good_high = 0.1 * np.sin(2 * np.pi * 8000 * t)
+    score_bad_low = float(
+        loss(Response(h=_as_h(bad_low + good_high), fs=fs)).detach()
+    )
+
+    # Response that matches low freq well
+    good_low = 0.5 * np.sin(2 * np.pi * 100 * t)
+    bad_high = 0.01 * np.sin(2 * np.pi * 8000 * t)
+    score_good_low = float(
+        loss(Response(h=_as_h(good_low + bad_high), fs=fs)).detach()
+    )
+
+    # Low frequency match should be favored (lower loss)
+    assert score_good_low < score_bad_low
+
+
+def test_match_mel_magnitude_mimo_target():
+    """MatchMelMagnitude should handle MIMO targets correctly."""
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(6)
+    ref = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=20,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=21,
+    )
+    log = train_fdn(
+        fresh,
+        MatchMelMagnitude(target, n_mels=64),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
 
 
 # --- the doubly-cumulated energy loss --------------------------------------

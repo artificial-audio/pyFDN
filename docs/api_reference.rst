@@ -353,6 +353,8 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.Sparsity
    pyFDN.L1
    pyFDN.L2
+   pyFDN.mimo_rir_eigenvalues_per_frequency
+   pyFDN.energy_decay_curve
 
 Plotting
 --------

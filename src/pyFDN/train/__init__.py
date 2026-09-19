@@ -26,6 +26,10 @@ from .build import (
     trainable_from_preset,
 )
 from .engine import TrainLog, train_fdn
+from .features import (
+    energy_decay_curve,
+    mimo_rir_eigenvalues_per_frequency,
+)
 from .filters import AttenuationFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
@@ -39,11 +43,15 @@ from .losses import (
     MatchEnergyDecay,
     MatchImpulseResponse,
     MatchMagnitude,
+    MatchMelMagnitude,
     MatchMelSpectrogram,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
     ParameterLoss,
     ResponseLoss,
     Sparsity,
+    SpectralFlatness,
 )
 from .params import ParamRef, param, params
 from .response import Response, impulse_excitation, model_response
@@ -77,7 +85,11 @@ __all__ = [
     "FlatMagnitude",
     "AsymmetricFlatMagnitude",
     "FlatSpectrogram",
+    "SpectralFlatness",
     "MatchMagnitude",
+    "MatchPhase",
+    "MatchPhaseSpectrogram",
+    "MatchMelMagnitude",
     "MatchSpectrogram",
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
@@ -87,4 +99,7 @@ __all__ = [
     "Sparsity",
     "L1",
     "L2",
+    # features
+    "mimo_rir_eigenvalues_per_frequency",
+    "energy_decay_curve",
 ]
