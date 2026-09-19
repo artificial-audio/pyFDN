@@ -28,6 +28,28 @@ class Mean(Reduction):
         return x.mean()
 
 
+class MeanPerGroup(Reduction):
+    """Mean averaged per first-dimension group, then across groups.
+
+    Each group is normalized by its actual element count, giving equal
+    weight to each group regardless of its size (unlike :meth:`Mean`
+    which weights by total element count). If the feature stores
+    ``_group_counts``, those are used for correct normalization.
+    """
+
+    def __init__(self, feature=None) -> None:
+        self.feature = feature
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        if self.feature is not None and hasattr(self.feature, '_group_counts'):
+            counts = torch.tensor(
+                self.feature._group_counts, device=x.device, dtype=x.dtype
+            )
+            group_sums = x.sum(dim=tuple(range(1, x.ndim)))
+            return (group_sums / counts).mean()
+        return x.mean(dim=tuple(range(1, x.ndim))).mean()
+
+
 class Sum(Reduction):
     """Sum reduction."""
 
@@ -305,7 +327,7 @@ class SpectrogramFeature(Feature):
         return self._windows[key]
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        """Return (n_nfft, n_out, n_in) tensor stacking normalized Welch spectra."""
+        """Return (n_nfft, n_out, n_in, max_freq) tensor stacking normalized Welch spectra."""
         # Reshape for batch STFT: (n_samples, n_out, n_in) -> (n_out * n_in, n_samples)
         signal = h.permute(1, 2, 0).reshape(-1, h.shape[0])
 
@@ -331,9 +353,14 @@ class SpectrogramFeature(Feature):
             normalized = smoothed / level  # (batch, freq)
             spectrograms.append(normalized)
 
-        # Stack across windows, reshape back to (n_nfft, n_out, n_in)
-        stacked = torch.stack(spectrograms, dim=0)  # (n_nfft, batch, freq)
-        return stacked.permute(0, 2, 1).reshape(len(self.nfft), h.shape[1], h.shape[2])
+        # Pad to max freq, then stack: (n_nfft, batch, max_freq)
+        max_freq = max(s.shape[1] for s in spectrograms)
+        padded = [torch.nn.functional.pad(s, (0, max_freq - s.shape[1]), value=1.0)
+                  for s in spectrograms]
+        stacked = torch.stack(padded, dim=0)
+        result = stacked.permute(0, 2, 1).reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq)
+        self._group_counts = [s.shape[0] * s.shape[1] for s in spectrograms]
+        return result
 
 
 class PhaseSpectrogramFeature(Feature):
@@ -368,7 +395,7 @@ class PhaseSpectrogramFeature(Feature):
         return self._windows[key]
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        """Return (n_nfft, n_out, n_in, n_frames, n_freq) phase tensor."""
+        """Return (n_nfft, n_out, n_in, max_freq, max_frames) phase tensor."""
         # Reshape for batch STFT: (n_samples, n_out, n_in) -> (n_out * n_in, n_samples)
         signal = h.permute(1, 2, 0).reshape(-1, h.shape[0])
 
@@ -389,11 +416,17 @@ class PhaseSpectrogramFeature(Feature):
             phase = torch.angle(stft)  # (batch, freq, frames)
             phases.append(phase)
 
-        # Stack: (n_nfft, batch, freq, frames)
-        stacked = torch.stack(phases, dim=0)
-        # Reshape: (n_nfft, n_out, n_in, freq, frames)
-        return stacked.permute(0, 3, 1).reshape(len(self.nfft), h.shape[1], h.shape[2],
-                                                stacked.shape[2], stacked.shape[3])
+        # Pad to max freq and frames, then stack: (n_nfft, batch, max_freq, max_frames)
+        max_freq = max(p.shape[1] for p in phases)
+        max_frames = max(p.shape[2] for p in phases)
+        padded = [
+            torch.nn.functional.pad(p, (0, max_frames - p.shape[2], 0, max_freq - p.shape[1]))
+            for p in phases
+        ]
+        stacked = torch.stack(padded, dim=0)
+        result = stacked.permute(0, 3, 1, 2).reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames)
+        self._group_counts = [p.shape[0] * p.shape[1] * p.shape[2] for p in phases]
+        return result
 
 
 # --- Composed Match class ---
@@ -430,15 +463,16 @@ class Match(ResponseLoss):
         distance: Distance | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = SquaredError(),
         reduction: Reduction | Callable[[torch.Tensor], torch.Tensor] = Mean(),
     ) -> None:
-        self._target = _CachedTarget(target)
+        self._target = _CachedTarget(target) if target is not None else None
         self.feature = feature
         self.distance = distance
         self.reduction = reduction
 
     def __call__(self, response: Response) -> torch.Tensor:
-        ref_h = self._target(response)
         pred_feat = self.feature(response.h, response.fs)
-        ref_feat = self.feature(ref_h, response.fs)
-
-        diff = self.distance(pred_feat, ref_feat)
+        if self._target is not None:
+            ref_feat = self.feature(self._target(response), response.fs)
+            diff = self.distance(pred_feat, ref_feat)
+        else:
+            diff = self.distance(pred_feat, torch.zeros_like(pred_feat))
         return self.reduction(diff)

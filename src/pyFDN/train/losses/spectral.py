@@ -20,10 +20,13 @@ from .match import (
     FlatnessRatioDistance,
     Magnitude,
     Match,
-    MelMagnitude,
     Mean,
+    MeanPerGroup,
+    MelMagnitude,
     OnesTargetDistance,
     Phase,
+    PhaseSpectrogramFeature,
+    SpectrogramFeature,
     SquaredError,
 )
 
@@ -231,7 +234,7 @@ class SpectralFlatness(Match):
         )
 
 
-class FlatSpectrogram(ResponseLoss):
+class FlatSpectrogram(Match):
     r"""Flatness measured on multi-resolution smoothed spectra -- *colorless*.
 
     The multi-scale sibling of :class:`FlatMagnitude`, and the one whose
@@ -276,53 +279,14 @@ class FlatSpectrogram(ResponseLoss):
         nfft: tuple[int, ...] = (256, 512, 1024, 2048),
         overlap: float = 0.75,
     ) -> None:
-        self.nfft = tuple(int(n) for n in nfft)
-        self.overlap = float(overlap)
-        if not 0.0 <= self.overlap < 1.0:
-            raise ValueError(f"overlap must be in [0, 1); got {self.overlap}")
-        self._windows: dict[Any, Any] = {}
-
-    def _window(self, n: int, response: Response) -> Any:
-        """Hann window for size ``n``, cached per device/dtype across steps."""
-        import torch
-
-        key = (n, response.h.device, response.h.dtype)
-        if key not in self._windows:
-            self._windows[key] = torch.hann_window(
-                n, device=response.h.device, dtype=response.h.dtype
-            )
-        return self._windows[key]
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        # torch.stft takes (batch, n_samples); fold every input/output pair into
-        # the batch so each transfer path is scored on its own flatness.
-        signal = response.h.permute(1, 2, 0).reshape(-1, response.n_samples)
-
-        total: Any = None
-        for n in self.nfft:
-            if n > response.n_samples:
-                raise ValueError(
-                    f"STFT window {n} is longer than the response "
-                    f"({response.n_samples} samples); shorten nfft= or build "
-                    "the model with a larger nfft."
-                )
-            spectrogram = torch.stft(
-                signal,
-                n_fft=n,
-                hop_length=max(1, int(n * (1.0 - self.overlap))),
-                window=self._window(n, response),
-                center=False,  # no zero-padded edge frames to skew the average
-                return_complex=True,
-            ).abs()
-            # Welch estimate: average power over frames, back to a magnitude.
-            smoothed = (spectrogram**2).mean(dim=-1).sqrt()
-            level = smoothed.mean(dim=-1, keepdim=True)
-            normalized = smoothed / level.clamp_min(torch.finfo(smoothed.dtype).tiny)
-            term = torch.nn.functional.mse_loss(normalized, torch.ones_like(normalized))
-            total = term if total is None else total + term
-        return total / len(self.nfft)
+        nfft = tuple(int(n) for n in nfft)
+        feature = SpectrogramFeature(nfft=nfft, overlap=overlap)
+        super().__init__(
+            target=None,
+            feature=feature,
+            distance=OnesTargetDistance(),
+            reduction=MeanPerGroup(feature=feature),
+        )
 
 
 class MatchMagnitude(Match):
@@ -349,7 +313,7 @@ class MatchPhase(Match):
         )
 
 
-class MatchPhaseSpectrogram(ResponseLoss):
+class MatchPhaseSpectrogram(Match):
     r"""Circular distance of the STFT phase against a reference, multi-resolution.
 
     The windowed sibling of :class:`MatchPhase`: rather than a single FFT over
@@ -378,65 +342,14 @@ class MatchPhaseSpectrogram(ResponseLoss):
         nfft: tuple[int, ...] = (256, 512, 1024, 2048),
         overlap: float = 0.75,
     ) -> None:
-        self.nfft = tuple(int(n) for n in nfft)
-        self.overlap = float(overlap)
-        if not 0.0 <= self.overlap < 1.0:
-            raise ValueError(f"overlap must be in [0, 1); got {self.overlap}")
-        self._target = _CachedTarget(target)
-        self._windows: dict[Any, Any] = {}
-
-    def _window(self, n: int, response: Response) -> Any:
-        """Hann window for size ``n``, cached per device/dtype across steps."""
-        import torch
-
-        key = (n, response.h.device, response.h.dtype)
-        if key not in self._windows:
-            self._windows[key] = torch.hann_window(
-                n, device=response.h.device, dtype=response.h.dtype
-            )
-        return self._windows[key]
-
-    def _phase(self, signal: torch.Tensor, n: int, response: Response) -> torch.Tensor:
-        import torch
-
-        return torch.angle(
-            torch.stft(
-                signal,
-                n_fft=n,
-                hop_length=max(1, int(n * (1.0 - self.overlap))),
-                window=self._window(n, response),
-                center=False,  # no zero-padded edge frames to skew the average
-                return_complex=True,
-            )
+        nfft = tuple(int(n) for n in nfft)
+        feature = PhaseSpectrogramFeature(nfft=nfft, overlap=overlap)
+        super().__init__(
+            target=target,
+            feature=feature,
+            distance=CircularDistance(),
+            reduction=MeanPerGroup(feature=feature),
         )
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        # torch.stft takes (batch, n_samples); fold every input/output pair into
-        # the batch so each transfer path is scored on its own phase.
-        signal = response.h.permute(1, 2, 0).reshape(-1, response.n_samples)
-        reference = (
-            self._target(response).permute(1, 2, 0).reshape(-1, response.n_samples)
-        )
-
-        total: Any = None
-        for n in self.nfft:
-            if n > response.n_samples:
-                raise ValueError(
-                    f"STFT window {n} is longer than the response "
-                    f"({response.n_samples} samples); shorten nfft= or build "
-                    "the model with a larger nfft."
-                )
-            term = (
-                1.0
-                - torch.cos(
-                    self._phase(signal, n, response)
-                    - self._phase(reference, n, response)
-                )
-            ).mean()
-            total = term if total is None else total + term
-        return total / len(self.nfft)
 
 
 class MatchMelMagnitude(Match):
