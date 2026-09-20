@@ -180,7 +180,7 @@ class SpectrogramFeature(Feature):
         padded = [torch.nn.functional.pad(s, (0, max_freq - s.shape[1]), value=1.0)
                   for s in spectrograms]
         stacked = torch.stack(padded, dim=0)
-        result = stacked.permute(0, 2, 1).reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq)
+        result = stacked.reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq)
         self._group_counts = [s.shape[0] * s.shape[1] for s in spectrograms]
         return result
 
@@ -243,6 +243,6 @@ class PhaseSpectrogramFeature(Feature):
             for p in phases
         ]
         stacked = torch.stack(padded, dim=0)
-        result = stacked.permute(0, 3, 1, 2).reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames)
+        result = stacked.reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames)
         self._group_counts = [p.shape[0] * p.shape[1] * p.shape[2] for p in phases]
         return result
