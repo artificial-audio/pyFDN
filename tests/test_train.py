@@ -1341,6 +1341,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1356,6 +1357,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1421,10 +1423,10 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
     shared = pyFDN.AttenuationFilter(
-        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
     per_line = pyFDN.AttenuationFilter(
-        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
     assert shared.rt_floor.ndim == 0
     np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
