@@ -80,7 +80,8 @@ def _(fs, N, nfft, np, pyFDN):
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, fs, nfft=nfft, shell=False
+        A_sch, B_sch, C_sch, D_sch, delays_sch, fs, nfft=nfft, shell=False,
+        device="cpu",
     )
     return (allpass_fdn_core,)
 
@@ -104,15 +105,15 @@ def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     )
     output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
 
-    main_delays = delay_module(main_delay_sec, nfft, fs=fs)
-    input_delays = delay_module(input_delay_sec, nfft, fs=fs)
-    output_delays = delay_module(output_delay_sec, nfft, fs=fs)
+    main_delays = delay_module(main_delay_sec, nfft, fs=fs, device="cpu")
+    input_delays = delay_module(input_delay_sec, nfft, fs=fs, device="cpu")
+    output_delays = delay_module(output_delay_sec, nfft, fs=fs, device="cpu")
 
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
     sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, None, main_delay_smp, fs=fs)
-    attenuation = sos_filter_module(sos, nfft)
+    attenuation = sos_filter_module(sos, nfft, device="cpu")
     return attenuation, input_delays, main_delays, output_delays
 
 
@@ -147,8 +148,8 @@ def _(
     C_out = np.random.randn(2, N)
     C_out = C_out / np.linalg.norm(C_out, axis=1, keepdims=True)
 
-    gain_B_in = gain_module(B_in, nfft)
-    gain_C_out = gain_module(C_out, nfft)
+    gain_B_in = gain_module(B_in, nfft, device="cpu")
+    gain_C_out = gain_module(C_out, nfft, device="cpu")
 
     # Recursion: fF = allpass FDN → attenuation, fB = main delays
     feedforward = system.Series(
@@ -176,8 +177,8 @@ def _(
 
     model = system.Shell(
         core=core_chain,
-        input_layer=dsp.FFT(nfft),
-        output_layer=dsp.iFFT(nfft),
+        input_layer=dsp.FFT(nfft).to("cpu"),
+        output_layer=dsp.iFFT(nfft).to("cpu"),
     )
 
     ir_stereo = pyFDN.flamo_time_response(model).squeeze()

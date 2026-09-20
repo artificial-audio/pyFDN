@@ -265,7 +265,6 @@ def _(mo):
 
 @app.cell
 def _(device, fs, loss, model, pyFDN, render_nfft, rir_len, train_nfft):
-    model.set_nfft(train_nfft)
     log = pyFDN.train_fdn(
         model,
         loss,
@@ -275,7 +274,6 @@ def _(device, fs, loss, model, pyFDN, render_nfft, rir_len, train_nfft):
         device=device,
         rng=0,
     )
-    model.set_nfft(render_nfft)
     ir_trained = pyFDN.flamo_time_response(model, fs=fs).squeeze()[:rir_len]
     print(
         f"{log.steps_run} steps: loss "
