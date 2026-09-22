@@ -324,8 +324,7 @@ def _(mo):
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
     `decay_to_geq` designs those filters from a target curve at ten octave
-    centres (31.25 Hz – 16 kHz). Below 31.25 Hz and above 16 kHz the fitted
-    response holds the nearest command.
+    centres (31.25 Hz – 16 kHz).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
     the plain lossless `A` — all the decay is now in the filters. Bundling the

@@ -122,7 +122,6 @@ def test_geq_command_frequencies_are_octave_centres():
 
 
 def test_geq_interpolation_holds_constant_outside_the_command_range():
-    """DC follows 31.25 Hz and everything above 16 kHz follows 16 kHz."""
     fs = 48000.0
     _, interpolation = _geq_control_problem(fs)
     control = np.round(np.logspace(0, np.log10(fs / 2.1), 101))
@@ -136,7 +135,6 @@ def test_geq_interpolation_holds_constant_outside_the_command_range():
 
 
 def test_geq_top_band_moves_the_fitted_response_as_much_as_a_mid_band():
-    """The 16 kHz command must be visible to the least-squares fit (#236)."""
     matrix = geq_design_matrix(48000.0)
     mid = np.linalg.norm(matrix[:, 4])
     top = np.linalg.norm(matrix[:, -1])
@@ -384,7 +382,6 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
 
 
 def test_first_order_shelf_crosses_at_the_requested_frequency():
-    """Bilinear prewarp is tan(ω/2), so a requested 2 kHz shelf sits at 2 kHz."""
     from scipy.signal import sosfreqz
 
     fs = 48000.0

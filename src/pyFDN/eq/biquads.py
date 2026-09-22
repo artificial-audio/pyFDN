@@ -81,12 +81,7 @@ def first_order_shelf_biquad(
     gain_nyquist: Any,
     omega_c: float,
 ) -> Any:
-    """Return a normalized one-section SOS from two linear amplitudes.
-
-    ``omega_c`` is the crossover in radians per sample. The bilinear prewarp
-    uses ``tan(omega_c / 2)``, so the transition sits at the requested
-    frequency rather than at twice that frequency.
-    """
+    """Return a normalized one-section SOS from two linear amplitudes."""
     xp = array_namespace(gain_dc)
     if xp is np:
         gain_dc = np.asarray(gain_dc, dtype=float)
