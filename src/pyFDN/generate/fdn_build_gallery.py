@@ -196,7 +196,7 @@ def fdn_build_gallery(
 
     In-loop attenuation and optional output EQ are first-order shelves. An
     omitted ``rt_crossover`` or ``output_crossover`` is the shelf midpoint
-    ``fs/8``; a crossover above ``fs/2.1`` is clamped to ``fs/2.1``. Set
+    ``fs/4``; a crossover above ``fs/2.1`` is clamped to ``fs/2.1``. Set
     ``return_design=True`` to return ``(build, design)`` for direct use in an
     :class:`pyFDN.FDNPreset`; the default remains the plain :class:`FDNBuild`.
     """

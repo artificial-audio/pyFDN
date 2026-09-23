@@ -395,13 +395,13 @@ def _midpoint_hz(sos, fs, midpoint_db):
     ("crossover", "expected"),
     [
         (2000.0, 2000.0),
-        (None, 48000.0 / 8.0),
+        (None, 48000.0 / 4.0),
         (48000.0 / 4.0, 48000.0 / 4.0),
         (48000.0 / 2.0, 48000.0 / 2.1),
     ],
 )
 def test_first_order_shelf_crosses_at_the_requested_frequency(crossover, expected):
-    """The named midpoint is the realized one. None is fs/8; fs/2 clamps to fs/2.1."""
+    """The named midpoint is the realized one. None is fs/4; fs/2 clamps to fs/2.1."""
     fs = 48000.0
     sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
     realized = _midpoint_hz(sos, fs, -6.0)

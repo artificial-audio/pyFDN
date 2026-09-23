@@ -7,7 +7,7 @@ All main functions are accessible directly from ``pyFDN``::
     import pyFDN
 
     feedback = pyFDN.random_orthogonal(4)
-    # The omitted crossover is the shelf midpoint, fs/8.
+    # The omitted crossover is the shelf midpoint, fs/4.
     attenuation = pyFDN.decay_to_first_order_shelf(
         1.2, 0.9, None, [100, 150, 200, 250], 48_000
     )

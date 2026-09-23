@@ -95,7 +95,7 @@ def build_fdn(
     rt : float, (rt_dc, rt_nyquist), or None
         Reverberation time in seconds, realized as an
         :class:`~pyFDN.AttenuationFilter` with ``design="first_order_shelf"``.
-        The shelf midpoint is ``fs/8`` (clamped at ``fs/2.1``). ``None`` builds
+        The shelf midpoint is ``fs/4`` (clamped at ``fs/2.1``). ``None`` builds
         a lossless FDN.
         For any other design, build the module yourself and pass it to
         :func:`trainable_from_build` as ``post_delay=``.
@@ -521,7 +521,7 @@ def build_set_decay(
     Sets the ``post_delay`` hook to per-delay first-order attenuation
     (:func:`pyFDN.decay_to_first_order_shelf`) for ``rt`` (a single value, or
     ``(rt_dc, rt_nyquist)``). ``rt_crossover`` is the shelf midpoint in Hz;
-    ``None`` uses ``fs/8``, and values above ``fs/2.1`` are clamped there.
+    ``None`` uses ``fs/4``, and values above ``fs/2.1`` are clamped there.
     Decay does not change colouration, so this is the natural way to add a
     tail to a colorless build.
     """

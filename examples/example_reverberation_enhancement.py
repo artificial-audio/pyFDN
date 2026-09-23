@@ -222,8 +222,7 @@ def _(fs, np, pyFDN, td):
     C_fdn = gen.standard_normal((6, n_lines)) / np.sqrt(
         n_lines
     )  # lines -> loudspeakers
-    # Shelf midpoint fs/8. The challenge gain below is set for that crossover.
-    fdn_absorption = pyFDN.decay_to_first_order_shelf(1.2, 0.6, fs / 8, fdn_delays, fs)
+    fdn_absorption = pyFDN.decay_to_first_order_shelf(1.2, 0.6, None, fdn_delays, fs)
     fdn_block = 64  # Recursion block size; must be at most half the shortest delay
 
     def make_reverberator(time_varying, g):
@@ -403,7 +402,7 @@ def _(fs, go, np, render):
         )
         return starts / fs, env
 
-    g_challenge = 1.8
+    g_challenge = 1.6
     rec_static = render(time_varying=False, g=g_challenge)
     rec_varying = render(time_varying=True, g=g_challenge)
 

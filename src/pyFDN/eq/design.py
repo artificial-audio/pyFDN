@@ -24,8 +24,10 @@ from .graphic_eq import (
     geq_design_matrix,
 )
 
-# Omitted first-order shelf crossover. The ceiling is fs/_NYQUIST_DIVISOR.
-_DEFAULT_SHELF_CROSSOVER_DIVISOR = 8.0
+# Omitted first-order shelf crossover: fs/4. The ceiling is fs/_NYQUIST_DIVISOR.
+# Before the bilinear prewarp fix an omitted request of fs/8 was realized
+# near fs/4, which is the frequency those shelves were heard at.
+_DEFAULT_SHELF_CROSSOVER_DIVISOR = 4.0
 
 EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
 EQ_DESIGNS = get_args(EQDesign)
@@ -72,7 +74,7 @@ def gain_to_first_order_shelf(
     """Design a first-order shelf from its endpoint amplitudes in dB.
 
     ``crossover`` is the midpoint in Hz: the frequency where the gain is the
-    geometric mean of the DC and Nyquist amplitudes. ``None`` uses ``fs/8``.
+    geometric mean of the DC and Nyquist amplitudes. ``None`` uses ``fs/4``.
     A value above ``fs/2.1`` is clamped to ``fs/2.1``.
     """
     xp = array_namespace(gain_db)
@@ -110,7 +112,7 @@ def decay_to_first_order_shelf(
     """Design first-order attenuation shelves from endpoint RTs in seconds.
 
     ``rt_crossover`` is the shelf midpoint in Hz, with the same default
-    (``fs/8``) and clamp (``fs/2.1``) as :func:`gain_to_first_order_shelf`.
+    (``fs/4``) and clamp (``fs/2.1``) as :func:`gain_to_first_order_shelf`.
     """
     gain_db = _decay_to_gain_db(rt, delays, fs)
     nyquist_db = _decay_to_gain_db(rt_nyquist, delays, fs)

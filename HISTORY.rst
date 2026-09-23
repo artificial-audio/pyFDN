@@ -15,12 +15,16 @@ Unreleased
 * Fix the first-order shelf bilinear prewarp: ``first_order_shelf_biquad``
   used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
   twice the named frequency. High crossovers are now clamped at ``fs/2.1``
-  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``.
-* ``example_train_fdn_to_rir`` places its absorption and output shelves at
-  ``fs/4``. The default midpoint is ``fs/8``, which falls inside the octave
-  bands that notebook scores, so a two-parameter shelf cannot follow the
-  measured decay through 8 kHz. Notebooks that keep the default now name
-  ``fs/8`` at the call.
+  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``. The default
+  midpoint is ``fs/4``. An omitted crossover used to be requested at ``fs/8``
+  and realized near ``fs/4``; ``fs/4`` is the frequency those shelves were
+  heard at, and it sits above the 8 kHz octave scored by
+  ``example_train_fdn_to_rir``.
+* ``example_reverberation_enhancement`` returns its challenge gain to 1.6.
+  The gain was raised to 1.8 when the corrected shelf began crossing at the
+  written ``fs/8``. With the default back at the frequency the example was
+  heard at, 1.6 again separates the ringing static loop from the decaying
+  time-varying one.
 * ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
   on. The loss only needs enough of the decay to steer on, while the octave-band
   estimators need a longer measurement window, so the notebook trains at

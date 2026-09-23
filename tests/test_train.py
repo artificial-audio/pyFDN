@@ -458,12 +458,12 @@ def test_mimo_target_wrong_shape_raises():
 # --- analytic decay (the exact RT path) ------------------------------------
 
 
-def test_build_set_decay_shelf_midpoint_defaults_to_fs_over_8():
+def test_build_set_decay_shelf_midpoint_defaults_to_fs_over_4():
     build = pyFDN.extract_build(
         build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=1)
     )
     default = build_set_decay(build, (1.4, 0.5))
-    explicit = build_set_decay(build, (1.4, 0.5), rt_crossover=build.fs / 8.0)
+    explicit = build_set_decay(build, (1.4, 0.5), rt_crossover=build.fs / 4.0)
     np.testing.assert_allclose(default.post_delay, explicit.post_delay)
 
 
@@ -1229,11 +1229,11 @@ def test_shelf_post_eq_is_the_numpy_design():
 
 
 def test_trainable_shelf_forwards_its_crossover():
-    """A named midpoint reaches the coefficients, not the fs/8 default."""
+    """A named midpoint reaches the coefficients, not the fs/4 default."""
     import torch
 
     fs = 48000.0
-    crossover = fs / 4.0
+    crossover = fs / 8.0
     build = _plain_build()
     rt = (2.5, 0.8)
     model = trainable_from_build(

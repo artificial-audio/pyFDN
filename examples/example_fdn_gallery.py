@@ -183,7 +183,7 @@ def _(mo):
 
     # Complete FDN Build Gallery
 
-    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback, input/output/direct matrices, delays, sample rate, and optional loop filters. Absorption and output EQ are first-order shelves; an omitted crossover crosses at `fs/8`.
+    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback, input/output/direct matrices, delays, sample rate, and optional loop filters. Absorption and output EQ are first-order shelves; an omitted crossover crosses at `fs/4`.
     """)
     return
 

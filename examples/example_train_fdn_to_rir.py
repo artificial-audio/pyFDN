@@ -52,7 +52,7 @@ def _(mo):
 
     Choose CPU or CUDA GPU below; both use float32. CUDA is selected when available.
     Absorption and output EQ are first-order shelves: two parameters and one
-    biquad per filter, crossing at `fs/4`.
+    biquad per filter, crossing at the default midpoint, `fs/4`.
     """)
     return
 
@@ -167,10 +167,10 @@ def _(mo):
     The integer delays stay fixed. `AttenuationFilter` maps positive, smoothly
     floored RT values to per-delay attenuation, $-60d_i/(\mathrm{RT}\,f_s)$ dB,
     and designs the absorption filters. `OutputEQ` shapes the output spectrum.
-    Both shelves cross at `fs/4` (12 kHz at 48 kHz). A first-order shelf only
-    has its DC and Nyquist endpoints to train, and this room's decay is still
-    falling through the 8 kHz octave, so the midpoint sits above that band.
-    The default midpoint, `fs/8`, falls inside it.
+    Both shelves use the default midpoint, `fs/4` (12 kHz at 48 kHz). A
+    first-order shelf only has its DC and Nyquist endpoints to train, and
+    this room's decay is still falling through the 8 kHz octave, so the
+    midpoint sits above that band.
 
     Train at `2**16` samples (1.37 s at 48 kHz) to reduce the cost per step.
     Render at `2**17` (2.73 s) to give the final decay estimators a longer window.
@@ -186,8 +186,6 @@ def _(device, fs, init_build, np, pyFDN, rir, rir_len, torch):
 
     train_nfft = 2**16  # 1.37 s training window
     render_nfft = 2**17  # 2.73 s validation window
-    # Above the 8 kHz octave. The default midpoint is fs/8.
-    shelf_crossover = fs / 4
 
     model = pyFDN.trainable_from_build(
         init_build,
@@ -199,7 +197,6 @@ def _(device, fs, init_build, np, pyFDN, rir, rir_len, torch):
             init_build.delays,
             fs,
             design="first_order_shelf",
-            rt_crossover=shelf_crossover,
             nfft=render_nfft,
             device=device,
             dtype=torch.float32,
@@ -210,7 +207,6 @@ def _(device, fs, init_build, np, pyFDN, rir, rir_len, torch):
             1,
             fs,
             design="first_order_shelf",
-            crossover=shelf_crossover,
             nfft=render_nfft,
             device=device,
             dtype=torch.float32,
