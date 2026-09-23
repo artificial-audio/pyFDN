@@ -17,17 +17,11 @@ from ._backend import array_namespace
 from ._design_record import design_value, with_design
 from .biquads import first_order_shelf_biquad, one_pole_biquad
 from .graphic_eq import (
-    _NYQUIST_DIVISOR,
     N_GRAPHIC_EQ_BANDS,
     N_GRAPHIC_EQ_SECTIONS,
     gain_to_geq,
     geq_design_matrix,
 )
-
-# Omitted first-order shelf crossover: fs/4. The ceiling is fs/_NYQUIST_DIVISOR.
-# Before the bilinear prewarp fix an omitted request of fs/8 was realized
-# near fs/4, which is the frequency those shelves were heard at.
-_DEFAULT_SHELF_CROSSOVER_DIVISOR = 4.0
 
 EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
 EQ_DESIGNS = get_args(EQDesign)
@@ -50,17 +44,9 @@ def decay_to_geq(
     )
 
 
-def _shelf_crossover_hz(fs: float, crossover: float | None) -> float:
-    requested = (
-        float(fs) / _DEFAULT_SHELF_CROSSOVER_DIVISOR
-        if crossover is None
-        else float(crossover)
-    )
-    return min(requested, float(fs) / _NYQUIST_DIVISOR)
-
-
 def _shelf_crossover_omega(fs: float, crossover: float | None) -> float:
-    return _shelf_crossover_hz(fs, crossover) / float(fs) * 2.0 * math.pi
+    crossover_hz = fs / 4.0 if crossover is None else float(crossover)
+    return min(crossover_hz, fs / 2.1) / fs * 2.0 * math.pi
 
 
 def gain_to_first_order_shelf(
@@ -71,12 +57,7 @@ def gain_to_first_order_shelf(
     *,
     return_design: bool = False,
 ) -> Any:
-    """Design a first-order shelf from its endpoint amplitudes in dB.
-
-    ``crossover`` is the midpoint in Hz: the frequency where the gain is the
-    geometric mean of the DC and Nyquist amplitudes. ``None`` uses ``fs/4``.
-    A value above ``fs/2.1`` is clamped to ``fs/2.1``.
-    """
+    """Design a first-order shelf from its endpoint amplitudes in dB."""
     xp = array_namespace(gain_db)
     if xp is np:
         gain_db, gain_db_nyquist = np.broadcast_arrays(
@@ -109,11 +90,7 @@ def decay_to_first_order_shelf(
     *,
     return_design: bool = False,
 ) -> Any:
-    """Design first-order attenuation shelves from endpoint RTs in seconds.
-
-    ``rt_crossover`` is the shelf midpoint in Hz, with the same default
-    (``fs/4``) and clamp (``fs/2.1``) as :func:`gain_to_first_order_shelf`.
-    """
+    """Design first-order attenuation shelves from endpoint RTs in seconds."""
     gain_db = _decay_to_gain_db(rt, delays, fs)
     nyquist_db = _decay_to_gain_db(rt_nyquist, delays, fs)
     sos = gain_to_first_order_shelf(gain_db, nyquist_db, rt_crossover, fs)

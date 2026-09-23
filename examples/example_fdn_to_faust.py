@@ -87,7 +87,7 @@ def _(mo):
     mo.md(r"""
     ## 1. Design the FDN
 
-    A six-line FDN from the gallery, mono in and stereo out: random orthogonal feedback, a first-order absorption shelf per delay line (1.8 s at DC, 0.4 s at Nyquist, crossing at `fs/4`), unity direct path.
+    A six-line FDN from the gallery, mono in and stereo out: random orthogonal feedback, a first-order absorption shelf per delay line giving 1.8 s at DC and 0.4 s at Nyquist, unity direct path.
 
     The output matrix `C` is `(2, 6)` with random gains, so the two channels are decorrelated mixes of the same delay lines — with `io_type="ones"` both columns would be identical and the result would be dual mono.
 

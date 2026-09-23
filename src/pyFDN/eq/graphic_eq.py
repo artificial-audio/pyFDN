@@ -23,8 +23,6 @@ from .probe_sos import probe_sos
 COMMAND_FREQUENCIES = 16000.0 / 2.0 ** np.arange(9, -1, -1)
 CENTER_FREQUENCIES = np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000], float)
 SHELVING_CROSSOVER = np.array([46.0, 11360.0])
-# Control frequencies, and a first-order shelf crossover, stop at fs/this.
-_NYQUIST_DIVISOR = 2.1
 BANDWIDTH_R = 2.7
 N_GRAPHIC_EQ_BANDS = 10
 N_GRAPHIC_EQ_SECTIONS = 11
@@ -74,9 +72,7 @@ def _geq_sections(
 
 @lru_cache(maxsize=8)
 def _geq_control_problem(fs: float) -> tuple[np.ndarray, np.ndarray]:
-    control_frequencies = np.round(
-        np.logspace(0, np.log10(fs / _NYQUIST_DIVISOR), _NUM_CONTROL + 1)
-    )
+    control_frequencies = np.round(np.logspace(0, np.log10(fs / 2.1), _NUM_CONTROL + 1))
     interpolation = np.empty((len(control_frequencies), N_GRAPHIC_EQ_BANDS))
     for band in range(N_GRAPHIC_EQ_BANDS):
         unit = np.zeros(N_GRAPHIC_EQ_BANDS)

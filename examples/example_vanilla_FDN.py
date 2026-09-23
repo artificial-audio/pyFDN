@@ -41,7 +41,7 @@ def _(mo):
     mo.md(r"""
     ## Build the model
 
-    Eight delay lines at 48 kHz, decaying over 2 s at DC and half that at Nyquist — the frequency-dependent absorption every real room has. The first-order shelf that joins those endpoints crosses at `fs/4`, the gallery default. `dss_to_flamo` takes the build's matrices, delays and per-line filters and returns the FLAMO model; `flamo_time_response` renders its impulse response.
+    Eight delay lines at 48 kHz, decaying over 2 s at DC and half that at Nyquist — the frequency-dependent absorption every real room has. `dss_to_flamo` takes the build's matrices, delays and per-line filters and returns the FLAMO model; `flamo_time_response` renders its impulse response.
     """)
     return
 
