@@ -45,7 +45,7 @@ def decay_to_geq(
 
 
 def _shelf_crossover_omega(fs: float, crossover: float | None) -> float:
-    crossover_hz = fs / 8.0 if crossover is None else float(crossover)
+    crossover_hz = fs / 4.0 if crossover is None else float(crossover)
     return min(crossover_hz, fs / 2.1) / fs * 2.0 * math.pi
 
 

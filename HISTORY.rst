@@ -15,7 +15,9 @@ Unreleased
 * Fix the first-order shelf bilinear prewarp: ``first_order_shelf_biquad``
   used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
   twice the named frequency. High crossovers are now clamped at ``fs/2.1``
-  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``.
+  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``. The default
+  midpoint is ``fs/4``. ``example_reverberation_enhancement`` uses a
+  challenge gain of 1.6.
 * ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
   on. The loss only needs enough of the decay to steer on, while the octave-band
   estimators need a longer measurement window, so the notebook trains at

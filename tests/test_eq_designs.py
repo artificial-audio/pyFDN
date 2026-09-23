@@ -385,12 +385,15 @@ def test_first_order_shelf_crosses_at_the_requested_frequency():
     from scipy.signal import sosfreqz
 
     fs = 48000.0
-    crossover = 2000.0
-    sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
-    w, h = sosfreqz(sos, worN=2**14, fs=fs)
-    db = 20.0 * np.log10(np.abs(h) + 1e-300)
-    realized = float(w[np.argmin(np.abs(db + 6.0))])
-    assert abs(realized - crossover) / crossover < 0.1
+
+    def midpoint(crossover):
+        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+        w, h = sosfreqz(sos, worN=2**14, fs=fs)
+        db = 20.0 * np.log10(np.abs(h) + 1e-300)
+        return float(w[np.argmin(np.abs(db + 6.0))])
+
+    assert abs(midpoint(2000.0) - 2000.0) / 2000.0 < 0.1
+    assert abs(midpoint(None) - fs / 4.0) / (fs / 4.0) < 0.1
 
 
 def test_decay_and_gain_one_pole_are_the_same_mapping():
