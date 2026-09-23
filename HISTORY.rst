@@ -16,6 +16,11 @@ Unreleased
   used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
   twice the named frequency. High crossovers are now clamped at ``fs/2.1``
   (Nyquist-safe for the corrected prewarp) instead of ``fs/5``.
+* ``example_train_fdn_to_rir`` places its absorption and output shelves at
+  ``fs/4``. The default midpoint is ``fs/8``, which falls inside the octave
+  bands that notebook scores, so a two-parameter shelf cannot follow the
+  measured decay through 8 kHz. Notebooks that keep the default now name
+  ``fs/8`` at the call.
 * ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
   on. The loss only needs enough of the decay to steer on, while the octave-band
   estimators need a longer measurement window, so the notebook trains at

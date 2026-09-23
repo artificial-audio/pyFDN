@@ -398,6 +398,33 @@ def test_fdn_build_gallery_first_order_absorption_keeps_A_lossless():
     np.testing.assert_allclose(build.A @ build.A.T, np.eye(3), atol=1e-12)
 
 
+def test_fdn_build_gallery_shelf_midpoint_defaults_to_fs_over_8():
+    delays = np.array([101, 149, 211])
+    fs = 48000.0
+    default = fdn_build_gallery(
+        delays=delays,
+        fs=fs,
+        rt=1.5,
+        rt_nyquist=0.4,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-6.0,
+        rng=7,
+    )
+    explicit = fdn_build_gallery(
+        delays=delays,
+        fs=fs,
+        rt=1.5,
+        rt_nyquist=0.4,
+        rt_crossover=fs / 8.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-6.0,
+        output_crossover=fs / 8.0,
+        rng=7,
+    )
+    np.testing.assert_allclose(default.post_delay, explicit.post_delay)
+    np.testing.assert_allclose(default.post_output, explicit.post_output)
+
+
 def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
     delays = np.array([101, 149, 211])
     default_ny = fdn_build_gallery(delays=delays, rt=2.0, rng=7)

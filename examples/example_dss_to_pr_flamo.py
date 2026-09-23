@@ -24,7 +24,7 @@ def _(mo):
 
     ## Goals
 
-    1. Build a delay state-space model with a **one-pole absorption (SOS) in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`.
+    1. Build a delay state-space model with a **first-order absorption shelf in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`. The omitted crossover is the shelf midpoint `fs/8`.
     2. Extract poles/residues via `pyFDN.flamo_to_pr`.
     3. Explain the key math fix: why we evaluate Newton/Ehrlich–Aberth in **w-plane** (`w = z^{-1}`) while FLAMO probing naturally gives derivatives in **z-plane**.
     4. Verify numerically that the derivative identities are consistent.
@@ -244,7 +244,7 @@ def _(pyFDN, torch):
         io_type="identity",
         direct_gain=0.0,
         rt=0.5,  # reverberation time at DC (seconds)
-        rt_nyquist=0.1,  # ... and at Nyquist
+        rt_nyquist=0.1,  # ... and at Nyquist; the shelf midpoint is fs/8
         rng=7,
     )
 

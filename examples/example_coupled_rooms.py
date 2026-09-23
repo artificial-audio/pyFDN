@@ -70,6 +70,7 @@ def _(pyFDN):
     num_output = 2
 
     # Room 1: small, short RT, brighter (high frequencies decay faster); dark EQ.
+    # Both shelves cross at 1 kHz.
     room1 = pyFDN.fdn_build_gallery(
         N1,
         fs=fs,
@@ -83,7 +84,7 @@ def _(pyFDN):
         io_type="ones",
         rng=5,
     )
-    # Room 2: large, long RT; different (brighter) EQ.
+    # Room 2: large, long RT; different (brighter) EQ. Both shelves cross at 2 kHz.
     room2 = pyFDN.fdn_build_gallery(
         N2,
         fs=fs,

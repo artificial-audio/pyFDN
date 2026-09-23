@@ -458,6 +458,15 @@ def test_mimo_target_wrong_shape_raises():
 # --- analytic decay (the exact RT path) ------------------------------------
 
 
+def test_build_set_decay_shelf_midpoint_defaults_to_fs_over_8():
+    build = pyFDN.extract_build(
+        build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=1)
+    )
+    default = build_set_decay(build, (1.4, 0.5))
+    explicit = build_set_decay(build, (1.4, 0.5), rt_crossover=build.fs / 8.0)
+    np.testing.assert_allclose(default.post_delay, explicit.post_delay)
+
+
 def test_build_set_decay_realizes_rt():
     build = pyFDN.extract_build(
         build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
@@ -1217,6 +1226,50 @@ def test_shelf_post_eq_is_the_numpy_design():
     # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter
     db = _post_output_db(model, fs, np.array([1.0, 23999.0]))
     np.testing.assert_allclose(db, [3.0, -6.0], atol=0.05)
+
+
+def test_trainable_shelf_forwards_its_crossover():
+    """A named midpoint reaches the coefficients, not the fs/8 default."""
+    import torch
+
+    fs = 48000.0
+    crossover = fs / 4.0
+    build = _plain_build()
+    rt = (2.5, 0.8)
+    model = trainable_from_build(
+        build,
+        post_delay=_decay(
+            build,
+            rt,
+            design="first_order_shelf",
+            rt_crossover=crossover,
+            dtype=torch.float64,
+        ),
+        post_output=_out_eq(
+            build,
+            (0.0, -12.0),
+            design="first_order_shelf",
+            crossover=crossover,
+            dtype=torch.float64,
+        ),
+        nfft=2**12,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    expected_decay = pyFDN.decay_to_first_order_shelf(
+        rt[0], rt[1], crossover, build.delays, fs
+    )
+    expected_eq = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+    np.testing.assert_allclose(
+        param(model, "post_delay").value().detach().numpy(), expected_decay, atol=1e-8
+    )
+    np.testing.assert_allclose(
+        param(model, "post_output").value().detach().numpy(),
+        expected_eq[:, :, None],
+        atol=1e-8,
+    )
+    default_eq = pyFDN.gain_to_first_order_shelf(0.0, -12.0, None, fs)
+    assert not np.allclose(expected_eq, default_eq)
 
 
 def test_shelf_crossover_moves_the_transition():

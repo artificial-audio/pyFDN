@@ -162,6 +162,8 @@ if _HAS_FLAMO:
         First-order shelves and one-pole filters use ``rt`` at DC and the
         separately named ``rt_nyquist`` target; omitting the latter creates a
         flat target. Targets may additionally carry one value per delay line.
+        ``rt_crossover`` is the first-order shelf midpoint in Hz; ``None`` is
+        ``fs/8``, and values above ``fs/2.1`` are clamped there.
         The filter is implemented with FLAMO's ``parallelSOSFilter`` because an
         FDN applies one SOS cascade to each delay line in parallel.
         """
@@ -240,7 +242,8 @@ if _HAS_FLAMO:
         :data:`~pyFDN.eq.COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
         First-order shelves and one-pole filters use ``gain_db`` at DC and the
         separately named ``gain_db_nyquist`` target; omitting it creates a
-        flat target.
+        flat target. ``crossover`` is the first-order shelf midpoint in Hz;
+        ``None`` is ``fs/8``, and values above ``fs/2.1`` are clamped there.
         """
 
         def __init__(

@@ -9,6 +9,7 @@ import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
 from pyFDN.eq import (
     COMMAND_FREQUENCIES,
+    SHELVING_CROSSOVER,
     decay_to_geq,
     gain_to_bounded_geq,
     gain_to_geq,
@@ -26,7 +27,7 @@ def geq_setup():
     center_omega = hertz_to_rad(
         np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000.0]), fs
     )
-    shelving_omega = hertz_to_rad(np.array([46.0, 11360.0]), fs)
+    shelving_omega = hertz_to_rad(SHELVING_CROSSOVER, fs)
     R = 2.7
     return center_omega, shelving_omega, R, fs
 
@@ -239,7 +240,7 @@ def test_geq_designs_a_batch_of_gains_at_once():
     center_omega = hertz_to_rad(
         np.array([63, 125, 250, 500, 1000, 2000, 4000, 8000.0]), fs
     )
-    shelving_omega = hertz_to_rad(np.array([46.0, 11360.0]), fs)
+    shelving_omega = hertz_to_rad(SHELVING_CROSSOVER, fs)
     gains = np.stack([np.linspace(-6, 6, 11), np.zeros(11)], axis=1)
 
     banked = _geq_sections(center_omega, shelving_omega, 2.7, gains)
@@ -381,16 +382,55 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     )
 
 
-def test_first_order_shelf_crosses_at_the_requested_frequency():
+def _midpoint_hz(sos, fs, midpoint_db):
+    """Frequency where ``sos`` is nearest ``midpoint_db``."""
     from scipy.signal import sosfreqz
 
-    fs = 48000.0
-    crossover = 2000.0
-    sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
-    w, h = sosfreqz(sos, worN=2**14, fs=fs)
+    w, h = sosfreqz(np.asarray(sos, dtype=float), worN=2**16, fs=fs)
     db = 20.0 * np.log10(np.abs(h) + 1e-300)
-    realized = float(w[np.argmin(np.abs(db + 6.0))])
-    assert abs(realized - crossover) / crossover < 0.1
+    return float(w[np.argmin(np.abs(db - midpoint_db))])
+
+
+@pytest.mark.parametrize(
+    ("crossover", "expected"),
+    [
+        (2000.0, 2000.0),
+        (None, 48000.0 / 8.0),
+        (48000.0 / 4.0, 48000.0 / 4.0),
+        (48000.0 / 2.0, 48000.0 / 2.1),
+    ],
+)
+def test_first_order_shelf_crosses_at_the_requested_frequency(crossover, expected):
+    """The named midpoint is the realized one. None is fs/8; fs/2 clamps to fs/2.1."""
+    fs = 48000.0
+    sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+    realized = _midpoint_hz(sos, fs, -6.0)
+    assert abs(realized - expected) / expected < 0.02
+
+
+def _midpoint_hz_ba(b, a, fs, midpoint_db):
+    """Frequency where a ``(b, a)`` section is nearest ``midpoint_db``."""
+    from scipy.signal import freqz
+
+    w, h = freqz(np.asarray(b, float), np.asarray(a, float), worN=2**16, fs=fs)
+    db = 20.0 * np.log10(np.abs(h) + 1e-300)
+    return float(w[np.argmin(np.abs(db - midpoint_db))])
+
+
+@pytest.mark.parametrize(
+    ("section", "crossover"),
+    [
+        (lowshelf_biquad, SHELVING_CROSSOVER[0]),
+        (highshelf_biquad, SHELVING_CROSSOVER[1]),
+    ],
+)
+def test_graphic_eq_shelves_cross_at_shelving_crossover(section, crossover):
+    """Second-order GEQ shelves use the same midpoint convention."""
+    fs = 48000.0
+    omega = float(hertz_to_rad(crossover, fs))
+    b, a = section(omega, 10.0 ** (-12.0 / 20.0))
+    realized = _midpoint_hz_ba(b, a, fs, -6.0)
+    assert abs(realized - crossover) / crossover < 0.02
 
 
 def test_decay_and_gain_one_pole_are_the_same_mapping():

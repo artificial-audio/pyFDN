@@ -45,7 +45,7 @@ def _(mo):
     mo.md(r"""
     ## Room and wall filters
 
-    Define room size, source and receiver positions, and sample rate. Wall filters are first-order shelving EQs in second-order-section (SOS) format, with separate gains at DC and Nyquist.
+    Define room size, source and receiver positions, and sample rate. Wall filters are first-order shelving EQs in second-order-section (SOS) format, with separate gains at DC and Nyquist and a midpoint at 8 kHz.
     """)
     return
 
