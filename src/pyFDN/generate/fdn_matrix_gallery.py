@@ -5,9 +5,11 @@ Translation of fdnMatrixGallery.m from fdnToolbox.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Literal, NamedTuple, NoReturn, get_args, overload
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .householder_matrix import householder_matrix
 from .random_orthogonal import random_orthogonal
@@ -36,6 +38,7 @@ def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
 FeedbackMatrixType = Literal[
     "orthogonal",
     "hadamard",
+    "kronecker",
     "householder",
     "circulant",
     "permutation",
@@ -183,6 +186,9 @@ def filter_matrix_gallery(
 def fdn_matrix_gallery(
     N: int | None = None,
     matrix_type: str | None = None,
+    *,
+    angles: ArrayLike | None = None,
+    kernel_type: str | Sequence[str] = "rotation",
 ) -> np.ndarray | list[str]:
     """Return a feedback matrix of the requested type, or list all type names.
 
@@ -190,6 +196,12 @@ def fdn_matrix_gallery(
         N: Matrix size.  Ignored when ``matrix_type`` is ``None``.
         matrix_type: One of the supported type strings.  Pass ``None`` (or call
                      with no arguments) to get the list of all type names.
+        angles: Kernel angles for the ``"kronecker"`` type, innermost first
+            (see :func:`pyFDN.kronecker_matrix`).  Defaults to ``pi / 4`` on
+            every kernel, the equal-mixing setting.  Ignored otherwise.
+        kernel_type: Kernel family for the ``"kronecker"`` type,
+            ``"rotation"`` or ``"reflection"``, either once for all kernels or
+            one per kernel.  Ignored otherwise.
 
     Returns:
         Feedback matrix of shape ``(N, N)``, or a list of type-name strings.
@@ -199,6 +211,7 @@ def fdn_matrix_gallery(
         fdn_matrix_gallery()             # → list of type strings
         fdn_matrix_gallery(4, "orthogonal")
         fdn_matrix_gallery(8, "hadamard")
+        fdn_matrix_gallery(8, "kronecker", angles=[0.0, np.pi / 4, np.pi / 8])
     """
     if matrix_type is None:
         return list(FEEDBACK_MATRIX_TYPES)
@@ -215,6 +228,12 @@ def fdn_matrix_gallery(
         from scipy.linalg import hadamard
 
         return hadamard(N) / np.sqrt(N)
+
+    if matrix_type == "kronecker":
+        from .kronecker_matrix import kronecker_angles, kronecker_matrix
+
+        theta = kronecker_angles(N) if angles is None else angles
+        return kronecker_matrix(theta, kernel_type)
 
     if matrix_type == "circulant":
         r_fft = np.fft.fft(np.random.randn(N))
