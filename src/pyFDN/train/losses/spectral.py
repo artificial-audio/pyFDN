@@ -84,11 +84,9 @@ class FlatMagnitude(Match):
         self, target: float = 1.0, *, channels: ChannelReduction = "sum"
     ) -> None:
         _reduce_channels_check(channels)
-        # Use a dummy target IR; the ConstantTargetDistance ignores it
         import numpy as np
-        dummy_target = np.array([1.0])
         super().__init__(
-            target=dummy_target,
+            target=None,
             feature=Magnitude(channels=channels),
             distance=ConstantTargetDistance(target),
             reduction=Mean(),
@@ -203,11 +201,9 @@ class SpectralFlatness(Match):
         self, target: float = 1.0, *, channels: ChannelReduction = "none"
     ) -> None:
         _reduce_channels_check(channels)
-        # Use a dummy target IR; FlatnessRatioDistance computes the flatness ratio
         import numpy as np
-        dummy_target = np.array([1.0])
         super().__init__(
-            target=dummy_target,
+            target=None,
             feature=Magnitude(channels=channels),
             distance=FlatnessRatioDistance(),
             reduction=Mean(),
