@@ -229,7 +229,8 @@ def test_kronecker_matrix_operator_matches_a_static_gain() -> None:
 
     assert operator.in_channels == operator.out_channels == 16
     assert np.allclose(
-        operator.process(x), td.Gain(pyFDN.kronecker_matrix(angles)).process(x)
+        operator.process_signal(x),
+        td.Gain(pyFDN.kronecker_matrix(angles)).process_signal(x),
     )
 
 
@@ -239,15 +240,17 @@ def test_kronecker_matrix_operator_is_block_invariant() -> None:
     x = rng.standard_normal((30, 8))
     operator = td.KroneckerMatrix(angles)
 
-    whole = operator.process(x)
-    streamed = np.vstack([operator.filter(x[i : i + 7]) for i in range(0, 30, 7)])
+    whole = operator.process_signal(x)
+    streamed = np.vstack(
+        [operator.process_block(x[i : i + 7]) for i in range(0, 30, 7)]
+    )
 
     assert np.allclose(whole, streamed)
 
 
 def test_kronecker_matrix_operator_rejects_a_channel_mismatch() -> None:
     with pytest.raises(ValueError, match="expects 8 input channels"):
-        td.KroneckerMatrix(np.zeros(3)).process(np.zeros((4, 4)))
+        td.KroneckerMatrix(np.zeros(3)).process_signal(np.zeros((4, 4)))
 
 
 def test_time_varying_operator_is_orthogonal_at_every_sample() -> None:
@@ -289,14 +292,14 @@ def test_time_varying_operator_advances_and_rewinds_its_clock() -> None:
     )
     x = np.random.default_rng(13).standard_normal((64, 8))
 
-    first = operator.process(x)
+    first = operator.process_signal(x)
     assert operator.sample_index == 64
 
-    second = operator.process(x)
+    second = operator.process_signal(x)
     assert not np.allclose(first, second)
 
     operator.reset()
-    assert np.allclose(operator.process(x), first)
+    assert np.allclose(operator.process_signal(x), first)
 
 
 def test_zero_depth_time_varying_operator_equals_the_static_matrix() -> None:
@@ -305,7 +308,9 @@ def test_zero_depth_time_varying_operator_equals_the_static_matrix() -> None:
 
     modulated = td.TimeVaryingKroneckerMatrix(angles, 48000.0, rate=3.0, depth=0.0)
 
-    assert np.allclose(modulated.process(x), td.KroneckerMatrix(angles).process(x))
+    assert np.allclose(
+        modulated.process_signal(x), td.KroneckerMatrix(angles).process_signal(x)
+    )
 
 
 def test_triangle_waveform_stays_within_the_requested_depth() -> None:
@@ -341,7 +346,7 @@ def test_kronecker_feedback_matrix_renders_a_lossless_fdn() -> None:
 
     impulse = np.zeros(4000)
     impulse[0] = 1.0
-    ir = pyFDN.process_fdn(impulse, delays, A, B, C, D)
+    ir = pyFDN.process_dss(impulse, delays, A, B, C, D)
 
     # Lossless: the tail neither grows nor dies away.
     assert np.isfinite(ir).all()
@@ -349,7 +354,7 @@ def test_kronecker_feedback_matrix_renders_a_lossless_fdn() -> None:
     assert np.abs(late).max() > 1e-3
 
 
-def test_time_varying_kronecker_matrix_drives_process_fdn() -> None:
+def test_time_varying_kronecker_matrix_drives_process_dss() -> None:
     """With A = I the operator on ``post_matrix`` *is* the feedback matrix."""
     N = 16
     delays = pyFDN.sample_delay_lengths(N, (60, 300), coprime=True, rng=4)
@@ -371,8 +376,8 @@ def test_time_varying_kronecker_matrix_drives_process_fdn() -> None:
         np.ones((1, N)) / np.sqrt(N),
         np.zeros((1, 1)),
     )
-    moving = pyFDN.process_fdn(impulse, *common, post_matrix=modulated)
-    fixed = pyFDN.process_fdn(impulse, *common, post_matrix=static)
+    moving = pyFDN.process_dss(impulse, *common, post_matrix=modulated)
+    fixed = pyFDN.process_dss(impulse, *common, post_matrix=static)
 
     assert np.isfinite(moving).all()
     assert not np.allclose(moving, fixed)

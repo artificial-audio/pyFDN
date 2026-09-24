@@ -23,13 +23,61 @@ Unreleased
   chorusing that modulating the delay lengths brings; since only one two-by-two
   kernel changes per moving angle, per-sample modulation costs no more than the
   static matrix. Both go straight into the ``post_matrix`` hook of
-  ``process_fdn``.
+  ``process_dss``.
 * Add the ``example_kronecker_matrix`` notebook, which reproduces the
   configurations from the paper's companion site: the construction and its
   Hadamard special case, the fast transform, the stereo cross-coupling sweep on
   the outermost angle with its interchannel-balance and IACC analysis, and
   matrix modulation on the next angle in, with the pole-frequency histogram
   that shows why it reduces coloration.
+* **Breaking:** the ten-band graphic EQ's command grid is now the octave
+  centres 31.25 Hz through 16 kHz, with nearest-neighbour hold below 31.25 Hz
+  and above 16 kHz, instead of dummy DC and Nyquist anchors at 1 Hz and
+  ``fs``. The 10-vector of ``gain_to_geq`` / ``decay_to_geq`` /
+  ``AttenuationFilter`` / ``OutputEQ`` targets is ordered on
+  ``pyFDN.eq.COMMAND_FREQUENCIES``. The 11-section cascade itself is
+  unchanged.
+* Fix the first-order shelf bilinear prewarp: ``first_order_shelf_biquad``
+  used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
+  twice the named frequency. High crossovers are now clamped at ``fs/2.1``
+  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``. The default
+  midpoint is ``fs/4``. ``example_reverberation_enhancement`` uses a
+  challenge gain of 1.6.
+* ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
+  on. The loss only needs enough of the decay to steer on, while the octave-band
+  estimators need a longer measurement window, so the notebook trains at
+  ``nfft=2**16`` (1.37 s) and switches to ``2**17`` (2.73 s) with FLAMO's new
+  ``Shell.set_nfft`` before rendering. The step cost is linear in ``nfft``, so
+  shorter grid reduces training time. Each training-cell run resets the grid
+  before fitting. Requires ``flamo>=0.2.18``, where ``set_nfft`` was added.
+  The walkthrough now focuses on the implemented workflow and ends with
+  octave-band validation.
+  Keep a CPU/CUDA float32 selector and use first-order shelves for absorption
+  and output EQ. Cite the filter-learning paper with a TODO for publication.
+
+* Type every DSS matrix parameter (``A``/``B``/``C``/``D`` and the ``b``/``c``/``d``
+  gains in ``dss_to_ss``) as ``ArrayLike`` instead of ``ndarray`` across
+  ``dss_to_flamo``, ``dss_to_impz``, ``dss_to_td``, ``dss_to_tf``, ``dss_to_ss``,
+  ``general_char_poly``, and ``loop_tf`` -- matching what these functions
+  already do internally (``np.asarray(...)``) and how ``delays`` was already
+  typed. Also fixes ``dss_to_ss`` silently returning a non-array ``dd`` when
+  ``d`` was passed as a list rather than an ``ndarray``.
+* Add ``dss_to_td``, the raw delay state-space (DSS) counterpart of
+  ``build_to_td`` -- matching the ``dss_to_*``/``build_to_*`` pattern already
+  used by ``dss_to_flamo``/``build_to_flamo`` and ``dss_to_impz``/
+  ``build_to_impz``.
+* **Breaking:** rename the ``m`` parameter to ``delays`` in ``dss_to_ss`` and
+  ``dss_to_flamo``, matching every other DSS-related function.
+* Clarify docs and docstrings on the relationship between a delay state-space
+  (DSS) system and an ``FDNBuild``: a build is a DSS system plus ``fs`` and
+  baked filter hooks.
+* Fix ``dss_to_ss`` raising a dimension-mismatch error for delays at the
+  documented minimum of 3 samples.
+* **Breaking:** ``process_fdn`` now takes an ``FDNBuild`` and assembles a
+  stateful ``td`` graph (new ``build_to_td``) instead of taking raw DSS
+  arguments; the old signature is renamed to ``process_dss``. ``td`` operators
+  rename ``filter(block)``/``process(signal)`` to
+  ``process_block(block)``/``process_signal(signal)``.
 
 0.4.2 (2026-08-27)
 ------------------
@@ -43,7 +91,7 @@ Unreleased
 * Add nonlinear and pitch-shifting time-domain operators for shimmer
   reverberation -- ``DCBlocker``, ``ControllableFullWaveRect``, ``SDFD``,
   ``RingModulator``, ``PitchShift`` and ``GranularPitchShift`` -- all usable as
-  ``process_fdn`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
+  ``process_dss`` hooks, plus the ``example_shimmer_fdn`` notebook that walks
   through each one inside the feedback loop of the same 8-line FDN.
 * ``is_uniallpass`` no longer solves a singular Lyapunov equation when ``A`` is
   itself lossless (as in the allpass-in-FDN structure). The spectral radius is

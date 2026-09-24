@@ -378,7 +378,7 @@ def _(
     _impulse[0, 0] = 1.0
 
     stereo_ir = {
-        percent: pyFDN.process_fdn(
+        percent: pyFDN.process_dss(
             _impulse,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
@@ -536,7 +536,7 @@ def _(
     stereo_note,
 ):
     stereo_wet = {
-        percent: pyFDN.process_fdn(
+        percent: pyFDN.process_dss(
             stereo_note,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
@@ -741,7 +741,7 @@ def _(
     pyFDN,
 ):
     modulated_wet = {
-        name: pyFDN.process_fdn(
+        name: pyFDN.process_dss(
             dry_chords,
             delays_mod,
             absorption_mod,  # A carries the absorption only ...

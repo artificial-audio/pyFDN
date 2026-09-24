@@ -109,9 +109,13 @@ def dss_to_pr(
     dtype: Any = None,
     device: Any = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    """Modal decomposition of an FDN from raw DSS matrices.
+    """Modal decomposition of a delay state-space (DSS) system.
 
     ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (1 − p_k z^{-1}) + D``
+
+    No ``build_to_pr`` counterpart exists: pass ``build.delays`` and
+    ``build.A``/``B``/``C``/``D`` directly, plus ``fs=build.fs`` for
+    ``mode="eai"``.
 
     Parameters
     ----------
@@ -169,7 +173,7 @@ def dss_to_pr(
             B=np.asarray(B, dtype=np.float64),
             C=np.asarray(C, dtype=np.float64),
             D=np.asarray(D, dtype=np.float64),
-            m=delays_arr,
+            delays=delays_arr,
             fs=float(fs),
             nfft=int(nfft),
             device=device,

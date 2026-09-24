@@ -139,6 +139,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_td",
     "build_to_impz",
     "build_to_flamo",
     "dss_to_flamo",
@@ -149,11 +150,13 @@ __all__ = [
     "flamo_extract_pr_decomposition",
     "FlamoDecompositionForPR",
     "dss_to_ss",
+    "dss_to_td",
     "dss_to_tf",
     "impz_to_res",
     "mtf_to_impz",
     "pr_to_impz",
     # fdn processing
+    "process_dss",
     "process_fdn",
     # training
     "build_fdn",
@@ -453,7 +456,7 @@ from .preset import (
 )
 
 # fdn processing
-from .process import process_fdn
+from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
@@ -497,6 +500,7 @@ from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import build_to_impz, dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
+from .translate.dss_to_td import build_to_td, dss_to_td
 from .translate.dss_to_tf import dss_to_tf
 from .translate.flamo_to_pr import (
     FlamoDecompositionForPR,

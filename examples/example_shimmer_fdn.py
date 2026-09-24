@@ -39,7 +39,7 @@ def _(mo):
     | `PitchShift` | dual-read-head pitch shifter reading a circular buffer at a different rate than it's written | `transpose_cents` |
     | `GranularPitchShift` | the same idea, done with short overlapping grains instead of two continuous read heads | `transpose_cents`, `grain_dur_samps` |
 
-    Each is a `post_delay` hook for `process_fdn`.
+    Each is a `post_delay` hook for `process_dss`.
 
 
     Reference: "Shimmer Reverberation with Nonlinear Feedback Delay Networks",
@@ -128,7 +128,7 @@ def _(mo):
     mo.md(r"""
     ### The reference: plain FDN, no nonlinearity
 
-    `process_fdn` runs the same recursion as above, driven by a dry synth signal
+    `process_dss` runs the same recursion as above, driven by a dry synth signal
     instead of an impulse. This "plain FDN" render is the baseline every
     nonlinear variant below gets compared against — same input, same delays, same
     decay, nothing else in the loop yet.
@@ -141,7 +141,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_fdn(
+    wet = pyFDN.process_dss(
         x,
         delays,
         A,
@@ -181,7 +181,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
-    wet_cfwr = pyFDN.process_fdn(
+    wet_cfwr = pyFDN.process_dss(
         x,
         delays,
         A,
@@ -230,7 +230,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
-    wet_sdfd = pyFDN.process_fdn(
+    wet_sdfd = pyFDN.process_dss(
         x,
         delays,
         A,
@@ -274,7 +274,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
-    wet_rm = pyFDN.process_fdn(
+    wet_rm = pyFDN.process_dss(
         x,
         delays,
         A,
@@ -341,7 +341,7 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
     absorption_2 = pyFDN.decay_to_geq(target_rt, delays_2, fs)  # (n_sections, 6, N)
 
     window_size = 2048
-    wet_ps = pyFDN.process_fdn(
+    wet_ps = pyFDN.process_dss(
         x,
         delays_2,
         A,
@@ -392,7 +392,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
     grain_dur_samps = 1024
-    wet_gps = pyFDN.process_fdn(
+    wet_gps = pyFDN.process_dss(
         x,
         delays_2,
         A,
