@@ -29,8 +29,8 @@ class Match(ResponseLoss):
 
         Parameters
         ----------
-        target : Any
-            Reference impulse response (NumPy array, PyTorch tensor, or list).
+        target : Any or None
+            Reference impulse response (NumPy array, PyTorch tensor, or list), or None.
         feature : Feature or callable
             Extracts the representation to compare: ``(h, fs) -> torch.Tensor``.
         distance : Distance or callable, default SquaredError()
@@ -41,7 +41,7 @@ class Match(ResponseLoss):
 
     def __init__(
         self,
-        target: Any,
+        target: Any | None,
         feature: Feature | Callable[[torch.Tensor, float], torch.Tensor],
         distance: Distance | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = SquaredError(),
         reduction: Reduction | Callable[[torch.Tensor], torch.Tensor] = Mean(),
