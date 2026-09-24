@@ -3,7 +3,7 @@
 
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.2"
 app = marimo.App()
 
 
@@ -276,7 +276,7 @@ def _(mo):
 
     ### The network
 
-    A 32-line FDN, coprime delays from 20 ms to 200 ms, \(T_{60} = 10\) s, no damping filters and no diffusion stages, so nothing but the matrix shapes what is heard. The sorted delays are dealt alternately into the two halves so each half spans the full 20–200 ms range — otherwise the contiguous split would give one channel all the short lines and the other all the long ones.
+    A 32-line FDN, delays from 20 ms to 200 ms, \(T_{60} = 10\) s, no damping filters and no diffusion stages, so nothing but the matrix shapes what is heard. Following the companion site, the delays are coprime *per channel*: one set of 16 coprime, geometrically spaced lengths is drawn and both halves reuse it, so every length appears once on each side. The matched pairs are what give the energy its audible back-and-forth bounce between the channels once they are coupled; with unrelated delay sets on the two sides that effect disappears.
     """)
     return
 
@@ -286,7 +286,7 @@ def _(fs, np, pyFDN):
     N_stereo = 32
     T60_stereo = 10.0  # seconds
 
-    _left_delays = pyFDN.sample_delay_lengths(
+    _half_delays = pyFDN.sample_delay_lengths(
         N_stereo // 2,
         (int(0.020 * fs), int(0.200 * fs)),
         coprime=True,
@@ -294,16 +294,9 @@ def _(fs, np, pyFDN):
         distribution="geometric",
         rng=808,
     )
-    _right_delays = pyFDN.sample_delay_lengths(
-        N_stereo // 2,
-        (int(0.020 * fs), int(0.200 * fs)),
-        coprime=True,
-        sort=True,
-        distribution="geometric",
-        rng=808,
-    )
-    # Deal alternately into the two halves so both span 20-200 ms.
-    delays_stereo = np.hstack([_left_delays, _right_delays])
+    # Coprime per channel, shared across channels: both halves use the same
+    # delays, which is what produces the left/right bouncing once coupled.
+    delays_stereo = np.tile(_half_delays, 2)
 
     absorption_stereo = np.diag(
         pyFDN.rt_to_gain_per_sample(T60_stereo, fs) ** delays_stereo
@@ -546,7 +539,7 @@ def _(
         percent: pyFDN.process_fdn(
             stereo_note,
             delays_stereo,
-            pyFDN.kronecker_matrix(angles, "rotation") @ absorption_stereo,
+            pyFDN.kronecker_matrix(angles) @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
