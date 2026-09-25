@@ -87,7 +87,7 @@ def first_order_shelf_biquad(
         gain_dc = np.asarray(gain_dc, dtype=float)
         gain_nyquist = np.asarray(gain_nyquist, dtype=float)
 
-    t = math.tan(float(omega_c))
+    t = math.tan(float(omega_c) / 2.0)
     sqrt_ratio = xp.sqrt(gain_dc / gain_nyquist)
     a0 = t / sqrt_ratio + 1.0
     b0 = (t * sqrt_ratio + 1.0) * gain_nyquist / a0

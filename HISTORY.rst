@@ -5,6 +5,44 @@ History
 Unreleased
 ----------
 
+* Add the Kronecker feedback matrix of Coppola (DAFx26): ``kronecker_matrix``
+  builds a lossless ``2**M x 2**M`` matrix from ``M`` two-by-two rotation or
+  reflection kernels, one angle each, and ``kronecker_transform`` applies it in
+  ``O(N log2 N)`` with the paper's in-place butterfly instead of a dense
+  product. Every kernel angle addresses one bit of the delay-line index, so a
+  single angle cuts or re-couples the network along one partition -- the
+  outermost across the two stereo halves, the innermost between the even- and
+  odd-indexed lines -- and the matrix stays orthogonal at every setting. All
+  reflection kernels at ``pi/4`` recover the normalised Hadamard matrix, so the
+  usual FDN mixing matrix is one point in the family. Reachable from the
+  gallery as ``fdn_matrix_gallery(N, "kronecker")``, with ``kronecker_angles``
+  for naming the angles to move.
+* Add the ``td.KroneckerMatrix`` and ``td.TimeVaryingKroneckerMatrix``
+  operators. The latter modulates chosen kernel angles by a sine or triangle,
+  which breaks up fixed modal resonances by moving the poles without the
+  chorusing that modulating the delay lengths brings; since only one two-by-two
+  kernel changes per moving angle, per-sample modulation costs no more than the
+  static matrix. Both go straight into the ``post_matrix`` hook of
+  ``process_dss``.
+* Add the ``example_kronecker_matrix`` notebook, which reproduces the
+  configurations from the paper's companion site: the construction and its
+  Hadamard special case, the fast transform, the stereo cross-coupling sweep on
+  the outermost angle with its interchannel-balance and IACC analysis, and
+  matrix modulation on the next angle in, with the pole-frequency histogram
+  that shows why it reduces coloration.
+* **Breaking:** the ten-band graphic EQ's command grid is now the octave
+  centres 31.25 Hz through 16 kHz, with nearest-neighbour hold below 31.25 Hz
+  and above 16 kHz, instead of dummy DC and Nyquist anchors at 1 Hz and
+  ``fs``. The 10-vector of ``gain_to_geq`` / ``decay_to_geq`` /
+  ``AttenuationFilter`` / ``OutputEQ`` targets is ordered on
+  ``pyFDN.eq.COMMAND_FREQUENCIES``. The 11-section cascade itself is
+  unchanged.
+* Fix the first-order shelf bilinear prewarp: ``first_order_shelf_biquad``
+  used ``tan(ω)`` rather than ``tan(ω/2)``, so a requested crossover sat at
+  twice the named frequency. High crossovers are now clamped at ``fs/2.1``
+  (Nyquist-safe for the corrected prewarp) instead of ``fs/5``. The default
+  midpoint is ``fs/4``. ``example_reverberation_enhancement`` uses a
+  challenge gain of 1.6.
 * ``example_train_fdn_to_rir`` now fits on a shorter FFT grid than it measures
   on. The loss only needs enough of the decay to steer on, while the octave-band
   estimators need a longer measurement window, so the notebook trains at

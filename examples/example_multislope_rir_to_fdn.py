@@ -183,7 +183,7 @@ def _(mo):
 
     Each slope becomes its own FDN. A GEQ absorption filter per delay line gives the FDN the decay time of that slope, and an output GEQ sets its initial level. The level target is the difference between the level the slope should have and the level the unequalized FDN happens to produce, so the design corrects itself.
 
-    The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
+    The two GEQ designs work on a 10-point grid (octave centres 31.25 Hz … 16 kHz);
     the octave-band estimates are extended to it by repeating the edge bands.
 
     `pyFDN.decay_to_geq` and `pyFDN.gain_to_bounded_geq` both return normalized biquad sections in `[b0, b1, b2, a0, a1, a2]` form, with `a0 = 1`. The first maps reverberation-time targets onto in-loop attenuation; the second fits level corrections onto the output EQ while limiting every frequency-shaped section to ±20 dB of internal gain.
@@ -194,7 +194,7 @@ def _(mo):
 @app.cell
 def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
     def geq_grid(band_values):
-        """Extend 8 octave-band values onto the 10-point GEQ design grid."""
+        """Extend 8 octave-band values onto the 10-point GEQ command grid."""
         return np.concatenate(([band_values[0]], band_values, [band_values[-1]]))
 
     resynthesis = np.zeros(len(rir))

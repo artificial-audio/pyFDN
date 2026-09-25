@@ -8,6 +8,7 @@ import pytest
 import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
 from pyFDN.eq import (
+    COMMAND_FREQUENCIES,
     decay_to_geq,
     gain_to_bounded_geq,
     gain_to_geq,
@@ -16,7 +17,7 @@ from pyFDN.eq import (
     peaking_biquad,
     probe_sos,
 )
-from pyFDN.eq.graphic_eq import _geq_sections
+from pyFDN.eq.graphic_eq import _geq_control_problem, _geq_sections, geq_design_matrix
 
 
 @pytest.fixture()
@@ -111,6 +112,33 @@ def test_gain_to_geq_uniform_target():
     G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.full(len(ctrl), -3.0), atol=0.5)
+
+
+def test_geq_command_frequencies_are_octave_centres():
+    np.testing.assert_allclose(
+        COMMAND_FREQUENCIES, 16000.0 / 2.0 ** np.arange(9, -1, -1)
+    )
+    assert COMMAND_FREQUENCIES.shape == (10,)
+
+
+def test_geq_interpolation_holds_constant_outside_the_command_range():
+    fs = 48000.0
+    _, interpolation = _geq_control_problem(fs)
+    control = np.round(np.logspace(0, np.log10(fs / 2.1), 101))
+    below = control < COMMAND_FREQUENCIES[0]
+    above = control > COMMAND_FREQUENCIES[-1]
+    assert np.any(below) and np.any(above)
+    np.testing.assert_allclose(interpolation[below, 0], 1.0)
+    np.testing.assert_allclose(interpolation[below, 1:], 0.0)
+    np.testing.assert_allclose(interpolation[above, -1], 1.0)
+    np.testing.assert_allclose(interpolation[above, :-1], 0.0)
+
+
+def test_geq_top_band_moves_the_fitted_response_as_much_as_a_mid_band():
+    matrix = geq_design_matrix(48000.0)
+    mid = np.linalg.norm(matrix[:, 4])
+    top = np.linalg.norm(matrix[:, -1])
+    assert top > 0.3 * mid
 
 
 def test_gain_to_bounded_geq_matches_closed_form_when_bounds_are_slack():
@@ -353,6 +381,21 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     )
 
 
+def test_first_order_shelf_crosses_at_the_requested_frequency():
+    from scipy.signal import sosfreqz
+
+    fs = 48000.0
+
+    def midpoint(crossover):
+        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+        w, h = sosfreqz(sos, worN=2**14, fs=fs)
+        db = 20.0 * np.log10(np.abs(h) + 1e-300)
+        return float(w[np.argmin(np.abs(db + 6.0))])
+
+    assert abs(midpoint(2000.0) - 2000.0) / 2000.0 < 0.1
+    assert abs(midpoint(None) - fs / 4.0) / (fs / 4.0) < 0.1
+
+
 def test_decay_and_gain_one_pole_are_the_same_mapping():
     fs = 48000.0
     delays = np.array([809.0, 1153.0])
@@ -382,7 +425,7 @@ def test_attenuation_designs_flatten_delays(design_fn):
     fs = 48000.0
     flat = np.array([100.0, 150.0, 200.0, 250.0])
     if design_fn is pyFDN.decay_to_first_order_shelf:
-        args = (4.0, 1.0, None)
+        args: tuple[float | None, ...] = (4.0, 1.0, None)
     else:
         args = (4.0, 1.0)
     np.testing.assert_allclose(
