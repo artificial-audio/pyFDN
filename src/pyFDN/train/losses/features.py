@@ -246,3 +246,89 @@ class PhaseSpectrogramFeature(Feature):
         result = stacked.reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames)
         self._group_counts = [p.shape[0] * p.shape[1] * p.shape[2] for p in phases]
         return result
+
+
+class EnergyDecayCurve(Feature):
+    """Octave-band normalized Schroeder decay curves in dB.
+
+    Short-time power per octave band, backward-integrated (Schroeder) and
+    normalized to each band's own value at ``t=0``.
+    """
+
+    def __init__(
+        self,
+        window: int = 4096,
+        hop: int | None = None,
+        bands: Any = None,
+    ) -> None:
+        self.window = int(window)
+        self.hop = int(hop) if hop is not None else int(window) // 4
+        self.bands = tuple(float(f) for f in bands)
+
+    def _stft_power(self, h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
+        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
+        spectrum = torch.stft(
+            x,
+            n_fft=self.window,
+            hop_length=self.hop,
+            window=window,
+            center=False,
+            return_complex=True,
+        )
+        return spectrum.real**2 + spectrum.imag**2, x
+
+    def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
+        power, x = self._stft_power(h)
+        freqs = torch.fft.rfftfreq(self.window, 1.0 / fs).to(x.device)
+        band_power = torch.stack(
+            [
+                power[:, (freqs >= lo) & (freqs < hi), :].sum(dim=1)
+                for lo, hi in zip(self.bands[:-1], self.bands[1:], strict=True)
+            ],
+            dim=1,
+        )
+        edc = torch.flip(torch.cumsum(torch.flip(band_power, [-1]), dim=-1), [-1])
+        eps = torch.finfo(edc.dtype).tiny
+        db = 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
+        return db.reshape(-1, len(self.bands) - 1, db.shape[-1])
+
+
+class CumulativeEnergySurface(Feature):
+    """Doubly-cumulated short-time power, one surface per direction.
+
+    Power is integrated backwards in time, then along frequency in each of
+    ``directions`` (``"descending"`` and/or ``"ascending"``). Returns a
+    ``(n_directions, n_channels, n_freq, n_frames)`` tensor.
+    """
+
+    def __init__(
+        self,
+        window: int = 1024,
+        hop: int | None = None,
+        directions: tuple[str, ...] = ("descending",),
+    ) -> None:
+        self.window = int(window)
+        self.hop = int(hop) if hop is not None else int(window) // 4
+        self.directions = tuple(directions)
+
+    def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
+        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
+        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
+        spectrum = torch.stft(
+            x,
+            n_fft=self.window,
+            hop_length=self.hop,
+            window=window,
+            center=False,
+            return_complex=True,
+        )
+        energy = spectrum.real**2 + spectrum.imag**2
+        energy = torch.flip(torch.cumsum(torch.flip(energy, [-1]), -1), [-1])
+        surfaces = [
+            torch.flip(torch.cumsum(torch.flip(energy, [-2]), -2), [-2])
+            if direction == "descending"
+            else torch.cumsum(energy, -2)
+            for direction in self.directions
+        ]
+        return torch.stack(surfaces, dim=0)
