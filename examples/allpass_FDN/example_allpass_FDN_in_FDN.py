@@ -34,7 +34,6 @@ def _():
     from collections import OrderedDict
 
     import numpy as np
-    import torch
     from flamo.processor import dsp, system
 
     import pyFDN
@@ -44,9 +43,7 @@ def _():
     fs = 48000
     nfft = 2**17
     N = 4  # number of delay lines (1→N input gain, N→2 output gain)
-    device = torch.device("cpu")
     return (
-        device,
         fs,
         N,
         OrderedDict,
@@ -72,7 +69,7 @@ def _(mo):
 
 
 @app.cell
-def _(device, fs, N, nfft, np, pyFDN):
+def _(fs, N, nfft, np, pyFDN):
     # Homogeneous MIMO allpass FDN: delays, G = diag(g^delays), A = G @ U, complete_fdn
     delays_sch = np.random.randint(51, 300, size=N)
     _g = pyFDN.rt_to_gain_per_sample(0.07, fs)
@@ -83,8 +80,15 @@ def _(device, fs, N, nfft, np, pyFDN):
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, fs, nfft=nfft, shell=False,
-        device=device,
+        A_sch,
+        B_sch,
+        C_sch,
+        D_sch,
+        delays_sch,
+        fs,
+        nfft=nfft,
+        shell=False,
+        device="cpu",
     )
     return (allpass_fdn_core,)
 
@@ -100,7 +104,7 @@ def _(mo):
 
 
 @app.cell
-def _(device, fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
+def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Main delays (feedback path), input and output delays — in seconds
     main_delay_sec = np.random.uniform(0.02, 0.04, size=N)
     input_delay_sec = np.linspace(0.01, 0.02 * N, N) + np.random.uniform(
@@ -108,15 +112,15 @@ def _(device, fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     )
     output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
 
-    main_delays = delay_module(main_delay_sec, nfft, fs=fs, device=device)
-    input_delays = delay_module(input_delay_sec, nfft, fs=fs, device=device)
-    output_delays = delay_module(output_delay_sec, nfft, fs=fs, device=device)
+    main_delays = delay_module(main_delay_sec, nfft, fs=fs, device="cpu")
+    input_delays = delay_module(input_delay_sec, nfft, fs=fs, device="cpu")
+    output_delays = delay_module(output_delay_sec, nfft, fs=fs, device="cpu")
 
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
     sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, None, main_delay_smp, fs=fs)
-    attenuation = sos_filter_module(sos, nfft, device=device)
+    attenuation = sos_filter_module(sos, nfft, device="cpu")
     return attenuation, input_delays, main_delays, output_delays
 
 
@@ -136,7 +140,6 @@ def _(
     OrderedDict,
     allpass_fdn_core,
     attenuation,
-    device,
     dsp,
     gain_module,
     input_delays,
@@ -152,8 +155,8 @@ def _(
     C_out = np.random.randn(2, N)
     C_out = C_out / np.linalg.norm(C_out, axis=1, keepdims=True)
 
-    gain_B_in = gain_module(B_in, nfft, device=device)
-    gain_C_out = gain_module(C_out, nfft, device=device)
+    gain_B_in = gain_module(B_in, nfft, device="cpu")
+    gain_C_out = gain_module(C_out, nfft, device="cpu")
 
     # Recursion: fF = allpass FDN → attenuation, fB = main delays
     feedforward = system.Series(
@@ -181,8 +184,8 @@ def _(
 
     model = system.Shell(
         core=core_chain,
-        input_layer=dsp.FFT(nfft).to(device),
-        output_layer=dsp.iFFT(nfft).to(device),
+        input_layer=dsp.FFT(nfft).to("cpu"),
+        output_layer=dsp.iFFT(nfft).to("cpu"),
     )
 
     ir_stereo = pyFDN.flamo_time_response(model).squeeze()

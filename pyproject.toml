@@ -34,7 +34,7 @@ dependencies = [
   "numpy",
   "soundfile",
   "scipy",
-  "flamo>=0.2.18",  # Shell.set_nfft (train and render at different FFT sizes)
+  "flamo>=0.2.20",  # canonical module devices (string "cpu"/"cuda" mix with .to())
   "flareverb",
 ]
 

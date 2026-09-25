@@ -47,7 +47,7 @@ def create_coupled_rooms_fdn():
     num_output = 2
 
     # Device configuration
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     alias_decay_db = 0  # No anti-aliasing for exact reproduction
 
     # Exact delay values
