@@ -108,3 +108,67 @@ class OnesTargetDistance(Distance):
 
     def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (pred - 1.0) ** 2
+
+
+class MaskedSquaredError(Distance):
+    """Squared error over entries where the reference is above ``floor_db``.
+
+    The mask follows the reference, so only the part of the curve carrying
+    signal counts; entries below the floor (noise) are ignored.
+    """
+
+    def __init__(self, floor_db: float = -45.0) -> None:
+        self.floor_db = float(floor_db)
+
+    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        mask = target > self.floor_db
+        if not bool(mask.any()):
+            raise ValueError(
+                f"the reference never rises above floor_db={self.floor_db}; "
+                "it carries no decay to fit"
+            )
+        out = torch.zeros_like(pred)
+        out[mask] = (pred[mask] - target[mask]) ** 2
+        # Stash the count so Rms reads only the masked entries.
+        self._count = mask.sum()
+        return out
+
+
+class CompressedEnergyDistance(Distance):
+    """Reference-normalized, compressed squared error per cumulation direction.
+
+    Each ``(direction, channel, freq, frame)`` surface is normalized by the
+    reference's total energy (one constant per direction, so relative levels
+    between paths survive) and compressed with ``power`` above a ``floor_db``
+    floor before comparing.
+    """
+
+    def __init__(self, power: float = 0.5, floor_db: float = -100.0) -> None:
+        self.power = float(power)
+        if not 0.0 < self.power <= 1.0:
+            raise ValueError(
+                f"power must be in (0, 1]; got {self.power} (1 is no compression, "
+                "smaller compresses harder)"
+            )
+        self.floor_db = float(floor_db)
+
+    def _compressed(
+        self, surface: torch.Tensor, scale: torch.Tensor
+    ) -> torch.Tensor:
+        floor = 10.0 ** (self.floor_db / 10.0)
+        return (surface / scale).clamp_min(floor) ** self.power
+
+    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        scales = [
+            d.amax(dim=(-2, -1)).mean().clamp_min(torch.finfo(d.dtype).tiny)
+            for d in target
+        ]
+        if not all(bool(s > 0) for s in scales):
+            raise ValueError("the reference carries no energy to fit")
+        compressed = torch.stack(
+            [
+                self._compressed(p, s) - self._compressed(t, s)
+                for p, t, s in zip(pred, target, scales, strict=True)
+            ]
+        )
+        return compressed**2
