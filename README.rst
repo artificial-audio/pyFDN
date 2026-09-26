@@ -43,7 +43,7 @@ Highlights
 
 * Matrix polynomial helpers for evaluating, differentiating, and convolving FIR/IIR blocks.
 * Loop analysis utilities including pole boundary estimation and curve bounding checks.
-* Acoustic absorption design tools that translate RT targets into one-pole loop filters.
+* Acoustic absorption design tools that translate RT targets into one-pole and first-order shelf loop filters.
 * Echo density (Abel & Huang 2006) for analysing reverberation and mixing time.
 * Random orthogonal matrix generation to prototype energy-preserving feedback networks.
 

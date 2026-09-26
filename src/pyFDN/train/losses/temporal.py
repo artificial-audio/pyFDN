@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._targets import _CachedTarget, response_key
 from .base import ResponseLoss
 
 if TYPE_CHECKING:
@@ -12,8 +11,18 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .distances import CompressedEnergyDistance, MaskedSquaredError, SquaredError
+from .features import (
+    OCTAVE_EDGES,
+    CumulativeEnergySurface,
+    EnergyDecayCurve,
+    Waveform,
+)
+from .match import Match
+from .reductions import Mean, MeanRmsOverGroups, Rms
 
-class MatchImpulseResponse(ResponseLoss):
+
+class MatchImpulseResponse(Match):
     """Mean squared error against a reference impulse response, sample by sample.
 
     The strictest of the matching losses -- it fits phase as well as magnitude,
@@ -30,12 +39,12 @@ class MatchImpulseResponse(ResponseLoss):
     """
 
     def __init__(self, target: Any) -> None:
-        self._target = _CachedTarget(target)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        return torch.nn.functional.mse_loss(response.h, self._target(response))
+        super().__init__(
+            target=target,
+            feature=Waveform(),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
 
 
 class Energy(ResponseLoss):
@@ -53,13 +62,7 @@ class Energy(ResponseLoss):
         return (energy - self.target) ** 2
 
 
-# Octave band edges around the 63 Hz … 8 kHz centres, the range a measured RIR
-# actually carries. Below the first edge and above the last, a room impulse
-# response is noise, and its "decay" is the noise floor's.
-_OCTAVE_EDGES = (44.0, 88.0, 177.0, 354.0, 707.0, 1414.0, 2828.0, 5657.0, 11314.0)
-
-
-class MatchEnergyDecay(ResponseLoss):
+class MatchEnergyDecay(Match):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
@@ -106,13 +109,18 @@ class MatchEnergyDecay(ResponseLoss):
         self.window = int(window)
         self.hop = int(hop) if hop is not None else int(window) // 4
         self.bands = tuple(
-            float(f) for f in (bands if bands is not None else _OCTAVE_EDGES)
+            float(f) for f in (bands if bands is not None else OCTAVE_EDGES)
         )
         self.floor_db = float(floor_db)
-        self._target = _CachedTarget(target)
-        self._reference: torch.Tensor | None = None
-        self._key: tuple[Any, ...] | None = None
-        self._mask: torch.Tensor | None = None
+        distance = MaskedSquaredError(floor_db=self.floor_db)
+        super().__init__(
+            target=target,
+            feature=EnergyDecayCurve(
+                window=self.window, hop=self.hop, bands=self.bands
+            ),
+            distance=distance,
+            reduction=Rms(),
+        )
 
     def check(self, model: Any) -> None:
         nfft = int(model.nfft)
@@ -122,64 +130,8 @@ class MatchEnergyDecay(ResponseLoss):
                 f"model's nfft ({nfft}); there is no decay to read."
             )
 
-    def _band_edc_db(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        """``(n_channels, n_bands, n_frames)`` normalized Schroeder curves in dB."""
-        import torch
 
-        # (n_samples, n_out, n_in) -> (n_out * n_in, n_samples), the batch layout
-        # torch.stft wants.
-        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
-        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
-        spectrum = torch.stft(
-            x,
-            n_fft=self.window,
-            hop_length=self.hop,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        power = spectrum.real**2 + spectrum.imag**2  # (batch, freq, frames)
-        freqs = torch.fft.rfftfreq(self.window, 1.0 / fs).to(x.device)
-
-        band_power = torch.stack(
-            [
-                power[:, (freqs >= lo) & (freqs < hi), :].sum(dim=1)
-                for lo, hi in zip(self.bands[:-1], self.bands[1:], strict=True)
-            ],
-            dim=1,
-        )  # (batch, n_bands, frames)
-        # Schroeder backward integration, per band.
-        edc = torch.flip(torch.cumsum(torch.flip(band_power, [-1]), dim=-1), [-1])
-        eps = torch.finfo(edc.dtype).tiny
-        return 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        key = response_key(response)
-        if self._reference is None or self._key != key:
-            self._key = key
-            self._reference = self._band_edc_db(self._target(response), response.fs)
-            self._mask = self._reference > self.floor_db
-            if not bool(self._mask.any()):
-                raise ValueError(
-                    f"the reference never rises above floor_db={self.floor_db}; "
-                    "it carries no decay to fit"
-                )
-        difference = (self._band_edc_db(response.h, response.fs) - self._reference)[
-            self._mask
-        ]
-        return torch.sqrt((difference**2).mean())
-
-
-def _reverse_cumsum(x: torch.Tensor, axis: int) -> torch.Tensor:
-    """Cumulative sum running from the far end of ``axis`` back towards the near one."""
-    import torch
-
-    return torch.flip(torch.cumsum(torch.flip(x, [axis]), axis), [axis])
-
-
-class MatchCumulativeEnergy(ResponseLoss):
+class MatchCumulativeEnergy(Match):
     r"""Doubly-cumulated energy against a reference -- decay *and* colour, no bands.
 
     Takes the short-time power spectrum of both signals and integrates it twice,
@@ -263,10 +215,17 @@ class MatchCumulativeEnergy(ResponseLoss):
                 f"{frequency!r}"
             )
         self.frequency = frequency
-        self._target = _CachedTarget(target)
-        self._reference: list[torch.Tensor] | None = None
-        self._scale: list[torch.Tensor] | None = None
-        self._key: tuple[Any, ...] | None = None
+        directions = (
+            ("descending", "ascending") if frequency == "both" else (frequency,)
+        )
+        super().__init__(
+            target=target,
+            feature=CumulativeEnergySurface(
+                window=self.window, hop=self.hop, directions=directions
+            ),
+            distance=CompressedEnergyDistance(power=self.power, floor_db=self.floor_db),
+            reduction=MeanRmsOverGroups(),
+        )
 
     def check(self, model: Any) -> None:
         nfft = int(model.nfft)
@@ -275,79 +234,3 @@ class MatchCumulativeEnergy(ResponseLoss):
                 f"{type(self).__name__} window ({self.window}) is longer than the "
                 f"model's nfft ({nfft}); there is no decay to read."
             )
-
-    def _directions(self) -> tuple[str, ...]:
-        """The cumulation directions this loss scores, one surface each."""
-        if self.frequency == "both":
-            return ("descending", "ascending")
-        return (self.frequency,)
-
-    def _energy(self, h: torch.Tensor) -> torch.Tensor:
-        """``(n_channels, n_freq, n_frames)`` short-time power, cumulated in time."""
-        import torch
-
-        # (n_samples, n_out, n_in) -> (n_out * n_in, n_samples), the batch layout
-        # torch.stft wants.
-        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
-        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
-        spectrum = torch.stft(
-            x,
-            n_fft=self.window,
-            hop_length=self.hop,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        energy = spectrum.real**2 + spectrum.imag**2  # (batch, freq, frames)
-        return _reverse_cumsum(energy, -1)  # backwards in time
-
-    def _surfaces(self, h: torch.Tensor) -> list[torch.Tensor]:
-        """The doubly-cumulated energy, one surface per cumulation direction."""
-        import torch
-
-        energy = self._energy(h)
-        return [
-            _reverse_cumsum(energy, -2)
-            if direction == "descending"
-            else torch.cumsum(energy, -2)
-            for direction in self._directions()
-        ]
-
-    def _compressed(self, surface: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
-        floor = 10.0 ** (self.floor_db / 10.0)
-        return (surface / scale).clamp_min(floor) ** self.power
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        # Both are set together, and mypy needs the guard to say so.
-        key = response_key(response)
-        if self._reference is None or self._scale is None or self._key != key:
-            self._key = key
-            references = self._surfaces(self._target(response))
-            # The largest value on a surface is the total energy: everything
-            # after frame 0, on whichever side of the spectrum the cumulation
-            # started from. One number for the whole reference, so relative
-            # levels between input/output paths survive the normalization.
-            self._scale = [
-                r.amax(dim=(-2, -1)).mean().clamp_min(torch.finfo(r.dtype).tiny)
-                for r in references
-            ]
-            if not all(bool(scale > 0) for scale in self._scale):
-                raise ValueError("the reference carries no energy to fit")
-            self._reference = [
-                self._compressed(r, scale)
-                for r, scale in zip(references, self._scale, strict=True)
-            ]
-
-        # Each direction is normalized and compressed on its own before it is
-        # scored: averaging the raw surfaces instead would let the one that
-        # starts from the loud end of the spectrum swamp the other, which is
-        # the whole thing "both" exists to avoid.
-        terms = [
-            torch.sqrt(((self._compressed(surface, scale) - reference) ** 2).mean())
-            for surface, scale, reference in zip(
-                self._surfaces(response.h), self._scale, self._reference, strict=True
-            )
-        ]
-        return sum(terms[1:], terms[0]) / len(terms)

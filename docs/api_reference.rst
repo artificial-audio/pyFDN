@@ -40,6 +40,11 @@ Matrix Generators
    pyFDN.construct_velvet_feedback_matrix
    pyFDN.tiny_rotation_matrix
    pyFDN.rotation_matrix_from_angles
+   pyFDN.rotation_kernel
+   pyFDN.reflection_kernel
+   pyFDN.kronecker_angles
+   pyFDN.kronecker_matrix
+   pyFDN.kronecker_transform
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
@@ -150,7 +155,9 @@ rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.SOSBank
    pyFDN.td.MatrixFIR
    pyFDN.td.MatrixConvolver
+   pyFDN.td.KroneckerMatrix
    pyFDN.td.TimeVaryingMatrix
+   pyFDN.td.TimeVaryingKroneckerMatrix
    pyFDN.td.RecursionState
    pyFDN.td.Series
    pyFDN.td.Parallel
@@ -340,10 +347,15 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.params
    pyFDN.ParamRef
    pyFDN.Loss
+   pyFDN.Match
    pyFDN.FlatMagnitude
    pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
+   pyFDN.SpectralFlatness
    pyFDN.MatchMagnitude
+   pyFDN.MatchPhase
+   pyFDN.MatchPhaseSpectrogram
+   pyFDN.MatchMelMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
@@ -353,6 +365,8 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.Sparsity
    pyFDN.L1
    pyFDN.L2
+   pyFDN.mimo_rir_eigenvalues_per_frequency
+   pyFDN.energy_decay_curve
 
 Plotting
 --------

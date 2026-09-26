@@ -107,8 +107,8 @@ def test_first_order_absorption_matches_rt_targets():
 def test_first_order_absorption_clamps_high_crossover():
     fs = 48000.0
     delays = np.array([100.0, 130.0])
-    clamped = decay_to_first_order_shelf(1.0, 0.5, fs / 3, delays, fs)
-    limit = decay_to_first_order_shelf(1.0, 0.5, fs / 5, delays, fs)
+    clamped = decay_to_first_order_shelf(1.0, 0.5, fs / 2, delays, fs)
+    limit = decay_to_first_order_shelf(1.0, 0.5, fs / 2.1, delays, fs)
     np.testing.assert_allclose(clamped, limit)
 
 
