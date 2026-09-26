@@ -347,10 +347,15 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.params
    pyFDN.ParamRef
    pyFDN.Loss
+   pyFDN.Match
    pyFDN.FlatMagnitude
    pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
+   pyFDN.SpectralFlatness
    pyFDN.MatchMagnitude
+   pyFDN.MatchPhase
+   pyFDN.MatchPhaseSpectrogram
+   pyFDN.MatchMelMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
@@ -360,6 +365,8 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.Sparsity
    pyFDN.L1
    pyFDN.L2
+   pyFDN.mimo_rir_eigenvalues_per_frequency
+   pyFDN.energy_decay_curve
 
 Plotting
 --------

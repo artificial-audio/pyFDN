@@ -5,6 +5,21 @@ History
 Unreleased
 ----------
 
+* Add ``Match``, a composable response loss that extracts a feature from the
+  model response and the reference (waveform, magnitude, phase, mel
+  magnitude, multi-resolution spectrogram, octave-band EDC, cumulative energy),
+  compares them with a distance (squared, absolute, circular, ...) and reduces
+  the result to a scalar. The reference feature is cached across steps.
+  ``FlatMagnitude``, ``FlatSpectrogram``, ``MatchMagnitude``,
+  ``MatchImpulseResponse``, ``MatchEnergyDecay`` and ``MatchCumulativeEnergy``
+  are now built on it, with unchanged values.
+* Add the losses ``SpectralFlatness`` (geometric over arithmetic mean of
+  ``|H|``, gain-invariant), ``MatchPhase`` and ``MatchPhaseSpectrogram``
+  (circular phase distance, whole-response and multi-resolution STFT) and
+  ``MatchMelMagnitude`` (mel-filterbank magnitude).
+* Add the differentiable features ``energy_decay_curve`` (Schroeder EDC) and
+  ``mimo_rir_eigenvalues_per_frequency`` (eigenvalues of a square MIMO
+  transfer matrix per frequency bin).
 * Add the Kronecker feedback matrix of Coppola (DAFx26): ``kronecker_matrix``
   builds a lossless ``2**M x 2**M`` matrix from ``M`` two-by-two rotation or
   reflection kernels, one angle each, and ``kronecker_transform`` applies it in
