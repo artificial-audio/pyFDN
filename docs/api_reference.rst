@@ -347,10 +347,15 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.params
    pyFDN.ParamRef
    pyFDN.Loss
+   pyFDN.Match
    pyFDN.FlatMagnitude
    pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
+   pyFDN.SpectralFlatness
    pyFDN.MatchMagnitude
+   pyFDN.MatchPhase
+   pyFDN.MatchPhaseSpectrogram
+   pyFDN.MatchMelMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse

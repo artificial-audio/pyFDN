@@ -97,3 +97,12 @@ def test_energy_decay_curve_linear_mode():
     # The entire tail before and at t=0 contains 4.0; after t=0 it is 0.0
     assert float(edc[0, 0, 0]) == pytest.approx(4.0, abs=1e-6)
     assert float(edc[1, 0, 0]) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_mimo_eigenvalues_time_axis_can_be_last():
+    """``dim`` moves the time axis; the result matches the time-first layout."""
+    torch.manual_seed(0)
+    ir = torch.randn(256, 3, 3, dtype=torch.float64)
+    expected = mimo_rir_eigenvalues_per_frequency(ir, n_fft=256)
+    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), n_fft=256, dim=2)
+    torch.testing.assert_close(moved, expected)

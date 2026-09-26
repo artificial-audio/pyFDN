@@ -165,6 +165,7 @@ module = [
     "plotly.*",
     "scipy.*",
     "soundfile",
+    "torchaudio.*",
 ]
 ignore_missing_imports = true
 

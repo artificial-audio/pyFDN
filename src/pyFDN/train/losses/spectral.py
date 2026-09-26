@@ -17,7 +17,6 @@ from .distances import (
     CircularDistance,
     ConstantTargetDistance,
     FlatnessRatioDistance,
-    OnesTargetDistance,
     SquaredError,
 )
 from .features import (
@@ -102,7 +101,8 @@ class FlatMagnitude(Match):
             distance=ConstantTargetDistance(target),
             reduction=Mean(),
         )
-        self._flat_target_value = float(target)
+        self.target = float(target)
+        self.channels = channels
 
     def check(self, model: Any) -> None:
         _warn_if_magnitude_unbounded(
@@ -190,12 +190,13 @@ class SpectralFlatness(Match):
     classic flatness measure: 1 for a perfectly flat spectrum, towards 0 for a
     peaky one. Unlike :class:`FlatMagnitude`, both means scale the same way
     with an overall gain, so the loss is gain-invariant without needing to
-    assume :math:`|H| \approx 1`.
+    assume :math:`|H| \approx 1`. A silent response has flatness 0, the
+    opposite end from flat.
 
     Parameters
     ----------
     target : float
-        The flatness to fit, at most 1 (perfectly flat). Default 1.0.
+        The flatness to fit, in ``[0, 1]`` (1 is perfectly flat). Default 1.0.
     channels : {"sum", "mean", "none"}
         How the output channels are combined before the flatness ratio is
         computed. ``"none"`` (default) scores each input/output path on its
@@ -215,10 +216,11 @@ class SpectralFlatness(Match):
         super().__init__(
             target=None,
             feature=Magnitude(channels=channels),
-            distance=FlatnessRatioDistance(),
+            distance=FlatnessRatioDistance(target_flatness=target),
             reduction=Mean(),
         )
-        self._flat_target = float(target)
+        self.target = float(target)
+        self.channels = channels
 
     def check(self, model: Any) -> None:
         _warn_if_magnitude_unbounded(
@@ -278,13 +280,29 @@ class FlatSpectrogram(Match):
         super().__init__(
             target=None,
             feature=feature,
-            distance=OnesTargetDistance(),
+            distance=ConstantTargetDistance(1.0),
             reduction=MeanPerGroup(feature=feature),
         )
+        self.nfft = nfft
+        self.overlap = float(overlap)
 
 
 class MatchMagnitude(Match):
-    """Mean squared error of :math:`|H|` against a reference impulse response."""
+    """Mean squared error of :math:`|H|` against a reference impulse response.
+
+    The magnitude-only sibling of :class:`MatchImpulseResponse`: fits the
+    spectral envelope while ignoring phase.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    channels : {"sum", "mean", "none"}
+        How the output channels are combined before the comparison. ``"none"``
+        (default) fits each input/output pair on its own.
+    """
 
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
         _reduce_channels_check(channels)
@@ -294,10 +312,34 @@ class MatchMagnitude(Match):
             distance=SquaredError(),
             reduction=Mean(),
         )
+        self.channels = channels
 
 
 class MatchPhase(Match):
-    r"""Circular distance of :math:`\angle H` against a reference impulse response."""
+    r"""Circular distance of :math:`\angle H` against a reference impulse response.
+
+    The per-bin distance is :math:`1 - \cos(\Delta\phi)`, circular so the
+    :math:`\pm\pi` wrap costs nothing extra.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    channels : {"sum", "mean", "none"}
+        ``"none"`` (default) compares each input/output pair on its own;
+        ``"sum"`` and ``"mean"`` compare the phase of the summed output
+        channels (both give the same phase).
+
+    Notes
+    -----
+    The whole-response phase of a reverberant IR varies extremely fast with
+    frequency and is undefined where :math:`|H|` vanishes, yet every bin
+    counts equally, so the loss landscape is very rough for long responses.
+    Prefer it for short filters or the early part of a response, or use
+    :class:`MatchPhaseSpectrogram`.
+    """
 
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
         _reduce_channels_check(channels)
@@ -307,6 +349,7 @@ class MatchPhase(Match):
             distance=CircularDistance(),
             reduction=Mean(),
         )
+        self.channels = channels
 
 
 class MatchPhaseSpectrogram(Match):

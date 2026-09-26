@@ -178,10 +178,15 @@ __all__ = [
     "Loss",
     "ResponseLoss",
     "ParameterLoss",
+    "Match",
     "FlatMagnitude",
     "AsymmetricFlatMagnitude",
     "FlatSpectrogram",
+    "SpectralFlatness",
     "MatchMagnitude",
+    "MatchPhase",
+    "MatchPhaseSpectrogram",
+    "MatchMelMagnitude",
     "MatchSpectrogram",
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
@@ -463,7 +468,6 @@ from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
 # training (torch/flamo are imported lazily inside these)
-# features
 from .train import (
     L1,
     L2,
@@ -474,11 +478,15 @@ from .train import (
     FlatMagnitude,
     FlatSpectrogram,
     Loss,
+    Match,
     MatchCumulativeEnergy,
     MatchEnergyDecay,
     MatchImpulseResponse,
     MatchMagnitude,
+    MatchMelMagnitude,
     MatchMelSpectrogram,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
     OutputEQ,
     ParameterLoss,
@@ -486,6 +494,7 @@ from .train import (
     Response,
     ResponseLoss,
     Sparsity,
+    SpectralFlatness,
     Trainable,
     TrainLog,
     build_fdn,

@@ -5,6 +5,16 @@ from __future__ import annotations
 import torch
 
 
+def schroeder_integral(energy: torch.Tensor, dim: int = 0) -> torch.Tensor:
+    r"""Backward (Schroeder) integration of ``energy`` along ``dim``.
+
+    .. math:: E[n] = \sum_{m=n}^{L-1} e[m]
+
+    Shared by :func:`energy_decay_curve` and the decay-curve loss features.
+    """
+    return torch.flip(torch.cumsum(torch.flip(energy, dims=[dim]), dim=dim), dims=[dim])
+
+
 def energy_decay_curve(
     ir: torch.Tensor,
     dim: int = 0,
@@ -14,7 +24,8 @@ def energy_decay_curve(
 ) -> torch.Tensor:
     r"""Compute the Energy Decay Curve (EDC) via backward Schroeder integration.
 
-        Evaluates the continuous-energy decay profile across discrete time samples:
+    Evaluates the energy decay profile across discrete time samples:
+
     .. math::
 
         \text{EDC}[n] = \sum_{m=n}^{L-1} h^2[m]
@@ -47,14 +58,7 @@ def energy_decay_curve(
 
     energy = ir.pow(2)
 
-    # Schroeder backward integration
-    edc = torch.flip(
-        torch.cumsum(
-            torch.flip(energy, dims=[dim]),
-            dim=dim,
-        ),
-        dims=[dim],
-    )
+    edc = schroeder_integral(energy, dim=dim)
 
     if normalize:
         initial_energy = edc.select(dim, 0).unsqueeze(dim)

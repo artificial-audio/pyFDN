@@ -1117,7 +1117,7 @@ def test_cumulative_energy_surface_is_cumulative_in_both_directions():
     rng = np.random.default_rng(0)
     ir = _decaying_noise(n, fs, 0.4, rng)
     loss = MatchCumulativeEnergy(ir, window=512)
-    (tensor,) = loss._surfaces(_as_h(ir).double())
+    (tensor,) = loss.feature(_as_h(ir).double(), fs)
     surface = tensor.numpy()
 
     # non-increasing towards later times and towards higher frequencies

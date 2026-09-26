@@ -222,3 +222,125 @@ def test_phase_spectrogram_feature_sees_a_quarter_cycle_phase_shift():
     diff = cos_phase - sin_phase
     wrapped = torch.atan2(torch.sin(diff), torch.cos(diff))
     assert wrapped.abs().item() == pytest.approx(math.pi / 2, abs=0.05)
+
+
+# --- Match and the losses built on it -------------------------------------------
+
+import numpy as np  # noqa: E402
+
+import pyFDN.train.losses as losses  # noqa: E402
+from pyFDN.train.losses.base import Sum as LossSum  # noqa: E402
+from pyFDN.train.losses.distances import FlatnessRatioDistance  # noqa: E402
+from pyFDN.train.losses.features import (  # noqa: E402
+    OCTAVE_EDGES,
+    EnergyDecayCurve,
+    Phase,
+)
+from pyFDN.train.response import Response  # noqa: E402
+
+
+def _decaying(n=4096, n_out=2, n_in=2, seed=0):
+    g = torch.Generator().manual_seed(seed)
+    envelope = torch.exp(-torch.arange(n, dtype=torch.float64) / 800.0)
+    return (
+        torch.randn(n, n_out, n_in, generator=g, dtype=torch.float64)
+        * envelope[:, None, None]
+    )
+
+
+def test_losses_sum_is_still_the_loss_composition():
+    """The Sum reduction must not shadow the composite loss in the package."""
+    assert losses.Sum is LossSum
+
+
+def test_spectral_flatness_fits_the_requested_target():
+    """The target flatness is honoured: the loss is (F - target)^2."""
+    h = _decaying()
+    flatness = FlatnessRatioDistance.flatness(torch.fft.rfft(h, dim=0).abs())
+    response = Response(h=h, fs=48000.0)
+    for target in (1.0, 0.5, 0.0):
+        expected = ((flatness - target) ** 2).mean()
+        value = losses.SpectralFlatness(target=target)(response)
+        torch.testing.assert_close(value, expected)
+
+
+def test_spectral_flatness_rejects_a_target_outside_zero_one():
+    with pytest.raises(ValueError, match="target_flatness"):
+        losses.SpectralFlatness(target=1.5)
+
+
+def test_spectral_flatness_does_not_score_silence_as_flat():
+    """A silent response has flatness 0, so the flat target costs 1, not 0."""
+    silent = Response(h=torch.zeros(1024, 1, 1, dtype=torch.float64), fs=48000.0)
+    assert float(losses.SpectralFlatness()(silent)) == pytest.approx(1.0)
+
+
+def test_phase_sum_is_the_phase_of_the_summed_response():
+    """channels="sum" takes the angle of the summed spectra, not a sum of angles."""
+    h = _decaying(n=512)
+    phase = Phase(channels="sum")(h, 48000.0)
+    expected = torch.angle(torch.fft.rfft(h.sum(dim=1), dim=0))
+    torch.testing.assert_close(phase, expected)
+    torch.testing.assert_close(Phase(channels="mean")(h, 48000.0), expected)
+
+
+def test_match_computes_the_reference_feature_once_per_response_shape():
+    calls = []
+
+    class Counting(losses.Waveform):
+        def __call__(self, h, fs):
+            calls.append(h.shape)
+            return h
+
+    h = _decaying(n=256)
+    loss = losses.Match(target=h.numpy(), feature=Counting())
+    response = Response(h=h, fs=48000.0)
+    for _ in range(3):
+        loss(response)
+    # three predictions, one reference
+    assert len(calls) == 4
+    # a response of another length rebuilds the reference
+    loss(Response(h=_decaying(n=512), fs=48000.0))
+    assert len(calls) == 6
+
+
+def test_energy_decay_curve_feature_defaults_to_octave_bands():
+    feature = EnergyDecayCurve(window=1024)
+    assert feature.bands == OCTAVE_EDGES
+    out = feature(_decaying(n=8192, n_out=1, n_in=1), 48000.0)
+    assert out.shape[1] == len(OCTAVE_EDGES) - 1
+
+
+def test_match_energy_decay_is_rms_over_the_masked_entries():
+    """Only reference entries above floor_db count, averaged over those alone."""
+    h, target = _decaying(n=16384, seed=1), _decaying(n=16384, seed=2)
+    loss = losses.MatchEnergyDecay(target.numpy(), window=1024, floor_db=-30.0)
+    response = Response(h=h, fs=48000.0)
+    feature = EnergyDecayCurve(window=1024, bands=loss.bands)
+    pred, ref = feature(h, 48000.0), feature(target, 48000.0)
+    mask = ref > -30.0
+    expected = ((pred[mask] - ref[mask]) ** 2).mean().sqrt()
+    torch.testing.assert_close(loss(response), expected)
+
+
+@pytest.mark.parametrize(
+    "make_loss",
+    [
+        lambda t: losses.MatchPhase(t),
+        lambda t: losses.MatchPhaseSpectrogram(t, nfft=(256, 512)),
+        lambda t: losses.MatchMelMagnitude(t, n_mels=32),
+        lambda t: losses.SpectralFlatness(),
+    ],
+)
+@pytest.mark.parametrize("silent", ["prediction", "target"])
+def test_new_losses_have_finite_gradients_on_silent_inputs(make_loss, silent):
+    h, target = _decaying(n=2048), _decaying(n=2048, seed=3)
+    if silent == "prediction":
+        h = torch.zeros_like(h)
+    else:
+        target = torch.zeros_like(target)
+    h = h.clone().requires_grad_()
+    value = make_loss(np.asarray(target))(Response(h=h, fs=48000.0))
+    value.backward()
+    assert torch.isfinite(value)
+    assert torch.isfinite(h.grad).all()

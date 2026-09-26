@@ -5,6 +5,13 @@ from typing import Any
 
 import torch
 
+from ..features.temporal import schroeder_integral
+
+# Octave band edges around the 63 Hz … 8 kHz centres, the range a measured RIR
+# actually carries. Below the first edge and above the last, a room impulse
+# response is noise, and its "decay" is the noise floor's.
+OCTAVE_EDGES = (44.0, 88.0, 177.0, 354.0, 707.0, 1414.0, 2828.0, 5657.0, 11314.0)
+
 
 class Feature(ABC):
     """Base class for extracting a representation from an impulse response."""
@@ -40,7 +47,18 @@ class Magnitude(Feature):
 
 
 class Phase(Feature):
-    """Frequency-domain phase spectrum via rfft."""
+    r"""Frequency-domain phase spectrum via rfft, in :math:`(-\pi, \pi]`.
+
+    With ``channels="sum"`` or ``"mean"`` the complex spectra of the output
+    channels are combined first and the phase is taken of the result, i.e. the
+    phase of the summed response (the phase of the mean is the same). Summing
+    the phase angles themselves would not be the phase of anything.
+
+    The whole-response phase of a reverberant IR varies extremely fast with
+    frequency and is undefined where the magnitude vanishes, yet every bin
+    counts equally; a phase loss built on it is best reserved for short or
+    early responses.
+    """
 
     def __init__(self, channels: str = "none") -> None:
         if channels not in ("sum", "mean", "none"):
@@ -50,12 +68,11 @@ class Phase(Feature):
         self.channels = channels
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        phase = torch.angle(torch.fft.rfft(h, dim=0))
-        if self.channels == "sum":
-            return phase.sum(dim=1)
-        if self.channels == "mean":
-            return phase.mean(dim=1)
-        return phase
+        spectrum = torch.fft.rfft(h, dim=0)
+        if self.channels in ("sum", "mean"):
+            # The mean has the phase of the sum; sum avoids a needless scale.
+            spectrum = spectrum.sum(dim=1)
+        return torch.angle(spectrum)
 
 
 class MelMagnitude(Feature):
@@ -278,7 +295,9 @@ class EnergyDecayCurve(Feature):
     ) -> None:
         self.window = int(window)
         self.hop = int(hop) if hop is not None else int(window) // 4
-        self.bands = tuple(float(f) for f in bands)
+        self.bands = tuple(
+            float(f) for f in (bands if bands is not None else OCTAVE_EDGES)
+        )
 
     def _stft_power(self, h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
@@ -303,7 +322,7 @@ class EnergyDecayCurve(Feature):
             ],
             dim=1,
         )
-        edc = torch.flip(torch.cumsum(torch.flip(band_power, [-1]), dim=-1), [-1])
+        edc = schroeder_integral(band_power, dim=-1)
         eps = torch.finfo(edc.dtype).tiny
         db = 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
         return db.reshape(-1, len(self.bands) - 1, db.shape[-1])
@@ -339,9 +358,9 @@ class CumulativeEnergySurface(Feature):
             return_complex=True,
         )
         energy = spectrum.real**2 + spectrum.imag**2
-        energy = torch.flip(torch.cumsum(torch.flip(energy, [-1]), -1), [-1])
+        energy = schroeder_integral(energy, dim=-1)
         surfaces = [
-            torch.flip(torch.cumsum(torch.flip(energy, [-2]), -2), [-2])
+            schroeder_integral(energy, dim=-2)
             if direction == "descending"
             else torch.cumsum(energy, -2)
             for direction in self.directions

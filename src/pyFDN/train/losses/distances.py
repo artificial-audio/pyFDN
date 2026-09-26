@@ -33,65 +33,60 @@ class CircularDistance(Distance):
         return 1.0 - torch.cos(pred - target)
 
 
-class AsymmetricPowerDistance(Distance):
-    r"""Asymmetric penalty: peaks raised to ``peak_power``, dips always squared.
+class FlatnessRatioDistance(Distance):
+    r"""Squared error of the spectral flatness, per channel.
 
-    For flatness measures, peaks ring audibly while dips are inaudible, so peaks
-    are penalized harder. Expects magnitude spectra (non-negative values).
+    The flatness of a magnitude spectrum :math:`|H|` over its frequency axis
+    (dim 0) is the ratio of its geometric to its arithmetic mean,
+
+    .. math:: F = \frac{\exp\big(\overline{\log |H|}\big)}{\overline{|H|}},
+
+    1 for a perfectly flat spectrum and towards 0 for a peaky one. A silent
+    spectrum (arithmetic mean at the numerical floor) has flatness 0, so it
+    is never mistaken for a flat one.
 
     Parameters
     ----------
-    peak_power : float
-        Exponent for positive deviations (peaks). Must be >= 2. Dips always use power 2.
+    target_flatness : float or None
+        Fit the prediction's flatness to this constant, in ``[0, 1]``, and
+        ignore the reference feature. ``None`` (default) compares against the
+        flatness of the reference feature instead.
     """
 
-    def __init__(self, peak_power: float = 4.0) -> None:
-        self.peak_power = float(peak_power)
-        if self.peak_power < 2.0:
-            raise ValueError(f"peak_power must be at least 2; got {self.peak_power}")
-
-    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        rms = (target**2).mean(dim=0, keepdim=True).sqrt()
-        eps = torch.finfo(target.dtype).tiny
-        normalized = pred / rms.clamp_min(eps)
-        deviation = normalized - 1.0
-
-        peaks = deviation.clamp_min(0.0) ** self.peak_power
-        dips = deviation.clamp_max(0.0) ** 2
-        return peaks + dips
-
-
-class FlatnessRatioDistance(Distance):
-    r"""Spectral flatness: geometric mean / arithmetic mean per frequency.
-
-    Used to measure flatness of a spectrum. Returns MSE between the target
-    flatness (default 1.0) and the pred flatness, which is the ratio of
-    geometric to arithmetic mean normalized by target's ratio.
-
-    This distance assumes pred and target are both magnitude spectra.
-    """
-
-    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        eps = torch.finfo(pred.dtype).tiny
-        pred_geom = torch.exp(torch.log(pred.clamp_min(eps)).mean(dim=0, keepdim=True))
-        pred_arith = pred.mean(dim=0, keepdim=True).clamp_min(eps)
-        pred_flatness = pred_geom / pred_arith
-
-        target_geom = torch.exp(
-            torch.log(target.clamp_min(eps)).mean(dim=0, keepdim=True)
+    def __init__(self, target_flatness: float | None = None) -> None:
+        if target_flatness is not None and not 0.0 <= target_flatness <= 1.0:
+            raise ValueError(
+                f"target_flatness must be in [0, 1]; got {target_flatness}"
+            )
+        self.target_flatness = (
+            None if target_flatness is None else float(target_flatness)
         )
-        target_arith = target.mean(dim=0, keepdim=True).clamp_min(eps)
-        target_flatness = target_geom / target_arith
 
-        return (pred_flatness - target_flatness) ** 2
+    @staticmethod
+    def flatness(magnitude: torch.Tensor) -> torch.Tensor:
+        """Geometric over arithmetic mean along dim 0, 0 for a silent spectrum."""
+        tiny = torch.finfo(magnitude.dtype).tiny
+        geometric = torch.exp(
+            torch.log(magnitude.clamp_min(tiny)).mean(dim=0, keepdim=True)
+        )
+        arithmetic = magnitude.mean(dim=0, keepdim=True)
+        silent = arithmetic <= tiny
+        ratio = geometric / arithmetic.clamp_min(tiny)
+        return torch.where(silent, torch.zeros_like(ratio), ratio)
+
+    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        pred_flatness = self.flatness(pred)
+        if self.target_flatness is not None:
+            return (pred_flatness - self.target_flatness) ** 2
+        return (pred_flatness - self.flatness(target)) ** 2
 
 
 class ConstantTargetDistance(Distance):
-    """Compare pred to a fixed constant target value (ignores ref_feat).
+    """Squared error of ``pred`` against a constant (ignores the reference).
 
-    Useful for losses like FlatMagnitude that fit to a constant rather than
-    a reference IR. The target parameter in Match is ignored; instead pred is
-    compared to the constant value provided at construction.
+    For the targetless losses that fit to a constant rather than a reference
+    IR, e.g. :class:`~pyFDN.FlatMagnitude` (``|H| = target``) and
+    :class:`~pyFDN.FlatSpectrogram` (normalized spectra equal to 1).
     """
 
     def __init__(self, target_value: float) -> None:
@@ -101,22 +96,13 @@ class ConstantTargetDistance(Distance):
         return (pred - self.target_value) ** 2
 
 
-class OnesTargetDistance(Distance):
-    """Compare pred to a tensor of all ones (ignores ref_feat).
-
-    Useful for losses like FlatSpectrogram that fit normalized spectra to flat
-    (where flat = ones after normalization).
-    """
-
-    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        return (pred - 1.0) ** 2
-
-
 class MaskedSquaredError(Distance):
-    """Squared error over entries where the reference is above ``floor_db``.
+    """Squared error over the entries where the reference is above ``floor_db``.
 
     The mask follows the reference, so only the part of the curve carrying
-    signal counts; entries below the floor (noise) are ignored.
+    signal counts; entries below the floor (noise) are ignored. Returns the
+    masked entries only, as a 1-D tensor, so any plain reduction (e.g.
+    :class:`~pyFDN.train.losses.reductions.Rms`) averages over them alone.
     """
 
     def __init__(self, floor_db: float = -45.0) -> None:
@@ -129,11 +115,7 @@ class MaskedSquaredError(Distance):
                 f"the reference never rises above floor_db={self.floor_db}; "
                 "it carries no decay to fit"
             )
-        out = torch.zeros_like(pred)
-        out[mask] = (pred[mask] - target[mask]) ** 2
-        # Stash the count so Rms reads only the masked entries.
-        self._count = mask.sum()
-        return out
+        return (pred[mask] - target[mask]) ** 2
 
 
 class CompressedEnergyDistance(Distance):

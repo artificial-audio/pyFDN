@@ -12,13 +12,31 @@ if TYPE_CHECKING:
     from pyFDN.train.response import Response
 
 from .distances import CompressedEnergyDistance, MaskedSquaredError, SquaredError
-from .features import CumulativeEnergySurface, EnergyDecayCurve, Waveform
+from .features import (
+    OCTAVE_EDGES,
+    CumulativeEnergySurface,
+    EnergyDecayCurve,
+    Waveform,
+)
 from .match import Match
-from .reductions import MaskedRms, Mean, MeanRmsOverGroups
+from .reductions import Mean, MeanRmsOverGroups, Rms
 
 
 class MatchImpulseResponse(Match):
-    """Mean squared error against a reference impulse response, sample by sample."""
+    """Mean squared error against a reference impulse response, sample by sample.
+
+    The strictest of the matching losses -- it fits phase as well as magnitude,
+    which for a reverberator is usually more than you want. Reach for
+    :class:`~pyFDN.MatchSpectrogram` unless you are fitting an early part or a
+    short filter.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    """
 
     def __init__(self, target: Any) -> None:
         super().__init__(
@@ -42,12 +60,6 @@ class Energy(ResponseLoss):
     def __call__(self, response: Response) -> torch.Tensor:
         energy = (response.h**2).sum()
         return (energy - self.target) ** 2
-
-
-# Octave band edges around the 63 Hz … 8 kHz centres, the range a measured RIR
-# actually carries. Below the first edge and above the last, a room impulse
-# response is noise, and its "decay" is the noise floor's.
-_OCTAVE_EDGES = (44.0, 88.0, 177.0, 354.0, 707.0, 1414.0, 2828.0, 5657.0, 11314.0)
 
 
 class MatchEnergyDecay(Match):
@@ -97,7 +109,7 @@ class MatchEnergyDecay(Match):
         self.window = int(window)
         self.hop = int(hop) if hop is not None else int(window) // 4
         self.bands = tuple(
-            float(f) for f in (bands if bands is not None else _OCTAVE_EDGES)
+            float(f) for f in (bands if bands is not None else OCTAVE_EDGES)
         )
         self.floor_db = float(floor_db)
         distance = MaskedSquaredError(floor_db=self.floor_db)
@@ -107,7 +119,7 @@ class MatchEnergyDecay(Match):
                 window=self.window, hop=self.hop, bands=self.bands
             ),
             distance=distance,
-            reduction=MaskedRms(distance=distance),
+            reduction=Rms(),
         )
 
     def check(self, model: Any) -> None:
@@ -160,7 +172,7 @@ class MatchCumulativeEnergy(Match):
         Hard floor on the normalized surface, in energy dB below the reference's
         total energy. It bounds the gradient of the compression near zero and
         keeps the fit off the numerical floor of the render; ``clamp`` means no
-        gradient flows from anything below it.n
+        gradient flows from anything below it.
     frequency : {"descending", "ascending", "both"}
         Which way the frequency cumulation runs, and with it the loss's balance
         between the ends of the spectrum. The default ``"descending"`` (the
@@ -222,7 +234,3 @@ class MatchCumulativeEnergy(Match):
                 f"{type(self).__name__} window ({self.window}) is longer than the "
                 f"model's nfft ({nfft}); there is no decay to read."
             )
-
-    def _surfaces(self, h: torch.Tensor) -> list[torch.Tensor]:
-        """Per-direction doubly-cumulated energy (test compat helper)."""
-        return [s for s in self.feature(h, 48000.0)]

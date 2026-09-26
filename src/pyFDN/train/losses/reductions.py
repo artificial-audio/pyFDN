@@ -25,11 +25,19 @@ class MeanPerGroup(Reduction):
 
     Each group is normalized by its actual element count, giving equal
     weight to each group regardless of its size (unlike :meth:`Mean`
-    which weights by total element count). If the feature stores
-    ``_group_counts``, those are used for correct normalization.
+    which weights by total element count).
+
+    Multi-resolution features (:class:`~pyFDN.train.losses.features.SpectrogramFeature`,
+    :class:`~pyFDN.train.losses.features.PhaseSpectrogramFeature`) pad every
+    resolution to a common shape and record each resolution's number of real
+    (unpadded) entries in ``_group_counts`` on every call. Pass that feature
+    here so each group is divided by its real count; the padding must then
+    contribute zero distance (it does for the distances those features are
+    used with). Without such a feature, each group is averaged over its full,
+    padded size.
     """
 
-    def __init__(self, feature=None) -> None:
+    def __init__(self, feature: Any = None) -> None:
         self.feature = feature
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
@@ -50,23 +58,10 @@ class Sum(Reduction):
 
 
 class Rms(Reduction):
-    """Root-mean-square: ``sqrt(mean(x))`` over all entries."""
+    """Root-mean-square of squared errors: ``sqrt(mean(x))`` over all entries."""
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return x.mean().sqrt()
-
-
-class MaskedRms(Reduction):
-    """RMS over the masked entries counted by :class:`MaskedSquaredError`."""
-
-    def __init__(self, distance: Any = None) -> None:
-        self.distance = distance
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        count = getattr(self.distance, "_count", None)
-        if count is None:
-            return x.mean().sqrt()
-        return (x.sum() / count).sqrt()
 
 
 class MeanRmsOverGroups(Reduction):
