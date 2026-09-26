@@ -214,12 +214,6 @@ allow_untyped_defs = true
 disable_error_code = ["no-untyped-call", "no-untyped-def"]
 
 [[tool.mypy.overrides]]
-# Coupled rooms: research code, annotation work in progress
-module = "pyFDN.auxiliary.coupled_rooms"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined"]
-
-[[tool.mypy.overrides]]
 # Acoustics helpers: ArrayLike-heavy DSP code
 module = "pyFDN.auxiliary.acoustics"
 disable_error_code = ["operator", "index", "arg-type"]

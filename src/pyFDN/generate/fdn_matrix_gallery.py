@@ -11,8 +11,7 @@ from typing import Literal, NamedTuple, NoReturn, get_args, overload
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .householder_matrix import householder_matrix
-from .random_orthogonal import random_orthogonal
+from .orthogonal import householder_matrix, random_orthogonal
 
 
 class FDNSystem(NamedTuple):
@@ -154,7 +153,7 @@ def filter_matrix_gallery(
         raise ValueError("N must be provided when matrix_type is specified")
 
     if matrix_type == "RandomDense":
-        from .construct_cascaded_paraunitary_matrix import (
+        from .paraunitary import (
             construct_cascaded_paraunitary_matrix,
         )
 
@@ -163,7 +162,7 @@ def filter_matrix_gallery(
         )[0]
 
     if matrix_type == "Velvet":
-        from .construct_cascaded_paraunitary_matrix import (
+        from .paraunitary import (
             construct_cascaded_paraunitary_matrix,
         )
 
@@ -172,7 +171,7 @@ def filter_matrix_gallery(
         )[0]
 
     if matrix_type == "FromElementals":
-        from .construct_paraunitary_from_elementals import (
+        from .paraunitary import (
             construct_paraunitary_from_elementals,
         )
 
@@ -257,14 +256,12 @@ def fdn_matrix_gallery(
         return np.linalg.solve(D, random_orthogonal(N)) @ D
 
     if matrix_type == "tiny_rotation":
-        import torch
+        from .orthogonal import tiny_rotation_matrix
 
-        from ..auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
-
-        return tiny_rotation_matrix(N, 0.01, dtype=torch.float64).numpy()
+        return tiny_rotation_matrix(N, 0.01)
 
     if matrix_type == "anderson":
-        from .anderson_matrix import anderson_matrix
+        from .orthogonal import anderson_matrix
 
         return anderson_matrix(N)
 
@@ -304,21 +301,21 @@ def fdn_system_gallery(
         raise ValueError("N must be provided when system_type is specified")
 
     if system_type == "series":
-        from ..auxiliary.allpass import series_allpass
+        from .structures import series_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
         A, B, C, D = series_allpass(g)
         return FDNSystem(A, B, C, D)
 
     if system_type == "nestedAllpass":
-        from ..auxiliary.allpass import nested_allpass
+        from .structures import nested_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
         A, B, C, D = nested_allpass(g)
         return FDNSystem(A, B, C, D)
 
     if system_type == "polettiAllpass":
-        from ..auxiliary.allpass import poletti_allpass
+        from .structures import poletti_allpass
 
         A, B, C, D = poletti_allpass(0.7, random_orthogonal(N))
         return FDNSystem(A, B, C, D)
@@ -335,7 +332,7 @@ def fdn_system_gallery(
         return FDNSystem(A, B, C, D)
 
     if system_type == "SchroederReverberator":
-        from .schroeder_reverberator import schroeder_reverberator
+        from .structures import schroeder_reverberator
 
         N_c = N // 2
         N_a = N - N_c
@@ -348,7 +345,7 @@ def fdn_system_gallery(
         return FDNSystem(A, B, C, D)
 
     if system_type == "allpassInFDN":
-        from .allpass_in_fdn import allpass_in_fdn
+        from .structures import allpass_in_fdn
 
         g = np.random.uniform(-0.8, 0.8, N // 2)
         A_inner = random_orthogonal(N // 2)

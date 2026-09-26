@@ -18,13 +18,6 @@ from pyFDN.auxiliary.flamo import delay_module, gain_module
 if TYPE_CHECKING:
     from pyFDN.build import FDNBuild
 
-try:
-    import flamo.processor  # noqa: F401
-
-    _HAS_FLAMO = True
-except ImportError:
-    _HAS_FLAMO = False
-
 
 def dss_to_flamo(
     A: ArrayLike,
@@ -93,13 +86,9 @@ def dss_to_flamo(
         a NumPy impulse response.
         If shell=False, the core module (same I/O as B.shape[1] / C.shape[0]).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("dss_to_flamo requires flamo (pip install flamo)")
-
-    import torch
-
     from pyFDN.auxiliary.flamo import (
         assemble_fdn_core,
+        default_device,
         fir_matrix_module,
         hook_module,
         wrap_fdn_shell,
@@ -114,8 +103,7 @@ def dss_to_flamo(
     if delays_arr.shape[0] != N:
         raise ValueError("delays must have length N (number of delay lines)")
 
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = default_device(device)
 
     # Delays: convert samples to seconds for FLAMO
     lengths_sec = delays_arr / float(fs)

@@ -1,6 +1,7 @@
 """Top-level package for pyFDN."""
 
 from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
 __author__ = "Facundo Franchino"
 __version__ = "0.4.2"
@@ -270,9 +271,6 @@ from .auxiliary.allpass import (
     is_allpass,
     is_paraunitary,
     is_uniallpass,
-    nested_allpass,
-    poletti_allpass,
-    series_allpass,
 )
 from .auxiliary.audio import audio_metadata, available_audio, load_audio
 
@@ -344,12 +342,6 @@ from .auxiliary.plot import (
     plot_system_matrix,
 )
 
-# tiny rotation matrix
-from .auxiliary.tiny_rotation_matrix import (
-    rotation_matrix_from_angles,
-    tiny_rotation_matrix,
-)
-
 # general utilities
 from .auxiliary.utils import (
     db_to_lin,
@@ -358,6 +350,7 @@ from .auxiliary.utils import (
     fade_out,
     hertz_to_rad,
     hertz_to_unit,
+    is_almost_zero,
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
@@ -415,17 +408,6 @@ from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fd
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
     rand_admissible_homogeneous_allpass,
 )
-from .generate.allpass_in_fdn import allpass_in_fdn
-from .generate.anderson_matrix import anderson_matrix
-from .generate.complete_orthogonal import complete_orthogonal
-from .generate.construct_cascaded_paraunitary_matrix import (
-    construct_cascaded_paraunitary_matrix,
-)
-from .generate.construct_paraunitary_from_elementals import (
-    construct_paraunitary_from_elementals,
-)
-from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
-from .generate.degree_one_lossless import degree_one_lossless
 from .generate.fdn_build_gallery import fdn_build_gallery
 from .generate.fdn_matrix_gallery import (
     FDNSystem,
@@ -433,8 +415,6 @@ from .generate.fdn_matrix_gallery import (
     fdn_system_gallery,
     filter_matrix_gallery,
 )
-from .generate.householder_matrix import householder_matrix
-from .generate.is_almost_zero import is_almost_zero
 from .generate.kronecker_matrix import (
     kronecker_angles,
     kronecker_matrix,
@@ -442,17 +422,36 @@ from .generate.kronecker_matrix import (
     reflection_kernel,
     rotation_kernel,
 )
-from .generate.nearest_orthogonal import nearest_orthogonal
-from .generate.nearest_sign_agnostic_orthogonal import nearest_sign_agnostic_orthogonal
-from .generate.random_matrix_shift import random_matrix_shift
 
 # matrix generators
-from .generate.random_orthogonal import random_orthogonal
+from .generate.orthogonal import (
+    anderson_matrix,
+    complete_orthogonal,
+    householder_matrix,
+    nearest_orthogonal,
+    nearest_sign_agnostic_orthogonal,
+    random_orthogonal,
+    rotation_matrix_from_angles,
+    tiny_rotation_matrix,
+)
+from .generate.paraunitary import (
+    construct_cascaded_paraunitary_matrix,
+    construct_paraunitary_from_elementals,
+    construct_velvet_feedback_matrix,
+    degree_one_lossless,
+    random_matrix_shift,
+    shift_matrix,
+    shift_matrix_distribute,
+)
 from .generate.sample_delay_lengths import sample_delay_lengths
-from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
-from .generate.shift_matrix import shift_matrix
-from .generate.shift_matrix_distribute import shift_matrix_distribute
+from .generate.structures import (
+    allpass_in_fdn,
+    nested_allpass,
+    poletti_allpass,
+    schroeder_reverberator,
+    series_allpass,
+)
 from .preset import (
     FDNPreset,
     available_fdn_presets,
@@ -467,49 +466,6 @@ from .preset import (
 from .process import process_dss, process_fdn
 from .references import paper_link, paper_reference
 
-# training (torch/flamo are imported lazily inside these)
-from .train import (
-    L1,
-    L2,
-    LOSSLESS_ALIAS_DECAY_DB,
-    AsymmetricFlatMagnitude,
-    AttenuationFilter,
-    Energy,
-    FlatMagnitude,
-    FlatSpectrogram,
-    Loss,
-    Match,
-    MatchCumulativeEnergy,
-    MatchEnergyDecay,
-    MatchImpulseResponse,
-    MatchMagnitude,
-    MatchMelMagnitude,
-    MatchMelSpectrogram,
-    MatchPhase,
-    MatchPhaseSpectrogram,
-    MatchSpectrogram,
-    OutputEQ,
-    ParameterLoss,
-    ParamRef,
-    Response,
-    ResponseLoss,
-    Sparsity,
-    SpectralFlatness,
-    Trainable,
-    TrainLog,
-    build_fdn,
-    build_set_decay,
-    energy_decay_curve,
-    impulse_excitation,
-    mimo_rir_eigenvalues_per_frequency,
-    model_response,
-    param,
-    params,
-    train_fdn,
-    trainable_from_build,
-    trainable_from_preset,
-)
-
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import build_to_impz, dss_to_impz
@@ -517,12 +473,6 @@ from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_td import build_to_td, dss_to_td
 from .translate.dss_to_tf import dss_to_tf
-from .translate.flamo_to_pr import (
-    FlamoDecompositionForPR,
-    flamo_decompose_for_pr,
-    flamo_extract_pr_decomposition,
-    flamo_to_pr,
-)
 from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
@@ -532,3 +482,113 @@ allpass = import_module(".auxiliary.allpass", __name__)
 
 # Time-domain graph engine (pyFDN.td operators and connectors).
 from . import td  # noqa: E402
+
+# The training API and the FLAMO pole finder need torch and flamo. They are
+# imported on first access, so ``import pyFDN`` stays light for NumPy users.
+if TYPE_CHECKING:
+    from .train import (
+        L1,
+        L2,
+        LOSSLESS_ALIAS_DECAY_DB,
+        AsymmetricFlatMagnitude,
+        AttenuationFilter,
+        Energy,
+        FlatMagnitude,
+        FlatSpectrogram,
+        Loss,
+        Match,
+        MatchCumulativeEnergy,
+        MatchEnergyDecay,
+        MatchImpulseResponse,
+        MatchMagnitude,
+        MatchMelMagnitude,
+        MatchMelSpectrogram,
+        MatchPhase,
+        MatchPhaseSpectrogram,
+        MatchSpectrogram,
+        OutputEQ,
+        ParameterLoss,
+        ParamRef,
+        Response,
+        ResponseLoss,
+        Sparsity,
+        SpectralFlatness,
+        Trainable,
+        TrainLog,
+        build_fdn,
+        build_set_decay,
+        energy_decay_curve,
+        impulse_excitation,
+        mimo_rir_eigenvalues_per_frequency,
+        model_response,
+        param,
+        params,
+        train_fdn,
+        trainable_from_build,
+        trainable_from_preset,
+    )
+    from .translate.flamo_to_pr import (
+        FlamoDecompositionForPR,
+        flamo_decompose_for_pr,
+        flamo_extract_pr_decomposition,
+        flamo_to_pr,
+    )
+
+_LAZY_MODULES = {
+    "L1": ".train",
+    "L2": ".train",
+    "LOSSLESS_ALIAS_DECAY_DB": ".train",
+    "AsymmetricFlatMagnitude": ".train",
+    "AttenuationFilter": ".train",
+    "Energy": ".train",
+    "FlatMagnitude": ".train",
+    "FlatSpectrogram": ".train",
+    "Loss": ".train",
+    "Match": ".train",
+    "MatchCumulativeEnergy": ".train",
+    "MatchEnergyDecay": ".train",
+    "MatchImpulseResponse": ".train",
+    "MatchMagnitude": ".train",
+    "MatchMelMagnitude": ".train",
+    "MatchMelSpectrogram": ".train",
+    "MatchPhase": ".train",
+    "MatchPhaseSpectrogram": ".train",
+    "MatchSpectrogram": ".train",
+    "OutputEQ": ".train",
+    "ParameterLoss": ".train",
+    "ParamRef": ".train",
+    "Response": ".train",
+    "ResponseLoss": ".train",
+    "Sparsity": ".train",
+    "SpectralFlatness": ".train",
+    "Trainable": ".train",
+    "TrainLog": ".train",
+    "build_fdn": ".train",
+    "build_set_decay": ".train",
+    "energy_decay_curve": ".train",
+    "impulse_excitation": ".train",
+    "mimo_rir_eigenvalues_per_frequency": ".train",
+    "model_response": ".train",
+    "param": ".train",
+    "params": ".train",
+    "train_fdn": ".train",
+    "trainable_from_build": ".train",
+    "trainable_from_preset": ".train",
+    "FlamoDecompositionForPR": ".translate.flamo_to_pr",
+    "flamo_decompose_for_pr": ".translate.flamo_to_pr",
+    "flamo_extract_pr_decomposition": ".translate.flamo_to_pr",
+    "flamo_to_pr": ".translate.flamo_to_pr",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module = _LAZY_MODULES.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module, __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_MODULES))

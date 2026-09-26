@@ -10,8 +10,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
-from pyFDN.auxiliary.utils import ensure_3d, lin_to_db
-from pyFDN.generate.is_almost_zero import is_almost_zero
+from pyFDN.auxiliary.utils import ensure_3d, is_almost_zero, lin_to_db
 
 if TYPE_CHECKING:
     import torch

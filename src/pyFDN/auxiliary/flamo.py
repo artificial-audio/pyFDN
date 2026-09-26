@@ -1,9 +1,9 @@
 """
 Standard wrappers for FLAMO modules that accept numpy arrays and return FLAMO modules.
 
-All functions require flamo to be installed. They take numpy arrays and common
-options (nfft, device, etc.) and return configured FLAMO dsp modules with
-values assigned.
+They take numpy arrays and common options (nfft, device, etc.) and return
+configured FLAMO dsp modules with values assigned. torch and flamo are imported
+inside the functions, so importing pyFDN does not load them.
 """
 
 from __future__ import annotations
@@ -13,20 +13,25 @@ from typing import Any
 
 import numpy as np
 
-try:
-    from flamo.processor import dsp
 
-    _HAS_FLAMO = True
-except ImportError:
-    _HAS_FLAMO = False
+def default_device(device: Any = None) -> Any:
+    """``device`` as given, or CUDA when available and the CPU otherwise."""
+    if device is not None:
+        return device
+    import torch
+
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def _get_device(device: Any) -> Any:
-    if device is None and _HAS_FLAMO:
-        import torch
-
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return device
+def to_numpy(value: Any) -> np.ndarray:
+    """A tensor (or anything array-like) as a detached NumPy array on the CPU."""
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "resolve_conj"):
+        value = value.resolve_conj()
+    return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
 
 
 def flamo_time_response(
@@ -55,12 +60,7 @@ def flamo_time_response(
     np.ndarray
         Time response with the same shape and numeric dtype as FLAMO's tensor.
     """
-    response = model.get_time_response(fs=fs, identity=identity)
-    if hasattr(response, "detach"):
-        response = response.detach()
-    if hasattr(response, "cpu"):
-        response = response.cpu()
-    return np.asarray(response)
+    return to_numpy(model.get_time_response(fs=fs, identity=identity))
 
 
 def flamo_freq_response(
@@ -95,12 +95,7 @@ def flamo_freq_response(
         Complex frequency response with the same shape and numeric dtype as
         FLAMO's tensor.
     """
-    response = model.get_freq_response(fs=fs, identity=identity)
-    if hasattr(response, "detach"):
-        response = response.detach()
-    if hasattr(response, "cpu"):
-        response = response.cpu()
-    return np.asarray(response)
+    return to_numpy(model.get_freq_response(fs=fs, identity=identity))
 
 
 def flamo_process(
@@ -143,8 +138,6 @@ def flamo_process(
     np.ndarray
         Squeezed model output on CPU.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("flamo_process requires flamo (pip install flamo)")
     import torch
 
     nfft = int(model.get_inputLayer().nfft)
@@ -165,7 +158,7 @@ def flamo_process(
     x = torch.as_tensor(buf, dtype=torch_dtype).unsqueeze(0).unsqueeze(-1)
     with torch.no_grad():
         wet = model(x)
-    return np.asarray(wet.squeeze().detach().cpu())
+    return to_numpy(wet.squeeze())
 
 
 def gain_module(
@@ -201,15 +194,14 @@ def gain_module(
     flamo.processor.dsp.Gain
         FLAMO Gain module with values assigned.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("gain_module requires flamo (pip install flamo)")
     import torch
+    from flamo.processor import dsp
 
     values = np.asarray(values, dtype=np.float64)
     if values.ndim == 1:
         values = values.reshape(-1, 1)
     n_out, n_in = values.shape
-    dev = _get_device(device)
+    dev = default_device(device)
 
     torch_dtype = torch.float32 if dtype is None else dtype
     gain = dsp.Gain(
@@ -265,15 +257,14 @@ def delay_module(
     flamo.processor.dsp.parallelDelay
         FLAMO parallelDelay module with lengths assigned (in seconds).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("delay_module requires flamo (pip install flamo)")
     import torch
+    from flamo.processor import dsp
 
     lengths = np.asarray(lengths_seconds, dtype=np.float64).ravel()
     n = len(lengths)
     max_len = int(np.ceil(np.max(lengths) * fs)) if n else 1
     max_len = max(1, max_len)
-    dev = _get_device(device)
+    dev = default_device(device)
 
     torch_dtype = torch.float32 if dtype is None else dtype
     delays = dsp.parallelDelay(
@@ -323,16 +314,15 @@ def fir_matrix_module(
     flamo.processor.dsp.Filter
         FLAMO Filter module with coefficients assigned.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("fir_matrix_module requires flamo (pip install flamo)")
     import torch
+    from flamo.processor import dsp
 
     coeffs = np.asarray(coeffs, dtype=np.float64)
     if coeffs.ndim != 3:
         raise ValueError("coeffs must have shape (n_output, n_input, n_taps)")
     n_out, n_in, n_taps = coeffs.shape
 
-    dev = _get_device(device)
+    dev = default_device(device)
     torch_dtype = torch.float32 if dtype is None else dtype
     filt = dsp.Filter(
         size=(n_taps, n_out, n_in),
@@ -383,9 +373,8 @@ def sos_filter_module(
     flamo.processor.dsp.parallelSOSFilter
         FLAMO parallelSOSFilter with coefficients assigned.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("sos_filter_module requires flamo (pip install flamo)")
     import torch
+    from flamo.processor import dsp
 
     sos_pad = np.asarray(sos, dtype=np.float64)
     if sos_pad.ndim != 3 or sos_pad.shape[1] != 6:
@@ -399,7 +388,7 @@ def sos_filter_module(
         raise ValueError("sos has a section with a0 = 0")
     sos_pad = sos_pad / a0
 
-    dev = _get_device(device)
+    dev = default_device(device)
     torch_dtype = torch.float32 if dtype is None else dtype
     filt = dsp.parallelSOSFilter(
         size=(N,),
@@ -494,15 +483,14 @@ def matrix_module(
         Matrix whose realized value (``map(param)``) equals ``values`` (within
         the parametrization; an SO(N) projection may apply for orthogonal).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("matrix_module requires flamo (pip install flamo)")
     import torch
+    from flamo.processor import dsp
 
     values = np.asarray(values, dtype=np.float64)
     if values.ndim != 2 or values.shape[0] != values.shape[1]:
         raise ValueError("matrix values must be square (N, N)")
     n = values.shape[0]
-    dev = _get_device(device)
+    dev = default_device(device)
     torch_dtype = torch.float32 if dtype is None else dtype
 
     matrix = dsp.Matrix(
@@ -569,8 +557,6 @@ def hook_module(
         ]
         if len(parts) == 1:
             return parts[0]
-        if not _HAS_FLAMO:
-            raise ImportError("hook_module requires flamo (pip install flamo)")
         from collections import OrderedDict
 
         from flamo.processor import system
@@ -664,8 +650,6 @@ def assemble_fdn_core(
     core : flamo.processor.system.Series or Parallel
         The FDN core, ready for :func:`wrap_fdn_shell`.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("assemble_fdn_core requires flamo (pip install flamo)")
     from collections import OrderedDict
 
     from flamo.processor import system
@@ -751,8 +735,6 @@ def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
     pyFDN.model_response : the shell's output as a :class:`~pyFDN.Response`,
         including the magnitude spectrum a frequency-domain view wants.
     """
-    if not _HAS_FLAMO:
-        raise ImportError("wrap_fdn_shell requires flamo (pip install flamo)")
     import torch
     from flamo.processor import dsp, system
 

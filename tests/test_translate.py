@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.allpass import is_allpass
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_ss import dss_to_ss
 from pyFDN.translate.dss_to_tf import dss_to_tf

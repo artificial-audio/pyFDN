@@ -11,7 +11,7 @@ from pyFDN.auxiliary.flamo import (
     wrap_fdn_shell,
 )
 from pyFDN.auxiliary.flamo_graph import extract_build
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_impz import dss_to_impz
 

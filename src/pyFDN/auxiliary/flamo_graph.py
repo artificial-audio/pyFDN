@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from pyFDN.auxiliary.flamo import to_numpy
+
 if TYPE_CHECKING:
     from pyFDN.build import FDNBuild
 
@@ -232,11 +234,7 @@ def _module_value(module: Any) -> np.ndarray:
         raise ValueError(f"{type(module).__name__} has no parameter tensor")
     mapper = getattr(module, "map", None)
     value = mapper(param) if callable(mapper) else param
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
-    return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
+    return to_numpy(value)
 
 
 def _delay_samples(module: Any) -> np.ndarray:
@@ -250,11 +248,7 @@ def _delay_samples(module: Any) -> np.ndarray:
         to_samples = getattr(module, "s2sample", None)
         if callable(to_samples):
             value = to_samples(value)
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
-    samples = np.asarray(value.numpy() if hasattr(value, "numpy") else value)
+    samples = to_numpy(value)
     return np.asarray(np.round(samples), dtype=int).ravel()
 
 

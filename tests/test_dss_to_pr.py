@@ -14,7 +14,7 @@ import warnings
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_pr import dss_to_pr
 from pyFDN.translate.impz_to_res import impz_to_res

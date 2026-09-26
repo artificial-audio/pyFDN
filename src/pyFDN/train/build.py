@@ -554,7 +554,7 @@ def _random_so_n(n: int, rng: np.random.Generator) -> np.ndarray:
     Landing in SO(N) means the orthogonal parametrization's preimage
     (``logm``) round-trips without the det<0 projection warning.
     """
-    from pyFDN.generate.random_orthogonal import random_orthogonal
+    from pyFDN.generate.orthogonal import random_orthogonal
 
     q = random_orthogonal(n, rng)
     if np.linalg.det(q) < 0:

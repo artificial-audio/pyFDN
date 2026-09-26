@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike
 
 from ..build import FDNBuild
 from .fdn_matrix_gallery import IO_MATRIX_TYPES
-from .random_orthogonal import random_orthogonal
+from .orthogonal import random_orthogonal
 from .sample_delay_lengths import DelayDistribution, sample_delay_lengths
 
 FDNDesign = dict[str, dict[str, Any]]

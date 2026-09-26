@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.allpass import is_uniallpass, poletti_allpass
-from pyFDN.generate.allpass_in_fdn import allpass_in_fdn
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
+from pyFDN.generate.structures import allpass_in_fdn
 
 
 def test_is_uniallpass_poletti():

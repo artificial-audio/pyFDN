@@ -76,7 +76,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     """
     from scipy.signal import butter
 
-    from pyFDN.generate.random_orthogonal import random_orthogonal
+    from pyFDN.generate.orthogonal import random_orthogonal
     from pyFDN.translate.pr_to_impz import pr_to_impz
 
     fs = 48000.0

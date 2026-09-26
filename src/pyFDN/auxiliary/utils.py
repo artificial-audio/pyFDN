@@ -23,6 +23,11 @@ def skew(X: ArrayLike) -> np.ndarray:
     return upper - upper.T
 
 
+def is_almost_zero(A: ArrayLike, tol: float = 1e-12) -> bool:
+    """Whether every entry of ``A`` is below ``tol`` in absolute value."""
+    return bool(np.max(np.abs(A)) < tol)
+
+
 def ensure_3d(matrix: ArrayLike) -> np.ndarray:
     """Ensure the matrix has a trailing polynomial dimension."""
 
