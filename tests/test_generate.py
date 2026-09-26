@@ -29,9 +29,8 @@ from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
 
 
 @pytest.fixture()
-def deterministic_rng(monkeypatch):
-    generator = np.random.default_rng(42)
-    monkeypatch.setattr(np.random, "default_rng", lambda: generator)
+def deterministic_rng():
+    np.random.seed(42)
 
 
 def test_random_orthogonal_produces_unitary_matrix():
@@ -79,6 +78,14 @@ def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
     np.testing.assert_equal(right.size, tensor.shape[0])
     np.testing.assert_(np.all(left >= 0))
     np.testing.assert_(np.all(right >= 0))
+
+
+def test_cascaded_paraunitary_matrix_is_reproducible_with_global_seed():
+    np.random.seed(0)
+    first, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    np.random.seed(0)
+    second, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    np.testing.assert_array_equal(first, second)
 
 
 def test_construct_cascaded_paraunitary_matrix_is_inverse(monkeypatch):

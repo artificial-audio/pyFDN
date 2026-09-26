@@ -18,7 +18,6 @@ def shift_matrix_distribute(
         pulse_size = max(pulse_size, 1)
 
     n = mat_arr.shape[0]
-    rng = np.random.default_rng()
     base = np.arange(n)
-    rand_left_shift = np.floor(sparsity * (base + rng.random(n) * 0.99)).astype(int)
+    rand_left_shift = np.floor(sparsity * (base + np.random.rand(n) * 0.99)).astype(int)
     return rand_left_shift * pulse_size

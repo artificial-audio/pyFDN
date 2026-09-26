@@ -26,7 +26,7 @@ def slope_to_rt(slope: ArrayLike, fs: float) -> np.ndarray:
 def rt_to_gain_per_sample(rt: float, fs: float) -> float:
     """Convert reverb time (seconds) to gain coefficient per sample.
 
-    The gain g satisfies g^(rt*fs) = 10^(-3), i.e. about -30 dB after rt seconds.
+    The gain g satisfies g^(rt*fs) = 10^(-3), i.e. -60 dB after rt seconds.
     """
     return 10 ** (-3 / (rt * fs))
 

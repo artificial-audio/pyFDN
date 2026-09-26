@@ -16,16 +16,15 @@ def random_matrix_shift(
     rev = ensure_3d(matrix_rev) if matrix_rev is not None else None
     n = mat.shape[0]
 
-    rng = np.random.default_rng()
     if max_shift >= n:
-        rand_left = rng.permutation(max_shift)[:n]
-        rand_right = rng.permutation(max_shift)[:n]
+        rand_left = np.random.permutation(max_shift)[:n]
+        rand_right = np.random.permutation(max_shift)[:n]
     elif max_shift <= 0:
         rand_left = np.zeros(n, dtype=int)
         rand_right = np.zeros(n, dtype=int)
     else:
-        rand_left = rng.integers(0, max_shift, size=n)  # type: ignore[assignment]
-        rand_right = rng.integers(0, max_shift, size=n)  # type: ignore[assignment]
+        rand_left = np.random.randint(0, max_shift, size=n)
+        rand_right = np.random.randint(0, max_shift, size=n)
 
     rand_left -= rand_left.min()
     rand_right -= rand_right.min()

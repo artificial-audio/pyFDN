@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike
 
 from ..build import FDNBuild
 from .fdn_matrix_gallery import IO_MATRIX_TYPES
+from .random_orthogonal import random_orthogonal
 from .sample_delay_lengths import DelayDistribution, sample_delay_lengths
 
 FDNDesign = dict[str, dict[str, Any]]
@@ -20,13 +21,6 @@ def _build_rng(
     if isinstance(rng, np.random.Generator):
         return rng
     return np.random.default_rng(default_seed if rng is None else rng)
-
-
-def _random_orthogonal(N: int, rng: np.random.Generator) -> np.ndarray:
-    q, r = np.linalg.qr(rng.standard_normal((N, N)))
-    signs = np.sign(np.diag(r))
-    signs[signs == 0] = 1
-    return q * signs
 
 
 def _build_io_matrices(
@@ -242,7 +236,7 @@ def fdn_build_gallery(
     if np.any(delays_array < 1):
         raise ValueError("all delays must be positive")
 
-    A = _random_orthogonal(N, local_rng)
+    A = random_orthogonal(N, local_rng)
     B, C, D, normalized_io_type = _build_io_matrices(
         N,
         num_inputs,
