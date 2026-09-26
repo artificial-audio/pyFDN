@@ -127,7 +127,10 @@ def model_response(model: Any, excitation: torch.Tensor | None = None) -> Respon
     n_in, n_out = int(model.input_channels), int(model.output_channels)
     if excitation is None:
         excitation = impulse_excitation(
-            n_in, int(model.nfft), device=model.device, dtype=getattr(model, "dtype", None)
+            n_in,
+            int(model.nfft),
+            device=model.device,
+            dtype=getattr(model, "dtype", None),
         )
     y = model(excitation)  # (n_in, nfft, n_out)
     if y.shape[0] != n_in or y.shape[2] != n_out:

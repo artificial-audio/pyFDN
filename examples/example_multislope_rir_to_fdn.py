@@ -226,8 +226,8 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 nfft=nfft,
                 post_delay=_absorption,
                 shell=True,
-            device="cpu",
-    )
+                device="cpu",
+            )
         ).squeeze()[: len(rir)]
 
         _rt_flat, _ = pyFDN.estimate_rt_bands(_ir_flat, fs)
@@ -249,8 +249,8 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 post_delay=_absorption,
                 post_output=_eq[:, :, np.newaxis],
                 shell=True,
-            device="cpu",
-    )
+                device="cpu",
+            )
         ).squeeze()[: len(rir)]
 
         slope_fdn_rt.append(_rt_flat)
