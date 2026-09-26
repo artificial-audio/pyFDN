@@ -498,17 +498,16 @@ def matrix_sqrt(A: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     A : torch.Tensor
-        Square matrix (real, will be cast to complex for eig).
+        Square real matrix.
 
     Returns
     -------
     torch.Tensor
-        Real matrix square root of A.
+        Real matrix square root of A, in A's dtype (float64 in, float64 out).
     """
     import torch
 
-    eigenvals, eigenvecs = torch.linalg.eig(A.to(torch.complex64))
-    sqrt_eigenvals = torch.sqrt(eigenvals)
-    return torch.real(
-        eigenvecs @ torch.diag(sqrt_eigenvals) @ torch.linalg.inv(eigenvecs)
-    ).float()
+    complex_dtype = torch.complex128 if A.dtype == torch.float64 else torch.complex64
+    eigenvals, eigenvecs = torch.linalg.eig(A.to(complex_dtype))
+    root = eigenvecs @ torch.diag(torch.sqrt(eigenvals)) @ torch.linalg.inv(eigenvecs)
+    return torch.real(root).to(A.dtype)

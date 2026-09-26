@@ -15,6 +15,7 @@ from flamo.processor import dsp
 from ..auxiliary.flamo import default_device
 from ..eq.design import (
     EQDesign,
+    _decay_to_gain_db,
     _design_buffers,
     _design_parameter_count,
     _design_section_count,
@@ -25,33 +26,6 @@ from ..eq.design import (
 MAX_ATTENUATION_DB = 60.0
 
 
-def _target(
-    value: Any,
-    design: EQDesign,
-    n_channels: int,
-    *,
-    broadcast: bool,
-) -> np.ndarray:
-    n_parameters = _design_parameter_count(design)
-    target = np.asarray(value, dtype=np.float64)
-    if target.ndim == 0:
-        target = np.full(n_parameters, float(target))
-    if target.ndim not in (1, 2):
-        raise ValueError(
-            f"target must be 1- or 2-dimensional, got shape {target.shape}"
-        )
-    if target.shape[0] != n_parameters:
-        raise ValueError(f"{design} takes {n_parameters} values, got {target.shape[0]}")
-    if target.ndim == 2 and target.shape[1] != n_channels:
-        raise ValueError(
-            f"a per-channel target must have {n_channels} columns, "
-            f"got {target.shape[1]}"
-        )
-    if broadcast and target.ndim == 1:
-        target = np.broadcast_to(target[:, None], (n_parameters, n_channels))
-    return np.ascontiguousarray(target)
-
-
 def _filter_target(
     value: Any,
     value_nyquist: Any | None,
@@ -60,29 +34,47 @@ def _filter_target(
     *,
     broadcast: bool,
 ) -> np.ndarray:
+    """A design target as ``(n_parameters,)`` or ``(n_parameters, n_channels)``.
+
+    ``graphic_eq`` takes one array of band values; the endpoint designs take a
+    DC value and a Nyquist value (defaulting to the DC one, i.e. flat).
+    """
     if design == "graphic_eq":
         if value_nyquist is not None:
             raise ValueError("graphic_eq uses one target array, not a Nyquist target")
-        return _target(value, design, n_channels, broadcast=broadcast)
-
-    nyquist = value if value_nyquist is None else value_nyquist
-    first, last = np.broadcast_arrays(
-        np.asarray(value, dtype=np.float64),
-        np.asarray(nyquist, dtype=np.float64),
-    )
-    target = np.stack((first, last))
-    if target.ndim not in (1, 2):
-        raise ValueError(
-            "endpoint targets must be scalar or one value per channel, "
-            f"got shape {target.shape}"
+        n_parameters = _design_parameter_count(design)
+        target = np.asarray(value, dtype=np.float64)
+        if target.ndim == 0:
+            target = np.full(n_parameters, float(target))
+        if target.ndim not in (1, 2):
+            raise ValueError(
+                f"target must be 1- or 2-dimensional, got shape {target.shape}"
+            )
+        if target.shape[0] != n_parameters:
+            raise ValueError(
+                f"{design} takes {n_parameters} values, got {target.shape[0]}"
+            )
+    else:
+        nyquist = value if value_nyquist is None else value_nyquist
+        target = np.stack(
+            np.broadcast_arrays(
+                np.asarray(value, dtype=np.float64),
+                np.asarray(nyquist, dtype=np.float64),
+            )
         )
+        if target.ndim not in (1, 2):
+            raise ValueError(
+                "endpoint targets must be scalar or one value per channel, "
+                f"got shape {target.shape}"
+            )
+
     if target.ndim == 2 and target.shape[1] != n_channels:
         raise ValueError(
             f"a per-channel target must have {n_channels} columns, "
             f"got {target.shape[1]}"
         )
     if broadcast and target.ndim == 1:
-        target = np.broadcast_to(target[:, None], (2, n_channels))
+        target = np.broadcast_to(target[:, None], (target.shape[0], n_channels))
     return np.ascontiguousarray(target)
 
 
@@ -208,7 +200,9 @@ class AttenuationFilter(_DesignedSOS):
 
     def rt_to_sos(self, rt: Any) -> Any:
         per_line = rt if rt.ndim == 2 else rt[:, None]
-        gain_db = -60.0 * self.delays_samples / (self._floored(per_line) * self.fs_hz)
+        gain_db = _decay_to_gain_db(
+            self._floored(per_line), self.delays_samples, self.fs_hz
+        )
         return self.design_sos(gain_db)
 
     def _floored(self, rt: Any) -> Any:

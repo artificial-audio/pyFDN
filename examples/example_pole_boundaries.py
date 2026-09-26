@@ -37,15 +37,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
-    from types import SimpleNamespace
-
     import numpy as np
     import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
-    return SimpleNamespace, go, np, pyFDN, torch
+    return go, np, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -57,7 +55,7 @@ def _(mo):
 
 
 @app.cell
-def _(SimpleNamespace, np, pyFDN):
+def _(np, pyFDN):
     np.random.seed(6)
     fs = 48000
     num_delays = 8
@@ -68,13 +66,12 @@ def _(SimpleNamespace, np, pyFDN):
 
     feedback_matrix = pyFDN.random_orthogonal(num_delays) / 1.5
 
-    # two-tap FIR absorption per delay line: h(z) = 0.65 + 0.3 z^{-1}
-    absorption = SimpleNamespace(
-        b=np.zeros((num_delays, 1, 2)), a=np.zeros((num_delays, 1, 2))
-    )
-    absorption.a[:, 0, 0] = 1.0
-    absorption.b[:, 0, 0] = 0.65
-    absorption.b[:, 0, 1] = 0.3
+    # two-tap FIR absorption per delay line, h(z) = 0.65 + 0.3 z^{-1}, as one
+    # SOS section per line: [b0, b1, b2, a0, a1, a2]
+    absorption = np.zeros((1, 6, num_delays))
+    absorption[0, 0, :] = 0.65
+    absorption[0, 1, :] = 0.3
+    absorption[0, 3, :] = 1.0
 
     print(f"Delays: {delays} (sum = {delays.sum()})")
     return (
@@ -112,14 +109,8 @@ def _(
     torch,
 ):
     min_curve, max_curve, f_bounds = pyFDN.pole_boundaries(
-        delays, absorption, feedback_matrix[:, :, None], fs
+        delays, absorption, feedback_matrix, fs
     )
-
-    # absorption FIR as one SOS section per delay line: [b0, b1, b2, a0, a1, a2]
-    sos_loop = np.zeros((1, 6, delays.size))
-    sos_loop[0, 0, :] = absorption.b[:, 0, 0]
-    sos_loop[0, 1, :] = absorption.b[:, 0, 1]
-    sos_loop[0, 3, :] = 1.0
 
     model = pyFDN.dss_to_flamo(
         A=feedback_matrix,
@@ -129,7 +120,7 @@ def _(
         delays=delays,
         fs=fs,
         shell=False,
-        post_delay=sos_loop,
+        post_delay=absorption,
         dtype=torch.float64,
     )
     _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(

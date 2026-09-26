@@ -161,9 +161,7 @@ def test_process_dss_absorption_matches_flamo() -> None:
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_dss(
-        impulse, delays, A, B, C, D, post_delay=absorption
-    )
+    ir_td = pyFDN.process_dss(impulse, delays, A, B, C, D, post_delay=absorption)
 
     model = pyFDN.dss_to_flamo(
         delays,
@@ -267,9 +265,7 @@ def test_build_to_td_matches_process_dss_with_all_hooks() -> None:
 def test_build_to_td_fir_feedback_mimo_and_direct_path() -> None:
     rng = np.random.default_rng(17)
     n, num_inputs, num_outputs = 4, 2, 3
-    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(
-        n, 2, matrix_type="random"
-    )
+    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(n, 2, matrix_type="random")
     build = FDNBuild(
         A=0.8 * A,
         B=rng.standard_normal((n, num_inputs)),

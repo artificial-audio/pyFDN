@@ -118,7 +118,7 @@ def _(mo):
 
 @app.cell
 def _(build, pyFDN):
-    pyFDN.plot_FDN_build(build, title="FDN parameters")
+    pyFDN.plot_fdn_build(build, title="FDN parameters")
     return
 
 

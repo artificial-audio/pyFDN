@@ -44,17 +44,13 @@ LOSSLESS_ALIAS_DECAY_DB = 60.0
 class Trainable:
     """Which of the FDN's gain groups are trained. Delays are always fixed.
 
-    These four are plain arrays: they have no module of their own to carry the
-    flag, so it is named here. The three *filter* hooks are not in this class,
-    because a filter is a module and a module carries its own
-    ``requires_grad`` -- a :class:`~pyFDN.AttenuationFilter` or
-    :class:`~pyFDN.OutputEQ` is trained unless it was built with
-    ``requires_grad=False``.
+    These are plain arrays, so the flag is named here; a filter hook is a
+    module (:class:`~pyFDN.AttenuationFilter`, :class:`~pyFDN.OutputEQ`) and
+    carries its own ``requires_grad``.
 
-    A baked SOS bank taken from an :class:`~pyFDN.FDNBuild` is always frozen.
-    Raw biquad coefficients have nothing keeping them inside the unit circle,
-    so a fit that wants more energy raises the loop gain past 1 and the network
-    diverges; training one is therefore a module you build on purpose
+    A baked SOS bank taken from an :class:`~pyFDN.FDNBuild` is always frozen:
+    nothing keeps raw biquad coefficients inside the unit circle, so a fit can
+    push the loop gain past 1. Training one is a module you build on purpose
     (:func:`pyFDN.sos_filter_module`), not a flag.
     """
 
@@ -116,11 +112,8 @@ def build_fdn(
         coefficients, which nothing holds inside the unit circle.
     alias_decay_db : float or None
         Anti-time-aliasing decay, see :func:`trainable_from_build`. ``None``
-        (default) picks it from ``rt``: :data:`LOSSLESS_ALIAS_DECAY_DB` when
-        ``rt is None``, else 0. A lossless FDN has every pole exactly on the
-        unit circle, where the FFT-domain evaluation breaks down entirely; a
-        decaying FDN damps itself within ``nfft`` samples and needs no nudge.
-        Pass ``0.0`` to opt out.
+        (default) picks :data:`LOSSLESS_ALIAS_DECAY_DB` when ``rt is None``,
+        else 0.
     fs, nfft, device, dtype : see :func:`trainable_from_build`.
     rng : np.random.Generator, int, or None
         Seed for the sampled delays / default feedback matrix.
@@ -234,9 +227,7 @@ def trainable_from_build(
                 design="first_order_shelf", nfft=nfft),
         )
 
-    Each of those modules is trained because it says so itself (both default to
-    ``requires_grad=True``); pass ``requires_grad=False`` for a designed filter
-    that must not move.
+    Both modules default to ``requires_grad=True``.
 
     Parameters
     ----------

@@ -148,7 +148,9 @@ def fdn_core(
 
     def gains(values: ArrayLike, name: str) -> Any:
         requires_grad = bool(trainable is not None and getattr(trainable, name))
-        return gain_module(values, nfft, requires_grad=requires_grad, **common)
+        return gain_module(
+            np.asarray(values), nfft, requires_grad=requires_grad, **common
+        )
 
     if feedback is None:
         feedback = (

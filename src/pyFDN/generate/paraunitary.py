@@ -109,6 +109,8 @@ def random_matrix_shift(
     rev = ensure_3d(matrix_rev) if matrix_rev is not None else None
     n = mat.shape[0]
 
+    rand_left: np.ndarray
+    rand_right: np.ndarray
     if max_shift >= n:
         rand_left = np.random.permutation(max_shift)[:n]
         rand_right = np.random.permutation(max_shift)[:n]
@@ -116,8 +118,8 @@ def random_matrix_shift(
         rand_left = np.zeros(n, dtype=int)
         rand_right = np.zeros(n, dtype=int)
     else:
-        rand_left = np.random.randint(0, max_shift, size=n)
-        rand_right = np.random.randint(0, max_shift, size=n)
+        rand_left = np.asarray(np.random.randint(0, max_shift, size=n))
+        rand_right = np.asarray(np.random.randint(0, max_shift, size=n))
 
     rand_left -= rand_left.min()
     rand_right -= rand_right.min()

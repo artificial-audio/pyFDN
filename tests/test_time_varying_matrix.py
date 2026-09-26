@@ -54,7 +54,9 @@ def test_time_varying_matrix_filter_keeps_state_across_blocks():
     split_block = _make_time_varying_matrix()
 
     expected = single_block.process_block(x)
-    out = np.vstack([split_block.process_block(x[:17]), split_block.process_block(x[17:])])
+    out = np.vstack(
+        [split_block.process_block(x[:17]), split_block.process_block(x[17:])]
+    )
 
     np.testing.assert_allclose(out, expected)
     assert split_block.sample_index == x.shape[0]

@@ -358,7 +358,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 def _(build, pyFDN):
     # Every parameter of the finished FDN in one figure: delays, A, B, C, D and
     # the absorption response of each line.
-    pyFDN.plot_FDN_build(build, title="The complete FDN")
+    pyFDN.plot_fdn_build(build, title="The complete FDN")
 
     # Try this: pyFDN.plot_db_per_sample(absorption, delays, fs=fs, nfft=2**14)
     #   -> the attenuation each line applies per sample, which is the quantity

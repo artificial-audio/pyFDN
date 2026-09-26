@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, overload
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -94,60 +94,6 @@ def _build_post_output(
         fs,
         return_design=True,
     )
-
-
-@overload
-def fdn_build_gallery(
-    N: int | None = None,
-    *,
-    fs: float = 48_000.0,
-    delays: np.ndarray | None = None,
-    delay_range: tuple[int, int] = (400, 1200),
-    delay_distribution: DelayDistribution = "uniform",
-    coprime: bool = False,
-    sort_delays: bool = False,
-    num_inputs: int = 1,
-    num_outputs: int = 1,
-    io_type: str = "normalised",
-    input_scale: float = 1.0,
-    output_scale: float = 1.0,
-    direct_gain: float | None = 0.0,
-    rt: float | None = 2.0,
-    rt_nyquist: float | None = None,
-    rt_crossover: float | None = None,
-    output_gain_db: ArrayLike | None = None,
-    output_gain_db_nyquist: ArrayLike | None = None,
-    output_crossover: float | None = None,
-    rng: np.random.Generator | int | None = None,
-    return_design: Literal[False] = False,
-) -> FDNBuild: ...
-
-
-@overload
-def fdn_build_gallery(
-    N: int | None = None,
-    *,
-    fs: float = 48_000.0,
-    delays: np.ndarray | None = None,
-    delay_range: tuple[int, int] = (400, 1200),
-    delay_distribution: DelayDistribution = "uniform",
-    coprime: bool = False,
-    sort_delays: bool = False,
-    num_inputs: int = 1,
-    num_outputs: int = 1,
-    io_type: str = "normalised",
-    input_scale: float = 1.0,
-    output_scale: float = 1.0,
-    direct_gain: float | None = 0.0,
-    rt: float | None = 2.0,
-    rt_nyquist: float | None = None,
-    rt_crossover: float | None = None,
-    output_gain_db: ArrayLike | None = None,
-    output_gain_db_nyquist: ArrayLike | None = None,
-    output_crossover: float | None = None,
-    rng: np.random.Generator | int | None = None,
-    return_design: Literal[True],
-) -> tuple[FDNBuild, FDNDesign]: ...
 
 
 def fdn_build_gallery(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from pyFDN.auxiliary.acoustics import edc
+from pyFDN.auxiliary.acoustics import schroeder_integral
 
 
 def energy_decay_curve(
@@ -48,7 +48,7 @@ def energy_decay_curve(
     if not ir.is_floating_point():
         raise TypeError(f"Expected real floating-point tensor, got {ir.dtype}")
 
-    curve = edc(ir, axis=dim)
+    curve: torch.Tensor = schroeder_integral(ir.pow(2), axis=dim)
 
     if normalize:
         initial_energy = curve.select(dim, 0).unsqueeze(dim)

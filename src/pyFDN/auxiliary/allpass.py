@@ -17,11 +17,9 @@ from scipy.linalg import solve_discrete_lyapunov
 
 from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.auxiliary.utils import is_almost_zero
-from pyFDN.generate.structures import (  # noqa: F401  (re-export)
-    nested_allpass,
-    poletti_allpass,
-    series_allpass,
-)
+from pyFDN.generate.structures import nested_allpass as nested_allpass
+from pyFDN.generate.structures import poletti_allpass as poletti_allpass
+from pyFDN.generate.structures import series_allpass as series_allpass
 
 # How far inside the unit circle the eigenvalues of A must sit for the discrete
 # Lyapunov equation solved by is_uniallpass to be well posed.
