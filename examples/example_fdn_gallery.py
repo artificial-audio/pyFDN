@@ -237,7 +237,7 @@ def _(builds, mo):
 
 @app.cell
 def _(builds, pyFDN):
-    pyFDN.plot_FDN_build(
+    pyFDN.plot_fdn_build(
         builds["multichannel post EQ"], title="FDN build with per-output post EQ"
     )
     return

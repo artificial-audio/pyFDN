@@ -163,11 +163,11 @@ def _(
 ):
     nfft = int(2 ** np.ceil(np.log2(rir_len)))
     _model = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct_gain,
-        delays,
         fs,
         nfft=nfft,
         post_delay=sos_absorption,
@@ -216,11 +216,11 @@ def _(
     equalization_sos = pyFDN.gain_to_bounded_geq(target_level_db, fs=fs)
 
     model_eq = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct_gain,
-        delays,
         fs,
         nfft=nfft,
         post_delay=sos_absorption,

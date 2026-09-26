@@ -13,7 +13,7 @@ from typing import Any, Literal, get_args
 
 import numpy as np
 
-from ._backend import array_namespace
+from ..auxiliary.utils import array_namespace
 from ._design_record import design_value, with_design
 from .biquads import first_order_shelf_biquad, one_pole_biquad
 from .graphic_eq import (

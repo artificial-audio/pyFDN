@@ -1,4 +1,11 @@
-"""Plot utilities (matrix heatmap, system matrix layout, impulse response grid)."""
+"""Plot utilities (matrix heatmap, system matrix layout, impulse response grid).
+
+Figures are Plotly, with two deliberate exceptions that return Matplotlib
+figures: :func:`plot_spectrogram`, because a Plotly heatmap embeds every cell
+in the exported notebook (megabytes per spectrogram) where Matplotlib embeds
+one compressed image, and :func:`plot_impulse_response_matrix`, whose
+``N x N`` subplot grids are far lighter in Matplotlib.
+"""
 
 from __future__ import annotations
 
@@ -843,7 +850,7 @@ def plot_fdn_parameter(
     return fig
 
 
-def plot_FDN_build(
+def plot_fdn_build(
     build: Any,
     *,
     nfft: int = 512,
@@ -873,6 +880,10 @@ def plot_FDN_build(
         zmax=zmax,
         title=title,
     )
+
+
+# Historical spelling, kept as an alias.
+plot_FDN_build = plot_fdn_build  # noqa: N816
 
 
 def plot_impulse_response(

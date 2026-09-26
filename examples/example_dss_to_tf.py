@@ -96,7 +96,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, delays, impulse_response_length, pyFDN):
-    ir_dss = pyFDN.dss_to_impz(impulse_response_length, delays, A, B, C, D)
+    ir_dss = pyFDN.dss_to_impz(delays, A, B, C, D, impulse_response_length)
     return (ir_dss,)
 
 

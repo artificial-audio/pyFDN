@@ -5,6 +5,45 @@ History
 Unreleased
 ----------
 
+* ``import pyFDN`` no longer loads torch or flamo, which makes it about three
+  times faster; the training API and ``flamo_to_pr`` load on first use. Every
+  public name is still exported from ``pyFDN``.
+* ``construct_cascaded_paraunitary_matrix`` (and the ``velvet`` /
+  ``random_dense`` gallery types), ``shift_matrix_distribute`` and
+  ``random_matrix_shift`` are now reproducible with ``np.random.seed``; they
+  used an unseeded generator before. ``random_orthogonal`` takes an optional
+  ``rng``.
+* ``process_dss`` renders through the same graph as ``dss_to_td`` (one
+  time-domain engine), with identical output. ``dss_to_td`` / ``build_to_td``
+  now accept a ``td`` operator or any ``process_block`` object as a hook, and
+  run ``post_delay`` on the delay output in real time.
+* **Breaking:** delay state-space arguments are ``(delays, A, B, C, D)``
+  everywhere: ``dss_to_flamo(delays, A, B, C, D, fs, ...)``,
+  ``is_allpass(delays, A, B, C, D)`` and
+  ``dss_to_impz(delays, A, B, C, D, ir_len)``.
+* **Breaking:** ``pole_boundaries`` takes the absorption as an
+  ``(sections, 6, N)`` SOS bank (the ``FDNBuild.post_delay`` format) instead of
+  an object with ``b`` and ``a`` fields, and accepts a 2-D feedback matrix.
+* **Breaking:** ``tiny_rotation_matrix`` and ``rotation_matrix_from_angles``
+  return NumPy arrays (the ``dtype`` argument is gone) and draw from NumPy's
+  random state.
+* ``fdn_system_gallery`` and ``filter_matrix_gallery`` use snake_case type
+  names like ``fdn_matrix_gallery`` (``"nested_allpass"``,
+  ``"allpass_in_fdn"``, ``"velvet"``, ...); the old spellings are still
+  accepted.
+* ``plot_FDN_build`` is now ``plot_fdn_build``; the old name remains an alias.
+* ``flamo_to_pr`` no longer prints progress by default (``verbose=False``, like
+  ``dss_to_pr``). ``matrix_sqrt`` keeps float64 precision.
+* ``edc`` accepts torch tensors and shares its Schroeder integral with
+  ``energy_decay_curve`` and the decay losses.
+* Remove the ``pyFDN.auxiliary.coupled_rooms`` module (a hand-wired FLAMO FDN
+  used only by its test; ``example_coupled_rooms`` covers the model) and the
+  unused ``flareverb`` dependency.
+* Internal: ``generate/`` is consolidated into ``orthogonal.py``,
+  ``paraunitary.py`` and ``structures.py``; ``dss_to_flamo`` and
+  ``trainable_from_build`` share one FLAMO core builder; the residue
+  extraction, device default, tensor conversion and seed handling exist once.
+  CI now runs ruff and mypy.
 * Add ``Match``, a composable response loss that extracts a feature from the
   model response and the reference (waveform, magnitude, phase, mel
   magnitude, multi-resolution spectrogram, octave-band EDC, cumulative energy),

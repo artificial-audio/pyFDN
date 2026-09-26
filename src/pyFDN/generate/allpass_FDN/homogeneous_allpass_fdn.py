@@ -109,7 +109,7 @@ def homogeneous_allpass_fdn(
         is_a1, XX = is_uniallpass(A, b, c, d)
         print("isUniallpass:", is_a1, "XX=\n", XX)
         delays = 2 ** np.arange(N)
-        is_a2, den, num = is_allpass(A, b, c, d, delays)
+        is_a2, den, num = is_allpass(delays, A, b, c, d)
         print("isAllpass (delays 2^0..2^(N-1)):", is_a2)
 
     return A, b, c, d, U

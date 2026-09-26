@@ -305,7 +305,7 @@ def _(mo):
     as SOS banks. Use it with `build_to_impz`, `build_to_flamo`, or `process_fdn`.
     `param(...).raw()` gives the trained RT values in seconds and EQ gains in dB.
 
-    `plot_FDN_build` shows the matrix, gains, delays, absorption in dB per sample,
+    `plot_fdn_build` shows the matrix, gains, delays, absorption in dB per sample,
     and output EQ in dB. Compare the initial and trained builds below.
     """)
     return
@@ -334,8 +334,8 @@ def _(ir_trained, model, np, pyFDN):
 def _(initial_build, mo, pyFDN, trained_build):
     mo.hstack(
         [
-            pyFDN.plot_FDN_build(initial_build, title="FDN, untrained"),
-            pyFDN.plot_FDN_build(trained_build, title="FDN, trained"),
+            pyFDN.plot_fdn_build(initial_build, title="FDN, untrained"),
+            pyFDN.plot_fdn_build(trained_build, title="FDN, trained"),
         ]
     )
     return

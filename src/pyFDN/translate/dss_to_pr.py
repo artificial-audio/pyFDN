@@ -8,14 +8,17 @@ callers using only ``"eig"``/``"roots"`` never pay that import cost.
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.auxiliary.poles import reduce_conjugate_pairs
+from pyFDN.auxiliary.poles import (
+    reduce_conjugate_pairs,
+    residue_at_pole,
+    residues_from_terms,
+)
 from pyFDN.translate.dss_to_ss import dss_to_ss
 
 
@@ -27,9 +30,7 @@ def _dss_to_res(
     C: np.ndarray,
     D: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """Residues from poles via SVD null-vector formula on
-    ``P(z) = diag(z^m) − A``.
-    """
+    """Residues at ``poles`` of ``P(z) = diag(z^m) - A`` (SVD null vectors)."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     delays = np.asarray(delays, dtype=np.float64).ravel()
     A = np.asarray(A, dtype=np.complex128)
@@ -37,53 +38,24 @@ def _dss_to_res(
     C = np.asarray(C, dtype=np.complex128)
     D = np.asarray(D, dtype=np.complex128)
 
-    n_poles = poles.size
-    n = delays.size
-    n_in = B.shape[1]
-    n_out = C.shape[0]
-
-    r_den = np.zeros(n_poles, dtype=np.complex128)
-    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
-    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
-    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
-
-    for it, pole in enumerate(poles):
-        # P(z) = diag(z^m) - A, dP/dz = diag(m z^{m-1})
-        z_m = np.power(pole, delays)
-        z_m1 = np.power(pole, delays - 1.0)
-        p = np.diag(z_m) - A
-        dp = np.diag(delays * z_m1)
-
-        # Null vectors: P r = 0, l^H P = 0
-        u, s, vh = np.linalg.svd(p, full_matrices=False)
-        r = vh.conj().T[:, -1]
-        l = u[:, -1]
-
-        denom = np.vdot(l, dp @ r)
-        r_den[it] = denom
-        eig_right[:, it] = r
-        eig_left[:, it] = l
-
-        cr = C @ r.reshape(-1, 1)
-        lh_b = np.conj(l).reshape(1, -1) @ B
-        r_nom[it, :, :] = cr @ lh_b
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        undriven = 1.0 / r_den
-    is_multiple = ~np.isfinite(undriven)
-    if np.any(is_multiple):
-        warnings.warn(
-            "There are multipoles. The residues are set to zero.", stacklevel=2
+    terms = [
+        residue_at_pole(
+            np.diag(np.power(pole, delays)) - A,
+            np.diag(delays * np.power(pole, delays - 1.0)),
+            B,
+            C,
         )
-        undriven[is_multiple] = 0.0
-        r_den[is_multiple] = np.inf
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        residues = r_nom / r_den[:, None, None]
-    residues = np.where(np.isfinite(residues), residues, 0.0)
-
-    eigenvectors = {"right": eig_right, "left": eig_left}
-    return residues, D, undriven, eigenvectors
+        for pole in poles
+    ]
+    n = delays.size
+    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
+    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
+        poles.size, C.shape[0], B.shape[1]
+    )
+    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    residues, undriven = residues_from_terms(numerators, denominators)
+    return residues, D, undriven, {"right": right, "left": left}
 
 
 def dss_to_pr(

@@ -11,7 +11,7 @@ from pyFDN.auxiliary.plot import (
     downsample_minmax,
     downsampled_scatter,
     plot_edc,
-    plot_FDN_build,
+    plot_fdn_build,
     plot_fdn_parameter,
     plot_matrix,
     plot_matrix_grid,
@@ -120,7 +120,7 @@ def test_plot_edc_rejects_mismatched_labels():
         plot_edc(np.zeros(10), labels=["a", "b"])
 
 
-def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
+def test_plot_fdn_build_forwards_build_parameters(monkeypatch):
     from pyFDN.build import FDNBuild
 
     build = FDNBuild(
@@ -142,7 +142,7 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
 
     monkeypatch.setattr("pyFDN.auxiliary.plot.plot_fdn_parameter", fake_plot)
 
-    result = plot_FDN_build(build, nfft=1024, title="FDN")
+    result = plot_fdn_build(build, nfft=1024, title="FDN")
 
     assert result == "figure"
     forwarded = captured["args"]
@@ -160,7 +160,7 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
     assert captured["kwargs"]["title"] == "FDN"
 
 
-def test_plot_FDN_build_renders_multichannel_post_eq():
+def test_plot_fdn_build_renders_multichannel_post_eq():
     import pyFDN
 
     build = pyFDN.fdn_build_gallery(
@@ -172,7 +172,7 @@ def test_plot_FDN_build_renders_multichannel_post_eq():
         output_gain_db_nyquist=-6.0,
         rng=0,
     )
-    fig = pyFDN.plot_FDN_build(build)
+    fig = pyFDN.plot_fdn_build(build)
 
     eq_traces = [t for t in fig.data if t.name and t.name.startswith("out ")]
     assert len(eq_traces) == 3
@@ -280,3 +280,9 @@ def test_animate_works_with_arbitrary_plot_fn():
 def test_animate_rejects_empty_frames():
     with pytest.raises(ValueError, match="at least one frame"):
         animate(plot_matrix, [])
+
+
+def test_plot_FDN_build_alias():
+    import pyFDN
+
+    assert pyFDN.plot_FDN_build is pyFDN.plot_fdn_build

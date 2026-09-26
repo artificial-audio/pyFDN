@@ -35,7 +35,6 @@ dependencies = [
   "soundfile",
   "scipy",
   "flamo>=0.2.18",  # Shell.set_nfft (train and render at different FFT sizes)
-  "flareverb",
 ]
 
 [project.optional-dependencies]
@@ -213,24 +212,6 @@ disable_error_code = ["no-untyped-call", "no-untyped-def"]
 module = "pyFDN.auxiliary.flamo"
 allow_untyped_defs = true
 disable_error_code = ["no-untyped-call", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-# FLAMO-based PR translation: annotation work in progress
-module = "pyFDN.translate.dss_to_pr_flamo"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "unused-ignore"]
-
-[[tool.mypy.overrides]]
-# Coupled rooms: research code, annotation work in progress
-module = "pyFDN.auxiliary.coupled_rooms"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined"]
-
-[[tool.mypy.overrides]]
-# Recursive module: PyTorch-heavy, annotation work in progress
-module = "pyFDN.recursive.*"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "override", "arg-type", "call-arg"]
 
 [[tool.mypy.overrides]]
 # Acoustics helpers: ArrayLike-heavy DSP code

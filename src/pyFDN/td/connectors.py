@@ -5,17 +5,7 @@ import warnings
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.td.operators import RecursionState, TimeOperator
-
-
-def _as_2d(block: ArrayLike) -> np.ndarray:
-    """Coerce a signal block to ``(num_samples, channels)`` float array."""
-    x = np.asarray(block, dtype=float)
-    if x.ndim == 1:
-        x = x[:, np.newaxis]
-    if x.ndim != 2:
-        raise ValueError("signal block must be 1-D or 2-D")
-    return x
+from pyFDN.td.operators import RecursionState, TimeOperator, _as_2d
 
 
 class Series(TimeOperator):

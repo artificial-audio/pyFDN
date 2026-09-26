@@ -167,7 +167,9 @@ def test_parallel_filter() -> None:
         delays_ref.advance(block_size)
 
         # td engine
-        out_sig_td[start : start + block_size, :] = parallel_conn.process_block(block_in)
+        out_sig_td[start : start + block_size, :] = parallel_conn.process_block(
+            block_in
+        )
 
         start += block_size
 

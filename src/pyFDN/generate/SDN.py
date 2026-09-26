@@ -11,14 +11,6 @@ import math
 
 import numpy as np
 
-try:
-    import plotly.graph_objects as go
-
-    _HAS_PLOTLY = True
-except ImportError:
-    go = None
-    _HAS_PLOTLY = False
-
 # ---------------------------------------------------------------------------
 # Minimal geometry (no dependency on Geometry.py)
 # ---------------------------------------------------------------------------
@@ -373,8 +365,8 @@ class SDN:
         -------
         fig : plotly.graph_objects.Figure
         """
-        if not _HAS_PLOTLY:
-            raise ImportError("visualize() requires plotly (pip install plotly)")
+        import plotly.graph_objects as go
+
         if self._result is None:
             self.compute()
         r = self._result
@@ -571,17 +563,16 @@ def _result_to_flamo(r, nfft, device):
     """Build FLAMO model from SDN result dict."""
     from collections import OrderedDict
 
-    try:
-        from flamo.processor import dsp, system
-    except ImportError as e:
-        raise ImportError("sdn_to_flamo requires flamo (pip install flamo)") from e
+    from flamo.processor import dsp, system
 
-    import torch
+    from ..auxiliary.flamo import (
+        default_device,
+        delay_module,
+        gain_module,
+        sos_filter_module,
+    )
 
-    from ..auxiliary.flamo import delay_module, gain_module, sos_filter_module
-
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = default_device(device)
     N = 30
     n_nodes = 6
     S_block = np.zeros((N, N))

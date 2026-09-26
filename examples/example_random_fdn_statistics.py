@@ -94,7 +94,7 @@ def _(
     pyFDN,
 ):
     ir_time = pyFDN.dss_to_impz(
-        ir_len, delays, feedback_matrix, input_gain, output_gain, direct
+        delays, feedback_matrix, input_gain, output_gain, direct, ir_len
     )[:, 0, 0]
 
     residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr(

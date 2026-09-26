@@ -2,7 +2,6 @@
 Convert a delay state-space (DSS) system (A, B, C, D, delays) to a FLAMO model
 for rendering.
 
-Uses gain_module and delay_module from pyFDN.auxiliary.flamo.
 Optionally place an allpass (or other) filter behind the delays in the loop.
 """
 
@@ -13,25 +12,18 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.flamo import delay_module, gain_module
+from pyFDN.auxiliary.flamo import delay_module
 
 if TYPE_CHECKING:
     from pyFDN.build import FDNBuild
 
-try:
-    import flamo.processor  # noqa: F401
-
-    _HAS_FLAMO = True
-except ImportError:
-    _HAS_FLAMO = False
-
 
 def dss_to_flamo(
+    delays: ArrayLike,
     A: ArrayLike,
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
-    delays: ArrayLike,
     fs: float,
     nfft: int = 2**16,
     device: Any = None,
@@ -43,13 +35,15 @@ def dss_to_flamo(
     post_output: Any = None,
 ) -> Any:
     """
-    Build a FLAMO model from a delay state-space (DSS) system (A, B, C, D, delays).
+    Build a FLAMO model from a delay state-space (DSS) system (delays, A, B, C, D).
 
     Signal flow: input -> B -> [recursion: delay -> (post_delay); fB = A -> (post_matrix)]
     -> C -> (post_output) -> output, with direct path D summed in parallel.
 
     Parameters
     ----------
+    delays : array-like, (N,)
+        Delay lengths in samples (one per delay line).
     A : array-like, (N, N) or (N, N, L)
         Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
         convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
@@ -59,8 +53,6 @@ def dss_to_flamo(
         Output gain.
     D : array-like, (num_out, num_in)
         Direct gain.
-    delays : array-like, (N,)
-        Delay lengths in samples (one per delay line).
     fs : float
         Sampling rate in Hz.
     nfft : int
@@ -93,63 +85,97 @@ def dss_to_flamo(
         a NumPy impulse response.
         If shell=False, the core module (same I/O as B.shape[1] / C.shape[0]).
     """
-    if not _HAS_FLAMO:
-        raise ImportError("dss_to_flamo requires flamo (pip install flamo)")
+    core = fdn_core(
+        delays,
+        A,
+        B,
+        C,
+        D,
+        fs,
+        nfft,
+        device=device,
+        dtype=dtype,
+        post_delay=post_delay,
+        post_matrix=post_matrix,
+        post_output=post_output,
+    )
+    if shell:
+        from pyFDN.auxiliary.flamo import wrap_fdn_shell
 
-    import torch
+        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
+    return core
 
+
+def fdn_core(
+    delays: ArrayLike,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
+    fs: float,
+    nfft: int,
+    *,
+    device: Any = None,
+    dtype: Any = None,
+    alias_decay_db: float = 0.0,
+    feedback: Any = None,
+    trainable: Any = None,
+    post_delay: Any = None,
+    post_matrix: Any = None,
+    post_output: Any = None,
+) -> Any:
+    """The FLAMO FDN core shared by :func:`dss_to_flamo` and training.
+
+    ``feedback`` replaces the default fixed feedback module (a parametrized
+    matrix, when training); ``trainable`` names which of ``input_gain``,
+    ``output_gain`` and ``direct`` require gradients. Hooks are resolved by
+    :func:`pyFDN.hook_module`, so a baked SOS bank becomes a frozen filter.
+    """
     from pyFDN.auxiliary.flamo import (
         assemble_fdn_core,
+        default_device,
         fir_matrix_module,
+        gain_module,
         hook_module,
-        wrap_fdn_shell,
     )
 
     A = np.asarray(A, dtype=np.float64)
-    B = np.asarray(B, dtype=np.float64)
-    C = np.asarray(C, dtype=np.float64)
-    D = np.asarray(D, dtype=np.float64)
     delays_arr = np.asarray(delays, dtype=np.float64).ravel()
-    N = A.shape[0]
-    if delays_arr.shape[0] != N:
+    if delays_arr.shape[0] != A.shape[0]:
         raise ValueError("delays must have length N (number of delay lines)")
+    device = default_device(device)
+    common = {"device": device, "dtype": dtype, "alias_decay_db": alias_decay_db}
 
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def gains(values: ArrayLike, name: str) -> Any:
+        requires_grad = bool(trainable is not None and getattr(trainable, name))
+        return gain_module(
+            np.asarray(values), nfft, requires_grad=requires_grad, **common
+        )
 
-    # Delays: convert samples to seconds for FLAMO
-    lengths_sec = delays_arr / float(fs)
-    delay_lines = delay_module(lengths_sec, nfft, fs=fs, device=device, dtype=dtype)
-    if A.ndim == 3:
-        gain_A = fir_matrix_module(A, nfft, device=device, dtype=dtype)
-    else:
-        gain_A = gain_module(A, nfft, device=device, dtype=dtype)
-    gain_B = gain_module(B, nfft, device=device, dtype=dtype)
-    gain_C = gain_module(C, nfft, device=device, dtype=dtype)
-    gain_D = gain_module(D, nfft, device=device, dtype=dtype)
+    if feedback is None:
+        feedback = (
+            fir_matrix_module(A, nfft, device=device, dtype=dtype)
+            if A.ndim == 3
+            else gain_module(A, nfft, **common)
+        )
     hooks = {
-        name: hook_module(value, nfft, name=name, device=device, dtype=dtype)
+        name: hook_module(value, nfft, name=name, **common)
         for name, value in (
             ("post_delay", post_delay),
             ("post_matrix", post_matrix),
             ("post_output", post_output),
         )
     }
-
-    # Wiring is delegated to the shared assembler so the render path here and the
-    # training builder (pyFDN.train) stay byte-for-byte identical in topology.
-    core = assemble_fdn_core(
-        input_gain=gain_B,
-        feedback=gain_A,
-        delays=delay_lines,
-        output_gain=gain_C,
-        direct=gain_D,
+    # One assembler for render and training, so the topology (and the leaf
+    # names extract_build reads back) cannot drift apart.
+    return assemble_fdn_core(
+        input_gain=gains(B, "input_gain"),
+        feedback=feedback,
+        delays=delay_module(delays_arr / float(fs), nfft, fs=fs, **common),
+        output_gain=gains(C, "output_gain"),
+        direct=gains(D, "direct"),
         **hooks,
     )
-
-    if shell:
-        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
-    return core
 
 
 def build_to_flamo(
@@ -203,11 +229,11 @@ def build_to_flamo(
         a NumPy impulse response. If shell=False, the core module.
     """
     return dss_to_flamo(
+        build.delays,
         build.A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=nfft,
         device=device,

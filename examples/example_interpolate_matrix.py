@@ -120,7 +120,7 @@ def _(C, N, T, np, num_t, pyFDN):
     for i in idx:
         Af = C[:, :, i] @ np.diag(g**delays)
         ir = pyFDN.dss_to_impz(
-            ir_len, delays, Af, b, c, d
+            delays, Af, b, c, d, ir_len
         )  # feedback matrix with gain per delay
         ir = np.asarray(ir).squeeze().ravel()
         irs.append(ir)

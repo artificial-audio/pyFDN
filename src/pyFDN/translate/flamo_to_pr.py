@@ -6,7 +6,6 @@ polished via SVD null-vector Newton, then converted to z.
 
 from __future__ import annotations
 
-import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -15,7 +14,13 @@ from typing import Any
 import numpy as np
 import torch
 
-from pyFDN.auxiliary.poles import reduce_conjugate_pairs
+from pyFDN.auxiliary.flamo import to_numpy
+from pyFDN.auxiliary.flamo_graph import _delay_samples
+from pyFDN.auxiliary.poles import (
+    reduce_conjugate_pairs,
+    residue_at_pole,
+    residues_from_terms,
+)
 
 # ───────────────────────────────────────────────────────────────────────────
 # Small infrastructure helpers
@@ -48,18 +53,11 @@ def _as_torch_complex_scalar(z: complex, *, model: Any) -> torch.Tensor:
     )
 
 
-def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
-    """Convert tensor to numpy; safe for conjugate bit. Pass-through for ndarray."""
-    if isinstance(t, np.ndarray):
-        return t
-    return t.detach().cpu().resolve_conj().numpy()
-
-
 def _sort_by_torch(
     a: torch.Tensor, key: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Sort tensor a by key (by angle for complex); return (a_sorted, indices)."""
-    key_np = _to_numpy(key)
+    key_np = to_numpy(key)
     ind = np.argsort(key_np)
     ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
     return a[ind_t], ind_t
@@ -209,7 +207,9 @@ def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
     recursion_module = recs[0]
     rec_idx = fdn_modules.index(recursion_module)
     n_fdn = len(fdn_modules)
-    delays = _delays_from_recursion(recursion_module)
+    # Delay lengths are read from the recursion's feedforward delay module.
+    feedforward = recursion_module.feedforward
+    delays = _delay_samples(getattr(feedforward, "delay", feedforward))
     if delays.size == 0:
         raise ValueError("Recursion has no delays (empty delay module).")
 
@@ -223,23 +223,6 @@ def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
         out_subgraph=out_subgraph,
         direct_subgraph=direct_branch,
     )
-
-
-def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
-    """
-    Return 1D array of delay lengths in samples from the recursion's feedforward.
-    Looks at the delay module in the recursion and sums the number of delays (per line).
-    """
-    ff = recursion_module.feedforward
-    delay_mod = getattr(ff, "delay", ff)
-    param = delay_mod.param
-    if callable(getattr(delay_mod, "map", None)):
-        sec = delay_mod.map(param)
-    else:
-        sec = param
-    samples = delay_mod.s2sample(sec)
-    out = np.asarray(samples.detach().cpu().numpy(), dtype=np.float64).ravel()
-    return np.asarray(np.round(out), dtype=int)
 
 
 def _iter_leaf_modules(node: Any) -> Iterator[Any]:
@@ -578,7 +561,7 @@ def _refine_pole_positions_w(
         "iterations": int(iteration_counter),
         "exactCounter": int(exact_counter),
         "recordRootsW": np.asarray(
-            [_to_numpy(r) for r in record_roots_w], dtype=np.complex128
+            [to_numpy(r) for r in record_roots_w], dtype=np.complex128
         ),
     }
     return roots_w, quality, meta
@@ -673,65 +656,32 @@ def _dss_to_res_flamo(
     loop: _FDNLoopFlamo,
     decomposition: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """Residues from poles using FLAMO probes for B, C, D."""
+    """Residues from poles using FLAMO probes for P, dP/dz, B, C and D."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
-    n_poles = poles.size
     n_in = int(decomposition.in_subgraph.input_channels)
     n_out = int(decomposition.out_subgraph.output_channels)
     n = loop.n
 
-    p0, _ = loop.get_P_and_dP_dz(poles[0])
-    device, dtype = p0.device, p0.dtype
-
-    r_den = torch.zeros(n_poles, device=device, dtype=dtype)
-    r_nom = torch.zeros((n_poles, n_out, n_in), device=device, dtype=dtype)
-    eig_right = torch.zeros((n, n_poles), device=device, dtype=dtype)
-    eig_left = torch.zeros((n, n_poles), device=device, dtype=dtype)
-
-    for it, pole in enumerate(poles):
+    terms = []
+    for pole in poles:
         p, dp = loop.get_P_and_dP_dz(pole)
-        f_at = decomposition.f_subgraph.probe(pole)
-        in_at = decomposition.in_subgraph.probe(pole)
-        b = f_at @ in_at
+        b = decomposition.f_subgraph.probe(pole) @ decomposition.in_subgraph.probe(pole)
         c = decomposition.out_subgraph.probe(pole)
-
-        # Scale p before the SVD (null vectors are scale-invariant) so poles far
-        # from the unit circle stay well-conditioned; dp is left unscaled for denom.
-        scale = p.abs().max()
-        p_svd = p / scale if (scale > 0 and torch.isfinite(scale)) else p
-        u, s, vh = torch.linalg.svd(p_svd)
-        r = vh.conj().T[:, -1]
-        l = u[:, -1]
-
-        denom = torch.vdot(l, (dp @ r).ravel())  # l^H (dP/dz) r
-        r_den[it] = denom
-        eig_right[:, it] = r
-        eig_left[:, it] = l
-
-        cr = c @ r.reshape(-1, 1)
-        lh_b = l.conj().reshape(1, -1) @ b
-        r_nom[it, :, :] = cr @ lh_b
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        undriven = 1.0 / r_den
-    is_multiple = ~torch.isfinite(undriven)
-    if is_multiple.any():
-        warnings.warn(
-            "There are multipoles. The residues are set to zero.", stacklevel=2
+        terms.append(
+            residue_at_pole(
+                to_numpy(p), to_numpy(dp).reshape(n, n), to_numpy(b), to_numpy(c)
+            )
         )
-        undriven = torch.where(is_multiple, torch.zeros_like(undriven), undriven)
 
-    residues = r_nom / r_den[:, None, None]
-    zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
-    residues = torch.where(torch.isfinite(residues), residues, zero)
-    direct_term = decomposition.direct_subgraph.probe(1.0 + 0j)
-
-    return (
-        _to_numpy(residues),
-        _to_numpy(direct_term),
-        _to_numpy(undriven),
-        {"right": _to_numpy(eig_right), "left": _to_numpy(eig_left)},
+    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
+    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
+        poles.size, n_out, n_in
     )
+    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    residues, undriven = residues_from_terms(numerators, denominators)
+    direct_term = to_numpy(decomposition.direct_subgraph.probe(1.0 + 0j))
+    return residues, direct_term, undriven, {"right": right, "left": left}
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -750,7 +700,7 @@ def flamo_to_pr(
     refinement_tol: float = 1e-12,
     svd_refine: bool = True,
     symmetrize: bool = True,
-    verbose: bool = True,
+    verbose: bool = False,
     num_poles: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """Poles/residues from a FLAMO transfer ``H(z) = C(z)P(z)^{-1}B(z) + D(z)``.
@@ -848,7 +798,7 @@ def flamo_to_pr(
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
-    meta_data["refinedRootsW"] = _to_numpy(roots_w)
+    meta_data["refinedRootsW"] = to_numpy(roots_w)
 
     is_stable = roots_w.abs() >= 1.0
     is_converged = quality < float(quality_threshold) * 1000.0
@@ -866,7 +816,7 @@ def flamo_to_pr(
 
     poles_torch = 1.0 / roots_w
     # Convert to numpy only for scipy.optimize.linear_sum_assignment in reduce_conjugate_pairs
-    poles_np = _to_numpy(poles_torch)
+    poles_np = to_numpy(poles_torch)
 
     if svd_refine:
         poles_np = np.array(

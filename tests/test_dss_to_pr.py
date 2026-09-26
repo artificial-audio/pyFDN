@@ -14,7 +14,7 @@ import warnings
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_pr import dss_to_pr
 from pyFDN.translate.impz_to_res import impz_to_res
@@ -46,7 +46,7 @@ def test_dss_to_pr_eig_mode_reconstructs_ir():
     residues, poles, direct, is_pair, _ = dss_to_pr(delays, a, b, c, d, mode="eig")
 
     ir_len = 512
-    ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
+    ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
     ir_modal = pr_to_impz(residues, poles, direct, is_pair, ir_len)[:, 0, 0]
 
     np.testing.assert_allclose(ir_modal, ir_time, rtol=1e-7, atol=1e-8)
@@ -69,7 +69,7 @@ def test_dss_to_pr_roots_mode_reconstructs_ir():
     )
 
     ir_len = 512
-    ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
+    ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
     ir_modal = pr_to_impz(residues, poles, direct, is_conj, ir_len)[:, 0, 0]
 
     np.testing.assert_allclose(ir_modal, ir_time, rtol=1e-7, atol=1e-8)
@@ -137,7 +137,7 @@ def test_dss_to_pr_eai_matches_roots():
 
     # IR round-trip
     ir_len = 512
-    ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
+    ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
     ir_modal = pr_to_impz(res_new, pol_new, direct_new, pair_new, ir_len)[:, 0, 0]
     np.testing.assert_allclose(ir_modal, ir_time, rtol=1e-10, atol=1e-10)
 
@@ -157,7 +157,7 @@ def test_dss_to_pr_residue_lstsq_match():
     d = np.zeros((1, 1))
 
     ir_len = 4 * int(np.sum(delays))
-    ir_time = dss_to_impz(ir_len, delays, a, b, c, d)[:, 0, 0]
+    ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
     residues, poles, direct, is_conj, _ = dss_to_pr(
         delays,
         a,

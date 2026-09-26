@@ -107,7 +107,7 @@ def _(np, pyFDN):
 def _(fs, ir, mo, pyFDN):
     mo.vstack(
         [
-            # pyFDN.plot_FDN_build(
+            # pyFDN.plot_fdn_build(
             #     build,
             #     title="The complete FDN"
             #     ),

@@ -153,11 +153,11 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, attenuation_sos, delays, fs, nfft, post_eq_sos, pyFDN):
     model = pyFDN.dss_to_flamo(
+        delays,
         A,
         B,
         C,
         D,
-        delays,
         fs,
         nfft=nfft,
         post_delay=attenuation_sos,

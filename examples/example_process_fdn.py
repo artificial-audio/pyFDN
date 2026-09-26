@@ -178,7 +178,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
         ("orthogonal", A),
         ("permutation", pyFDN.fdn_matrix_gallery(N, "permutation")),
     ]:
-        _ir = pyFDN.dss_to_impz(2 * fs, delays, _matrix, _B, _C, _D).squeeze()
+        _ir = pyFDN.dss_to_impz(delays, _matrix, _B, _C, _D, 2 * fs).squeeze()
         with warnings.catch_warnings():
             # "never mixes" is a result here, not a problem: echo_density warns
             # when the density does not reach the threshold, which is exactly
@@ -242,7 +242,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, delays, fs, ir_len_seconds, mo, pyFDN):
     ir_lossless = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A, B, C, D
+        delays, A, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     mo.vstack(
@@ -281,7 +281,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     g = pyFDN.rt_to_gain_per_sample(rt, fs)
     A_lossy = np.diag(g**delays) @ A
     ir_broadband = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A_lossy, B, C, D
+        delays, A_lossy, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     print(f"gain per sample: {g:.8f}")
@@ -358,7 +358,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 def _(build, pyFDN):
     # Every parameter of the finished FDN in one figure: delays, A, B, C, D and
     # the absorption response of each line.
-    pyFDN.plot_FDN_build(build, title="The complete FDN")
+    pyFDN.plot_fdn_build(build, title="The complete FDN")
 
     # Try this: pyFDN.plot_db_per_sample(absorption, delays, fs=fs, nfft=2**14)
     #   -> the attenuation each line applies per sample, which is the quantity

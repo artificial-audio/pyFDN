@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from ._backend import array_namespace
+from ..auxiliary.utils import array_namespace
 
 
 def lowshelf_biquad(omega_c: float, gain: Any) -> tuple[Any, Any]:

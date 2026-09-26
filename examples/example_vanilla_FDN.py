@@ -64,11 +64,11 @@ def _(pyFDN, torch):
         rng=42,
     )
     model = pyFDN.dss_to_flamo(
+        build.delays,
         build.A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=2**18,
         post_delay=build.post_delay,
@@ -90,7 +90,7 @@ def _(mo):
 
 @app.cell
 def _(build, pyFDN):
-    pyFDN.plot_FDN_build(build, title="Vanilla FDN parameters")
+    pyFDN.plot_fdn_build(build, title="Vanilla FDN parameters")
     return
 
 

@@ -379,7 +379,7 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
-   pyFDN.plot_FDN_build
+   pyFDN.plot_fdn_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix

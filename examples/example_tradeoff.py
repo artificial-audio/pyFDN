@@ -96,12 +96,12 @@ def _(all_delays, fs, gain_per_sample, ir_len, np, pyFDN, sizes):
             _g = np.diag(gain_per_sample ** _delays.astype(float))
             _A = pyFDN.fdn_matrix_gallery(_n, "orthogonal") @ _g
             rirs[(_n, _s)] = pyFDN.dss_to_impz(
-                ir_len,
                 _delays,
                 _A,
                 np.ones((_n, 1)),
                 np.ones((1, _n)),
                 np.zeros((1, 1)),
+                ir_len,
             )[:, 0, 0]
             _, density[(_n, _s)] = pyFDN.echo_density(rirs[(_n, _s)], 1024, fs, 0)
             num_modes[(_n, _s)] = int(_delays.sum())
