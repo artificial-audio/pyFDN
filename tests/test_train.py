@@ -1579,6 +1579,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1594,6 +1595,7 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1659,10 +1661,10 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
     shared = pyFDN.AttenuationFilter(
-        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
     per_line = pyFDN.AttenuationFilter(
-        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
     assert shared.rt_floor.ndim == 0
     np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
@@ -1731,3 +1733,85 @@ def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
     long_ir = np.concatenate([ir, np.zeros(2**12)])
     moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
     assert float(loss(moved)) == pytest.approx(float(make_loss(reference)(moved)))
+
+
+# --- devices (#231) ------------------------------------------------------------
+
+
+def test_shell_accepts_parts_built_with_a_string_device_and_moved_with_to():
+    """Regression for #231: a core built with ``device="cpu"`` next to layers
+    moved with ``.to("cpu")`` used to fail inside ``Shell`` (FLAMO < 0.2.20
+    compared the string with the ``torch.device`` that ``.to`` stores)."""
+    from flamo.processor import dsp, system
+
+    nfft = 2**10
+    core = pyFDN.dss_to_flamo(
+        0.5 * np.eye(2),
+        np.ones((2, 1)),
+        np.ones((1, 2)),
+        np.zeros((1, 1)),
+        np.array([101, 137]),
+        48000,
+        nfft=nfft,
+        shell=False,
+        device="cpu",
+    )
+    model = system.Shell(
+        core=core,
+        input_layer=dsp.FFT(nfft).to("cpu"),
+        output_layer=dsp.iFFT(nfft).to("cpu"),
+    )
+    impulse = torch.zeros(1, nfft, 1)
+    impulse[0, 0, 0] = 1.0
+    assert torch.isfinite(model(impulse)).all()
+
+
+def _devices():
+    """CPU always; each accelerator when present, else a skipped CUDA case."""
+    accelerators = []
+    if torch.cuda.is_available():
+        accelerators.append("cuda")
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        accelerators.append("mps")
+    if not accelerators:
+        accelerators.append(
+            pytest.param("cuda", marks=pytest.mark.skip(reason="no GPU available"))
+        )
+    return ["cpu", *accelerators]
+
+
+@pytest.mark.parametrize("device", _devices())
+def test_training_stays_on_the_device_the_model_was_built_on(device):
+    """Build on the accelerator, then render and train with default arguments:
+    the response and the trained parameters stay on that device (#231)."""
+    model = build_fdn(N=4, rt=None, nfft=2**10, device=device, rng=0)
+
+    response = model_response(model)
+    assert response.h.device.type == device
+
+    log = train_fdn(model, FlatMagnitude(), max_steps=3, lr=3e-3, rng=0)
+    assert log.steps_run > 0
+    assert all(p.device.type == device for p in model.parameters())
+
+
+@pytest.mark.parametrize("device", _devices())
+def test_wrap_fdn_shell_keeps_the_core_on_its_device(device):
+    """Without ``device=``, the shell follows the core instead of the default
+    accelerator, so wrapping a CPU core on a GPU machine does not fail."""
+    from pyFDN.auxiliary.flamo import wrap_fdn_shell
+
+    core = pyFDN.dss_to_flamo(
+        0.5 * np.eye(2),
+        np.ones((2, 1)),
+        np.ones((1, 2)),
+        np.zeros((1, 1)),
+        np.array([101, 137]),
+        48000,
+        nfft=2**10,
+        shell=False,
+        device=device,
+    )
+    shell = wrap_fdn_shell(core, nfft=2**10)
+    assert torch.device(shell.device).type == device
+    assert model_response(shell).h.device.type == device

@@ -172,6 +172,7 @@ def _(
         nfft=nfft,
         post_delay=sos_absorption,
         shell=True,
+        device="cpu",
     )
     ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
     print(f"Unequalized FDN IR computed: {rir_len} samples")
@@ -226,6 +227,7 @@ def _(
         post_delay=sos_absorption,
         post_output=equalization_sos[:, :, np.newaxis],
         shell=True,
+        device="cpu",
     )
     ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
 

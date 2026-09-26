@@ -162,6 +162,7 @@ def _(A, B, C, D, attenuation_sos, delays, fs, nfft, post_eq_sos, pyFDN):
         nfft=nfft,
         post_delay=attenuation_sos,
         post_output=post_eq_sos,
+        device="cpu",
     )
     return (model,)
 

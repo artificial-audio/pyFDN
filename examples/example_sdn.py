@@ -120,7 +120,7 @@ def _(mo):
 @app.cell
 def _(sdn):
     nfft = 2**17
-    model, sdn_result = sdn.sdn_to_flamo(nfft=nfft)
+    model, sdn_result = sdn.sdn_to_flamo(nfft=nfft, device="cpu")
     return model, sdn_result
 
 

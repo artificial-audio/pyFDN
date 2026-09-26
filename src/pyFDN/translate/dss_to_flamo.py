@@ -148,7 +148,7 @@ def dss_to_flamo(
     )
 
     if shell:
-        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
+        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, device=device)
     return core
 
 

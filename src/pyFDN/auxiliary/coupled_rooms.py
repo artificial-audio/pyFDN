@@ -174,14 +174,14 @@ def create_coupled_rooms_fdn():
         )
     )
 
-    input_layer = dsp.FFT(nfft)
-    output_layer = dsp.iFFT(nfft)
+    input_layer = dsp.FFT(nfft).to(device)
+    output_layer = dsp.iFFT(nfft).to(device)
 
     model = system.Shell(core=fdn, input_layer=input_layer, output_layer=output_layer)
 
     # Generate impulse response
     with torch.no_grad():
-        impulse = torch.zeros(1, nfft, 1)
+        impulse = torch.zeros(1, nfft, 1, device=device)
         impulse[0, 0, 0] = 1.0
         ir = model(impulse).squeeze().cpu().numpy()
 

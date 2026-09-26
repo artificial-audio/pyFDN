@@ -73,6 +73,7 @@ def _(pyFDN, torch):
         nfft=2**18,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     ir = pyFDN.flamo_time_response(model).flatten()
     return build, fs, ir, model

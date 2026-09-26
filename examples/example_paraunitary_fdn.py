@@ -152,6 +152,7 @@ def _(
         fs=fs,
         shell=False,
         dtype=torch.float64,
+        device="cpu",
     )
     residues, poles, direct_term, is_pair, _meta = pyFDN.flamo_to_pr(
         model,
