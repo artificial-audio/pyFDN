@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .base import ResponseLoss
 from ._targets import _CachedTarget
-from .reductions import Reduction, Mean
+from .base import ResponseLoss
 from .distances import Distance, SquaredError
 from .features import Feature
+from .reductions import Mean, Reduction
 
 if TYPE_CHECKING:
     from pyFDN.train.response import Response
@@ -17,33 +18,34 @@ if TYPE_CHECKING:
 class Match(ResponseLoss):
     r"""Compares a model's impulse response to a target using three steps:
 
-        1. **Feature**: Extracts representations from both the model response and the
-        target (e.g., raw waveform, magnitude spectrum, or phase).
-        2. **Distance**: Computes the differences between the extracted
-        features (e.g., squared error or circular phase difference).
-        3. **Reduction**: Aggregates the elementwise differences into a scalar loss
-        tensor (e.g., mean or sum).
+    1. **Feature**: Extracts representations from both the model response and the
+    target (e.g., raw waveform, magnitude spectrum, or phase).
+    2. **Distance**: Computes the differences between the extracted
+    features (e.g., squared error or circular phase difference).
+    3. **Reduction**: Aggregates the elementwise differences into a scalar loss
+    tensor (e.g., mean or sum).
 
-        The reference target is aligned in length, shape, device, and dtype
-        using ``_CachedTarget``.
+    The reference target is aligned in length, shape, device, and dtype
+    using ``_CachedTarget``.
 
-        Parameters
-        ----------
-        target : Any or None
-            Reference impulse response (NumPy array, PyTorch tensor, or list), or None.
-        feature : Feature or callable
-            Extracts the representation to compare: ``(h, fs) -> torch.Tensor``.
-        distance : Distance or callable, default SquaredError()
-            Calculates error between two features: ``(pred, target) -> torch.Tensor``.
-        reduction : Reduction or callable, default Mean()
-            Turns the error tensor into a single scalar: ``(diff) -> torch.Tensor``.
+    Parameters
+    ----------
+    target : Any or None
+        Reference impulse response (NumPy array, PyTorch tensor, or list), or None.
+    feature : Feature or callable
+        Extracts the representation to compare: ``(h, fs) -> torch.Tensor``.
+    distance : Distance or callable, default SquaredError()
+        Calculates error between two features: ``(pred, target) -> torch.Tensor``.
+    reduction : Reduction or callable, default Mean()
+        Turns the error tensor into a single scalar: ``(diff) -> torch.Tensor``.
     """
 
     def __init__(
         self,
         target: Any | None,
         feature: Feature | Callable[[torch.Tensor, float], torch.Tensor],
-        distance: Distance | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = SquaredError(),
+        distance: Distance
+        | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = SquaredError(),
         reduction: Reduction | Callable[[torch.Tensor], torch.Tensor] = Mean(),
     ) -> None:
         self._target = _CachedTarget(target) if target is not None else None

@@ -5,6 +5,7 @@ import pytest
 
 # Force PyTorch to use CPU only for the test suite
 import torch
+
 if hasattr(torch, "set_default_device"):
     torch.set_default_device("cpu")
 # Disable CUDA detection so downstream libraries (e.g., flamo) stay on CPU
@@ -21,7 +22,6 @@ from pyFDN.train import (  # noqa: E402
     FlatSpectrogram,
     MatchCumulativeEnergy,
     MatchEnergyDecay,
-    MatchMagnitude,
     MatchMelMagnitude,
     MatchPhase,
     MatchPhaseSpectrogram,
@@ -1054,16 +1054,12 @@ def test_match_mel_magnitude_focuses_on_low_freq():
     # Response that matches high freq well but low freq poorly
     bad_low = 0.1 * np.sin(2 * np.pi * 100 * t)
     good_high = 0.1 * np.sin(2 * np.pi * 8000 * t)
-    score_bad_low = float(
-        loss(Response(h=_as_h(bad_low + good_high), fs=fs)).detach()
-    )
+    score_bad_low = float(loss(Response(h=_as_h(bad_low + good_high), fs=fs)).detach())
 
     # Response that matches low freq well
     good_low = 0.5 * np.sin(2 * np.pi * 100 * t)
     bad_high = 0.01 * np.sin(2 * np.pi * 8000 * t)
-    score_good_low = float(
-        loss(Response(h=_as_h(good_low + bad_high), fs=fs)).detach()
-    )
+    score_good_low = float(loss(Response(h=_as_h(good_low + bad_high), fs=fs)).detach())
 
     # Low frequency match should be favored (lower loss)
     assert score_good_low < score_bad_low

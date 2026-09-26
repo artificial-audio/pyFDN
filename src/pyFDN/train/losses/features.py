@@ -25,7 +25,9 @@ class Magnitude(Feature):
 
     def __init__(self, channels: str = "none") -> None:
         if channels not in ("sum", "mean", "none"):
-            raise ValueError(f"channels must be 'sum', 'mean', or 'none'; got {channels!r}")
+            raise ValueError(
+                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
+            )
         self.channels = channels
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
@@ -42,7 +44,9 @@ class Phase(Feature):
 
     def __init__(self, channels: str = "none") -> None:
         if channels not in ("sum", "mean", "none"):
-            raise ValueError(f"channels must be 'sum', 'mean', or 'none'; got {channels!r}")
+            raise ValueError(
+                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
+            )
         self.channels = channels
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
@@ -81,7 +85,9 @@ class MelMagnitude(Feature):
         channels: str = "none",
     ) -> None:
         if channels not in ("sum", "mean", "none"):
-            raise ValueError(f"channels must be 'sum', 'mean', or 'none'; got {channels!r}")
+            raise ValueError(
+                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
+            )
         self.n_mels = int(n_mels)
         self.f_min = float(f_min)
         self.f_max = f_max
@@ -91,6 +97,7 @@ class MelMagnitude(Feature):
 
     def _build_mel_scale(self, n_freq: int, fs: float, device: Any, dtype: Any) -> Any:
         from torchaudio.transforms import MelScale
+
         return MelScale(
             n_mels=self.n_mels,
             sample_rate=int(fs),
@@ -172,13 +179,17 @@ class SpectrogramFeature(Feature):
                 return_complex=True,
             ).abs()
             smoothed = (stft**2).mean(dim=-1).sqrt()
-            level = smoothed.mean(dim=-1, keepdim=True).clamp_min(torch.finfo(smoothed.dtype).tiny)
+            level = smoothed.mean(dim=-1, keepdim=True).clamp_min(
+                torch.finfo(smoothed.dtype).tiny
+            )
             normalized = smoothed / level
             spectrograms.append(normalized)
 
         max_freq = max(s.shape[1] for s in spectrograms)
-        padded = [torch.nn.functional.pad(s, (0, max_freq - s.shape[1]), value=1.0)
-                  for s in spectrograms]
+        padded = [
+            torch.nn.functional.pad(s, (0, max_freq - s.shape[1]), value=1.0)
+            for s in spectrograms
+        ]
         stacked = torch.stack(padded, dim=0)
         result = stacked.reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq)
         self._group_counts = [s.shape[0] * s.shape[1] for s in spectrograms]
@@ -239,11 +250,15 @@ class PhaseSpectrogramFeature(Feature):
         max_freq = max(p.shape[1] for p in phases)
         max_frames = max(p.shape[2] for p in phases)
         padded = [
-            torch.nn.functional.pad(p, (0, max_frames - p.shape[2], 0, max_freq - p.shape[1]))
+            torch.nn.functional.pad(
+                p, (0, max_frames - p.shape[2], 0, max_freq - p.shape[1])
+            )
             for p in phases
         ]
         stacked = torch.stack(padded, dim=0)
-        result = stacked.reshape(len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames)
+        result = stacked.reshape(
+            len(self.nfft), h.shape[1], h.shape[2], max_freq, max_frames
+        )
         self._group_counts = [p.shape[0] * p.shape[1] * p.shape[2] for p in phases]
         return result
 

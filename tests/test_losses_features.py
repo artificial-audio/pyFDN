@@ -16,7 +16,9 @@ from pyFDN.train.losses.features import PhaseSpectrogramFeature, SpectrogramFeat
 # --- SpectrogramFeature -------------------------------------------------------
 
 
-def _manual_spectrogram(h: torch.Tensor, nfft: tuple[int, ...], overlap: float) -> torch.Tensor:
+def _manual_spectrogram(
+    h: torch.Tensor, nfft: tuple[int, ...], overlap: float
+) -> torch.Tensor:
     """The same Welch spectrogram, computed one channel at a time with plain
     indexing (no stacking/reshaping), to use as a ground truth to compare against."""
     n_out, n_in = h.shape[1], h.shape[2]
@@ -28,8 +30,12 @@ def _manual_spectrogram(h: torch.Tensor, nfft: tuple[int, ...], overlap: float) 
         for o in range(n_out):
             for c in range(n_in):
                 stft = torch.stft(
-                    h[:, o, c], n_fft=n, hop_length=hop, window=window,
-                    center=False, return_complex=True,
+                    h[:, o, c],
+                    n_fft=n,
+                    hop_length=hop,
+                    window=window,
+                    center=False,
+                    return_complex=True,
                 ).abs()
                 smoothed = (stft**2).mean(dim=-1).sqrt()
                 level = smoothed.mean().clamp_min(torch.finfo(smoothed.dtype).tiny)
@@ -150,8 +156,12 @@ def test_phase_spectrogram_feature_matches_direct_stft_phase():
     window = torch.hann_window(n_fft)
     expected = torch.angle(
         torch.stft(
-            h[:, 0, 0], n_fft=n_fft, hop_length=hop, window=window,
-            center=False, return_complex=True,
+            h[:, 0, 0],
+            n_fft=n_fft,
+            hop_length=hop,
+            window=window,
+            center=False,
+            return_complex=True,
         )
     )
 

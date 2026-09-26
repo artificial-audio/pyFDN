@@ -5,7 +5,11 @@ compose into an objective.
 from __future__ import annotations
 
 from .base import Loss, ParameterLoss, ResponseLoss, Scaled, Sum
+from .distances import CircularDistance, SquaredError
+from .features import Magnitude, Phase, Waveform
+from .match import Match
 from .parameter import L1, L2, Sparsity
+from .reductions import Mean
 from .spectral import (
     AsymmetricFlatMagnitude,
     FlatMagnitude,
@@ -25,16 +29,11 @@ from .temporal import (
     MatchImpulseResponse,
 )
 
-from .match import Match
-from .reductions import Mean, Sum
-from .distances import SquaredError, CircularDistance
-from .features import Waveform, Magnitude, Phase
-
 __all__ = [
-    # match
+    # match (the Sum reduction stays in .reductions: ``Sum`` here is the
+    # loss composition from .base)
     "Match",
     "Mean",
-    "Sum",
     "SquaredError",
     "CircularDistance",
     "Waveform",

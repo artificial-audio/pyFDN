@@ -13,10 +13,22 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .distances import (
+    CircularDistance,
+    ConstantTargetDistance,
+    FlatnessRatioDistance,
+    OnesTargetDistance,
+    SquaredError,
+)
+from .features import (
+    Magnitude,
+    MelMagnitude,
+    Phase,
+    PhaseSpectrogramFeature,
+    SpectrogramFeature,
+)
 from .match import Match
 from .reductions import Mean, MeanPerGroup
-from .distances import SquaredError, CircularDistance, ConstantTargetDistance, FlatnessRatioDistance, OnesTargetDistance
-from .features import Magnitude, Phase, MelMagnitude, SpectrogramFeature, PhaseSpectrogramFeature
 
 # How the output channels of |H| are combined before comparing with the target.
 ChannelReduction = Literal["sum", "mean", "none"]
@@ -84,7 +96,6 @@ class FlatMagnitude(Match):
         self, target: float = 1.0, *, channels: ChannelReduction = "sum"
     ) -> None:
         _reduce_channels_check(channels)
-        import numpy as np
         super().__init__(
             target=None,
             feature=Magnitude(channels=channels),
@@ -201,7 +212,6 @@ class SpectralFlatness(Match):
         self, target: float = 1.0, *, channels: ChannelReduction = "none"
     ) -> None:
         _reduce_channels_check(channels)
-        import numpy as np
         super().__init__(
             target=None,
             feature=Magnitude(channels=channels),
@@ -275,6 +285,7 @@ class FlatSpectrogram(Match):
 
 class MatchMagnitude(Match):
     """Mean squared error of :math:`|H|` against a reference impulse response."""
+
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
         _reduce_channels_check(channels)
         super().__init__(
@@ -287,6 +298,7 @@ class MatchMagnitude(Match):
 
 class MatchPhase(Match):
     r"""Circular distance of :math:`\angle H` against a reference impulse response."""
+
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
         _reduce_channels_check(channels)
         super().__init__(
@@ -372,7 +384,9 @@ class MatchMelMagnitude(Match):
         _reduce_channels_check(channels)
         super().__init__(
             target=target,
-            feature=MelMagnitude(n_mels=n_mels, f_min=f_min, f_max=f_max, channels=channels),
+            feature=MelMagnitude(
+                n_mels=n_mels, f_min=f_min, f_max=f_max, channels=channels
+            ),
             distance=SquaredError(),
             reduction=Mean(),
         )

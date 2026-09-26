@@ -11,22 +11,22 @@ if TYPE_CHECKING:
 
     from pyFDN.train.response import Response
 
+from .distances import CompressedEnergyDistance, MaskedSquaredError, SquaredError
+from .features import CumulativeEnergySurface, EnergyDecayCurve, Waveform
 from .match import Match
-from .reductions import Mean, MaskedRms, MeanRmsOverGroups
-from .distances import SquaredError, MaskedSquaredError, CompressedEnergyDistance
-from .features import Waveform, EnergyDecayCurve, CumulativeEnergySurface
+from .reductions import MaskedRms, Mean, MeanRmsOverGroups
 
 
 class MatchImpulseResponse(Match):
     """Mean squared error against a reference impulse response, sample by sample."""
 
     def __init__(self, target: Any) -> None:
-            super().__init__(
-                target=target,
-                feature=Waveform(),
-                distance=SquaredError(),
-                reduction=Mean(),
-            )
+        super().__init__(
+            target=target,
+            feature=Waveform(),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
 
 
 class Energy(ResponseLoss):
@@ -118,6 +118,7 @@ class MatchEnergyDecay(Match):
                 f"model's nfft ({nfft}); there is no decay to read."
             )
 
+
 class MatchCumulativeEnergy(Match):
     r"""Doubly-cumulated energy against a reference -- decay *and* colour, no bands.
 
@@ -203,18 +204,14 @@ class MatchCumulativeEnergy(Match):
             )
         self.frequency = frequency
         directions = (
-            ("descending", "ascending")
-            if frequency == "both"
-            else (frequency,)
+            ("descending", "ascending") if frequency == "both" else (frequency,)
         )
         super().__init__(
             target=target,
             feature=CumulativeEnergySurface(
                 window=self.window, hop=self.hop, directions=directions
             ),
-            distance=CompressedEnergyDistance(
-                power=self.power, floor_db=self.floor_db
-            ),
+            distance=CompressedEnergyDistance(power=self.power, floor_db=self.floor_db),
             reduction=MeanRmsOverGroups(),
         )
 

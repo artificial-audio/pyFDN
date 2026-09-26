@@ -77,7 +77,9 @@ class FlatnessRatioDistance(Distance):
         pred_arith = pred.mean(dim=0, keepdim=True).clamp_min(eps)
         pred_flatness = pred_geom / pred_arith
 
-        target_geom = torch.exp(torch.log(target.clamp_min(eps)).mean(dim=0, keepdim=True))
+        target_geom = torch.exp(
+            torch.log(target.clamp_min(eps)).mean(dim=0, keepdim=True)
+        )
         target_arith = target.mean(dim=0, keepdim=True).clamp_min(eps)
         target_flatness = target_geom / target_arith
 
@@ -152,9 +154,7 @@ class CompressedEnergyDistance(Distance):
             )
         self.floor_db = float(floor_db)
 
-    def _compressed(
-        self, surface: torch.Tensor, scale: torch.Tensor
-    ) -> torch.Tensor:
+    def _compressed(self, surface: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
         floor = 10.0 ** (self.floor_db / 10.0)
         return (surface / scale).clamp_min(floor) ** self.power
 
