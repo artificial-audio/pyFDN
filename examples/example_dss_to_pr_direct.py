@@ -56,7 +56,7 @@ def _(np, pyFDN):
 @app.cell
 def _(A, b, c, d, delays, np, pyFDN):
     ir_len = 1024
-    ir_time = pyFDN.dss_to_impz(ir_len, delays, A, b, c, d)[:, 0, 0]
+    ir_time = pyFDN.dss_to_impz(delays, A, b, c, d, ir_len)[:, 0, 0]
 
     ir_modals = {}
     modes = ["eig", "roots", "eai"]

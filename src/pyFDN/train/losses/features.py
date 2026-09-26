@@ -5,12 +5,19 @@ from typing import Any
 
 import torch
 
-from ..features.temporal import schroeder_integral
+from pyFDN.auxiliary.acoustics import octave_bands, schroeder_integral
 
 # Octave band edges around the 63 Hz … 8 kHz centres, the range a measured RIR
 # actually carries. Below the first edge and above the last, a room impulse
 # response is noise, and its "decay" is the noise floor's.
-OCTAVE_EDGES = (44.0, 88.0, 177.0, 354.0, 707.0, 1414.0, 2828.0, 5657.0, 11314.0)
+_BANDS, _ = octave_bands()  # 63 Hz ... 8 kHz, as in estimate_rt_bands
+OCTAVE_EDGES = tuple(float(round(edge)) for edge in (*_BANDS[:, 0], _BANDS[-1, 1]))
+
+
+def _check_channels(channels: str) -> None:
+    """How output channels are combined: ``"sum"``, ``"mean"`` or ``"none"``."""
+    if channels not in ("sum", "mean", "none"):
+        raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {channels!r}")
 
 
 class Feature(ABC):
@@ -31,10 +38,7 @@ class Magnitude(Feature):
     """Frequency-domain magnitude spectrum via rfft."""
 
     def __init__(self, channels: str = "none") -> None:
-        if channels not in ("sum", "mean", "none"):
-            raise ValueError(
-                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
-            )
+        _check_channels(channels)
         self.channels = channels
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
@@ -61,10 +65,7 @@ class Phase(Feature):
     """
 
     def __init__(self, channels: str = "none") -> None:
-        if channels not in ("sum", "mean", "none"):
-            raise ValueError(
-                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
-            )
+        _check_channels(channels)
         self.channels = channels
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
@@ -101,10 +102,7 @@ class MelMagnitude(Feature):
         f_max: float | None = None,
         channels: str = "none",
     ) -> None:
-        if channels not in ("sum", "mean", "none"):
-            raise ValueError(
-                f"channels must be 'sum', 'mean', or 'none'; got {channels!r}"
-            )
+        _check_channels(channels)
         self.n_mels = int(n_mels)
         self.f_min = float(f_min)
         self.f_max = f_max
@@ -322,7 +320,7 @@ class EnergyDecayCurve(Feature):
             ],
             dim=1,
         )
-        edc = schroeder_integral(band_power, dim=-1)
+        edc = schroeder_integral(band_power, axis=-1)
         eps = torch.finfo(edc.dtype).tiny
         db = 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
         return db.reshape(-1, len(self.bands) - 1, db.shape[-1])
@@ -358,9 +356,9 @@ class CumulativeEnergySurface(Feature):
             return_complex=True,
         )
         energy = spectrum.real**2 + spectrum.imag**2
-        energy = schroeder_integral(energy, dim=-1)
+        energy = schroeder_integral(energy, axis=-1)
         surfaces = [
-            schroeder_integral(energy, dim=-2)
+            schroeder_integral(energy, axis=-2)
             if direction == "descending"
             else torch.cumsum(energy, -2)
             for direction in self.directions

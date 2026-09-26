@@ -61,7 +61,7 @@ def _(np, pyFDN):
 
     delays = np.sort(np.random.randint(500, 2001, num_delays))
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "Velvet", num_stages=3, sparsity=3
+        num_delays, "velvet", num_stages=3, sparsity=3
     )
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
@@ -127,11 +127,11 @@ def _(
     )
 
     model = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct,
-        delays,
         fs,
         nfft=2**17,
         post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank

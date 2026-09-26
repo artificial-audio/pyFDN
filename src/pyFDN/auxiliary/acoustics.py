@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.signal import sosfreqz
 from scipy.special import erfc
+
+from pyFDN.auxiliary.utils import array_namespace
 
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
@@ -31,11 +34,28 @@ def rt_to_gain_per_sample(rt: float, fs: float) -> float:
     return 10 ** (-3 / (rt * fs))
 
 
+def schroeder_integral(energy: Any, axis: int = 0) -> Any:
+    r"""Backward (Schroeder) integration of ``energy`` along ``axis``.
+
+    .. math:: E[n] = \sum_{m=n}^{L-1} e[m]
+
+    Works on NumPy arrays and on torch tensors (differentiably), so the same
+    integral serves analysis and the training losses.
+    """
+    xp = array_namespace(energy)
+    if xp is np:
+        energy = np.asarray(energy, dtype=float)
+        return np.flip(np.cumsum(np.flip(energy, axis=axis), axis=axis), axis=axis)
+    flipped = xp.flip(energy, dims=[axis])
+    return xp.flip(xp.cumsum(flipped, dim=axis), dims=[axis])
+
+
 def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     """Energy decay curve: backward cumulative sum of squared signal along an axis.
 
     EDC(t) = sum(ir[t:]^2), so the curve decreases from total energy to zero.
     Typically used with impulse responses with shape (n_samples, n_channels).
+    Accepts NumPy arrays and torch tensors, see :func:`schroeder_integral`.
 
     Parameters
     ----------
@@ -50,10 +70,9 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     np.ndarray
         Same shape as ir. Values are non-negative and non-increasing along axis.
     """
-    ir = np.asarray(ir, dtype=float)
-    rev = np.flip(ir, axis=axis)
-    cum = np.cumsum(rev**2, axis=axis)
-    return np.flip(cum, axis=axis)
+    if array_namespace(ir) is np:
+        ir = np.asarray(ir, dtype=float)
+    return schroeder_integral(ir**2, axis=axis)
 
 
 def echo_density(

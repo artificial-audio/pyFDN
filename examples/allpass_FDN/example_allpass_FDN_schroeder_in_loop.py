@@ -82,12 +82,12 @@ def _(np, pyFDN):
     delays_schroeder = np.concatenate(delays_list)
 
     ir_schroeder = pyFDN.dss_to_impz(
-        ir_len_schroeder,
         delays_schroeder,
         A_schroeder,
         B_schroeder,
         C_schroeder,
         D_schroeder,
+        ir_len_schroeder,
     )
     return (
         A_schroeder,
@@ -191,11 +191,11 @@ def _(
 ):
     # Schroeder core (4-in, 4-out) from section 1; append to FDN forward path
     schroeder_core = pyFDN.dss_to_flamo(
+        delays_schroeder,
         A_schroeder,
         B_schroeder,
         C_schroeder,
         D_schroeder,
-        delays_schroeder,
         fs,
         nfft=nfft,
         shell=False,

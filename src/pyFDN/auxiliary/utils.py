@@ -12,6 +12,27 @@ from scipy.interpolate import interp1d
 from scipy.signal import freqz, group_delay
 
 
+def as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
+    """A NumPy ``Generator`` from a generator, an integer seed, or ``None``."""
+    if isinstance(rng, np.random.Generator):
+        return rng
+    return np.random.default_rng(rng)
+
+
+def array_namespace(x: Any) -> Any:
+    """The array module ``x`` belongs to: :mod:`torch` for tensors, else numpy.
+
+    Lets one formula serve both a NumPy design path and a differentiable torch
+    path: the few array functions it needs are looked up on the namespace of
+    its argument. torch is imported only when a tensor is actually passed.
+    """
+    if type(x).__module__.split(".", 1)[0] == "torch":
+        import torch
+
+        return torch
+    return np
+
+
 def skew(X: ArrayLike) -> np.ndarray:
     """Return skew-symmetric matrix from upper triangle.
 

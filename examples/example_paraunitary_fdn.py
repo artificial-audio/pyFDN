@@ -62,7 +62,7 @@ def _(np, pyFDN):
     direct = np.zeros((1, 1))
 
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "RandomDense", num_stages=num_stages, stage_matrix_type="random"
+        num_delays, "random_dense", num_stages=num_stages, stage_matrix_type="random"
     )
     print(f"Delays: {delays} (sum = {delays.sum()})")
     print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
@@ -136,7 +136,7 @@ def _(
     torch,
 ):
     ir_time = pyFDN.dss_to_impz(
-        ir_len, delays, feedback_matrix, input_gain, output_gain, direct
+        delays, feedback_matrix, input_gain, output_gain, direct, ir_len
     )[:, 0, 0]
 
     # pole count = degree of the generalized characteristic polynomial in w = z^{-1}

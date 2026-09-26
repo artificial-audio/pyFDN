@@ -80,7 +80,7 @@ def _(fs, N, nfft, np, pyFDN):
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, fs, nfft=nfft, shell=False
+        delays_sch, A_sch, B_sch, C_sch, D_sch, fs, nfft=nfft, shell=False
     )
     return (allpass_fdn_core,)
 

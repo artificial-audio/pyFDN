@@ -22,11 +22,11 @@ def test_extract_build_from_dss_model():
     post_eq[:, 3, :] = 1.0
 
     model = pyFDN.dss_to_flamo(
+        delays,
         A,
         B,
         C,
         D,
-        delays,
         48_000,
         nfft=128,
         post_delay=attenuation,

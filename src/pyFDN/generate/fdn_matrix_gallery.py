@@ -51,6 +51,19 @@ IOMatrixType = Literal["ones", "normalised", "identity"]
 IO_MATRIX_TYPES = get_args(IOMatrixType)
 
 # Historical fdnToolbox spellings remain accepted when loading old examples.
+_SYSTEM_TYPE_ALIASES = {
+    "series": "series_allpass",
+    "nestedAllpass": "nested_allpass",
+    "polettiAllpass": "poletti_allpass",
+    "homogeneousAllpass": "homogeneous_allpass",
+    "SchroederReverberator": "schroeder_reverberator",
+    "allpassInFDN": "allpass_in_fdn",
+}
+_FILTER_MATRIX_TYPE_ALIASES = {
+    "RandomDense": "random_dense",
+    "Velvet": "velvet",
+    "FromElementals": "from_elementals",
+}
 _MATRIX_TYPE_ALIASES = {
     "Hadamard": "hadamard",
     "Householder": "householder",
@@ -61,19 +74,19 @@ _MATRIX_TYPE_ALIASES = {
 
 # Full-system types (return FDNSystem).
 _SYSTEM_TYPES = [
-    "series",
-    "nestedAllpass",
-    "polettiAllpass",
-    "homogeneousAllpass",
-    "SchroederReverberator",
-    "allpassInFDN",
+    "series_allpass",
+    "nested_allpass",
+    "poletti_allpass",
+    "homogeneous_allpass",
+    "schroeder_reverberator",
+    "allpass_in_fdn",
 ]
 
 # Filter (FIR paraunitary) matrix types (return (N, N, L) np.ndarray).
 _FILTER_MATRIX_TYPES = [
-    "RandomDense",
-    "Velvet",
-    "FromElementals",
+    "random_dense",
+    "velvet",
+    "from_elementals",
 ]
 
 
@@ -125,15 +138,16 @@ def filter_matrix_gallery(
 
     Args:
         N: Matrix size.  Ignored when ``matrix_type`` is ``None``.
-        matrix_type: One of ``"RandomDense"`` (dense cascaded paraunitary
-            matrix), ``"Velvet"`` (sparse velvet-noise feedback matrix), or
-            ``"FromElementals"`` (cascade of degree-one lossless factors,
-            polynomial degree ``N * num_stages``).  Pass ``None`` (or call
+        matrix_type: One of ``"random_dense"`` (dense cascaded paraunitary
+            matrix), ``"velvet"`` (sparse velvet-noise feedback matrix), or
+            ``"from_elementals"`` (cascade of degree-one lossless factors,
+            polynomial degree ``N * num_stages``); the historical
+            fdnToolbox spellings (``"Velvet"``, ...) are accepted.  Pass ``None`` (or call
             with no arguments) to get the list of all type names.
         num_stages: Number of cascade stages (or degree factor for
-            ``"FromElementals"``).
-        sparsity: Sparsity of the ``"Velvet"`` type (ignored otherwise).
-        stage_matrix_type: Stage matrix for ``"RandomDense"`` and ``"Velvet"``:
+            ``"from_elementals"``).
+        sparsity: Sparsity of the ``"velvet"`` type (ignored otherwise).
+        stage_matrix_type: Stage matrix for ``"random_dense"`` and ``"velvet"``:
             ``"Hadamard"`` or ``"random"`` (random orthogonal; avoids the
             structural double poles at z = ±1 of Hadamard stages).
 
@@ -144,7 +158,7 @@ def filter_matrix_gallery(
     Example::
 
         filter_matrix_gallery()              # → list of type strings
-        filter_matrix_gallery(4, "Velvet", num_stages=3, sparsity=3)
+        filter_matrix_gallery(4, "velvet", num_stages=3, sparsity=3)
     """
     if matrix_type is None:
         return list(_FILTER_MATRIX_TYPES)
@@ -152,7 +166,9 @@ def filter_matrix_gallery(
     if N is None:
         raise ValueError("N must be provided when matrix_type is specified")
 
-    if matrix_type == "RandomDense":
+    matrix_type = _FILTER_MATRIX_TYPE_ALIASES.get(matrix_type, matrix_type)
+
+    if matrix_type == "random_dense":
         from .paraunitary import (
             construct_cascaded_paraunitary_matrix,
         )
@@ -161,7 +177,7 @@ def filter_matrix_gallery(
             N, num_stages, matrix_type=stage_matrix_type
         )[0]
 
-    if matrix_type == "Velvet":
+    if matrix_type == "velvet":
         from .paraunitary import (
             construct_cascaded_paraunitary_matrix,
         )
@@ -170,7 +186,7 @@ def filter_matrix_gallery(
             N, num_stages, sparsity=sparsity, matrix_type=stage_matrix_type
         )[0]
 
-    if matrix_type == "FromElementals":
+    if matrix_type == "from_elementals":
         from .paraunitary import (
             construct_paraunitary_from_elementals,
         )
@@ -265,7 +281,7 @@ def fdn_matrix_gallery(
 
         return anderson_matrix(N)
 
-    if matrix_type in _SYSTEM_TYPES:
+    if matrix_type in _SYSTEM_TYPES or matrix_type in _SYSTEM_TYPE_ALIASES:
         raise ValueError(
             f"'{matrix_type}' returns a full FDN system; use fdn_system_gallery() instead."
         )
@@ -292,7 +308,7 @@ def fdn_system_gallery(
     Example::
 
         fdn_system_gallery()                         # → list of type strings
-        fdn_system_gallery(8, "allpassInFDN")
+        fdn_system_gallery(8, "allpass_in_fdn")
     """
     if system_type is None:
         return list(_SYSTEM_TYPES)
@@ -300,27 +316,29 @@ def fdn_system_gallery(
     if N is None:
         raise ValueError("N must be provided when system_type is specified")
 
-    if system_type == "series":
+    system_type = _SYSTEM_TYPE_ALIASES.get(system_type, system_type)
+
+    if system_type == "series_allpass":
         from .structures import series_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
         A, B, C, D = series_allpass(g)
         return FDNSystem(A, B, C, D)
 
-    if system_type == "nestedAllpass":
+    if system_type == "nested_allpass":
         from .structures import nested_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
         A, B, C, D = nested_allpass(g)
         return FDNSystem(A, B, C, D)
 
-    if system_type == "polettiAllpass":
+    if system_type == "poletti_allpass":
         from .structures import poletti_allpass
 
         A, B, C, D = poletti_allpass(0.7, random_orthogonal(N))
         return FDNSystem(A, B, C, D)
 
-    if system_type == "homogeneousAllpass":
+    if system_type == "homogeneous_allpass":
         from .allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
         from .allpass_FDN.rand_admissible_homogeneous_allpass import (
             rand_admissible_homogeneous_allpass,
@@ -331,7 +349,7 @@ def fdn_system_gallery(
         A, B, C, D, _ = homogeneous_allpass_fdn(G, X)
         return FDNSystem(A, B, C, D)
 
-    if system_type == "SchroederReverberator":
+    if system_type == "schroeder_reverberator":
         from .structures import schroeder_reverberator
 
         N_c = N // 2
@@ -344,7 +362,7 @@ def fdn_system_gallery(
         A, B, C, D = schroeder_reverberator(allpass_gain, comb_gain, b, c, d)
         return FDNSystem(A, B, C, D)
 
-    if system_type == "allpassInFDN":
+    if system_type == "allpass_in_fdn":
         from .structures import allpass_in_fdn
 
         g = np.random.uniform(-0.8, 0.8, N // 2)

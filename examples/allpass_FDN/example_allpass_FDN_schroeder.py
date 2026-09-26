@@ -107,7 +107,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, delays, fs, pyFDN):
-    impulse_response = pyFDN.dss_to_impz(2 * fs, delays, A, B, C, D).squeeze()
+    impulse_response = pyFDN.dss_to_impz(delays, A, B, C, D, 2 * fs).squeeze()
 
     pyFDN.plot_impulse_response(
         impulse_response,

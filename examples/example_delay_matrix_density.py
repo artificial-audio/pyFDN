@@ -98,11 +98,11 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
     # Bake delay-proportional broadband decay into the lossless feedback matrix.
     A = np.diag(gain_per_sample**build.delays) @ build.A
     model = pyFDN.dss_to_flamo(
+        build.delays,
         A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=nfft,
         post_delay=build.post_delay,

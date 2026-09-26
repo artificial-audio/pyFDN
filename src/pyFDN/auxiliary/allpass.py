@@ -101,11 +101,11 @@ def is_uniallpass(
 
 
 def is_allpass(
+    delays: ArrayLike,
     A: ArrayLike,
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
-    delays: ArrayLike,
     tol: float = 1e-9,
 ) -> tuple[bool, np.ndarray, np.ndarray]:
     """
@@ -116,10 +116,10 @@ def is_allpass(
 
     Parameters
     ----------
-    A, B, C, D : array-like
-        Delay state-space matrices.
     delays : array-like
         Delay lengths (samples), length N.
+    A, B, C, D : array-like
+        Delay state-space matrices.
     tol : float
         Tolerance for coefficient comparison.
 

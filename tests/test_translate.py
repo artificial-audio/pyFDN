@@ -55,7 +55,7 @@ def test_dss_to_impz_produces_delayed_impulse():
     C = np.array([[1.0]])
     D = np.array([[0.0]])
 
-    impulse = dss_to_impz(ir_len, delays, A, B, C, D)
+    impulse = dss_to_impz(delays, A, B, C, D, ir_len)
 
     assert impulse.shape == (ir_len, 1, 1)
     ir_vector = impulse.squeeze()
@@ -78,7 +78,7 @@ def test_is_allpass_schroeder_siso():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(A, B, C, D, delays)
+    result, den, num = is_allpass(delays, A, B, C, D)
     assert result
 
 
@@ -88,7 +88,7 @@ def test_is_allpass_rejects_non_allpass():
     B = np.array([[1.0]])
     C = np.array([[1.0]])
     D = np.array([[0.5]])
-    result, _, _ = is_allpass(A, B, C, D, delays)
+    result, _, _ = is_allpass(delays, A, B, C, D)
     assert not result
 
 
@@ -103,7 +103,7 @@ def test_is_allpass_unitary_feedback():
     # Not checking allpass condition here (D=0 makes D singular),
     # just that the function runs without error via np.linalg.solve
     with pytest.raises(np.linalg.LinAlgError):
-        is_allpass(A, B, C, D, delays)
+        is_allpass(delays, A, B, C, D)
 
 
 def test_is_allpass_near_singular_D_does_not_use_inv():
@@ -114,7 +114,7 @@ def test_is_allpass_near_singular_D_does_not_use_inv():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(A, B, C, D, delays)
+    result, den, num = is_allpass(delays, A, B, C, D)
     assert result
     assert len(den) > 0
     assert len(num) > 0
@@ -136,7 +136,7 @@ def test_dss_to_tf_scalar_A_tf_matches_impz():
     D = np.zeros((1, 1))
 
     tfB, tfA = dss_to_tf(delays, A, B, C, D)
-    ir_tf = dss_to_impz(ir_len, delays, A, B, C, D)[:, 0, 0]
+    ir_tf = dss_to_impz(delays, A, B, C, D, ir_len)[:, 0, 0]
 
     # Evaluate TF at z = e^{j omega} and compare to DFT of IR
     N = 512

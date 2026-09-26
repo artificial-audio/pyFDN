@@ -6,7 +6,6 @@ polished via SVD null-vector Newton, then converted to z.
 
 from __future__ import annotations
 
-import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -17,7 +16,11 @@ import torch
 
 from pyFDN.auxiliary.flamo import to_numpy
 from pyFDN.auxiliary.flamo_graph import _delay_samples
-from pyFDN.auxiliary.poles import reduce_conjugate_pairs
+from pyFDN.auxiliary.poles import (
+    reduce_conjugate_pairs,
+    residue_at_pole,
+    residues_from_terms,
+)
 
 # ───────────────────────────────────────────────────────────────────────────
 # Small infrastructure helpers
@@ -653,65 +656,32 @@ def _dss_to_res_flamo(
     loop: _FDNLoopFlamo,
     decomposition: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """Residues from poles using FLAMO probes for B, C, D."""
+    """Residues from poles using FLAMO probes for P, dP/dz, B, C and D."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
-    n_poles = poles.size
     n_in = int(decomposition.in_subgraph.input_channels)
     n_out = int(decomposition.out_subgraph.output_channels)
     n = loop.n
 
-    p0, _ = loop.get_P_and_dP_dz(poles[0])
-    device, dtype = p0.device, p0.dtype
-
-    r_den = torch.zeros(n_poles, device=device, dtype=dtype)
-    r_nom = torch.zeros((n_poles, n_out, n_in), device=device, dtype=dtype)
-    eig_right = torch.zeros((n, n_poles), device=device, dtype=dtype)
-    eig_left = torch.zeros((n, n_poles), device=device, dtype=dtype)
-
-    for it, pole in enumerate(poles):
+    terms = []
+    for pole in poles:
         p, dp = loop.get_P_and_dP_dz(pole)
-        f_at = decomposition.f_subgraph.probe(pole)
-        in_at = decomposition.in_subgraph.probe(pole)
-        b = f_at @ in_at
+        b = decomposition.f_subgraph.probe(pole) @ decomposition.in_subgraph.probe(pole)
         c = decomposition.out_subgraph.probe(pole)
-
-        # Scale p before the SVD (null vectors are scale-invariant) so poles far
-        # from the unit circle stay well-conditioned; dp is left unscaled for denom.
-        scale = p.abs().max()
-        p_svd = p / scale if (scale > 0 and torch.isfinite(scale)) else p
-        u, s, vh = torch.linalg.svd(p_svd)
-        r = vh.conj().T[:, -1]
-        l = u[:, -1]
-
-        denom = torch.vdot(l, (dp @ r).ravel())  # l^H (dP/dz) r
-        r_den[it] = denom
-        eig_right[:, it] = r
-        eig_left[:, it] = l
-
-        cr = c @ r.reshape(-1, 1)
-        lh_b = l.conj().reshape(1, -1) @ b
-        r_nom[it, :, :] = cr @ lh_b
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        undriven = 1.0 / r_den
-    is_multiple = ~torch.isfinite(undriven)
-    if is_multiple.any():
-        warnings.warn(
-            "There are multipoles. The residues are set to zero.", stacklevel=2
+        terms.append(
+            residue_at_pole(
+                to_numpy(p), to_numpy(dp).reshape(n, n), to_numpy(b), to_numpy(c)
+            )
         )
-        undriven = torch.where(is_multiple, torch.zeros_like(undriven), undriven)
 
-    residues = r_nom / r_den[:, None, None]
-    zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
-    residues = torch.where(torch.isfinite(residues), residues, zero)
-    direct_term = decomposition.direct_subgraph.probe(1.0 + 0j)
-
-    return (
-        to_numpy(residues),
-        to_numpy(direct_term),
-        to_numpy(undriven),
-        {"right": to_numpy(eig_right), "left": to_numpy(eig_left)},
+    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
+    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
+        poles.size, n_out, n_in
     )
+    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    residues, undriven = residues_from_terms(numerators, denominators)
+    direct_term = to_numpy(decomposition.direct_subgraph.probe(1.0 + 0j))
+    return residues, direct_term, undriven, {"right": right, "left": left}
 
 
 # ───────────────────────────────────────────────────────────────────────────

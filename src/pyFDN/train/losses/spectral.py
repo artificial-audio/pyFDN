@@ -33,11 +33,6 @@ from .reductions import Mean, MeanPerGroup
 ChannelReduction = Literal["sum", "mean", "none"]
 
 
-def _reduce_channels_check(how: ChannelReduction) -> None:
-    if how not in ("sum", "mean", "none"):
-        raise ValueError(f"channels must be 'sum', 'mean' or 'none'; got {how!r}")
-
-
 def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -> None:
     """Warn when a flatness loss is asked to fit an unrenderable :math:`|H|`.
 
@@ -94,7 +89,6 @@ class FlatMagnitude(Match):
     def __init__(
         self, target: float = 1.0, *, channels: ChannelReduction = "sum"
     ) -> None:
-        _reduce_channels_check(channels)
         super().__init__(
             target=None,
             feature=Magnitude(channels=channels),
@@ -212,7 +206,6 @@ class SpectralFlatness(Match):
     def __init__(
         self, target: float = 1.0, *, channels: ChannelReduction = "none"
     ) -> None:
-        _reduce_channels_check(channels)
         super().__init__(
             target=None,
             feature=Magnitude(channels=channels),
@@ -305,7 +298,6 @@ class MatchMagnitude(Match):
     """
 
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
-        _reduce_channels_check(channels)
         super().__init__(
             target=target,
             feature=Magnitude(channels=channels),
@@ -342,7 +334,6 @@ class MatchPhase(Match):
     """
 
     def __init__(self, target: Any, *, channels: ChannelReduction = "none") -> None:
-        _reduce_channels_check(channels)
         super().__init__(
             target=target,
             feature=Phase(channels=channels),
@@ -424,7 +415,6 @@ class MatchMelMagnitude(Match):
         f_max: float | None = None,
         channels: ChannelReduction = "none",
     ) -> None:
-        _reduce_channels_check(channels)
         super().__init__(
             target=target,
             feature=MelMagnitude(

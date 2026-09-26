@@ -217,11 +217,11 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
         # unequalized FDN: reference level for the output GEQ
         _ir_flat = pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
+                _build.delays,
                 _build.A,
                 _build.B,
                 _build.C,
                 _build.D,
-                _build.delays,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,
@@ -238,11 +238,11 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
 
         resynthesis += pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
+                _build.delays,
                 _build.A,
                 _build.B,
                 _build.C,
                 _build.D,
-                _build.delays,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,

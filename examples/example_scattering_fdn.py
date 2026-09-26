@@ -115,7 +115,7 @@ def _(
     echo_densities = {}
     for _name, _mat in feedback_matrices.items():
         irs[_name] = pyFDN.dss_to_impz(
-            ir_len, delays, _mat, input_gain, output_gain, direct
+            delays, _mat, input_gain, output_gain, direct, ir_len
         )[:, 0, 0]
         _t_mix, echo_densities[_name] = pyFDN.echo_density(irs[_name], 1024, fs, 0)
         print(f"{_name}: mixing time = {_t_mix:.0f} ms")

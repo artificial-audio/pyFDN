@@ -4,15 +4,7 @@ from __future__ import annotations
 
 import torch
 
-
-def schroeder_integral(energy: torch.Tensor, dim: int = 0) -> torch.Tensor:
-    r"""Backward (Schroeder) integration of ``energy`` along ``dim``.
-
-    .. math:: E[n] = \sum_{m=n}^{L-1} e[m]
-
-    Shared by :func:`energy_decay_curve` and the decay-curve loss features.
-    """
-    return torch.flip(torch.cumsum(torch.flip(energy, dims=[dim]), dim=dim), dims=[dim])
+from pyFDN.auxiliary.acoustics import edc
 
 
 def energy_decay_curve(
@@ -56,15 +48,13 @@ def energy_decay_curve(
     if not ir.is_floating_point():
         raise TypeError(f"Expected real floating-point tensor, got {ir.dtype}")
 
-    energy = ir.pow(2)
-
-    edc = schroeder_integral(energy, dim=dim)
+    curve = edc(ir, axis=dim)
 
     if normalize:
-        initial_energy = edc.select(dim, 0).unsqueeze(dim)
-        edc = edc / initial_energy.clamp_min(eps)
+        initial_energy = curve.select(dim, 0).unsqueeze(dim)
+        curve = curve / initial_energy.clamp_min(eps)
 
     if db:
-        edc = 10.0 * torch.log10(edc.clamp_min(eps))
+        curve = 10.0 * torch.log10(curve.clamp_min(eps))
 
-    return edc
+    return curve

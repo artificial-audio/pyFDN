@@ -7,20 +7,13 @@ from typing import Any, Literal, overload
 import numpy as np
 from numpy.typing import ArrayLike
 
+from ..auxiliary.utils import as_generator
 from ..build import FDNBuild
 from .fdn_matrix_gallery import IO_MATRIX_TYPES
 from .orthogonal import random_orthogonal
 from .sample_delay_lengths import DelayDistribution, sample_delay_lengths
 
 FDNDesign = dict[str, dict[str, Any]]
-
-
-def _build_rng(
-    rng: np.random.Generator | int | None, default_seed: int
-) -> np.random.Generator:
-    if isinstance(rng, np.random.Generator):
-        return rng
-    return np.random.default_rng(default_seed if rng is None else rng)
 
 
 def _build_io_matrices(
@@ -199,7 +192,7 @@ def fdn_build_gallery(
     if rt_nyquist is not None and rt_nyquist <= 0:
         raise ValueError("rt_nyquist must be positive")
 
-    local_rng = _build_rng(rng, 0)
+    local_rng = as_generator(0 if rng is None else rng)
     delay_design: dict[str, Any] | None = None
     if delays is not None:
         if delay_distribution != "uniform" or coprime:

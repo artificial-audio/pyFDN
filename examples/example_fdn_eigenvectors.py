@@ -118,7 +118,7 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, delays, direct, go, is_pair, np, poles, pyFDN, residues):
     ir_len = 1000
-    ir_time = pyFDN.dss_to_impz(ir_len, delays, A, b, c, d)[:, 0, 0]
+    ir_time = pyFDN.dss_to_impz(delays, A, b, c, d, ir_len)[:, 0, 0]
     ir_modal = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[:, 0, 0]
 
     fig_ir = go.Figure()

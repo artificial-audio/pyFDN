@@ -116,7 +116,7 @@ def test_filter_matrix_gallery_types_are_paraunitary():
     np.random.seed(0)
     n = 4
     types = pyFDN.filter_matrix_gallery()
-    assert types == ["RandomDense", "Velvet", "FromElementals"]
+    assert types == ["random_dense", "velvet", "from_elementals"]
     for mtype in types:
         mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2)
         assert mat.ndim == 3 and mat.shape[:2] == (n, n)
@@ -125,7 +125,7 @@ def test_filter_matrix_gallery_types_are_paraunitary():
 
     # stage_matrix_type is honored for the cascaded types
     mat_rnd = pyFDN.filter_matrix_gallery(
-        n, "Velvet", num_stages=2, stage_matrix_type="random"
+        n, "velvet", num_stages=2, stage_matrix_type="random"
     )
     is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd.transpose(2, 0, 1))
     assert is_pu
@@ -580,3 +580,20 @@ def test_rotation_matrix_from_angles_block_structure():
         rotation[:2, :2], [[np.cos(0.1), -np.sin(0.1)], [np.sin(0.1), np.cos(0.1)]]
     )
     assert rotation[-1, -1] == 1.0
+
+
+def test_galleries_accept_historical_spellings():
+    import pyFDN
+
+    np.random.seed(3)
+    new = pyFDN.filter_matrix_gallery(4, "velvet", num_stages=2)
+    np.random.seed(3)
+    old = pyFDN.filter_matrix_gallery(4, "Velvet", num_stages=2)
+    np.testing.assert_array_equal(new, old)
+
+    assert "allpass_in_fdn" in pyFDN.fdn_system_gallery()
+    np.random.seed(3)
+    new_sys = pyFDN.fdn_system_gallery(4, "nested_allpass")
+    np.random.seed(3)
+    old_sys = pyFDN.fdn_system_gallery(4, "nestedAllpass")
+    np.testing.assert_array_equal(new_sys.A, old_sys.A)

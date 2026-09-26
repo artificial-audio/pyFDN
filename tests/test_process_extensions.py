@@ -58,7 +58,7 @@ def test_process_dss_fir_matrix_matches_frequency_inversion(
     delays = paraunitary_fdn["delays"]
     B, C, D = paraunitary_fdn["B"], paraunitary_fdn["C"], paraunitary_fdn["D"]
     ir_len = 1024
-    ir_time = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)[:, 0, 0]
+    ir_time = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)[:, 0, 0]
 
     # inverse z-transform on circle |z| = r > 1 (lossless system: unit-circle poles)
     nfft = 2**14
@@ -166,11 +166,11 @@ def test_process_dss_absorption_matches_flamo() -> None:
     )
 
     model = pyFDN.dss_to_flamo(
+        delays,
         A,
         B,
         C,
         D,
-        delays,
         fs,
         nfft=2**14,
         post_delay=sos,
@@ -198,11 +198,11 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
 
     def build(output_filter):
         return pyFDN.dss_to_flamo(
+            delays,
             A,
             B,
             C,
             D,
-            delays,
             fs,
             nfft=2**14,
             post_output=output_filter,
@@ -338,7 +338,7 @@ def test_build_to_impz_lossless_matches_dss_to_impz() -> None:
     build = _siso_build()  # post_delay=None -> no absorption
     ir_len = 4096
     got = build_to_impz(build, ir_len)
-    ref = dss_to_impz(ir_len, build.delays, build.A, build.B, build.C, build.D)
+    ref = dss_to_impz(build.delays, build.A, build.B, build.C, build.D, ir_len)
     assert got.shape == (ir_len, 1, 1)
     np.testing.assert_allclose(got, ref)
 

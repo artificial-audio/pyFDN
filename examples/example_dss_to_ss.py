@@ -92,7 +92,7 @@ def _(A, b, c, d, delays, dimpulse, dlti, impulse_response_length, np, pyFDN):
     ir_state_space = np.squeeze(ir_state_space)
 
     ir_delay_state_space = pyFDN.dss_to_impz(
-        impulse_response_length, delays, A, b, c, d
+        delays, A, b, c, d, impulse_response_length
     )
     ir_delay_state_space = np.asarray(ir_delay_state_space).squeeze()
 
