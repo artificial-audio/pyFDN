@@ -20,6 +20,11 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 
+[lint.per-file-ignores]
+# marimo renders a cell's last expression, so a bare `fig` is how a notebook
+# displays a figure.
+"examples/*" = ["B018"]
+
 [format]
 quote-style = "double"
 indent-style = "space"

@@ -386,9 +386,7 @@ Plotting
    pyFDN.plot_edc
    pyFDN.plot_spectrogram
    pyFDN.animate
-   pyFDN.downsampled_scatter
    pyFDN.downsample_minmax
-   pyFDN.downsample_plotly_trace
 
 Notebook Display
 ----------------

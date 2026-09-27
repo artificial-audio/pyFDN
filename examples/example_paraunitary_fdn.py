@@ -31,13 +31,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
-    return go, np, pyFDN, torch
+    return np, plt, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -205,34 +205,22 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, poles, pyFDN, residues):
-    fig_pr = go.Figure()
-    fig_pr.add_trace(
-        go.Scatter(
-            x=np.angle(poles),
-            y=pyFDN.lin_to_db(np.abs(poles)),
-            mode="markers",
-            marker={"size": 4},
-            name="Poles",
-        )
+def _(np, plt, poles, pyFDN, residues):
+    fig_pr, _ax = plt.subplots(figsize=(8, 4.2))
+    _ax.scatter(np.angle(poles), pyFDN.lin_to_db(np.abs(poles)), s=8, label="Poles")
+    _ax.scatter(
+        np.angle(poles),
+        pyFDN.lin_to_db(np.abs(residues[:, 0, 0])),
+        s=12,
+        marker="x",
+        label="Residues",
     )
-    fig_pr.add_trace(
-        go.Scatter(
-            x=np.angle(poles),
-            y=pyFDN.lin_to_db(np.abs(residues[:, 0, 0])),
-            mode="markers",
-            marker={"size": 4, "symbol": "x"},
-            name="Residues",
-        )
-    )
-    fig_pr.update_layout(
-        title="Pole and residue magnitudes over pole angle",
-        xaxis={"title": "Pole angle (rad)"},
-        yaxis={"title": "Magnitude (dB)"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_pr.show()
+    _ax.set_title("Pole and residue magnitudes over pole angle")
+    _ax.set_xlabel("Pole angle (rad)")
+    _ax.set_ylabel("Magnitude (dB)")
+    _ax.legend()
+    fig_pr.tight_layout()
+    fig_pr
     return
 
 

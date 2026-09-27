@@ -40,12 +40,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    from plotly.subplots import make_subplots
 
     import pyFDN
 
-    return make_subplots, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -123,56 +123,30 @@ def _(mo):
 
 
 @app.cell
-def _(all_delays, density, fs, make_subplots, np, pyFDN, rirs, sizes):
-    fig = make_subplots(
-        rows=3,
-        cols=3,
-        shared_xaxes=True,
-        subplot_titles=[
-            f"N = {_n}<br>mean delay = {int(np.mean(all_delays[_s, :_n]))}"
-            for _s in range(3)
-            for _n in sizes
-        ],
-        vertical_spacing=0.07,
-    )
+def _(all_delays, density, fs, np, plt, pyFDN, rirs, sizes):
+    fig, _axes = plt.subplots(3, 3, sharex=True, sharey=True, figsize=(10, 7.2))
     t_axis = np.arange(len(next(iter(rirs.values())))) / fs
 
     for _s in range(3):
-        for _col, _n in enumerate(sizes, start=1):
+        for _col, _n in enumerate(sizes):
+            _ax = _axes[_s, _col]
             _rir = rirs[(_n, _s)]
-            _dens = density[(_n, _s)]
-            fig.add_trace(
-                pyFDN.downsampled_scatter(
-                    x=t_axis,
-                    y=pyFDN.mulaw_encode(pyFDN.peak_normalize(_rir)),
-                    max_points=10_000,
-                    mode="lines",
-                    line={"color": "gray", "width": 0.5},
-                    showlegend=False,
-                ),
-                row=_s + 1,
-                col=_col,
+            _ax.plot(
+                t_axis,
+                pyFDN.mulaw_encode(pyFDN.peak_normalize(_rir)),
+                color="gray",
+                linewidth=0.5,
             )
-            fig.add_trace(
-                pyFDN.downsampled_scatter(
-                    x=t_axis,
-                    y=_dens,
-                    max_points=100,
-                    mode="lines",
-                    line={"color": "crimson", "width": 1.5},
-                    showlegend=False,
-                ),
-                row=_s + 1,
-                col=_col,
+            _ax.plot(t_axis, density[(_n, _s)], color="crimson", linewidth=1.5)
+            _ax.set_title(
+                f"N = {_n}\nmean delay = {int(np.mean(all_delays[_s, :_n]))}",
+                fontsize="small",
             )
-
-    fig.update_layout(
-        title="Impulse response (gray) and echo density (red)",
-        template="plotly_white",
-        height=720,
-    )
-    fig.update_xaxes(title_text="Time (s)", row=3)
-    fig.show()
+    for _ax in _axes[-1]:
+        _ax.set_xlabel("Time (s)")
+    fig.suptitle("Impulse response (gray) and echo density (red)")
+    fig.tight_layout()
+    fig
     return
 
 

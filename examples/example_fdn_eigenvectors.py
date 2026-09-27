@@ -41,12 +41,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -116,26 +116,23 @@ def _(mo):
 
 
 @app.cell
-def _(A, b, c, d, delays, direct, go, is_pair, np, poles, pyFDN, residues):
+def _(A, b, c, d, delays, direct, is_pair, np, plt, poles, pyFDN, residues):
     ir_len = 1000
     ir_time = pyFDN.dss_to_impz(delays, A, b, c, d, ir_len)[:, 0, 0]
     ir_modal = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[:, 0, 0]
 
-    fig_ir = go.Figure()
-    fig_ir.add_trace(
-        go.Scatter(y=ir_time, mode="lines", name="Impulse response (time domain)")
+    fig_ir, _ax = plt.subplots(figsize=(8, 4))
+    _ax.plot(ir_time, label="Impulse response (time domain)")
+    _ax.plot(ir_modal + 1.0, label="IR pole residue (+1 offset)")
+    _ax.set_title(
+        "Time domain vs modal synthesis "
+        f"(max err = {np.max(np.abs(ir_time - ir_modal)):.2e})"
     )
-    fig_ir.add_trace(
-        go.Scatter(y=ir_modal + 1.0, mode="lines", name="IR pole residue (+1 offset)")
-    )
-    fig_ir.update_layout(
-        title=f"Time domain vs modal synthesis (max err = {np.max(np.abs(ir_time - ir_modal)):.2e})",
-        xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Impulse response value"},
-        template="plotly_white",
-        height=400,
-    )
-    fig_ir.show()
+    _ax.set_xlabel("Time (samples)")
+    _ax.set_ylabel("Impulse response value")
+    _ax.legend()
+    fig_ir.tight_layout()
+    fig_ir
     return
 
 
@@ -150,31 +147,31 @@ def _(mo):
 
 
 @app.cell
-def _(delays, go, np, num_delays, num_modes, poles, rv):
+def _(delays, np, num_delays, plt, poles, rv):
     rv_state_blocks = []
     for _j in range(num_delays):
         _powers = poles[None, :] ** np.arange(delays[_j])[:, None]
         rv_state_blocks.append(rv[_j, :][None, :] * _powers)
     rv_state = np.vstack(rv_state_blocks)  # (sum(delays), num_modes)
 
-    fig_state = go.Figure(
-        go.Heatmap(
-            z=np.real(rv_state),
-            colorscale="RdBu",
-            zmid=0,
-            colorbar={"title": "Re"},
-        )
+    fig_state, _ax = plt.subplots(figsize=(8, 5.2))
+    _lim = np.max(np.abs(np.real(rv_state)))
+    _image = _ax.imshow(
+        np.real(rv_state),
+        cmap="RdBu",
+        vmin=-_lim,
+        vmax=_lim,
+        aspect="auto",
+        interpolation="nearest",
     )
     for _boundary in np.cumsum(delays)[:-1]:
-        fig_state.add_hline(y=_boundary - 0.5, line={"color": "black", "width": 2})
-    fig_state.update_layout(
-        title="Right eigenvectors expanded over the state space",
-        xaxis={"title": "Eigenvalue index i", "range": [-0.5, num_modes - 0.5]},
-        yaxis={"title": "State space index", "autorange": "reversed"},
-        template="plotly_white",
-        height=520,
-    )
-    fig_state.show()
+        _ax.axhline(_boundary - 0.5, color="black", linewidth=2)
+    fig_state.colorbar(_image, ax=_ax, label="Re")
+    _ax.set_title("Right eigenvectors expanded over the state space")
+    _ax.set_xlabel("Eigenvalue index i")
+    _ax.set_ylabel("State space index")
+    fig_state.tight_layout()
+    fig_state
     return
 
 
@@ -189,23 +186,23 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, num_modes, rv):
-    fig_rv = go.Figure(
-        go.Heatmap(
-            z=np.real(rv),
-            colorscale="RdBu",
-            zmid=0,
-            colorbar={"title": "Re", "orientation": "h"},
-        )
+def _(np, plt, rv):
+    fig_rv, _ax = plt.subplots(figsize=(8, 3))
+    _lim = np.max(np.abs(np.real(rv)))
+    _image = _ax.imshow(
+        np.real(rv),
+        cmap="RdBu",
+        vmin=-_lim,
+        vmax=_lim,
+        aspect="auto",
+        interpolation="nearest",
     )
-    fig_rv.update_layout(
-        title="Right eigenvectors (per delay line)",
-        xaxis={"title": "Eigenvalue index i", "range": [-0.5, num_modes - 0.5]},
-        yaxis={"title": "Delay index", "autorange": "reversed"},
-        template="plotly_white",
-        height=300,
-    )
-    fig_rv.show()
+    fig_rv.colorbar(_image, ax=_ax, label="Re", orientation="horizontal")
+    _ax.set_title("Right eigenvectors (per delay line)")
+    _ax.set_xlabel("Eigenvalue index i")
+    _ax.set_ylabel("Delay index")
+    fig_rv.tight_layout()
+    fig_rv
     return
 
 

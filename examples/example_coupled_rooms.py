@@ -251,8 +251,8 @@ def _(fs, ir, pyFDN):
         labels=["Room 1", "Room 2"],
         title="Energy decay curves",
     )
-    fig_edc.update_xaxes(range=[0, min(2, len(ir) / fs)])
-    fig_edc.update_yaxes(range=[-40, 15])
+    fig_edc.axes[0].set_xlim(0, min(2, len(ir) / fs))
+    fig_edc.axes[0].set_ylim(-40, 15)
     return
 
 

@@ -47,8 +47,8 @@ def _(mo, pyFDN):
 def _():
     import time
 
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     from scipy.linalg import hadamard
     from scipy.signal import correlate, square
 
@@ -65,9 +65,9 @@ def _():
         AUDIO_SECONDS,
         correlate,
         fs,
-        go,
         hadamard,
         np,
+        plt,
         pyFDN,
         square,
         td,
@@ -115,8 +115,9 @@ def _(mo):
 def _(figure5, pyFDN):
     pyFDN.plot_matrix(
         figure5,
-        title="Kronecker matrix Ψ₃ at θ = (0, π/4, π/8)"
-        "<br><sup>θ₁ = 0 decouples even from odd; θ₃ = π/8 leaves the halves weakly coupled</sup>",
+        title="Kronecker matrix Ψ₃ at θ = (0, π/4, π/8)\n"
+        "θ₁ = 0 decouples even from odd;\n"
+        "θ₃ = π/8 leaves the halves weakly coupled",
         block_boundaries=[4],
     )
     return
@@ -402,7 +403,7 @@ def _(mo):
 
 
 @app.cell
-def _(coupling_percent, fs, go, mo, np, stereo_ir):
+def _(coupling_percent, fs, mo, np, plt, stereo_ir):
     def channel_balance(ir, window=0.100, hop=0.050):
         """Right-minus-left level in dB, in sliding windows."""
         w, h = int(window * fs), int(hop * fs)
@@ -412,20 +413,19 @@ def _(coupling_percent, fs, go, mo, np, stereo_ir):
         times = (starts + w / 2) / fs
         return times, 10 * np.log10((energy_r + 1e-30) / (energy_l + 1e-30))
 
-    _figure = go.Figure()
+    _figure, _ax = plt.subplots(figsize=(8, 4.2))
     for _percent in coupling_percent:
         _t, _balance = channel_balance(stereo_ir[_percent])
-        _figure.add_scatter(
-            x=_t, y=np.maximum(_balance, -80), mode="lines", name=f"{_percent}%"
-        )
-    _figure.update_layout(
-        title="Right-channel level relative to left"
-        "<br><sup>impulse into the left input only; floor clamped at −80 dB</sup>",
-        xaxis_title="Time [s]",
-        yaxis_title="R − L [dB]",
-        height=420,
-        legend_title="coupling",
+        _ax.plot(_t, np.maximum(_balance, -80), label=f"{_percent}%")
+    _ax.set_title(
+        "Right-channel level relative to left\n"
+        "impulse into the left input only; floor clamped at −80 dB",
+        fontsize="medium",
     )
+    _ax.set_xlabel("Time [s]")
+    _ax.set_ylabel("R − L [dB]")
+    _ax.legend(title="coupling")
+    _figure.tight_layout()
     mo.output.replace(_figure)
     return (channel_balance,)
 
@@ -443,7 +443,7 @@ def _(mo):
 
 
 @app.cell
-def _(correlate, coupling_percent, fs, go, mo, np, stereo_ir):
+def _(correlate, coupling_percent, fs, mo, np, plt, stereo_ir):
     def iacc(ir, window=0.100, hop=0.050, max_lag=0.001):
         """Sliding-window IACC (ISO 3382-1) of a stereo impulse response."""
         w, h, lag = int(window * fs), int(hop * fs), int(max_lag * fs)
@@ -458,22 +458,23 @@ def _(correlate, coupling_percent, fs, go, mo, np, stereo_ir):
             values[index] = np.max(np.abs(rho))
         return (starts + w / 2) / fs, values
 
-    _figure = go.Figure()
+    _figure, _ax = plt.subplots(figsize=(8, 4.2))
     for _percent in coupling_percent:
         _t, _values = iacc(stereo_ir[_percent])
         if np.all(np.isnan(_values)):
             continue  # 0%: right channel silent throughout
-        _figure.add_scatter(x=_t, y=_values, mode="lines", name=f"{_percent}%")
-    _figure.update_layout(
-        title="Sliding-window IACC"
-        "<br><sup>100 ms window, 50 ms hop, ±1 ms lag; 0% omitted (right channel silent)</sup>",
-        xaxis_title="Time [s]",
-        yaxis_title="IACC",
-        yaxis_range=[0, 1],
-        xaxis_range=[0, 2],
-        height=420,
-        legend_title="coupling",
+        _ax.plot(_t, _values, label=f"{_percent}%")
+    _ax.set_title(
+        "Sliding-window IACC\n"
+        "100 ms window, 50 ms hop, ±1 ms lag; 0% omitted (right channel silent)",
+        fontsize="medium",
     )
+    _ax.set_xlabel("Time [s]")
+    _ax.set_ylabel("IACC")
+    _ax.set_ylim(0, 1)
+    _ax.set_xlim(0, 2)
+    _ax.legend(title="coupling")
+    _figure.tight_layout()
     mo.output.replace(_figure)
     return (iacc,)
 
@@ -712,18 +713,17 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, mo, modulated_matrix, modulation_settings, np):
-    _figure = go.Figure()
+def _(fs, mo, modulated_matrix, modulation_settings, np, plt):
+    _figure, _ax = plt.subplots(figsize=(8, 3.4))
     _n = np.arange(0, 3 * fs, 64)
     for _name, (_rate, _depth) in modulation_settings.items():
         _angles = modulated_matrix(_rate, _depth).angles_at(_n)
-        _figure.add_scatter(x=_n / fs, y=_angles[:, 2], mode="lines", name=_name)
-    _figure.update_layout(
-        title="Modulated kernel angle θ₃ = θ_{M−1}",
-        xaxis_title="Time [s]",
-        yaxis_title="θ₃ [rad]",
-        height=340,
-    )
+        _ax.plot(_n / fs, _angles[:, 2], label=_name)
+    _ax.set_title("Modulated kernel angle θ₃ = θ_(M−1)")
+    _ax.set_xlabel("Time [s]")
+    _ax.set_ylabel("θ₃ [rad]")
+    _ax.legend()
+    _figure.tight_layout()
     mo.output.replace(_figure)
     return
 
@@ -847,33 +847,39 @@ def _(fs, np, pyFDN):
 
 
 @app.cell
-def _(go, mo, modulated_poles, np, num_snapshots, static_poles):
+def _(mo, modulated_poles, np, num_snapshots, plt, static_poles):
     _bins = np.linspace(4500, 7500, 51)
     _centres = (_bins[:-1] + _bins[1:]) / 2
 
     _static_counts, _ = np.histogram(static_poles, _bins)
     _modulated_counts, _ = np.histogram(modulated_poles, _bins)
 
-    _figure = go.Figure()
-    _figure.add_bar(
-        x=_centres,
-        y=_static_counts,
-        name=f"no modulation (σ = {_static_counts.std():.1f})",
+    _figure, _ax = plt.subplots(figsize=(8, 4.2))
+    _width = _bins[1] - _bins[0]
+    _ax.bar(
+        _centres,
+        _static_counts,
+        width=_width,
+        alpha=0.65,
+        label=f"no modulation (σ = {_static_counts.std():.1f})",
     )
-    _figure.add_bar(
-        x=_centres,
-        y=_modulated_counts,
-        name=f"modulated (σ = {_modulated_counts.std():.1f})",
+    _ax.bar(
+        _centres,
+        _modulated_counts,
+        width=_width,
+        alpha=0.65,
+        label=f"modulated (σ = {_modulated_counts.std():.1f})",
     )
-    _figure.update_layout(
-        title="Pole frequency histogram over one modulation period"
-        f"<br><sup>{num_snapshots} snapshots of the 8×8 Kronecker FDN; σ is the standard deviation of the bin counts</sup>",
-        xaxis_title="Frequency [Hz]",
-        yaxis_title="Number of occurrences",
-        barmode="overlay",
-        height=420,
+    _ax.set_title(
+        "Pole frequency histogram over one modulation period\n"
+        f"{num_snapshots} snapshots of the 8×8 Kronecker FDN; "
+        "σ is the standard deviation of the bin counts",
+        fontsize="medium",
     )
-    _figure.update_traces(opacity=0.65)
+    _ax.set_xlabel("Frequency [Hz]")
+    _ax.set_ylabel("Number of occurrences")
+    _ax.legend()
+    _figure.tight_layout()
     mo.output.replace(_figure)
     return
 

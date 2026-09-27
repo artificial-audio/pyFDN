@@ -32,6 +32,13 @@ Unreleased
   ``"allpass_in_fdn"``, ``"velvet"``, ...); the old spellings are still
   accepted.
 * ``plot_FDN_build`` is now ``plot_fdn_build``; the old name remains an alias.
+* **Breaking:** Plotly is gone; every plot function returns a Matplotlib
+  figure, built without pyplot. ``animate`` returns a Matplotlib
+  ``FuncAnimation`` (show it with ``.to_jshtml()``; the Plotly-only
+  ``transition_ms`` argument is removed), ``SDN.visualize`` draws a
+  Matplotlib 3-D axes, and the Plotly helpers ``downsampled_scatter`` and
+  ``downsample_plotly_trace`` are removed. The example notebooks use
+  Matplotlib throughout, and ``plotly`` is no longer in any extra.
 * ``flamo_to_pr`` no longer prints progress by default (``verbose=False``, like
   ``dss_to_pr``). ``matrix_sqrt`` keeps float64 precision.
 * ``edc`` accepts torch tensors and shares its Schroeder integral with

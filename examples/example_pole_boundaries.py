@@ -37,13 +37,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
-    return go, np, pyFDN, torch
+    return np, plt, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -147,40 +147,32 @@ def _(mo):
 
 
 @app.cell
-def _(f_bounds, fs, go, max_curve, min_curve, np, poles, pyFDN):
+def _(f_bounds, fs, max_curve, min_curve, np, plt, poles, pyFDN):
     pole_freq = pyFDN.rad_to_hertz(np.angle(poles), fs)
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=pole_freq,
-            y=pyFDN.slope_to_rt(pyFDN.lin_to_db(np.abs(poles)), fs),
-            mode="markers",
-            marker={"size": 4},
-            name="Poles",
-        )
+    fig, _ax = plt.subplots(figsize=(8, 4.6))
+    _ax.scatter(
+        pole_freq,
+        pyFDN.slope_to_rt(pyFDN.lin_to_db(np.abs(poles)), fs),
+        s=8,
+        label="Poles",
     )
     for _curve, _name in [
         (min_curve, "Minimum boundary"),
         (max_curve, "Maximum boundary"),
     ]:
-        fig.add_trace(
-            go.Scatter(
-                x=f_bounds,
-                y=pyFDN.slope_to_rt(pyFDN.lin_to_db(_curve), fs),
-                mode="lines",
-                line={"width": 3},
-                name=_name,
-            )
+        _ax.plot(
+            f_bounds,
+            pyFDN.slope_to_rt(pyFDN.lin_to_db(_curve), fs),
+            linewidth=3,
+            label=_name,
         )
-    fig.update_layout(
-        title="Pole T60 and frequency-dependent boundaries",
-        xaxis={"title": "Frequency (Hz)"},
-        yaxis={"title": "Pole RT (s)"},
-        template="plotly_white",
-        height=460,
-    )
-    fig.show()
+    _ax.set_title("Pole T60 and frequency-dependent boundaries")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("Pole RT (s)")
+    _ax.legend()
+    fig.tight_layout()
+    fig
     return (pole_freq,)
 
 

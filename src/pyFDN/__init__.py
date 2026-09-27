@@ -214,8 +214,6 @@ __all__ = [
     "plot_system_matrix",
     "plot_spectrogram",
     "downsample_minmax",
-    "downsample_plotly_trace",
-    "downsampled_scatter",
     # notebook display (marimo)
     "labeled_audio",
     # FLAMO graph
@@ -329,8 +327,6 @@ from .auxiliary.math import (
 from .auxiliary.plot import (
     animate,
     downsample_minmax,
-    downsample_plotly_trace,
-    downsampled_scatter,
     plot_db_per_sample,
     plot_edc,
     plot_FDN_build,

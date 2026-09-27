@@ -37,12 +37,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -133,40 +133,28 @@ def _(mo):
 
 
 @app.cell
-def _(echo_densities, fs, go, irs, np, pyFDN):
-    fig = go.Figure()
+def _(echo_densities, fs, irs, np, plt):
+    fig, _ax = plt.subplots(figsize=(8, 5.6))
     colors = ["#636efa", "#ef553b", "#00cc96", "#ab63fa"]
     t_axis = np.arange(len(next(iter(irs.values())))) / fs
     for _i, _name in enumerate(irs):
         _offset = 2.0 * (_i + 1)
-        fig.add_trace(
-            pyFDN.downsampled_scatter(
-                x=t_axis,
-                y=irs[_name] + _offset,
-                mode="lines",
-                name=_name,
-                line={"color": colors[_i], "width": 0.6},
-                legendgroup=_name,
-            )
+        _ax.plot(
+            t_axis, irs[_name] + _offset, color=colors[_i], linewidth=0.6, label=_name
         )
-        fig.add_trace(
-            pyFDN.downsampled_scatter(
-                x=t_axis,
-                y=echo_densities[_name] + _offset,
-                mode="lines",
-                line={"color": colors[_i], "width": 1.8, "dash": "dash"},
-                legendgroup=_name,
-                showlegend=False,
-            )
+        _ax.plot(
+            t_axis,
+            echo_densities[_name] + _offset,
+            color=colors[_i],
+            linewidth=1.8,
+            linestyle="--",
         )
-    fig.update_layout(
-        title="Impulse response (solid) and echo density (dashed)",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Amplitude and echo density (offset per type)"},
-        template="plotly_white",
-        height=560,
-    )
-    fig.show()
+    _ax.set_title("Impulse response (solid) and echo density (dashed)")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Amplitude and echo density (offset per type)")
+    _ax.legend()
+    fig.tight_layout()
+    fig
     return
 
 

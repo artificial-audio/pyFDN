@@ -40,12 +40,12 @@ def _(mo, pyFDN):
 def _():
     import dataclasses
 
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return dataclasses, go, np, pyFDN
+    return dataclasses, np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -178,37 +178,21 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, pyFDN, rir, target_rt):
+def _(fs, plt, pyFDN, rir, target_rt):
     rt_est, f_centre = pyFDN.estimate_rt_bands(rir, fs)
 
     # target_rt[1:9] covers the same 8 octave bands (62.5 Hz – 8 kHz)
-    fig_rt = go.Figure()
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=target_rt[1:9],
-            mode="lines+markers",
-            name="Target RT",
-            line={"dash": "dash"},
-        )
-    )
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=rt_est,
-            mode="lines+markers",
-            name="Estimated RT",
-        )
-    )
-    fig_rt.update_layout(
-        title="RT: estimated vs target",
-        xaxis={"title": "Frequency (Hz)", "type": "log"},
-        yaxis={"title": "RT (s)"},
-        yaxis_range=[0, None],
-        template="plotly_white",
-        height=380,
-    )
-    fig_rt.show()
+    fig_rt, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(f_centre, target_rt[1:9], "o--", label="Target RT")
+    _ax.plot(f_centre, rt_est, "o-", label="Estimated RT")
+    _ax.set_xscale("log")
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("RT: estimated vs target")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("RT (s)")
+    _ax.legend()
+    fig_rt.tight_layout()
+    fig_rt
     return
 
 

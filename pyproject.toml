@@ -42,7 +42,6 @@ examples = [
     "marimo",  # the example notebooks are marimo apps
     "adac",  # example_fdn_to_faust compiles a FLAMO model to FAUST
     "matplotlib>=3.5.0",  # examples build matplotlib figures
-    "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
     "pyroomacoustics",  # shoebox image-source RIRs for example_reverberation_enhancement
 ]
@@ -50,7 +49,6 @@ test = [
     "marimo",  # deps to run the example notebooks under test
     "adac",
     "matplotlib>=3.5.0",
-    "plotly>=5.0.0",
     "multislope>=0.1.1",
     "pyroomacoustics",
     "pytest>=7.0.0",  # testing
@@ -79,7 +77,6 @@ docs = [
     "nbsphinx>=0.9.0",
     "ipykernel>=6.0.0",
     "pandoc>=2.0",
-    "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
     "pyroomacoustics",  # rendered by the reverberation-enhancement notebook
@@ -160,8 +157,9 @@ disable_error_code = ["no-any-return"]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
     "flamo.*",
+    "marimo.*",
+    "mpl_toolkits.*",
     "multislope.*",
-    "plotly.*",
     "scipy.*",
     "soundfile",
     "torchaudio.*",
