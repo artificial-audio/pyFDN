@@ -36,13 +36,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.express as px
     import torch
 
     import pyFDN
 
-    return np, px, pyFDN, torch
+    return np, plt, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -285,14 +285,14 @@ def _(device, fs, loss, model, pyFDN, render_nfft, rir_len, train_nfft):
 
 
 @app.cell
-def _(log, px):
-    px.line(
-        y=log.train_loss,
-        log_y=True,
-        labels={"index": "Step", "y": "Cumulative-energy RMS error"},
-        title="Training loss",
-        template="plotly_white",
-    ).show()
+def _(log, plt):
+    _fig, _ax = plt.subplots(figsize=(8, 3.6))
+    _ax.semilogy(log.train_loss)
+    _ax.set_xlabel("Step")
+    _ax.set_ylabel("Cumulative-energy RMS error")
+    _ax.set_title("Training loss")
+    _fig.tight_layout()
+    _fig
     return
 
 
@@ -305,7 +305,7 @@ def _(mo):
     as SOS banks. Use it with `build_to_impz`, `build_to_flamo`, or `process_fdn`.
     `param(...).raw()` gives the trained RT values in seconds and EQ gains in dB.
 
-    `plot_FDN_build` shows the matrix, gains, delays, absorption in dB per sample,
+    `plot_fdn_build` shows the matrix, gains, delays, absorption in dB per sample,
     and output EQ in dB. Compare the initial and trained builds below.
     """)
     return
@@ -334,8 +334,8 @@ def _(ir_trained, model, np, pyFDN):
 def _(initial_build, mo, pyFDN, trained_build):
     mo.hstack(
         [
-            pyFDN.plot_FDN_build(initial_build, title="FDN, untrained"),
-            pyFDN.plot_FDN_build(trained_build, title="FDN, trained"),
+            pyFDN.plot_fdn_build(initial_build, title="FDN, untrained"),
+            pyFDN.plot_fdn_build(trained_build, title="FDN, trained"),
         ]
     )
     return
@@ -360,7 +360,7 @@ def _(fs, ir_init, ir_trained, pyFDN, rir):
         fs=fs,
         labels=["Target RIR", "FDN, untrained", "FDN, trained"],
         title="Energy decay curve",
-    ).show()
+    )
     return
 
 
@@ -439,34 +439,33 @@ def _(
     f_centre,
     level_init,
     level_trained,
-    mo,
     np,
-    px,
+    plt,
     pyFDN,
     rt_init,
     rt_trained,
 ):
     _labels = ["Target RIR", "FDN, untrained", "FDN, trained"]
-    _plots = []
-    for _title, _values in (
-        ("RT (s)", (est_rt, rt_init, rt_trained)),
-        ("Initial level (dB)", pyFDN.lin_to_db([est_level, level_init, level_trained])),
+    _fig, _axes = plt.subplots(1, 2, figsize=(10, 3.8))
+    for _ax, (_title, _values) in zip(
+        _axes,
+        (
+            ("RT (s)", (est_rt, rt_init, rt_trained)),
+            (
+                "Initial level (dB)",
+                pyFDN.lin_to_db([est_level, level_init, level_trained]),
+            ),
+        ),
+        strict=True,
     ):
-        _plots.append(
-            px.line(
-                {
-                    "Frequency (Hz)": f_centre,
-                    **dict(zip(_labels, _values, strict=True)),
-                },
-                x="Frequency (Hz)",
-                y=_labels,
-                log_x=True,
-                markers=True,
-                labels={"value": _title, "variable": ""},
-                title=_title,
-                template="plotly_white",
-            )
-        )
+        for _label, _value in zip(_labels, _values, strict=True):
+            _ax.plot(f_centre, _value, "o-", label=_label)
+        _ax.set_xscale("log")
+        _ax.set_xlabel("Frequency (Hz)")
+        _ax.set_ylabel(_title)
+        _ax.set_title(_title)
+        _ax.legend()
+    _fig.tight_layout()
 
     for _name, _rt, _level in (
         ("FDN, untrained", rt_init, level_init),
@@ -478,7 +477,7 @@ def _(
             f"level offset {_err.mean():+5.1f} dB   "
             f"level shape {np.abs(_err - _err.mean()).mean():4.2f} dB"
         )
-    mo.hstack(_plots)
+    _fig
     return
 
 

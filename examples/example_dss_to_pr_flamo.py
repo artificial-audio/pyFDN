@@ -220,14 +220,13 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
     np.random.seed(7)
     print("pyFDN version:", getattr(pyFDN, "__version__", "unknown"))
-    return go, np, pyFDN, torch
+    return np, pyFDN, torch
 
 
 @app.cell
@@ -304,14 +303,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, build, go, np, poles, pyFDN):
-    _pole_trace = go.Scatter(
-        x=pyFDN.rad_to_hertz(np.angle(poles), fs),
-        y=pyFDN.lin_to_db(np.abs(poles)),
-        mode="markers",
-        marker={"size": 4, "color": "red"},
-        name="Poles",
-    )
+def _(fs, build, np, poles, pyFDN):
     _fig_decay = pyFDN.plot_db_per_sample(
         build.post_delay,
         build.delays,
@@ -319,7 +311,17 @@ def _(fs, build, go, np, poles, pyFDN):
         nfft=2**12,
         title="Absorption gain per sample and extracted poles",
     )
-    _fig_decay.add_trace(_pole_trace)
+    _ax = _fig_decay.axes[0]
+    _ax.scatter(
+        pyFDN.rad_to_hertz(np.angle(poles), fs),
+        pyFDN.lin_to_db(np.abs(poles)),
+        s=8,
+        color="red",
+        label="Poles",
+        zorder=3,
+    )
+    _ax.legend(fontsize="small")
+    _fig_decay
     return
 
 

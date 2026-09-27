@@ -114,7 +114,7 @@ def _(mo, pyFDN, results):
     figs = [
         pyFDN.plot_matrix(
             r["matrix"],
-            title=f"{t}<br><sup>orth={r['orthogonal']}, uni={r['unilossless']}</sup>",
+            title=f"{t}\north={r['orthogonal']}, uni={r['unilossless']}",
         )
         for t, r in implemented
     ]
@@ -237,7 +237,7 @@ def _(builds, mo):
 
 @app.cell
 def _(builds, pyFDN):
-    pyFDN.plot_FDN_build(
+    pyFDN.plot_fdn_build(
         builds["multichannel post EQ"], title="FDN build with per-output post EQ"
     )
     return
@@ -278,7 +278,7 @@ def _(N, mo, pyFDN, system_types):
     sys_figs = [
         pyFDN.plot_system_matrix(
             *sys_results[stype]["system"],
-            title=f"{stype}<br><sup>uniallpass={sys_results[stype]['uniallpass']}</sup>",
+            title=f"{stype}\nuniallpass={sys_results[stype]['uniallpass']}",
         )
         for stype in system_types
         if sys_results[stype] is not None

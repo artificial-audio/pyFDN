@@ -89,7 +89,7 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([1, 1, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(A, b, c, d, _m)
+    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
 
     _roots_den = np.roots(_den)
     _stable = np.all(np.abs(_roots_den) < 1)
@@ -112,7 +112,7 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([2, 1, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(A, b, c, d, _m)
+    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
 
     _roots_den = np.roots(_den)
     unstable = np.any(np.abs(_roots_den) > 1)
@@ -135,7 +135,7 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([2, 2, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(A, b, c, d, _m)
+    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
 
     _roots_den = np.roots(_den)
     _stable = np.all(np.abs(_roots_den) < 1)

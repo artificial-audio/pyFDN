@@ -13,11 +13,6 @@ Implements:
        C = C_tilde X^{-1/2}
        D = D_tilde
 
-Dependencies:
-  - numpy
-  - scipy (recommended) for stable matrix square roots in full MIMO.
-    If scipy not available, a fallback eigen-sqrt for symmetric/Hermitian matrices is used.
-
 Notes:
   - "Orthogonal" below means real-orthogonal; for complex matrices, it means unitary.
   - The general (k<=N) completion is exact if A has (approximately) N-k singular values at 1
@@ -32,16 +27,10 @@ import warnings
 from typing import Any
 
 import numpy as np
+import scipy.linalg as sla
+from scipy.optimize import minimize
 
-try:
-    import scipy.linalg as sla
-    from scipy.optimize import minimize
-
-    _HAVE_SCIPY = True
-except Exception:
-    _HAVE_SCIPY = False
-
-import pyFDN
+from pyFDN.generate.orthogonal import random_orthogonal
 
 # ---------------------------- Utilities -------------------------------------
 
@@ -61,7 +50,7 @@ def hermitize(M: np.ndarray) -> np.ndarray:
 
 def eig_sqrt_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     """
-    Matrix square root for Hermitian PSD matrix (fallback if SciPy is unavailable).
+    Matrix square root for Hermitian PSD matrix via its eigendecomposition.
     Clips eigenvalues below eps to eps (use eps=0 for pure PSD).
     """
     M = hermitize(M)
@@ -72,20 +61,14 @@ def eig_sqrt_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
 
 def sqrtm_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     """
-    Square root for Hermitian PSD matrix using SciPy if available; otherwise eigen fallback.
-    Clips eigenvalues below eps to eps.
+    Square root for a Hermitian PSD matrix.
+    Clips eigenvalues below eps to eps (``eps > 0`` uses the eigen route).
     """
     M = hermitize(M)
-    if _HAVE_SCIPY:
-        # SciPy sqrtm can introduce tiny imaginary parts; we hermitize after.
-        S = sla.sqrtm(M)
-        S = hermitize(S)
-        # Clip if requested by projecting via eigen-sqrt if eps>0
-        if eps > 0:
-            return eig_sqrt_psd(M, eps=eps)
-        return S
-    else:
+    if eps > 0:
         return eig_sqrt_psd(M, eps=eps)
+    # SciPy sqrtm can introduce tiny imaginary parts; hermitize after.
+    return hermitize(sla.sqrtm(M))
 
 
 def diag_sqrt(x: np.ndarray) -> np.ndarray:
@@ -577,10 +560,10 @@ def complete_fdn(
         Bt, Ct, Dt = complete_general_mimo_svd(At, k=k, tol_one=tol_one)
 
     # Random orthogonal transformation to mix B, C, and D
-    UU = pyFDN.random_orthogonal(k)
+    UU = random_orthogonal(k)
     Bt = Bt @ UU
     Dt = Dt @ UU
-    VV = pyFDN.random_orthogonal(k)
+    VV = random_orthogonal(k)
     Ct = VV @ Ct
     Dt = VV @ Dt
 

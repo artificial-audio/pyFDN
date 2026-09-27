@@ -1,4 +1,10 @@
-"""Plot utilities (matrix heatmap, system matrix layout, impulse response grid)."""
+"""Plot utilities (matrix heatmap, system matrix layout, impulse response grid).
+
+Every function returns a Matplotlib figure (:func:`animate` returns a
+Matplotlib animation). Figures are built without pyplot, so they do not
+accumulate in pyplot's global state; a notebook (marimo, Jupyter) displays a
+figure that is the last expression of a cell.
+"""
 
 from __future__ import annotations
 
@@ -92,7 +98,7 @@ def downsample_lttb(
     """Downsample a line with Largest-Triangle-Three-Buckets.
 
     LTTB keeps points that preserve the visual shape of the connected line. It
-    is a better default for Plotly ``mode="lines"`` than min/max bucketing,
+    is a better default for line plots than min/max bucketing,
     because it avoids artificial vertical segments between bucket extrema.
     """
     if max_points < 3:
@@ -172,55 +178,31 @@ def downsample_lttb(
     return x_arr[sampled], y_arr[sampled]
 
 
-def downsample_plotly_trace(
-    trace: Any,
-    *,
-    max_points: int = 10_000,
-    method: str = "lttb",
-) -> Any:
-    """Return a copy of a Plotly trace with downsampled ``x`` and ``y`` data.
-
-    Traces without ``y`` data are returned unchanged. If a trace has no ``x``
-    data, sample indices are generated.
-    """
-    y = getattr(trace, "y", None)
-    if y is None:
-        return trace
-
-    x = getattr(trace, "x", None)
-    if method == "lttb":
-        x_ds, y_ds = downsample_lttb(x, y, max_points=max_points)
-    elif method == "minmax":
-        x_ds, y_ds = downsample_minmax(x, y, max_points=max_points)
-    else:
-        raise ValueError("method must be 'lttb' or 'minmax'")
-
-    trace_data = trace.to_plotly_json()
-    trace_data["x"] = x_ds
-    trace_data["y"] = y_ds
-    return trace.__class__(trace_data)
+_DPI = 100  # pixel sizes below are converted to inches at this resolution
 
 
-def downsampled_scatter(
-    *args: Any,
-    max_points: int = 10_000,
-    method: str = "lttb",
-    **kwargs: Any,
-) -> Any:
-    """Create a Plotly ``go.Scatter`` trace with downsampled line data.
+def _new_figure(width_px: float, height_px: float) -> Figure:
+    """A pyplot-free Matplotlib figure of the given size in pixels."""
+    from matplotlib.figure import Figure
 
-    The call mirrors ``plotly.graph_objects.Scatter`` and only adds the
-    ``max_points`` and ``method`` keywords:
+    return Figure(figsize=(width_px / _DPI, height_px / _DPI), dpi=_DPI)
 
-    ``fig.add_trace(pyFDN.downsampled_scatter(x=t, y=ir, max_points=5000))``
-    """
-    import plotly.graph_objects as go
 
-    return downsample_plotly_trace(
-        go.Scatter(*args, **kwargs),
-        max_points=max_points,
-        method=method,
+def _heatmap(ax: Any, M: np.ndarray, zmin: float, zmax: float) -> Any:
+    """Draw ``M`` as an RdBu heatmap with its origin at the top-left."""
+    return ax.imshow(
+        M,
+        cmap="RdBu",
+        vmin=zmin,
+        vmax=zmax,
+        interpolation="nearest",
+        aspect="auto",
     )
+
+
+def _hide_ticks(ax: Any) -> None:
+    ax.set_xticks([])
+    ax.set_yticks([])
 
 
 def plot_matrix(
@@ -230,17 +212,17 @@ def plot_matrix(
     zmax: float | None = None,
     *,
     block_boundaries: Sequence[int] | None = None,
-) -> Any:
-    """Plot a single matrix as a Plotly heatmap (RdBu, square pixels).
+) -> Figure:
+    """Plot a single matrix as a heatmap (RdBu, square pixels).
 
     Parameters
     ----------
     A : array-like
         2-D matrix to visualise.
     title : str, optional
-        Figure title (supports HTML/``<sup>`` for subtitles).
+        Figure title.
     zmin, zmax : float, optional
-        Color limits. Default ``(-1, 1)``.
+        Color limits. If both None, uses ``(-1, 1)``.
     block_boundaries : sequence of int, optional
         Indices at which to draw dashed dividing lines on both axes, e.g. to
         separate the sub-blocks of a coupled feedback matrix. A boundary at
@@ -248,40 +230,30 @@ def plot_matrix(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-
     A = np.asarray(A, dtype=float)
-    if zmin is None and zmax is None:
-        zmin, zmax = -1.0, 1.0
+    zmin, zmax = _shared_color_limits(zmin, zmax)
 
-    n = A.shape[0]
-    size = max(160, 28 * n)
-    fig = go.Figure(
-        go.Heatmap(
-            z=A,
-            colorscale="RdBu",
-            zmid=0,
-            zmin=zmin,
-            zmax=zmax,
-            showscale=False,
-        )
-    )
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        width=size,
-        height=size,
-        margin={"t": 50 if title else 10, "b": 10, "l": 10, "r": 10},
-        template="plotly_white",
-    )
-    fig.update_xaxes(showticklabels=False)
-    fig.update_yaxes(showticklabels=False, autorange="reversed")
+    n_rows, n_cols = A.shape[:2]
+    size = min(max(240.0, 28.0 * max(n_rows, n_cols)), 480.0)
+    fig = _new_figure(size, size + (30 if title else 0))
+    ax = fig.add_subplot(111)
+    _heatmap(ax, A, zmin, zmax)
+    ax.set_aspect("equal")
+    _hide_ticks(ax)
     for k in block_boundaries or ():
-        line = {"color": "black", "width": 1, "dash": "dash"}
-        fig.add_hline(y=k - 0.5, line=line, opacity=0.5)
-        fig.add_vline(x=k - 0.5, line=line, opacity=0.5)
+        style: dict[str, Any] = {
+            "color": "black",
+            "linewidth": 1,
+            "linestyle": "--",
+            "alpha": 0.5,
+        }
+        ax.axhline(k - 0.5, **style)
+        ax.axvline(k - 0.5, **style)
+    if title:
+        ax.set_title(title)
+    fig.tight_layout()
     return fig
 
 
@@ -296,8 +268,8 @@ def plot_matrix_grid(
     title: str | None = None,
     height: int | None = None,
     width: int | None = None,
-) -> Any:
-    """Plot several matrices as a grid of Plotly heatmaps sharing one color scale.
+) -> Figure:
+    """Plot several matrices as a grid of heatmaps sharing one color scale.
 
     Each matrix is rendered like :func:`plot_matrix` (RdBu, zero-centered,
     top-left origin, square cells). Use this to compare several matrices side
@@ -309,7 +281,7 @@ def plot_matrix_grid(
     matrices : sequence of array-like
         2-D matrices to visualise, filled row by row across the grid.
     titles : sequence of str, optional
-        One subplot title per matrix (supports HTML/``<br>`` for line breaks).
+        One subplot title per matrix (``"\\n"`` for line breaks).
     ncols : int, optional
         Number of columns in the grid. Default 2.
     zmin, zmax : float, optional
@@ -323,12 +295,8 @@ def plot_matrix_grid(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
     mats = [np.asarray(m, dtype=float) for m in matrices]
     if not mats:
         raise ValueError("at least one matrix is required")
@@ -337,62 +305,34 @@ def plot_matrix_grid(
     zmin, zmax = _shared_color_limits(zmin, zmax)
 
     n = len(mats)
-    ncols = max(1, ncols)
+    ncols = max(1, min(ncols, n))
     nrows = -(-n // ncols)  # ceil division
-
-    fig = make_subplots(
-        rows=nrows,
-        cols=ncols,
-        subplot_titles=list(titles) if titles is not None else None,
-        horizontal_spacing=0.08,
-        vertical_spacing=0.08,
-    )
-
-    for idx, mat in enumerate(mats):
-        row, col = divmod(idx, ncols)
-        row, col = row + 1, col + 1
-        fig.add_trace(
-            go.Heatmap(
-                z=mat,
-                colorscale="RdBu",
-                zmid=0,
-                zmin=zmin,
-                zmax=zmax,
-                showscale=(idx == n - 1),
-            ),
-            row=row,
-            col=col,
-        )
-        if show_ticks:
-            n_rows, n_cols = mat.shape[:2]
-            fig.update_xaxes(
-                tickvals=list(range(n_cols)),
-                ticktext=[str(i) for i in range(n_cols)],
-                row=row,
-                col=col,
-            )
-            fig.update_yaxes(
-                tickvals=list(range(n_rows)),
-                ticktext=[str(i) for i in range(n_rows)],
-                row=row,
-                col=col,
-            )
-        else:
-            fig.update_xaxes(showticklabels=False, row=row, col=col)
-            fig.update_yaxes(showticklabels=False, row=row, col=col)
-        # Origin at top-left, like plot_matrix.
-        fig.update_yaxes(autorange="reversed", row=row, col=col)
 
     if height is None:
         height = 300 * nrows + (60 if title else 20)
     if width is None:
         width = 300 * ncols + 80
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        height=height,
-        width=width,
-        template="plotly_white",
-    )
+    fig = _new_figure(width, height)
+    fig.set_layout_engine("constrained")
+    axes = np.atleast_1d(fig.subplots(nrows, ncols, squeeze=False)).ravel()
+
+    image = None
+    for idx, (ax, mat) in enumerate(zip(axes, mats, strict=False)):
+        image = _heatmap(ax, mat, zmin, zmax)
+        ax.set_aspect("equal")
+        if show_ticks:
+            ax.set_xticks(range(mat.shape[1]))
+            ax.set_yticks(range(mat.shape[0]))
+        else:
+            _hide_ticks(ax)
+        if titles is not None:
+            ax.set_title(titles[idx])
+    for ax in axes[n:]:
+        ax.set_visible(False)
+    assert image is not None  # at least one matrix was drawn
+    fig.colorbar(image, ax=axes[:n].tolist(), shrink=0.8)
+    if title:
+        fig.suptitle(title)
     return fig
 
 
@@ -408,7 +348,7 @@ def _system_matrix_blocks(
     c = np.asarray(c, dtype=float)
     d = np.asarray(d, dtype=float)
 
-    # Normalise to 2-D so go.Heatmap always gets a matrix.
+    # Normalise to 2-D so every block is drawn as a matrix.
     if b.ndim == 1:
         b = b.reshape(-1, 1)
     if c.ndim == 1:
@@ -437,6 +377,24 @@ def _shared_color_limits(zmin: float | None, zmax: float | None) -> tuple[float,
     return zmin, zmax
 
 
+def _draw_system_matrix(
+    fig: Figure,
+    cells: Sequence[Any],
+    blocks: Sequence[np.ndarray],
+    zmin: float,
+    zmax: float,
+) -> list[Any]:
+    """Draw the A, b, c, d blocks into four gridspec cells; return the axes."""
+    axes = []
+    for cell, blk, name in zip(cells, blocks, "Abcd", strict=True):
+        ax = fig.add_subplot(cell)
+        _heatmap(ax, blk, zmin, zmax)
+        _hide_ticks(ax)
+        ax.set_title(name)
+        axes.append(ax)
+    return axes
+
+
 def plot_system_matrix(
     A: ArrayLike,
     b: ArrayLike,
@@ -445,8 +403,8 @@ def plot_system_matrix(
     zmin: float | None = None,
     zmax: float | None = None,
     title: str | None = None,
-) -> Any:
-    """Plot system matrix [A b; c d] as 2x2 Plotly heatmaps, shared RdBu color scale.
+) -> Figure:
+    """Plot system matrix [A b; c d] as 2x2 heatmaps, shared RdBu color scale.
 
     Subplot sizes are proportional to block dimensions so that each matrix element
     (pixel) has the same physical size across all four plots.
@@ -458,116 +416,89 @@ def plot_system_matrix(
     zmin, zmax : float, optional
         Shared color limits. If both None, uses (-1, 1).
     title : str, optional
-        Figure title (supports HTML/``<sup>`` for subtitles).
+        Figure title.
 
     Returns
     -------
-    go.Figure
-        Call .show() to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
     A, b, c, d = _system_matrix_blocks(A, b, c, d)
     zmin, zmax = _shared_color_limits(zmin, zmax)
 
-    # Proportional sizes so one "cell" has the same physical size in all four subplots.
-    # Layout: [A (m×n)  b (m×p);  c (q×n)  d (q×p)]
+    # Layout: [A (m×n)  b (m×p);  c (q×n)  d (q×p)], sized so one cell has the
+    # same physical size in all four subplots.
     m, n = A.shape
-    b_cols = b.shape[1]
-    c_rows = c.shape[0]
-
-    row_heights = [m / (m + c_rows), c_rows / (m + c_rows)]
-    column_widths = [n / (n + b_cols), b_cols / (n + b_cols)]
-
-    fig = make_subplots(
-        rows=2,
-        cols=2,
-        row_heights=row_heights,
-        column_widths=column_widths,
-        subplot_titles=["A", "b", "c", "d"],
-        horizontal_spacing=0.05,
-        vertical_spacing=0.10,
+    p = b.shape[1]
+    q = c.shape[0]
+    cell_px = 400.0 / max(m + q, n + p)
+    fig = _new_figure(
+        cell_px * (n + p) + 100, cell_px * (m + q) + (90 if title else 60)
     )
-
-    blocks = [A, b, c, d]
-    positions = [(1, 1), (1, 2), (2, 1), (2, 2)]
-    for (row, col), blk in zip(positions, blocks, strict=False):
-        fig.add_trace(
-            go.Heatmap(
-                z=blk,
-                colorscale="RdBu",
-                zmid=0,
-                zmin=zmin,
-                zmax=zmax,
-                showscale=(row == 2 and col == 2),
-            ),
-            row=row,
-            col=col,
-        )
-        # Origin at top-left: reverse y-axis per subplot.
-        fig.update_yaxes(autorange="reversed", row=row, col=col)
-
-    size = 500
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        width=size,
-        height=size + (40 if title else 0),
-        margin={"t": 80 if title else 40},
-        template="plotly_white",
+    fig.set_layout_engine("constrained")
+    gs = fig.add_gridspec(2, 2, width_ratios=[n, p], height_ratios=[m, q])
+    axes = _draw_system_matrix(
+        fig, [gs[0, 0], gs[0, 1], gs[1, 0], gs[1, 1]], [A, b, c, d], zmin, zmax
     )
-    fig.update_xaxes(showticklabels=False)
-    fig.update_yaxes(showticklabels=False)
+    fig.colorbar(axes[-1].images[0], ax=axes, shrink=0.8)
+    if title:
+        fig.suptitle(title)
     return fig
 
 
-def _delay_colors(delays_arr: np.ndarray, colorscale: str = "Viridis") -> list[str]:
-    """One color per delay line, mapped from the delay length via a colorscale."""
-    import plotly.colors as pcolors
+def _delay_colors(delays_arr: np.ndarray, colormap: str = "viridis") -> np.ndarray:
+    """One RGBA color per delay line, mapped from the delay length via a colormap."""
+    from matplotlib import colormaps
 
     span = float(delays_arr.max() - delays_arr.min()) if delays_arr.size else 0.0
     if span > 0:
         positions = (delays_arr - delays_arr.min()) / span
     else:
         positions = np.full(delays_arr.shape, 0.5)
-    return pcolors.sample_colorscale(colorscale, positions.tolist())
+    return colormaps[colormap](positions)
 
 
-def _db_per_sample_traces(
+def _frequency_axis(w: np.ndarray, fs: float | None) -> np.ndarray:
+    return w * fs / (2.0 * np.pi) if fs is not None else w
+
+
+def _style_frequency_axis(ax: Any, fs: float | None) -> None:
+    if fs is not None:
+        ax.set_xscale("log")
+        ax.set_xlabel("Frequency [Hz]")
+    else:
+        ax.set_xlabel("Frequency [rad/sample]")
+    ax.grid(True, which="both", alpha=0.3)
+
+
+def _plot_db_per_sample(
+    ax: Any,
     sos: ArrayLike,
     delays_arr: np.ndarray,
     *,
     fs: float | None,
     nfft: int,
-    colors: list[str],
-    show_legend: bool = False,
-) -> list[Any]:
-    """Scatter traces of SOS magnitude responses in dB divided by delay length."""
-    import plotly.graph_objects as go
+    colors: np.ndarray,
+) -> None:
+    """Draw SOS magnitude responses in dB divided by delay length."""
     from scipy.signal import sosfreqz
 
     from pyFDN.td.operators import SOSBank
 
-    N = delays_arr.size
     sos_bank = SOSBank(sos).sos  # (N, n_sections, 6)
-    traces = []
-    for i in range(N):
+    for i in range(delays_arr.size):
         w, h = sosfreqz(sos_bank[i], worN=nfft)
         mag_db = 20.0 * np.log10(np.abs(h) + np.finfo(float).tiny)
-        x = w * fs / (2.0 * np.pi) if fs is not None else w
+        x = _frequency_axis(w, fs)
         if fs is not None:  # drop DC for the log frequency axis
             x, mag_db = x[1:], mag_db[1:]
-        traces.append(
-            go.Scatter(
-                x=x,
-                y=mag_db / delays_arr[i],
-                mode="lines",
-                line={"color": colors[i], "width": 1.2},
-                showlegend=show_legend,
-                name=f"delay={delays_arr[i]:g}",
-            )
+        ax.plot(
+            x,
+            mag_db / delays_arr[i],
+            color=colors[i],
+            linewidth=1.2,
+            label=f"delay={delays_arr[i]:g}",
         )
-    return traces
+    _style_frequency_axis(ax, fs)
 
 
 def plot_db_per_sample(
@@ -577,7 +508,7 @@ def plot_db_per_sample(
     fs: float | None = None,
     nfft: int = 512,
     title: str | None = None,
-) -> Any:
+) -> Figure:
     """Plot SOS magnitude responses normalized by delay length (dB per sample).
 
     Each curve is the magnitude response of one delay line's filter cascade
@@ -603,28 +534,19 @@ def plot_db_per_sample(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-
     delays_arr = np.asarray(delays, dtype=float).ravel()
-    colors = _delay_colors(delays_arr)
-    fig = go.Figure(
-        _db_per_sample_traces(
-            sos, delays_arr, fs=fs, nfft=nfft, colors=colors, show_legend=True
-        )
+    fig = _new_figure(800, 420)
+    ax = fig.add_subplot(111)
+    _plot_db_per_sample(
+        ax, sos, delays_arr, fs=fs, nfft=nfft, colors=_delay_colors(delays_arr)
     )
-    if fs is not None:
-        fig.update_xaxes(type="log", title_text="Frequency [Hz]")
-    else:
-        fig.update_xaxes(title_text="Frequency [rad/sample]")
-    fig.update_yaxes(title_text="Magnitude [dB/sample]")
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        template="plotly_white",
-        height=420,
-    )
+    ax.set_ylabel("Magnitude [dB/sample]")
+    ax.legend(fontsize="small", loc="best")
+    if title:
+        ax.set_title(title)
+    fig.tight_layout()
     return fig
 
 
@@ -643,7 +565,7 @@ def plot_fdn_parameter(
     zmin: float | None = None,
     zmax: float | None = None,
     title: str | None = None,
-) -> Any:
+) -> Figure:
     """Plot all FDN parameters in one figure.
 
     Extends :func:`plot_system_matrix` with the delay lengths and, optionally,
@@ -688,11 +610,8 @@ def plot_fdn_parameter(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
     from scipy.signal import sosfreqz
 
     A, b, c, d = _system_matrix_blocks(A, b, c, d)
@@ -709,8 +628,12 @@ def plot_fdn_parameter(
 
     # Row layout: delays | A b | c d | [post_delay] | [post_matrix] | [post_output]
     in_loop = [
-        (post_delay_sos, "post_delay [dB/sample]"),
-        (post_matrix_sos, "post_matrix [dB/sample]"),
+        (sos, label)
+        for sos, label in (
+            (post_delay_sos, "post_delay [dB/sample]"),
+            (post_matrix_sos, "post_matrix [dB/sample]"),
+        )
+        if sos is not None
     ]
     has_post_output = post_output_sos is not None
     matrix_px = 440.0
@@ -719,79 +642,32 @@ def plot_fdn_parameter(
         matrix_px * m / (m + c.shape[0]),
         matrix_px * c.shape[0] / (m + c.shape[0]),
     ]
-    specs: list[list[dict[str, Any] | None]] = [
-        [{}, None],
-        [{}, {}],
-        [{}, {}],
-    ]
-    subplot_titles = ["", "A", "b", "c", "d"]
-    for sos, _ in in_loop:
-        if sos is not None:
-            specs.append([{"colspan": 2}, None])
-            subplot_titles.append("")
-            row_px.append(190.0)
-    if has_post_output:
-        specs.append([{"colspan": 2}, None])
-        subplot_titles.append("")
-        row_px.append(190.0)
+    row_px += [190.0] * (len(in_loop) + int(has_post_output))
     total_px = float(sum(row_px))
 
-    fig = make_subplots(
-        rows=len(row_px),
-        cols=2,
-        specs=specs,
-        row_heights=[h / total_px for h in row_px],
-        column_widths=[n / (n + b.shape[1]), b.shape[1] / (n + b.shape[1])],
-        subplot_titles=subplot_titles,
-        horizontal_spacing=0.05,
-        vertical_spacing=45.0 / total_px,
+    fig = _new_figure(560, total_px + 120 + (40 if title else 0))
+    fig.set_layout_engine("constrained")
+    gs = fig.add_gridspec(
+        len(row_px), 2, height_ratios=row_px, width_ratios=[n, b.shape[1]]
     )
 
-    # Delays as bars aligned with the columns of A (axis "x2" is A's x-axis).
-    fig.add_trace(
-        go.Bar(
-            x=np.arange(N),
-            y=delays_arr,
-            marker_color=colors,
-            showlegend=False,
-            name="delays",
-        ),
-        row=1,
-        col=1,
+    # The A, b, c, d heatmaps, as in plot_system_matrix.
+    ax_A, *_ = _draw_system_matrix(
+        fig, [gs[1, 0], gs[1, 1], gs[2, 0], gs[2, 1]], [A, b, c, d], zmin, zmax
     )
-    fig.update_xaxes(matches="x2", showticklabels=False, row=1, col=1)
-    fig.update_yaxes(title_text="Delays [samples]", row=1, col=1)
 
-    # The A, b, c, d heatmaps are lifted from the system matrix plot.
-    matrix_fig = plot_system_matrix(A, b, c, d, zmin=zmin, zmax=zmax)
-    positions = [(2, 1), (2, 2), (3, 1), (3, 2)]
-    for (row, col), trace in zip(positions, matrix_fig.data, strict=True):
-        trace.update(showscale=False)
-        fig.add_trace(trace, row=row, col=col)
-        fig.update_xaxes(showticklabels=False, row=row, col=col)
-        fig.update_yaxes(autorange="reversed", showticklabels=False, row=row, col=col)
+    # Delays as bars aligned with the columns of A.
+    ax_delays = fig.add_subplot(gs[0, 0], sharex=ax_A)
+    ax_delays.bar(np.arange(N), delays_arr, color=colors, width=0.8)
+    ax_delays.set_ylabel("Delays [samples]")
+    ax_delays.tick_params(labelbottom=False)
+    ax_A.set_xlim(-0.5, N - 0.5)
 
-    def _frequency_axis(w: np.ndarray) -> np.ndarray:
-        if fs is not None:
-            return w * fs / (2.0 * np.pi)
-        return w
-
-    def _style_frequency_xaxis(row: int) -> None:
-        if fs is not None:
-            fig.update_xaxes(type="log", title_text="Frequency [Hz]", row=row, col=1)
-        else:
-            fig.update_xaxes(title_text="Frequency [rad/sample]", row=row, col=1)
-
-    next_row = 4
-    for sos, y_title in in_loop:
-        if sos is None:
-            continue
-        for trace in _db_per_sample_traces(
-            sos, delays_arr, fs=fs, nfft=nfft, colors=colors
-        ):
-            fig.add_trace(trace, row=next_row, col=1)
-        _style_frequency_xaxis(next_row)
-        fig.update_yaxes(title_text=y_title, row=next_row, col=1)
+    next_row = 3
+    for sos, y_label in in_loop:
+        ax = fig.add_subplot(gs[next_row, :])
+        _plot_db_per_sample(ax, sos, delays_arr, fs=fs, nfft=nfft, colors=colors)
+        ax.set_ylabel(y_label)
         next_row += 1
 
     if has_post_output:
@@ -806,51 +682,43 @@ def plot_fdn_parameter(
             )
         n_out = sos_eq.shape[2]
         if n_out == 1:
-            eq_colors = ["black"]
+            eq_colors: Any = ["black"]
         else:
-            import plotly.colors as pc
+            from matplotlib import colormaps
 
-            eq_colors = pc.sample_colorscale("Plasma", np.linspace(0.0, 0.9, n_out))
+            eq_colors = colormaps["plasma"](np.linspace(0.0, 0.9, n_out))
+        ax = fig.add_subplot(gs[next_row, :])
         for k in range(n_out):
             w, h = sosfreqz(sos_eq[:, :, k], worN=nfft)
             mag_db = 20.0 * np.log10(np.abs(h) + np.finfo(float).tiny)
-            x = _frequency_axis(w)
+            x = _frequency_axis(w, fs)
             if fs is not None:
                 x, mag_db = x[1:], mag_db[1:]
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=mag_db,
-                    mode="lines",
-                    line={"color": eq_colors[k], "width": 1.5},
-                    showlegend=n_out > 1,
-                    name=f"out {k}" if n_out > 1 else "post_output",
-                ),
-                row=next_row,
-                col=1,
+            ax.plot(
+                x,
+                mag_db,
+                color=eq_colors[k],
+                linewidth=1.5,
+                label=f"out {k}" if n_out > 1 else "post_output",
             )
-        _style_frequency_xaxis(next_row)
-        fig.update_yaxes(title_text="post_output [dB]", row=next_row, col=1)
+        _style_frequency_axis(ax, fs)
+        ax.set_ylabel("post_output [dB]")
+        if n_out > 1:
+            ax.legend(fontsize="small", loc="best")
 
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        width=560,
-        height=int(total_px + 120 + (40 if title else 0)),
-        margin={"t": 80 if title else 50},
-        template="plotly_white",
-        bargap=0.2,
-    )
+    if title:
+        fig.suptitle(title)
     return fig
 
 
-def plot_FDN_build(
+def plot_fdn_build(
     build: Any,
     *,
     nfft: int = 512,
     zmin: float | None = None,
     zmax: float | None = None,
     title: str | None = None,
-) -> Any:
+) -> Figure:
     """Plot the parameters stored in an :class:`pyFDN.FDNBuild`.
 
     This is a convenience wrapper around :func:`plot_fdn_parameter`. A
@@ -875,6 +743,37 @@ def plot_FDN_build(
     )
 
 
+# Historical spelling, kept as an alias.
+plot_FDN_build = plot_fdn_build  # noqa: N816
+
+
+def _time_axis(n_samples: int, fs: float | None) -> np.ndarray:
+    return np.arange(n_samples) / fs if fs is not None else np.arange(n_samples)
+
+
+def _line_figure(
+    ax_fn: Callable[[Any], None],
+    *,
+    fs: float | None,
+    ylabel: str,
+    title: str | None,
+    legend: bool,
+) -> Figure:
+    """A single-axes time plot, filled by ``ax_fn``, with shared styling."""
+    fig = _new_figure(800, 420)
+    ax = fig.add_subplot(111)
+    ax_fn(ax)
+    ax.set_xlabel("Time [s]" if fs is not None else "Time [samples]")
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.3)
+    if legend:
+        ax.legend(loc="best")
+    if title:
+        ax.set_title(title)
+    fig.tight_layout()
+    return fig
+
+
 def plot_impulse_response(
     *irs: ArrayLike,
     fs: float | None = None,
@@ -883,12 +782,12 @@ def plot_impulse_response(
     mu: float = 255.0,
     title: str | None = "Impulse response",
     max_points: int = 10_000,
-) -> Any:
+) -> Figure:
     """Plot one or more impulse responses over time, mu-law compressed by default.
 
     Mu-law companding (:func:`pyFDN.mulaw_encode`) keeps the quiet late part of
     a reverberant decay visible alongside the early reflections. Dense traces
-    are downsampled with LTTB (:func:`downsampled_scatter`) before plotting.
+    are downsampled with LTTB before plotting.
 
     Parameters
     ----------
@@ -910,11 +809,8 @@ def plot_impulse_response(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-
     from pyFDN.auxiliary.utils import mulaw_encode
 
     if not irs:
@@ -922,32 +818,29 @@ def plot_impulse_response(
     if labels is not None and len(labels) != len(irs):
         raise ValueError("labels must have one entry per impulse response")
 
-    fig = go.Figure()
-    for i, ir in enumerate(irs):
-        y = np.asarray(ir, dtype=float).ravel()
-        x = np.arange(y.size) / fs if fs is not None else np.arange(y.size)
-        if mulaw:
-            y = mulaw_encode(y, mu)
-        fig.add_trace(
-            downsampled_scatter(
-                x=x,
-                y=y,
-                mode="lines",
-                line={"width": 1.0},
-                opacity=0.7,
-                name=labels[i] if labels is not None else f"IR {i + 1}",
-                max_points=max_points,
+    def draw(ax: Any) -> None:
+        for i, ir in enumerate(irs):
+            y = np.asarray(ir, dtype=float).ravel()
+            if mulaw:
+                y = mulaw_encode(y, mu)
+            x_ds, y_ds = downsample_lttb(
+                _time_axis(y.size, fs), y, max_points=max_points
             )
-        )
-    fig.update_xaxes(title_text="Time [s]" if fs is not None else "Time [samples]")
-    fig.update_yaxes(title_text="Amplitude [mu-law]" if mulaw else "Amplitude")
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        template="plotly_white",
-        height=420,
-        showlegend=labels is not None or len(irs) > 1,
+            ax.plot(
+                x_ds,
+                y_ds,
+                linewidth=1.0,
+                alpha=0.7,
+                label=labels[i] if labels is not None else f"IR {i + 1}",
+            )
+
+    return _line_figure(
+        draw,
+        fs=fs,
+        ylabel="Amplitude [mu-law]" if mulaw else "Amplitude",
+        title=title,
+        legend=labels is not None or len(irs) > 1,
     )
-    return fig
 
 
 def plot_edc(
@@ -959,12 +852,12 @@ def plot_edc(
     dynamic_range: float | None = 100.0,
     title: str | None = "Energy decay curve",
     max_points: int = 10_000,
-) -> Any:
+) -> Figure:
     """Plot the energy decay curve (EDC) of one or more impulse responses.
 
     The EDC is the backward energy integral (:func:`pyFDN.edc`); by default it
     is shown in dB (:func:`pyFDN.sq_to_db`). Dense traces are downsampled with
-    LTTB (:func:`downsampled_scatter`) before plotting.
+    LTTB before plotting.
 
     Parameters
     ----------
@@ -993,11 +886,8 @@ def plot_edc(
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.figure.Figure
     """
-    import plotly.graph_objects as go
-
     from pyFDN.auxiliary.acoustics import edc
     from pyFDN.auxiliary.utils import sq_to_db
 
@@ -1006,40 +896,37 @@ def plot_edc(
     if labels is not None and len(labels) != len(irs):
         raise ValueError("labels must have one entry per impulse response")
 
-    fig = go.Figure()
-    peak = -np.inf
-    for i, ir in enumerate(irs):
-        y = np.asarray(ir, dtype=float).ravel()
-        decay = edc(y)
-        if normalize and decay.size and decay[0] > 0:
-            decay = decay / decay[0]
-        y_plot = sq_to_db(decay) if db else decay
-        finite = y_plot[np.isfinite(y_plot)]
-        if finite.size:
-            peak = max(peak, float(finite.max()))
-        x = np.arange(y.size) / fs if fs is not None else np.arange(y.size)
-        fig.add_trace(
-            downsampled_scatter(
-                x=x,
-                y=y_plot,
-                mode="lines",
-                line={"width": 1.0},
-                opacity=0.8,
-                name=labels[i] if labels is not None else f"IR {i + 1}",
-                max_points=max_points,
+    def draw(ax: Any) -> None:
+        peak = -np.inf
+        for i, ir in enumerate(irs):
+            y = np.asarray(ir, dtype=float).ravel()
+            decay = edc(y)
+            if normalize and decay.size and decay[0] > 0:
+                decay = decay / decay[0]
+            y_plot = sq_to_db(decay) if db else decay
+            finite = y_plot[np.isfinite(y_plot)]
+            if finite.size:
+                peak = max(peak, float(finite.max()))
+            x_ds, y_ds = downsample_lttb(
+                _time_axis(y.size, fs), y_plot, max_points=max_points
             )
-        )
-    fig.update_xaxes(title_text="Time [s]" if fs is not None else "Time [samples]")
-    fig.update_yaxes(title_text="Energy [dB]" if db else "Energy")
-    if db and dynamic_range is not None and np.isfinite(peak):
-        fig.update_yaxes(range=[peak - dynamic_range, peak])
-    fig.update_layout(
-        title={"text": title, "x": 0.5, "xanchor": "center"} if title else None,
-        template="plotly_white",
-        height=420,
-        showlegend=labels is not None or len(irs) > 1,
+            ax.plot(
+                x_ds,
+                y_ds,
+                linewidth=1.0,
+                alpha=0.8,
+                label=labels[i] if labels is not None else f"IR {i + 1}",
+            )
+        if db and dynamic_range is not None and np.isfinite(peak):
+            ax.set_ylim(peak - dynamic_range, peak)
+
+    return _line_figure(
+        draw,
+        fs=fs,
+        ylabel="Energy [dB]" if db else "Energy",
+        title=title,
+        legend=labels is not None or len(irs) > 1,
     )
-    return fig
 
 
 def plot_impulse_response_matrix(
@@ -1144,7 +1031,7 @@ def plot_spectrogram(
     ylabel: str = "Frequency [Hz]",
     height: int = 500,
     colorscale: str = "Viridis",
-) -> Any:
+) -> Figure:
     """Plot spectrogram of a 1-D signal as a Matplotlib image.
 
     Uses the same default parameters as the Poletti example: Blackman window,
@@ -1168,7 +1055,7 @@ def plot_spectrogram(
         Frequency axis limits in Hz. Use None for auto (ymax defaults to fs/2).
     dynamic_range : float, optional
         Color (magnitude) range in dB below the peak of the displayed
-        spectrogram. Default 80. Use None for Plotly's auto scaling.
+        spectrogram. Default 80. Use None for Matplotlib's auto scaling.
     title : str, optional
         Figure title.
     xlabel, ylabel : str
@@ -1210,9 +1097,6 @@ def plot_spectrogram(
     if xmax is None:
         xmax = float(t[-1])
 
-    # Render with Matplotlib (Agg backend): marimo embeds the result as a single
-    # compressed PNG. A Plotly heatmap instead embeds every (freq, time) cell as
-    # base64 data, which bloats the exported HTML by several MB per spectrogram.
     cmap = colorscale.lower()
     vmax = float(np.max(Sxx_plot)) if Sxx_plot.size else 0.0
     vmin = vmax - float(dynamic_range) if dynamic_range is not None else None
@@ -1235,6 +1119,18 @@ def plot_spectrogram(
     return fig
 
 
+def _rasterize(fig: Any) -> np.ndarray:
+    """Render a Matplotlib figure to an RGBA image array."""
+    import io
+
+    from matplotlib.image import imread
+
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=fig.dpi)
+    buffer.seek(0)
+    return imread(buffer)
+
+
 def animate(
     plot_fn: Callable[[Any], Any],
     frames: Sequence[Any],
@@ -1243,123 +1139,93 @@ def animate(
     label_prefix: str = "",
     label_format: str = "",
     frame_ms: int = 300,
-    transition_ms: int = 0,
     title: str | None = None,
 ) -> Any:
     """Animate a sequence of frames built by any per-frame plotting function.
 
     ``plot_fn(frame)`` is called for each entry in ``frames`` and must return a
-    single-subplot Plotly figure (e.g. :func:`plot_matrix`,
-    :func:`plot_impulse_response`). The traces of each figure become one
-    animation frame; the first figure supplies the base layout (size, axes,
-    color scale), to which a play/pause button and a slider are added.
+    Matplotlib figure (e.g. :func:`plot_matrix`, :func:`plot_impulse_response`).
+    Each figure is rendered to one image, and the images are played back as a
+    :class:`matplotlib.animation.FuncAnimation`. Build every frame with the
+    same size and fixed axis/color limits so the frames line up.
 
     This composes with the existing ``plot_*`` builders instead of re-deriving
     their styling. To animate a matrix ``C`` of shape ``(rows, cols, T)`` over
-    time, with fixed color limits::
+    time, with fixed color limits, and show it with player controls in a
+    notebook::
 
         import functools
 
-        fig = pyFDN.animate(
+        anim = pyFDN.animate(
             functools.partial(pyFDN.plot_matrix, zmin=-1, zmax=1),
             [C[:, :, k] for k in range(C.shape[2])],
             labels=t,
             label_prefix="t = ",
             label_format=".2f",
         )
-        fig.show()
+        mo.Html(anim.to_jshtml())  # or IPython.display.HTML(...)
 
     Parameters
     ----------
     plot_fn : callable
-        Maps one ``frames`` entry to a Plotly figure. Use
+        Maps one ``frames`` entry to a Matplotlib figure. Use
         :func:`functools.partial` or a lambda to fix extra arguments (e.g.
         color limits) so every frame is built consistently.
     frames : sequence
         One argument per frame, passed positionally to ``plot_fn``.
     labels : sequence, optional
-        Slider label per frame. Defaults to the frame index.
+        Label shown above each frame. Defaults to the frame index.
     label_prefix : str, optional
         Prefix shown before the current label (e.g. ``"t = "``).
     label_format : str, optional
         Format spec applied to each label, e.g. ``".2f"``. Empty uses ``str``.
     frame_ms : int, optional
         Per-frame duration in milliseconds during playback. Default 300.
-    transition_ms : int, optional
-        Tween duration between frames in milliseconds. Default 0.
     title : str, optional
-        Figure title. If None, the first frame's title is kept.
+        Title shown above the frame label.
 
     Returns
     -------
-    go.Figure
-        Call ``.show()`` to display.
+    matplotlib.animation.FuncAnimation
+        Use ``.to_jshtml()`` for an interactive player or ``.save()`` to write
+        a GIF or video.
     """
-    import plotly.graph_objects as go
+    from matplotlib.animation import FuncAnimation
 
     if len(frames) == 0:
         raise ValueError("frames must contain at least one frame")
     if labels is not None and len(labels) != len(frames):
         raise ValueError("labels must have one entry per frame")
 
-    figs = [plot_fn(frame) for frame in frames]
-    names = [str(i) for i in range(len(figs))]
-    go_frames = [
-        go.Frame(data=fig_i.data, name=name)
-        for name, fig_i in zip(names, figs, strict=True)
-    ]
-
+    images = [_rasterize(plot_fn(frame)) for frame in frames]
     if labels is None:
-        label_texts = names
+        label_texts = [str(i) for i in range(len(images))]
     else:
         label_texts = [
             format(value, label_format) if label_format else str(value)
             for value in labels
         ]
 
-    play_args = {
-        "frame": {"duration": frame_ms, "redraw": True},
-        "fromcurrent": True,
-        "transition": {"duration": transition_ms},
-    }
-    pause_args = {
-        "frame": {"duration": 0, "redraw": False},
-        "mode": "immediate",
-        "transition": {"duration": 0},
-    }
-    slider = {
-        "active": 0,
-        "currentvalue": {"prefix": label_prefix, "visible": True},
-        "steps": [
-            {
-                "label": label_texts[i],
-                "method": "animate",
-                "args": [
-                    [names[i]],
-                    {
-                        "frame": {"duration": frame_ms, "redraw": True},
-                        "mode": "immediate",
-                        "transition": {"duration": transition_ms},
-                    },
-                ],
-            }
-            for i in range(len(figs))
-        ],
-    }
-    updatemenus = [
-        {
-            "type": "buttons",
-            "showactive": False,
-            "buttons": [
-                {"label": "▶", "method": "animate", "args": [None, play_args]},
-                {"label": "⏸", "method": "animate", "args": [[None], pause_args]},
-            ],
-        }
-    ]
-
-    fig = figs[0]
-    fig.frames = tuple(go_frames)
-    fig.update_layout(sliders=[slider], updatemenus=updatemenus)
+    height_px, width_px = images[0].shape[:2]
+    header_px = 30 * (1 + int(title is not None))
+    fig = _new_figure(width_px, height_px + header_px)
+    ax = fig.add_axes((0.0, 0.0, 1.0, height_px / (height_px + header_px)))
+    ax.set_axis_off()
+    image = ax.imshow(images[0], interpolation="nearest")
+    total_px = height_px + header_px
     if title is not None:
-        fig.update_layout(title={"text": title, "x": 0.5, "xanchor": "center"})
-    return fig
+        fig.text(0.5, 1.0 - 15 / total_px, title, ha="center", va="center")
+    label = fig.text(
+        0.5,
+        1.0 - (header_px - 15) / total_px,
+        label_prefix + label_texts[0],
+        ha="center",
+        va="center",
+    )
+
+    def update(k: int) -> tuple[Any, ...]:
+        image.set_data(images[k])
+        label.set_text(label_prefix + label_texts[k])
+        return image, label
+
+    return FuncAnimation(fig, update, frames=len(images), interval=frame_ms)

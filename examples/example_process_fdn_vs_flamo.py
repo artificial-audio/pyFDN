@@ -34,14 +34,14 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
     from pyFDN import td
 
-    return go, np, pyFDN, td, torch
+    return np, plt, pyFDN, td, torch
 
 
 @app.cell(hide_code=True)
@@ -61,7 +61,7 @@ def _(np, pyFDN):
 
     delays = np.sort(np.random.randint(500, 2001, num_delays))
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "Velvet", num_stages=3, sparsity=3
+        num_delays, "velvet", num_stages=3, sparsity=3
     )
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
@@ -127,11 +127,11 @@ def _(
     )
 
     model = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct,
-        delays,
         fs,
         nfft=2**17,
         post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank
@@ -178,25 +178,20 @@ def _(mo):
 
 
 @app.cell
-def _(difference, fs, go, pyFDN, t_axis):
-    fig_err = go.Figure()
-    fig_err.add_trace(
-        go.Scatter(
-            x=t_axis / fs,
-            y=pyFDN.lin_to_db(difference),
-            mode="lines",
-            name="|IR_process - IR_flamo|",
-            line={"width": 0.8},
-        )
+def _(difference, fs, plt, pyFDN, t_axis):
+    fig_err, _ax = plt.subplots(figsize=(8, 3.6))
+    _ax.plot(
+        t_axis / fs,
+        pyFDN.lin_to_db(difference),
+        linewidth=0.8,
+        label="|IR_process - IR_flamo|",
     )
-    fig_err.update_layout(
-        title="Difference between the two implementations",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Error (dB)"},
-        template="plotly_white",
-        height=360,
-    )
-    fig_err.show()
+    _ax.set_title("Difference between the two implementations")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Error (dB)")
+    _ax.legend()
+    fig_err.tight_layout()
+    fig_err
     return
 
 

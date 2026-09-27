@@ -8,6 +8,32 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      PIP_NO_CACHE_DIR: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.14'
+
+    - name: Ruff
+      run: |
+        pip install --no-cache-dir ruff
+        ruff check src tests examples
+        ruff format --check src tests examples
+
+    - name: Mypy
+      run: |
+        # The CPU build of torch keeps the install small; mypy only needs stubs.
+        pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+        pip install --no-cache-dir . mypy
+        python -m mypy
+
   test:
     runs-on: ubuntu-latest
     env:

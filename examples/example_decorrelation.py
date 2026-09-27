@@ -37,12 +37,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -74,7 +74,7 @@ def _(np, pyFDN):
 
 
 @app.cell
-def _(go, np):
+def _(np, plt):
     def summarise_correlation(matrix):
         """Median and IQR of the off-diagonal maximum correlations."""
         upper = np.abs(matrix[np.triu_indices(matrix.shape[0], k=1)])
@@ -83,29 +83,15 @@ def _(go, np):
         return np.median(values), iqr
 
     def correlation_heatmap(matrix, labels, title, axis_titles, size):
-        fig = go.Figure(
-            go.Heatmap(
-                z=np.abs(matrix),
-                x=labels,
-                y=labels,
-                zmin=0,
-                zmax=1,
-                colorscale="gray",
-                colorbar={"title": "|max corr|"},
-            )
-        )
-        fig.update_layout(
-            title=title,
-            xaxis={"title": axis_titles[0], "type": "category"},
-            yaxis={
-                "title": axis_titles[1],
-                "type": "category",
-                "autorange": "reversed",
-            },
-            template="plotly_white",
-            height=size[0],
-            width=size[1],
-        )
+        fig, ax = plt.subplots(figsize=(size[1] / 100, size[0] / 100))
+        image = ax.imshow(np.abs(matrix), cmap="gray", vmin=0, vmax=1)
+        ax.set_xticks(range(len(labels)), labels, rotation=90)
+        ax.set_yticks(range(len(labels)), labels)
+        ax.set_xlabel(axis_titles[0])
+        ax.set_ylabel(axis_titles[1])
+        ax.set_title(title)
+        fig.colorbar(image, ax=ax, label="|max corr|")
+        fig.tight_layout()
         return fig
 
     return correlation_heatmap, summarise_correlation

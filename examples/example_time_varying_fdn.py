@@ -43,7 +43,7 @@ def _():
 
     import pyFDN
     from pyFDN import td
-    from pyFDN.generate.random_orthogonal import random_orthogonal
+    from pyFDN.generate.orthogonal import random_orthogonal
     from pyFDN.process import process_dss
 
     return (

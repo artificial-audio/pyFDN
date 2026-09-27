@@ -156,8 +156,8 @@ def _(mo):
 
 @app.cell
 def _(init_build, mo, opt_build, pyFDN):
-    _build_init = pyFDN.plot_FDN_build(init_build, title="Random init")
-    _build_opt = pyFDN.plot_FDN_build(opt_build, title="Colorless")
+    _build_init = pyFDN.plot_fdn_build(init_build, title="Random init")
+    _build_opt = pyFDN.plot_fdn_build(opt_build, title="Colorless")
     mo.hstack([mo.as_html(_build_init), mo.as_html(_build_opt)], gap=2)
     return
 

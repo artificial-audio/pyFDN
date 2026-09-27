@@ -14,8 +14,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import lsq_linear
 
-from ..auxiliary.utils import hertz_to_rad
-from ._backend import array_namespace
+from ..auxiliary.utils import array_namespace, hertz_to_rad
 from ._design_record import design_value, with_design
 from .biquads import highshelf_biquad, lowshelf_biquad, peaking_biquad
 from .probe_sos import probe_sos

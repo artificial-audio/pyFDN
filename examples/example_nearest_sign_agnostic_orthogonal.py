@@ -130,9 +130,9 @@ def _(A_original, B, classic, np, pyFDN, sign_agnostic):
     titles = [
         f"Original A ({orth_label(A_original)})",
         "|A| (input)",
-        f"Sign-agnostic aligned<br>({orth_label(sign_agnostic_aligned)})",
+        f"Sign-agnostic aligned\n({orth_label(sign_agnostic_aligned)})",
         "|Sign-agnostic aligned|",
-        f"Nearest orthogonal aligned<br>({orth_label(classic_aligned)})",
+        f"Nearest orthogonal aligned\n({orth_label(classic_aligned)})",
         "|Nearest orthogonal aligned|",
     ]
 
@@ -146,7 +146,7 @@ def _(A_original, B, classic, np, pyFDN, sign_agnostic):
         title="Sign-agnostic vs. classic nearest orthogonal",
         height=1000,
     )
-    fig.show()
+    fig
     return
 
 

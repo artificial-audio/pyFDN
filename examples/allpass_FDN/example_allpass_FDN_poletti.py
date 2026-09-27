@@ -124,7 +124,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, N, is_allpass, np):
     test_delays = 2 ** np.arange(N)
-    _is_a, den, num = is_allpass(A, B, C, D, test_delays)
+    _is_a, den, num = is_allpass(test_delays, A, B, C, D)
     assert _is_a, "Expected allpass"
     print("Allpass: OK")
     return
@@ -143,7 +143,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, fs, delays, is_paraunitary, pyFDN, rt):
     ir_len = int(rt * fs * 5)
-    impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)
+    impulse_response = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)
     # Shape: (ir_len, n_out, n_in)
 
     is_p, test_matrix, max_off = is_paraunitary(impulse_response)

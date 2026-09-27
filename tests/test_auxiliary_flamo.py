@@ -11,7 +11,7 @@ from pyFDN.auxiliary.flamo import (
     wrap_fdn_shell,
 )
 from pyFDN.auxiliary.flamo_graph import extract_build
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_impz import dss_to_impz
 
@@ -72,9 +72,9 @@ def test_dss_to_flamo_render_matches_impz():
     # time-domain dss_to_impz recursion over the early (pre-wrap) samples.
     _, a, b, c, d, m = _small_fdn()
     nfft = 2**13
-    model = dss_to_flamo(a, b, c, d, m, fs=48000, nfft=nfft, device="cpu")
+    model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=nfft, device="cpu")
     ir = np.asarray(flamo_time_response(model, fs=48000)).reshape(-1)
-    ref = dss_to_impz(200, m, a, b, c, d).reshape(-1)
+    ref = dss_to_impz(m, a, b, c, d, 200).reshape(-1)
     np.testing.assert_allclose(ir[:120], ref[:120], atol=1e-4)
 
 
@@ -82,7 +82,7 @@ def test_dss_to_flamo_roundtrips_through_extractor():
     # Leaf names / topology survive the refactor: the extractor recovers A, B,
     # C, D and the delays from the named graph dss_to_flamo builds.
     n, a, b, c, d, m = _small_fdn()
-    model = dss_to_flamo(a, b, c, d, m, fs=48000, nfft=2**12, device="cpu")
+    model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=2**12, device="cpu")
     params = extract_build(model)
     np.testing.assert_allclose(params.A, a, atol=1e-5)
     np.testing.assert_allclose(params.B.reshape(n, 1), b, atol=1e-5)

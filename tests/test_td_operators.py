@@ -264,7 +264,10 @@ def test_matrixfir_block_consistency_and_reset() -> None:
 
     matrixFIR_td.reset()
     out_sig_blockwise = np.vstack(
-        [matrixFIR_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [
+            matrixFIR_td.process_block(in_sig[i : i + block])
+            for i in range(0, n_samples, block)
+        ]
     )
 
     # Test
@@ -370,7 +373,9 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     assert tvmatrix_td.sample_index == n_samples
     tvmatrix_td.reset()
     assert tvmatrix_td.sample_index == 0
-    np.testing.assert_allclose(tvmatrix_td.process_block(in_sig), out_sig, atol=1e-12, rtol=0)
+    np.testing.assert_allclose(
+        tvmatrix_td.process_block(in_sig), out_sig, atol=1e-12, rtol=0
+    )
 
 
 def test_tvmatrix_rejects_odd_channel_count() -> None:
@@ -409,7 +414,10 @@ def test_absolute_value() -> None:
 
     block = 128
     out_sig_blockwise = np.vstack(
-        [abs_td.process_block(in_sig[i : i + block]) for i in range(0, n_samples, block)]
+        [
+            abs_td.process_block(in_sig[i : i + block])
+            for i in range(0, n_samples, block)
+        ]
     )
     np.testing.assert_allclose(out_sig_blockwise, out_sig_td, atol=1e-12, rtol=0)
 
