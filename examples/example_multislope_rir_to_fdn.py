@@ -36,15 +36,14 @@ def _(mo):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     from multislope import DecayFitNet
-    from plotly.subplots import make_subplots
     from scipy.signal import sosfilt, stft
 
     import pyFDN
 
-    return DecayFitNet, go, make_subplots, np, pyFDN, sosfilt, stft
+    return DecayFitNet, np, plt, pyFDN, sosfilt, stft
 
 
 @app.cell(hide_code=True)
@@ -132,43 +131,20 @@ def _(DecayFitNet, f_centre, fs, pyFDN, rir):
 
 
 @app.cell
-def _(decay_time, f_centre, go, single_slope_rt):
-    fig_rt = go.Figure()
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=decay_time[:, 0],
-            mode="lines+markers",
-            line={"color": "#636efa"},
-            name="Fast slope",
-        )
-    )
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=decay_time[:, 1],
-            mode="lines+markers",
-            line={"color": "#ef553b"},
-            name="Slow slope",
-        )
-    )
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=single_slope_rt,
-            mode="lines+markers",
-            line={"color": "#00cc96", "dash": "dash"},
-            name="Single-slope RT",
-        )
-    )
-    fig_rt.update_layout(
-        title="Decay times: two fitted slopes vs. one reverberation time",
-        xaxis={"title": "Frequency (Hz)", "type": "log", "range": [1.7, 4.0]},
-        yaxis={"title": "Decay time (s)", "rangemode": "tozero"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_rt.show()
+def _(decay_time, f_centre, plt, single_slope_rt):
+    fig_rt, _ax = plt.subplots(figsize=(8, 4.2))
+    _ax.plot(f_centre, decay_time[:, 0], "o-", color="#636efa", label="Fast slope")
+    _ax.plot(f_centre, decay_time[:, 1], "o-", color="#ef553b", label="Slow slope")
+    _ax.plot(f_centre, single_slope_rt, "o--", color="#00cc96", label="Single-slope RT")
+    _ax.set_xscale("log")
+    _ax.set_xlim(10**1.7, 10**4.0)
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("Decay times: two fitted slopes vs. one reverberation time")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("Decay time (s)")
+    _ax.legend()
+    fig_rt.tight_layout()
+    fig_rt
     return
 
 
@@ -183,7 +159,7 @@ def _(mo):
 
     Each slope becomes its own FDN. A GEQ absorption filter per delay line gives the FDN the decay time of that slope, and an output GEQ sets its initial level. The level target is the difference between the level the slope should have and the level the unequalized FDN happens to produce, so the design corrects itself.
 
-    The two GEQ designs work on a 10-point grid (DC, 63 Hz … 8 kHz, Nyquist);
+    The two GEQ designs work on a 10-point grid (octave centres 31.25 Hz … 16 kHz);
     the octave-band estimates are extended to it by repeating the edge bands.
 
     `pyFDN.decay_to_geq` and `pyFDN.gain_to_bounded_geq` both return normalized biquad sections in `[b0, b1, b2, a0, a1, a2]` form, with `a0 = 1`. The first maps reverberation-time targets onto in-loop attenuation; the second fits level corrections onto the output EQ while limiting every frequency-shaped section to ±20 dB of internal gain.
@@ -194,7 +170,7 @@ def _(mo):
 @app.cell
 def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
     def geq_grid(band_values):
-        """Extend 8 octave-band values onto the 10-point GEQ design grid."""
+        """Extend 8 octave-band values onto the 10-point GEQ command grid."""
         return np.concatenate(([band_values[0]], band_values, [band_values[-1]]))
 
     resynthesis = np.zeros(len(rir))
@@ -217,11 +193,11 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
         # unequalized FDN: reference level for the output GEQ
         _ir_flat = pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
+                _build.delays,
                 _build.A,
                 _build.B,
                 _build.C,
                 _build.D,
-                _build.delays,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,
@@ -238,11 +214,11 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
 
         resynthesis += pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
+                _build.delays,
                 _build.A,
                 _build.B,
                 _build.C,
                 _build.D,
-                _build.delays,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,
@@ -308,38 +284,33 @@ def _(band_sos, f_centre, np, noisy_resynthesis, pyFDN, rir, sosfilt):
 
 
 @app.cell
-def _(edc_fdn, edc_target, f_centre, fs, go, np):
-    fig_edc = go.Figure()
+def _(edc_fdn, edc_target, f_centre, fs, np, plt):
+    fig_edc, _ax = plt.subplots(figsize=(8, 4.6))
     _time = np.arange(edc_target.shape[1])[::64] / fs
     for _index, _colour in zip(
         (2, 4, 6), ("#636efa", "#ef553b", "#00cc96"), strict=True
     ):
-        fig_edc.add_trace(
-            go.Scatter(
-                x=_time,
-                y=edc_target[_index][::64],
-                mode="lines",
-                line={"color": _colour},
-                name=f"{f_centre[_index]:.0f} Hz, measured",
-            )
+        _ax.plot(
+            _time,
+            edc_target[_index][::64],
+            color=_colour,
+            label=f"{f_centre[_index]:.0f} Hz, measured",
         )
-        fig_edc.add_trace(
-            go.Scatter(
-                x=_time,
-                y=edc_fdn[_index][::64],
-                mode="lines",
-                line={"color": _colour, "dash": "dash"},
-                name=f"{f_centre[_index]:.0f} Hz, two FDNs",
-            )
+        _ax.plot(
+            _time,
+            edc_fdn[_index][::64],
+            color=_colour,
+            linestyle="--",
+            label=f"{f_centre[_index]:.0f} Hz, two FDNs",
         )
-    fig_edc.update_layout(
-        title="Octave-band energy decay curves",
-        xaxis={"title": "Time (s)", "range": [0, 1.5]},
-        yaxis={"title": "Energy decay (dB)", "range": [-70, 2]},
-        template="plotly_white",
-        height=460,
-    )
-    fig_edc.show()
+    _ax.set_xlim(0, 1.5)
+    _ax.set_ylim(-70, 2)
+    _ax.set_title("Octave-band energy decay curves")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Energy decay (dB)")
+    _ax.legend()
+    fig_edc.tight_layout()
+    fig_edc
     return
 
 
@@ -356,7 +327,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, make_subplots, noisy_resynthesis, np, rir, stft):
+def _(fs, noisy_resynthesis, np, plt, rir, stft):
     def spectrogram_db(signal):
         """STFT magnitude in dB, normalised to 0 dB at its peak."""
         f, t, z = stft(signal, fs=fs, nperseg=1024, noverlap=512)
@@ -367,41 +338,29 @@ def _(fs, go, make_subplots, noisy_resynthesis, np, rir, stft):
     _f, _t, _target_db = spectrogram_db(rir)
     _, _, _fdn_db = spectrogram_db(noisy_resynthesis)
 
-    fig_spec = make_subplots(
-        rows=1,
-        cols=2,
-        shared_yaxes=True,
-        subplot_titles=("Measured", "Two FDNs"),
-        horizontal_spacing=0.06,
+    fig_spec, _axes = plt.subplots(
+        1, 2, sharey=True, figsize=(10, 4.3), layout="constrained"
     )
-    for _col, _data in ((1, _target_db), (2, _fdn_db)):
-        fig_spec.add_trace(
-            go.Heatmap(
-                x=_t,
-                y=_f,
-                z=_data,
-                zmin=-80,
-                zmax=0,
-                colorscale="Magma",
-                showscale=_col == 2,
-                colorbar={"title": "dB"},
-            ),
-            row=1,
-            col=_col,
+    for _ax, _title, _data in zip(
+        _axes, ("Measured", "Two FDNs"), (_target_db, _fdn_db), strict=True
+    ):
+        _mesh = _ax.pcolormesh(
+            _t, _f, _data, vmin=-80, vmax=0, cmap="magma", shading="auto"
         )
+        _ax.set_title(_title)
+        _ax.set_xlabel("Time (s)")
+        _ax.set_xlim(0, 1.4)
     _ticks = [63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-    fig_spec.update_yaxes(
-        title="Frequency (Hz)",
-        type="log",
-        range=[np.log10(50), np.log10(16000)],
-        tickvals=_ticks,
-        ticktext=[f"{v // 1000}k" if v >= 1000 else str(v) for v in _ticks],
+    _axes[0].set_yscale("log")
+    _axes[0].set_ylim(50, 16000)
+    _axes[0].set_yticks(
+        _ticks, [f"{v // 1000}k" if v >= 1000 else str(v) for v in _ticks]
     )
-    fig_spec.update_xaxes(title="Time (s)", range=[0, 1.4])
-    fig_spec.update_layout(
-        title="Spectrograms on a shared scale", template="plotly_white", height=430
-    )
-    fig_spec.show()
+    _axes[0].minorticks_off()
+    _axes[0].set_ylabel("Frequency (Hz)")
+    fig_spec.colorbar(_mesh, ax=_axes, label="dB")
+    fig_spec.suptitle("Spectrograms on a shared scale")
+    fig_spec
     return
 
 

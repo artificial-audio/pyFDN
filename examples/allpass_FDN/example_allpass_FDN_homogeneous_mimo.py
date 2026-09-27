@@ -110,7 +110,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, delays, fs, mo, pyFDN):
-    impulse_response = pyFDN.dss_to_impz(fs, delays, A, B, C, D)
+    impulse_response = pyFDN.dss_to_impz(delays, A, B, C, D, fs)
     ir_channel = impulse_response[:, 2, 1]
 
     _fig = pyFDN.plot_impulse_response(

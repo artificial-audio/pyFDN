@@ -24,7 +24,7 @@ def _(mo):
 
     ## Goals
 
-    1. Build a delay state-space model with a **one-pole absorption (SOS) in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`.
+    1. Build a delay state-space model with a **first-order absorption shelf in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`.
     2. Extract poles/residues via `pyFDN.flamo_to_pr`.
     3. Explain the key math fix: why we evaluate Newton/Ehrlich–Aberth in **w-plane** (`w = z^{-1}`) while FLAMO probing naturally gives derivatives in **z-plane**.
     4. Verify numerically that the derivative identities are consistent.
@@ -220,14 +220,13 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
     np.random.seed(7)
     print("pyFDN version:", getattr(pyFDN, "__version__", "unknown"))
-    return go, np, pyFDN, torch
+    return np, pyFDN, torch
 
 
 @app.cell
@@ -304,14 +303,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, build, go, np, poles, pyFDN):
-    _pole_trace = go.Scatter(
-        x=pyFDN.rad_to_hertz(np.angle(poles), fs),
-        y=pyFDN.lin_to_db(np.abs(poles)),
-        mode="markers",
-        marker={"size": 4, "color": "red"},
-        name="Poles",
-    )
+def _(fs, build, np, poles, pyFDN):
     _fig_decay = pyFDN.plot_db_per_sample(
         build.post_delay,
         build.delays,
@@ -319,7 +311,17 @@ def _(fs, build, go, np, poles, pyFDN):
         nfft=2**12,
         title="Absorption gain per sample and extracted poles",
     )
-    _fig_decay.add_trace(_pole_trace)
+    _ax = _fig_decay.axes[0]
+    _ax.scatter(
+        pyFDN.rad_to_hertz(np.angle(poles), fs),
+        pyFDN.lin_to_db(np.abs(poles)),
+        s=8,
+        color="red",
+        label="Poles",
+        zorder=3,
+    )
+    _ax.legend(fontsize="small")
+    _fig_decay
     return
 
 

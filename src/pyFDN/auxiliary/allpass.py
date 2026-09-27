@@ -1,5 +1,8 @@
 """
-Allpass FDN helpers (Poletti MIMO reverberator, uniallpass test, etc.).
+Allpass tests for FDNs (allpass, uniallpass, paraunitary).
+
+The allpass structure builders live in :mod:`pyFDN.generate.structures` and
+are re-exported here so ``pyFDN.allpass.series_allpass`` keeps working.
 
 Based on Poletti (1995) and "Allpass Feedback Delay Networks" by Sebastian J. Schlecht.
 """
@@ -13,41 +16,14 @@ from numpy.typing import ArrayLike
 from scipy.linalg import solve_discrete_lyapunov
 
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.generate.is_almost_zero import is_almost_zero
+from pyFDN.auxiliary.utils import is_almost_zero
+from pyFDN.generate.structures import nested_allpass as nested_allpass
+from pyFDN.generate.structures import poletti_allpass as poletti_allpass
+from pyFDN.generate.structures import series_allpass as series_allpass
 
 # How far inside the unit circle the eigenvalues of A must sit for the discrete
 # Lyapunov equation solved by is_uniallpass to be well posed.
 _STABILITY_TOL = 1e-9
-
-
-def poletti_allpass(
-    g: float, U: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Create Poletti's MIMO unitary reverberator (allpass FDN).
-
-    From Poletti, M. (1995). A unitary reverberator for reduced colouration
-    in assisted reverberation systems. INTER-NOISE and NOISE-CON, 5, 1223–1232.
-
-    Parameters
-    ----------
-    g : float
-        Scalar feedback gain (e.g. 0.7).
-    U : ndarray (N, N)
-        Unitary (orthogonal) feedback matrix.
-
-    Returns
-    -------
-    A, B, C, D : ndarray
-        Delay state-space matrices: A = -g*U, B = (1+g)*I, C = (1-g)*U, D = g*I.
-    """
-    U = np.asarray(U, dtype=float)
-    N = U.shape[0]
-    A = -g * U
-    B = (1 + g) * np.eye(N)
-    C = (1 - g) * U
-    D = g * np.eye(N)
-    return A, B, C, D
 
 
 def is_uniallpass(
@@ -123,11 +99,11 @@ def is_uniallpass(
 
 
 def is_allpass(
+    delays: ArrayLike,
     A: ArrayLike,
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
-    delays: ArrayLike,
     tol: float = 1e-9,
 ) -> tuple[bool, np.ndarray, np.ndarray]:
     """
@@ -138,10 +114,10 @@ def is_allpass(
 
     Parameters
     ----------
-    A, B, C, D : array-like
-        Delay state-space matrices.
     delays : array-like
         Delay lengths (samples), length N.
+    A, B, C, D : array-like
+        Delay state-space matrices.
     tol : float
         Tolerance for coefficient comparison.
 
@@ -174,123 +150,6 @@ def is_allpass(
         diff = den_rev - num_pad
     is_a = is_almost_zero(diff, tol=tol)
     return is_a, den, num
-
-
-def series_allpass(
-    g: ArrayLike,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Create Schroeder's series allpass FDN (SISO).
-
-    Iterative series connection of feedforward/back allpass filters (same as
-    seriesAllpass.m). Each stage appends one delay line via seriesFDNinAllpass.
-    From Schroeder & Logan (1961). "Colorless" artificial reverberation.
-    IRE Trans. Audio AU-9, 209–214. See "Allpass Feedback Delay Networks", Schlecht.
-
-    Parameters
-    ----------
-    g : array-like, shape (N,)
-        Per-section gains (e.g. in (0, 1)).
-
-    Returns
-    -------
-    A : ndarray (N, N)
-        Feedback matrix.
-    B : ndarray (N, 1)
-        Input gain (column vector).
-    C : ndarray (1, N)
-        Output gain (row vector).
-    D : ndarray (1, 1)
-        Direct gain (scalar).
-    """
-
-    def series_fdn_in_allpass(
-        allpass_gain: float,
-        matrix: np.ndarray,
-        input_gain: np.ndarray,
-        output_gain: np.ndarray,
-        direct: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Series connection of an FDN with a feedforward/back allpass (seriesFDNinAllpass.m)."""
-        g2 = 1 - allpass_gain**2
-        s_matrix = np.block(
-            [
-                [matrix, np.zeros((matrix.shape[0], 1))],
-                [output_gain * g2, np.array([[allpass_gain]])],
-            ]
-        )
-        s_input_gain = np.vstack([input_gain, direct * g2])
-        s_output_gain = np.hstack([-allpass_gain * output_gain, np.array([[1.0]])])
-        s_direct = -allpass_gain * direct
-        return s_matrix, s_input_gain, s_output_gain, s_direct
-
-    g = np.asarray(g, dtype=float).ravel()
-    N = len(g)
-    if N == 0:
-        raise ValueError("g must have at least one element")
-    matrix = np.array([[g[0]]])
-    input_gain = np.array([[1 - g[0] ** 2]])
-    output_gain = np.array([[1.0]])
-    direct = np.array([[-g[0]]])
-    for it in range(1, N):
-        matrix, input_gain, output_gain, direct = series_fdn_in_allpass(
-            g[it], matrix, input_gain, output_gain, direct
-        )
-    return matrix, input_gain, output_gain, direct
-
-
-def nested_allpass(
-    g: ArrayLike,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Create Gardner's nested allpass FDN (SISO).
-
-    Iteratively nests a feedforward/back allpass around the previous FDN.
-    From Gardner, W. G. (1992). A real-time multichannel room simulator.
-    J. Acoust. Soc. Am. 92, 1–23. See "Allpass Feedback Delay Networks", Schlecht.
-
-    Parameters
-    ----------
-    g : array-like, shape (N,)
-        Feedforward/back gains for each nesting stage.
-
-    Returns
-    -------
-    A : ndarray (N, N)
-        Feedback matrix.
-    B : ndarray (N, 1)
-        Input gain (column vector).
-    C : ndarray (1, N)
-        Output gain (row vector).
-    D : ndarray (1, 1)
-        Direct gain (scalar).
-    """
-    g = np.asarray(g, dtype=float).ravel()
-    N = len(g)
-    if N == 0:
-        raise ValueError("g must have at least one element")
-    # Initial: single allpass stage
-    matrix = np.array([[g[0]]])
-    input_gain = np.array([[1 - g[0] ** 2]])
-    output_gain = np.array([[1.0]])
-    direct = np.array([[-g[0]]])
-    for it in range(1, N):
-        ga = g[it]
-        # [matrix, input_gain; output_gain*ga, direct*ga]
-        n_matrix = np.block(
-            [
-                [matrix, input_gain],
-                [output_gain * ga, direct * ga],
-            ]
-        )
-        n_input_gain = np.vstack([np.zeros_like(input_gain), np.array([[1 - ga**2]])])
-        n_output_gain = np.hstack([output_gain, direct])
-        n_direct = np.array([[-ga]])
-        matrix = n_matrix
-        input_gain = n_input_gain
-        output_gain = n_output_gain
-        direct = n_direct
-    return matrix, input_gain, output_gain, direct
 
 
 def is_paraunitary(

@@ -2,31 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, overload
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
+from ..auxiliary.utils import as_generator
 from ..build import FDNBuild
 from .fdn_matrix_gallery import IO_MATRIX_TYPES
+from .orthogonal import random_orthogonal
 from .sample_delay_lengths import DelayDistribution, sample_delay_lengths
 
 FDNDesign = dict[str, dict[str, Any]]
-
-
-def _build_rng(
-    rng: np.random.Generator | int | None, default_seed: int
-) -> np.random.Generator:
-    if isinstance(rng, np.random.Generator):
-        return rng
-    return np.random.default_rng(default_seed if rng is None else rng)
-
-
-def _random_orthogonal(N: int, rng: np.random.Generator) -> np.ndarray:
-    q, r = np.linalg.qr(rng.standard_normal((N, N)))
-    signs = np.sign(np.diag(r))
-    signs[signs == 0] = 1
-    return q * signs
 
 
 def _build_io_matrices(
@@ -109,60 +96,6 @@ def _build_post_output(
     )
 
 
-@overload
-def fdn_build_gallery(
-    N: int | None = None,
-    *,
-    fs: float = 48_000.0,
-    delays: np.ndarray | None = None,
-    delay_range: tuple[int, int] = (400, 1200),
-    delay_distribution: DelayDistribution = "uniform",
-    coprime: bool = False,
-    sort_delays: bool = False,
-    num_inputs: int = 1,
-    num_outputs: int = 1,
-    io_type: str = "normalised",
-    input_scale: float = 1.0,
-    output_scale: float = 1.0,
-    direct_gain: float | None = 0.0,
-    rt: float | None = 2.0,
-    rt_nyquist: float | None = None,
-    rt_crossover: float | None = None,
-    output_gain_db: ArrayLike | None = None,
-    output_gain_db_nyquist: ArrayLike | None = None,
-    output_crossover: float | None = None,
-    rng: np.random.Generator | int | None = None,
-    return_design: Literal[False] = False,
-) -> FDNBuild: ...
-
-
-@overload
-def fdn_build_gallery(
-    N: int | None = None,
-    *,
-    fs: float = 48_000.0,
-    delays: np.ndarray | None = None,
-    delay_range: tuple[int, int] = (400, 1200),
-    delay_distribution: DelayDistribution = "uniform",
-    coprime: bool = False,
-    sort_delays: bool = False,
-    num_inputs: int = 1,
-    num_outputs: int = 1,
-    io_type: str = "normalised",
-    input_scale: float = 1.0,
-    output_scale: float = 1.0,
-    direct_gain: float | None = 0.0,
-    rt: float | None = 2.0,
-    rt_nyquist: float | None = None,
-    rt_crossover: float | None = None,
-    output_gain_db: ArrayLike | None = None,
-    output_gain_db_nyquist: ArrayLike | None = None,
-    output_crossover: float | None = None,
-    rng: np.random.Generator | int | None = None,
-    return_design: Literal[True],
-) -> tuple[FDNBuild, FDNDesign]: ...
-
-
 def fdn_build_gallery(
     N: int | None = None,
     *,
@@ -205,7 +138,7 @@ def fdn_build_gallery(
     if rt_nyquist is not None and rt_nyquist <= 0:
         raise ValueError("rt_nyquist must be positive")
 
-    local_rng = _build_rng(rng, 0)
+    local_rng = as_generator(0 if rng is None else rng)
     delay_design: dict[str, Any] | None = None
     if delays is not None:
         if delay_distribution != "uniform" or coprime:
@@ -242,7 +175,7 @@ def fdn_build_gallery(
     if np.any(delays_array < 1):
         raise ValueError("all delays must be positive")
 
-    A = _random_orthogonal(N, local_rng)
+    A = random_orthogonal(N, local_rng)
     B, C, D, normalized_io_type = _build_io_matrices(
         N,
         num_inputs,

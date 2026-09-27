@@ -81,17 +81,16 @@ def _(mo):
 
 
 @app.cell
-def _(C, T, pyFDN):
-    # animate one plot_matrix heatmap per time step (slider + play built in).
-    _fig = pyFDN.animate(
+def _(C, T, mo, pyFDN):
+    # animate one plot_matrix heatmap per time step; to_jshtml() adds a player.
+    _anim = pyFDN.animate(
         lambda M: pyFDN.plot_matrix(M, zmin=-1, zmax=1),
         [C[:, :, k] for k in range(C.shape[2])],
         labels=T,
         label_prefix="t = ",
         label_format=".2f",
     )
-    _fig.update_layout(height=420, width=420)
-    _fig.show()
+    mo.Html(_anim.to_jshtml())
     return
 
 
@@ -120,7 +119,7 @@ def _(C, N, T, np, num_t, pyFDN):
     for i in idx:
         Af = C[:, :, i] @ np.diag(g**delays)
         ir = pyFDN.dss_to_impz(
-            ir_len, delays, Af, b, c, d
+            delays, Af, b, c, d, ir_len
         )  # feedback matrix with gain per delay
         ir = np.asarray(ir).squeeze().ravel()
         irs.append(ir)

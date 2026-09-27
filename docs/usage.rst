@@ -18,6 +18,16 @@ Or import specific functions::
 
     feedback = random_orthogonal(4)
 
+DSS and builds
+---------------
+
+A delay state-space (DSS) system is an FDN's feedback matrix ``A``, gains
+``B``/``C``/``D``, and per-line ``delays``. An :class:`~pyFDN.FDNBuild` wraps a
+DSS system with a sample rate and optional baked filter hooks, ready to render.
+Functions named ``dss_to_*`` take the raw DSS arrays; ``build_to_*`` functions
+take an :class:`~pyFDN.FDNBuild` and are thin wrappers around the matching
+``dss_to_*`` call. Use whichever form fits the arguments you already have.
+
 Packaged tutorial resources
 ---------------------------
 

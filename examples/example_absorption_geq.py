@@ -40,12 +40,12 @@ def _(mo, pyFDN):
 def _():
     import dataclasses
 
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return dataclasses, go, np, pyFDN
+    return dataclasses, np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -91,11 +91,9 @@ def _(mo):
 
 @app.cell
 def _(build, dataclasses, np, pyFDN):
-    # Target RT at the 10 GEQ bands (seconds)
+    # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
-    # decay_to_geq uses the 8 interior RT values (bands 1..8)
-    # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
     sos_absorption = pyFDN.decay_to_geq(target_rt, build.delays, build.fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
@@ -133,7 +131,7 @@ def _(mo):
     mo.md(r"""
     ## Compute impulse response
 
-    `build_to_impz` renders the build straight to a time-domain impulse response — one `process_fdn` block simulation. Signal path: input → B → [delays → SOS → A] → C → output.
+    `build_to_impz` renders the build straight to a time-domain impulse response through its assembled `td` graph. Signal path: input → B → [delays → SOS → A] → C → output.
     """)
     return
 
@@ -180,37 +178,21 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, pyFDN, rir, target_rt):
+def _(fs, plt, pyFDN, rir, target_rt):
     rt_est, f_centre = pyFDN.estimate_rt_bands(rir, fs)
 
-    # target_rt[1:9] covers the same 8 octave bands (63–8k Hz)
-    fig_rt = go.Figure()
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=target_rt[1:9],
-            mode="lines+markers",
-            name="Target RT",
-            line={"dash": "dash"},
-        )
-    )
-    fig_rt.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=rt_est,
-            mode="lines+markers",
-            name="Estimated RT",
-        )
-    )
-    fig_rt.update_layout(
-        title="RT: estimated vs target",
-        xaxis={"title": "Frequency (Hz)", "type": "log"},
-        yaxis={"title": "RT (s)"},
-        yaxis_range=[0, None],
-        template="plotly_white",
-        height=380,
-    )
-    fig_rt.show()
+    # target_rt[1:9] covers the same 8 octave bands (62.5 Hz – 8 kHz)
+    fig_rt, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(f_centre, target_rt[1:9], "o--", label="Target RT")
+    _ax.plot(f_centre, rt_est, "o-", label="Estimated RT")
+    _ax.set_xscale("log")
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("RT: estimated vs target")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("RT (s)")
+    _ax.legend()
+    fig_rt.tight_layout()
+    fig_rt
     return
 
 

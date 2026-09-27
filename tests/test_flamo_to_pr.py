@@ -35,7 +35,7 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
         B=b,
         C=c,
         D=d,
-        m=delays,
+        delays=delays,
         fs=1.0,
         nfft=1024,
         shell=False,
@@ -76,7 +76,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     """
     from scipy.signal import butter
 
-    from pyFDN.generate.random_orthogonal import random_orthogonal
+    from pyFDN.generate.orthogonal import random_orthogonal
     from pyFDN.translate.pr_to_impz import pr_to_impz
 
     fs = 48000.0
@@ -99,7 +99,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
         B=b,
         C=c,
         D=d,
-        m=delays,
+        delays=delays,
         fs=fs,
         nfft=nfft,
         shell=True,

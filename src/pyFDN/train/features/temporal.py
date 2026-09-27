@@ -1,0 +1,60 @@
+"""Temporal feature representations and decay metrics."""
+
+from __future__ import annotations
+
+import torch
+
+from pyFDN.auxiliary.acoustics import schroeder_integral
+
+
+def energy_decay_curve(
+    ir: torch.Tensor,
+    dim: int = 0,
+    eps: float = 1e-12,
+    db: bool = True,
+    normalize: bool = True,
+) -> torch.Tensor:
+    r"""Compute the Energy Decay Curve (EDC) via backward Schroeder integration.
+
+    Evaluates the energy decay profile across discrete time samples:
+
+    .. math::
+
+        \text{EDC}[n] = \sum_{m=n}^{L-1} h^2[m]
+
+    Parameters
+    ----------
+    ir : torch.Tensor
+        Discrete-time impulse response. The time axis must be the first
+        dimension (``dim=0``), such as ``(n_samples,)``, ``(n_samples, channels)``,
+        or ``(n_samples, n_out, n_in)``.
+    dim : int, default 0
+        Temporal dimension.
+    eps : float, default 1e-12
+        Numerical stability constant.
+    db : bool, default True
+        If ``True``, return the EDC in decibels.
+    normalize : bool, default True
+        If ``True``, normalize the EDC by its initial energy.
+
+    Returns
+    -------
+    torch.Tensor
+        Energy decay curve with the same shape as ``ir``.
+    """
+    if not isinstance(ir, torch.Tensor):
+        raise TypeError(f"Expected torch.Tensor, got {type(ir).__name__}")
+
+    if not ir.is_floating_point():
+        raise TypeError(f"Expected real floating-point tensor, got {ir.dtype}")
+
+    curve: torch.Tensor = schroeder_integral(ir.pow(2), axis=dim)
+
+    if normalize:
+        initial_energy = curve.select(dim, 0).unsqueeze(dim)
+        curve = curve / initial_energy.clamp_min(eps)
+
+    if db:
+        curve = 10.0 * torch.log10(curve.clamp_min(eps))
+
+    return curve

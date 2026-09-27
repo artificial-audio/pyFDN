@@ -102,3 +102,52 @@ def reduce_conjugate_pairs(
     # Mirror the poles to the upper half of the complex plane
     poles = np.real(poles) + 1j * np.abs(np.imag(poles))
     return poles[select], is_conjugate[select], non_paired
+
+
+def residue_at_pole(
+    P: np.ndarray, dP: np.ndarray, B: np.ndarray, C: np.ndarray
+) -> tuple[complex, np.ndarray, np.ndarray, np.ndarray]:
+    """Residue terms of ``C P(z)^{-1} B`` at a pole ``z_k`` where ``P`` is singular.
+
+    With ``r`` and ``l`` the right and left null vectors of ``P(z_k)``, the
+    residue is ``(C r)(l^H B) / (l^H P'(z_k) r)``. ``P`` is scaled before the
+    SVD (null vectors are scale-invariant) so poles far from the unit circle,
+    where ``z^m`` terms blow up, stay well conditioned.
+
+    Returns
+    -------
+    denominator : complex
+        ``l^H P'(z_k) r``; zero for a multiple pole.
+    numerator : ndarray ``(n_out, n_in)``
+        ``(C r)(l^H B)``.
+    right, left : ndarray ``(N,)``
+        The null vectors.
+    """
+    scale = np.max(np.abs(P))
+    if scale > 0 and np.isfinite(scale):
+        P = P / scale
+    u, _, vh = np.linalg.svd(P)
+    right = vh.conj().T[:, -1]
+    left = u[:, -1]
+    denominator = complex(np.vdot(left, dP @ right))
+    numerator = np.outer(C @ right, left.conj() @ B)
+    return denominator, numerator, right, left
+
+
+def residues_from_terms(
+    numerators: np.ndarray, denominators: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Residues ``numerator / denominator``, zero (with a warning) for multipoles.
+
+    Returns ``(residues, undriven)`` where ``undriven = 1 / denominator``.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        undriven = 1.0 / denominators
+        residues = numerators / denominators[:, None, None]
+    if np.any(~np.isfinite(undriven)):
+        warnings.warn(
+            "There are multipoles. The residues are set to zero.", stacklevel=3
+        )
+    undriven = np.where(np.isfinite(undriven), undriven, 0.0)
+    residues = np.where(np.isfinite(residues), residues, 0.0)
+    return residues, undriven

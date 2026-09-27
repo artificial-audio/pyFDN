@@ -40,6 +40,11 @@ Matrix Generators
    pyFDN.construct_velvet_feedback_matrix
    pyFDN.tiny_rotation_matrix
    pyFDN.rotation_matrix_from_angles
+   pyFDN.rotation_kernel
+   pyFDN.reflection_kernel
+   pyFDN.kronecker_angles
+   pyFDN.kronecker_matrix
+   pyFDN.kronecker_transform
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
@@ -130,7 +135,7 @@ Time-Domain Graph (``pyFDN.td``)
 --------------------------------
 
 Stateful block-processing operators, wired into a graph by the connectors and
-rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
+rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
 
 .. autosummary::
    :toctree: generated/
@@ -150,7 +155,9 @@ rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.SOSBank
    pyFDN.td.MatrixFIR
    pyFDN.td.MatrixConvolver
+   pyFDN.td.KroneckerMatrix
    pyFDN.td.TimeVaryingMatrix
+   pyFDN.td.TimeVaryingKroneckerMatrix
    pyFDN.td.RecursionState
    pyFDN.td.Series
    pyFDN.td.Parallel
@@ -175,7 +182,8 @@ Building a FLAMO Graph
 An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
 ``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
 ``post_output`` on the wet signal -- are the same three
-:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+:func:`pyFDN.process_dss` takes, in the same positions and under the same
+names.
 
 .. autosummary::
    :toctree: generated/
@@ -269,6 +277,11 @@ Build Files, Packaged Examples & References
 State-Space Translators
 -----------------------
 
+Convert a delay state-space (DSS) system -- ``A``, ``B``, ``C``, ``D``,
+``delays`` -- to another representation. Each ``build_to_*`` function is a
+thin wrapper over its ``dss_to_*`` counterpart that unpacks an
+:class:`~pyFDN.FDNBuild` instead.
+
 .. autosummary::
    :toctree: generated/
    :nosignatures:
@@ -276,6 +289,8 @@ State-Space Translators
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
    pyFDN.build_to_impz
+   pyFDN.dss_to_td
+   pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
@@ -295,6 +310,7 @@ FDN Processing
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.process_dss
    pyFDN.process_fdn
    pyFDN.flamo_process
 
@@ -331,10 +347,15 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.params
    pyFDN.ParamRef
    pyFDN.Loss
+   pyFDN.Match
    pyFDN.FlatMagnitude
    pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
+   pyFDN.SpectralFlatness
    pyFDN.MatchMagnitude
+   pyFDN.MatchPhase
+   pyFDN.MatchPhaseSpectrogram
+   pyFDN.MatchMelMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
@@ -344,6 +365,8 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.Sparsity
    pyFDN.L1
    pyFDN.L2
+   pyFDN.mimo_rir_eigenvalues_per_frequency
+   pyFDN.energy_decay_curve
 
 Plotting
 --------
@@ -356,16 +379,14 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
-   pyFDN.plot_FDN_build
+   pyFDN.plot_fdn_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
    pyFDN.plot_edc
    pyFDN.plot_spectrogram
    pyFDN.animate
-   pyFDN.downsampled_scatter
    pyFDN.downsample_minmax
-   pyFDN.downsample_plotly_trace
 
 Notebook Display
 ----------------

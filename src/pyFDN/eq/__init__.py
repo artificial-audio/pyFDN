@@ -19,6 +19,7 @@ from .design import (
 from .graphic_eq import (
     BANDWIDTH_R,
     CENTER_FREQUENCIES,
+    COMMAND_FREQUENCIES,
     SHELVING_CROSSOVER,
     gain_to_bounded_geq,
     gain_to_geq,
@@ -29,6 +30,7 @@ from .probe_sos import probe_sos
 __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
+    "COMMAND_FREQUENCIES",
     "EQDesign",
     "EQ_DESIGNS",
     "SHELVING_CROSSOVER",

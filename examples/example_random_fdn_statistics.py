@@ -43,12 +43,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -94,7 +94,7 @@ def _(
     pyFDN,
 ):
     ir_time = pyFDN.dss_to_impz(
-        ir_len, delays, feedback_matrix, input_gain, output_gain, direct
+        delays, feedback_matrix, input_gain, output_gain, direct, ir_len
     )[:, 0, 0]
 
     residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr(
@@ -121,31 +121,21 @@ def _(mo):
 
 
 @app.cell
-def _(difference, go, ir_modal, ir_time, np):
-    fig_ir = go.Figure()
+def _(difference, ir_modal, ir_time, np, plt):
+    fig_ir, _ax = plt.subplots(figsize=(8, 4.2))
     t_axis = np.arange(len(ir_time))
     for _sig, _name, _offset in [
         (difference, "Difference", 0.0),
         (ir_time, "Time domain", -2.0),
         (ir_modal, "Poles/residues", -4.0),
     ]:
-        fig_ir.add_trace(
-            go.Scatter(
-                x=t_axis,
-                y=_sig + _offset,
-                mode="lines",
-                name=_name,
-                line={"width": 0.8},
-            )
-        )
-    fig_ir.update_layout(
-        title="Impulse response: time-domain recursion vs modal synthesis",
-        xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Amplitude (offset for display)"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_ir.show()
+        _ax.plot(t_axis, _sig + _offset, linewidth=0.8, label=_name)
+    _ax.set_title("Impulse response: time-domain recursion vs modal synthesis")
+    _ax.set_xlabel("Time (samples)")
+    _ax.set_ylabel("Amplitude (offset for display)")
+    _ax.legend()
+    fig_ir.tight_layout()
+    fig_ir
     return
 
 
@@ -160,22 +150,18 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, poles):
+def _(np, plt, poles):
     angle_counts, angle_edges = np.histogram(
         np.angle(poles), bins=np.linspace(0, np.pi, 300), density=True
     )
-    fig_angles = go.Figure(
-        go.Bar(x=angle_edges[1:], y=angle_counts, marker={"line": {"width": 0}})
-    )
-    fig_angles.update_layout(
-        title="Distribution of pole angles",
-        xaxis={"title": "Pole angle (rad)", "range": [0, np.pi]},
-        yaxis={"title": "Likelihood of occurrence"},
-        template="plotly_white",
-        height=380,
-        bargap=0,
-    )
-    fig_angles.show()
+    fig_angles, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.stairs(angle_counts, angle_edges, fill=True)
+    _ax.set_xlim(0, np.pi)
+    _ax.set_title("Distribution of pole angles")
+    _ax.set_xlabel("Pole angle (rad)")
+    _ax.set_ylabel("Likelihood of occurrence")
+    fig_angles.tight_layout()
+    fig_angles
     return
 
 
@@ -190,42 +176,26 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, pyFDN, residues, undriven_residues):
+def _(np, plt, pyFDN, residues, undriven_residues):
     db_edges = np.arange(-120.0, 41.0, 1.0)
 
     def _pdf(values_db):
         counts, edges = np.histogram(values_db, bins=db_edges, density=True)
         return edges[1:], counts
 
-    fig_res = go.Figure()
+    fig_res, _ax = plt.subplots(figsize=(8, 4.2))
     _x, _y = _pdf(pyFDN.lin_to_db(np.abs(residues[:, 0, 0] / undriven_residues)))
-    fig_res.add_trace(
-        go.Scatter(
-            x=_x,
-            y=_y,
-            mode="lines",
-            name="Input-output drives",
-            line={"dash": "dot", "color": "black"},
-        )
-    )
+    _ax.plot(_x, _y, linestyle=":", color="black", label="Input-output drives")
     _x, _y = _pdf(pyFDN.lin_to_db(np.abs(residues).ravel()))
-    fig_res.add_trace(
-        go.Scatter(x=_x, y=_y, mode="lines", name="Total residues", line={"width": 2})
-    )
+    _ax.plot(_x, _y, linewidth=2, label="Total residues")
     _x, _y = _pdf(pyFDN.lin_to_db(np.abs(undriven_residues)))
-    fig_res.add_trace(
-        go.Scatter(
-            x=_x, y=_y, mode="lines", name="Undriven residues", line={"width": 2}
-        )
-    )
-    fig_res.update_layout(
-        title="Distribution of residue magnitudes",
-        xaxis={"title": "Residue magnitude (dB)"},
-        yaxis={"title": "Likelihood of occurrence"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_res.show()
+    _ax.plot(_x, _y, linewidth=2, label="Undriven residues")
+    _ax.set_title("Distribution of residue magnitudes")
+    _ax.set_xlabel("Residue magnitude (dB)")
+    _ax.set_ylabel("Likelihood of occurrence")
+    _ax.legend()
+    fig_res.tight_layout()
+    fig_res
     return
 
 

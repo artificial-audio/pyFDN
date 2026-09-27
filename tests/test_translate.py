@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.allpass import is_allpass
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_ss import dss_to_ss
 from pyFDN.translate.dss_to_tf import dss_to_tf
 
 
-def test_dss_to_ss_raises_for_inconsistent_delay_blocks():
-    delays = np.array([3, 4])
+def test_dss_to_ss_raises_for_delay_below_minimum():
+    delays = np.array([2, 4])
     A = np.eye(2)
     bb = np.ones((2, 1))
     cc = np.ones((1, 2))
@@ -19,6 +19,32 @@ def test_dss_to_ss_raises_for_inconsistent_delay_blocks():
 
     with pytest.raises(ValueError):
         dss_to_ss(delays, A, bb, cc, dd)
+
+
+def test_dss_to_ss_supports_mixed_delays_including_minimum():
+    # Regression test for #240: delays that mix the documented minimum of
+    # 3 samples with larger delays must not raise a shape-mismatch error.
+    delays = np.array([3, 4])
+    A = np.eye(2)
+    bb = np.ones((2, 1))
+    cc = np.ones((1, 2))
+    dd = np.eye(1)
+
+    AA, _, _, _ = dss_to_ss(delays, A, bb, cc, dd)
+
+    total = int(np.sum(delays))
+    assert AA.shape == (total, total)
+
+
+def test_dss_to_ss_handles_minimum_delay_of_three():
+    # Regression test for #240: delays=[3] previously raised a dimension
+    # mismatch instead of returning a (3, 3) state-space matrix.
+    AA, bb, cc, dd = dss_to_ss(delays=np.array([3]), A=np.array([[0.5]]))
+
+    assert AA.shape == (3, 3)
+    assert bb.shape == (3, 1)
+    assert cc.shape == (1, 3)
+    assert dd.shape == (1, 1)
 
 
 def test_dss_to_impz_produces_delayed_impulse():
@@ -29,7 +55,7 @@ def test_dss_to_impz_produces_delayed_impulse():
     C = np.array([[1.0]])
     D = np.array([[0.0]])
 
-    impulse = dss_to_impz(ir_len, delays, A, B, C, D)
+    impulse = dss_to_impz(delays, A, B, C, D, ir_len)
 
     assert impulse.shape == (ir_len, 1, 1)
     ir_vector = impulse.squeeze()
@@ -52,7 +78,7 @@ def test_is_allpass_schroeder_siso():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(A, B, C, D, delays)
+    result, den, num = is_allpass(delays, A, B, C, D)
     assert result
 
 
@@ -62,7 +88,7 @@ def test_is_allpass_rejects_non_allpass():
     B = np.array([[1.0]])
     C = np.array([[1.0]])
     D = np.array([[0.5]])
-    result, _, _ = is_allpass(A, B, C, D, delays)
+    result, _, _ = is_allpass(delays, A, B, C, D)
     assert not result
 
 
@@ -77,7 +103,7 @@ def test_is_allpass_unitary_feedback():
     # Not checking allpass condition here (D=0 makes D singular),
     # just that the function runs without error via np.linalg.solve
     with pytest.raises(np.linalg.LinAlgError):
-        is_allpass(A, B, C, D, delays)
+        is_allpass(delays, A, B, C, D)
 
 
 def test_is_allpass_near_singular_D_does_not_use_inv():
@@ -88,7 +114,7 @@ def test_is_allpass_near_singular_D_does_not_use_inv():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(A, B, C, D, delays)
+    result, den, num = is_allpass(delays, A, B, C, D)
     assert result
     assert len(den) > 0
     assert len(num) > 0
@@ -110,7 +136,7 @@ def test_dss_to_tf_scalar_A_tf_matches_impz():
     D = np.zeros((1, 1))
 
     tfB, tfA = dss_to_tf(delays, A, B, C, D)
-    ir_tf = dss_to_impz(ir_len, delays, A, B, C, D)[:, 0, 0]
+    ir_tf = dss_to_impz(delays, A, B, C, D, ir_len)[:, 0, 0]
 
     # Evaluate TF at z = e^{j omega} and compare to DFT of IR
     N = 512

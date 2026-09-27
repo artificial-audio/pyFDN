@@ -13,15 +13,10 @@ from typing import Literal, get_args
 
 import numpy as np
 
+from pyFDN.auxiliary.utils import as_generator
+
 DelayDistribution = Literal["uniform", "geometric", "lognormal"]
 DELAY_DISTRIBUTIONS = get_args(DelayDistribution)
-
-
-def _as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
-    """Coerce a generator, integer seed, or ``None`` into a Generator."""
-    if isinstance(rng, np.random.Generator):
-        return rng
-    return np.random.default_rng(rng)
 
 
 def _sample(
@@ -138,7 +133,7 @@ def sample_delay_lengths(
     if low < 1 or high <= low:
         raise ValueError("delay_range must satisfy 1 <= low < high")
 
-    generator = _as_generator(rng)
+    generator = as_generator(rng)
     targets = _sample(N, low, high, distribution, generator)
 
     if coprime:
