@@ -1,6 +1,7 @@
 # `pyfdn-system`: one JSON document for every pyFDN backend
 
-**Status:** proposal; PR 1 (schema, `pyFDN.system`) sketched
+**Status:** proposal; PR 1 (schema, `pyFDN.system`) sketched; provenance
+metadata and the `pyfdn-results` plan (§9) added
 **Date:** 2026-09-07, updated 2026-09-27 with review decisions
 **Branch:** `docs/system-json-format`
 **Supersedes:** nothing. `pyfdn-fdn-build` v2 stays valid and unchanged.
@@ -88,6 +89,7 @@ Relevant prior art:
   arbitrary DSP graphs.
 - Model weights for training checkpoints. A document describes a *system*;
   optimiser state belongs in a torch checkpoint.
+- Rendered results go in a separate `pyfdn-results` document (§9).
 - A binary format. Human-readable and diffable is a feature; a network with a
   100 000-tap FIR matrix is a legitimate reason to reach for `.npz` instead.
 
@@ -129,6 +131,17 @@ lifts and **refuses** a graph that is not vanilla, in the same spirit as
   rate.
 - `metadata` is an open object. As in `FDNPreset`, `tags` is a list of
   strings when present so catalogues can filter consistently.
+- Two `metadata` fields record provenance, and `save_fdn_system` fills them
+  in when they are missing:
+
+  | field | example | meaning |
+  |---|---|---|
+  | `created` | `"2026-09-27T14:03:00Z"` | when the document was first saved; ISO 8601, UTC |
+  | `pyfdn_version` | `"0.4.2"` | the pyFDN version that wrote it |
+
+  Existing values are kept on re-save, so a document remembers when, and by
+  which pyFDN, it was first made. `pyfdn_version` also credits the library in
+  every file it writes.
 - Exactly one of `build` / `graph`.
 
 ### 4.3 One `type` namespace, owned by pyFDN
@@ -381,6 +394,40 @@ as a deprecated shim.
    a system document losslessly; `build_to_graph(build, design=preset.design)`
    moves those records onto the named nodes. Whether `FDNPreset` should become a
    thin alias of `FDNSystemDoc` is for PR 1 review.
+6. **Provenance metadata — added.** `metadata.created` and
+   `metadata.pyfdn_version` (§4.2), stamped by `save_fdn_system`.
+
+## 9. A separate `pyfdn-results` document
+ 
+Not part of PR 1–4. Recorded here for later steps.
+
+It is often useful to share the result of the network and what it produces on its own: to compare a trained network against a target, share with a collaborator, presenting final or "in-progress" network, or with a teaching-oriented use, to show a required results.
+That is a suggestion for the second document format:
+
+```json
+{
+  "format": "pyfdn-results",
+  "version": 1,
+  "metadata": {"name": "...", "created": "...", "pyfdn_version": "..."},
+  "sample_rate": 48000,
+  "render": {"block_size": 64},
+  "results": {
+    "impulse_response": [[...]],
+    "edc": [[...]],
+    "rt_bands": {"center_hz": [...], "seconds": [...]},
+    "echo_density": {"curve": [...], "mixing_time_ms": 42.0}
+  }
+}
+```
+
+- **Data file:** A viewer plots the data, and two results
+  files can be compared numerically.
+- **Sharing is the access control.** Handing out only a results file can also keep the network private if needed;
+- **Saved together by default.** When a network has results, saving writes
+  both files side by side (e.g. `name.json` and `name.results.json`). Saving
+  only one of them is an explicit choice.
+
+Moreover, a simple GUI for saving, loading and viewing (graphs, plots) might be considered in a later step.
 
 ---
 

@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from os import PathLike
 from pathlib import Path
 from typing import Any, Literal
@@ -693,9 +694,20 @@ def system_from_dict(data: Mapping[str, Any]) -> FDNSystemDoc:
 
 
 def save_fdn_system(path: str | PathLike[str], doc: FDNSystemDoc) -> None:
-    """Write a system document as indented, human-readable JSON."""
+    """Write a system document as indented, human-readable JSON.
+
+    ``metadata.created`` and ``metadata.pyfdn_version`` are added unless the
+    document already carries them.
+    """
+    from . import __version__
+
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    metadata = {"created": created, "pyfdn_version": __version__, **doc.metadata}
     Path(path).write_text(
-        json.dumps(system_to_dict(doc), indent=2, allow_nan=False) + "\n",
+        json.dumps(
+            system_to_dict(replace(doc, metadata=metadata)), indent=2, allow_nan=False
+        )
+        + "\n",
         encoding="utf-8",
     )
 

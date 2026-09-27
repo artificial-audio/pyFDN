@@ -9,7 +9,9 @@ Unreleased
   ``pyfdn-system`` v1 JSON document, which holds either an unchanged
   ``pyfdn-fdn-build`` or a node ``graph`` for systems a build cannot express.
   Includes validation with path-named errors, ``build_to_graph`` /
-  ``graph_to_build`` and ``save_fdn_system`` / ``load_fdn_system``. See
+  ``graph_to_build`` and ``save_fdn_system`` / ``load_fdn_system``.
+  ``save_fdn_system`` stamps ``metadata.created`` and
+  ``metadata.pyfdn_version`` when they are missing. See
   ``docs/design/system-format.md``.
 * ``import pyFDN`` no longer loads torch or flamo, which makes it about three
   times faster; the training API and ``flamo_to_pr`` load on first use. Every

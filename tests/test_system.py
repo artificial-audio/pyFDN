@@ -194,6 +194,26 @@ def test_document_validation(mutate, match):
         system_from_dict(data)
 
 
+def test_save_stamps_created_and_pyfdn_version(tmp_path):
+    build = _build(hooks=False)
+    doc = FDNSystemDoc(sample_rate=build.fs, build=build, metadata={"name": "N4"})
+    path = tmp_path / "n4.json"
+    save_fdn_system(path, doc)
+
+    metadata = load_fdn_system(path).metadata
+    assert metadata["name"] == "N4"
+    assert metadata["pyfdn_version"] == pyFDN.__version__
+    assert metadata["created"].endswith("Z")
+    assert doc.metadata == {"name": "N4"}
+
+    # Re-saving keeps when, and by which pyFDN, the document was first made.
+    stamped = {"created": "2026-09-27T14:03:00Z", "pyfdn_version": "0.4.1"}
+    save_fdn_system(
+        path, FDNSystemDoc(sample_rate=build.fs, build=build, metadata=stamped)
+    )
+    assert load_fdn_system(path).metadata == stamped
+
+
 def test_non_finite_params_are_refused():
     node = {"type": "gain", "params": {"matrix": [[float("nan")]]}}
     with pytest.raises(ValueError, match="finite"):
