@@ -5,6 +5,12 @@ History
 Unreleased
 ----------
 
+* New ``pyFDN.system`` module (draft, not yet exported from ``pyFDN``): the
+  ``pyfdn-system`` v1 JSON document, which holds either an unchanged
+  ``pyfdn-fdn-build`` or a node ``graph`` for systems a build cannot express.
+  Includes validation with path-named errors, ``build_to_graph`` /
+  ``graph_to_build`` and ``save_fdn_system`` / ``load_fdn_system``. See
+  ``docs/design/system-format.md``.
 * ``import pyFDN`` no longer loads torch or flamo, which makes it about three
   times faster; the training API and ``flamo_to_pr`` load on first use. Every
   public name is still exported from ``pyFDN``.

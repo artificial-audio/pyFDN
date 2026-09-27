@@ -1,7 +1,7 @@
 # `pyfdn-system`: one JSON document for every pyFDN backend
 
-**Status:** proposal, not implemented
-**Date:** 2026-09-07
+**Status:** proposal; PR 1 (schema, `pyFDN.system`) sketched
+**Date:** 2026-09-07, updated 2026-09-27 with review decisions
 **Branch:** `docs/system-json-format`
 **Supersedes:** nothing. `pyfdn-fdn-build` v2 stays valid and unchanged.
 
@@ -138,8 +138,11 @@ carry children; leaf types carry `params`.
 
 **Containers** — `series`, `parallel`, `recursion`.
 
-**Leaves** — `gain`, `matrix`, `matrix_fir`, `delay`, `sos`, `identity`,
-`time_varying_matrix`, `pitch_shift`, `dc_blocker`, … as the registry grows.
+**Leaves** — `identity`, `gain`, `matrix`, `matrix_fir`, `delay`, `sos`,
+`kronecker_matrix`, `time_varying_kronecker_matrix`, `time_varying_matrix`,
+`pitch_shift`, `dc_blocker`, … as the registry grows. A leaf's `params` are the
+constructor arguments of the matching `td` operator, minus `fs` (which is the
+document's `sample_rate`).
 
 This is a departure from adac's two-field split (`type` for structure,
 `module_type` for leaves). One field is enough: a node has children or it has
@@ -149,7 +152,7 @@ The names are pyFDN's, not FLAMO's. `sos`, not `parallelSOSFilter`.
 `delay`, not `parallelDelay`. A FLAMO class rename must not be able to
 invalidate documents on disk.
 
-The registry is **open**, not an enum: `td.TimeVaryingMatrix` has no FLAMO
+The registry is **open** (`pyFDN.system.register_node_type`), not an enum: `td.TimeVaryingMatrix` has no FLAMO
 *or* FAUST equivalent, and `td.GranularPitchShift` has neither either. Each
 backend owns its own map from `type` to its construction, and a backend that
 cannot build a type fails loudly, naming the type — never silently drops the
@@ -195,6 +198,17 @@ One canonical form per quantity, chosen so that no backend's convention wins:
 
 All arrays are finite. `allow_nan=False` on write, as `save_fdn_build`
 already does.
+
+**Cascaded matrices stay cascaded (decided in review).** A paraunitary matrix
+built as a cascade of orthogonal stages and per-channel shifts is stored as that
+cascade — a `series` of `matrix` and `delay` nodes — not as its expanded
+`matrix_fir`. The expansion is always recoverable from the cascade, the reverse
+is not, and a real-time or FAUST implementation wants the cascade. `design` on
+the `series` node records how it was generated
+(`{"type": "cascaded_paraunitary", "stages": 3, "seed": 1}`). `matrix_fir`
+remains for FIR matrices that have no cascade, e.g. trained ones. To allow
+this, `delay` accepts zero-length lines; only `graph_to_build` insists on
+positive delays, because `FDNBuild` does.
 
 ### 4.6 `render` is not the system
 
@@ -243,8 +257,12 @@ parallel(sum_output=true)
 │   │   └── feedback: series[ mixing_matrix, post_matrix ]  (or a bare matrix)
 │   ├── output_gain
 │   └── post_output
-└── brB: direct_gain
+└── direct_gain
 ```
+
+The feedback matrix is always named `mixing_matrix` in a document, including
+when `post_matrix` is absent (where `assemble_fdn_core` leaves it unnamed on
+`fB`). The direct path is always present, since `FDNBuild.D` always is.
 
 A hook given several modules keeps the existing `post_delay_0`,
 `post_delay_1`, … convention from `hook_module`.
@@ -337,24 +355,32 @@ still trains.
 speaks them, so this is mostly a rename plus a reader. `flamo_to_json` stays
 as a deprecated shim.
 
-## 8. Open questions
+## 8. Decisions from review, and what is still open
 
-1. **Does `graph` need explicit channel counts per node?** adac stores
-   `input_channels` / `output_channels` on every leaf. They are derivable from
-   the parameter shapes for every type in the table above, and a stored value
-   that disagrees with the shape is a new failure mode. Proposal: derive, do
-   not store — but check this against `parallelFilter` and the nested-hook
-   cases before committing.
-2. **Large arrays.** A 100 000-tap `matrix_fir` in JSON is unpleasant. Option:
-   allow a `params` value to be `{"$ref": "sidecar.npz#A"}`. Worth designing
-   now so the escape hatch is not bolted on later, but not worth implementing
-   until something needs it.
-3. **`FDNSystem` name collision.** `pyFDN.FDNSystem` already exists
-   (`generate/fdn_build_gallery.py`). Pick a different name for the document
-   type, or rename — decide in PR 1 review.
-4. **Should `render` be per-backend?** `{"flamo": {...}, "td": {...}}` is more
-   honest than one flat block with fields that only some backends read. Flat
-   is simpler and the field names do not currently collide. Revisit if they do.
+1. **Channel counts — stored, and checked.** Every node is written with
+   `"channels": [in, out]`. They are still derived from the parameter shapes
+   (so they cannot be the source of truth), and a stored value that disagrees
+   is a load error naming the node's path, e.g.
+   `/root/brA/feedback_loop: stored channels [6, 6] disagree ...`. This gives
+   the validation and diagnosability asked for in review without a second way
+   to define a system. The system-level `[K, N, J]` triplet is not stored: `N`
+   is not a property of every graph (an SDN or a RES has no single loop size);
+   `K` and `J` are the root node's `channels`.
+2. **Large arrays.** Still open. The `{"$ref": "sidecar.npz#A"}` hook is not
+   implemented; cascaded storage (§4.5) removes the most likely reason to need
+   it.
+3. **`FDNSystem` name collision — rename agreed.** The sketch names the
+   document class `FDNSystemDoc`, which does not collide. Renaming the gallery's
+   `(A, B, C, D)` named tuple (e.g. to `DSSMatrices`, keeping `FDNSystem` as an
+   alias for one release) is left to its own small PR so it can be reviewed as
+   the breaking change it is.
+4. **`render` — flat.** `nfft`, `alias_decay_db`, `block_size`; any other field
+   is a load error. Revisit if a name collides.
+5. **`FDNPreset`.** Unchanged in the sketch. A `build` document takes an
+   optional top-level `design` in the preset vocabulary, so a preset converts to
+   a system document losslessly; `build_to_graph(build, design=preset.design)`
+   moves those records onto the named nodes. Whether `FDNPreset` should become a
+   thin alias of `FDNSystemDoc` is for PR 1 review.
 
 ---
 
@@ -421,7 +447,7 @@ i.e. a system that has no representation on disk today.
                 {
                   "type": "time_varying_matrix",
                   "name": "post_matrix",
-                  "params": {"matrix": [["..."]], "rate_hz": 1.2, "depth": 0.15}
+                  "params": {"N": 6, "cycles_per_second": 1.2, "amplitude": 0.15, "spread": 0.3}
                 }
               ]
             }
@@ -435,7 +461,7 @@ i.e. a system that has no representation on disk today.
       },
       {
         "type": "gain",
-        "name": "brB",
+        "name": "direct_gain",
         "params": {"matrix": [[0.0]]}
       }
     ]
