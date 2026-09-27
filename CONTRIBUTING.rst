@@ -144,13 +144,18 @@ documentation sources, and tests:
   the public API, while ``process.py``, ``build.py``, and ``preset.py``
   provide the main build-processing and persistence entry points.
 * ``src/pyFDN/generate/`` contains feedback-matrix and FDN construction
-  algorithms, including the allpass and scattering-delay-network builders.
+  algorithms: ``orthogonal.py``, ``paraunitary.py`` and ``kronecker_matrix.py``
+  for feedback matrices, ``structures.py`` for classic reverberator structures,
+  the galleries, and the allpass and scattering-delay-network builders.
 * ``src/pyFDN/td/`` contains stateful block-processing operators and the
   connectors (``Series``, ``Parallel``, ``Recursion``) that wire them into a
-  time-domain graph. ``pyFDN.process_dss`` uses ``MatrixFIR`` for polynomial
-  feedback matrices; ``SOSBank`` implements per-delay-line filter cascades used
-  for frequency-dependent absorption. ``build_to_td`` assembles a complete
-  ``FDNBuild`` from these operators.
+  time-domain graph. ``dss_to_td`` / ``build_to_td`` assemble an FDN from these
+  operators (``MatrixFIR`` for polynomial feedback matrices, ``SOSBank`` for
+  per-delay-line filter cascades); ``process_dss`` and ``process_fdn`` render
+  through that graph.
+* ``import pyFDN`` must not import torch or flamo (``tests/test_import.py``):
+  import them inside the functions that need them, or add the module to the
+  lazily loaded names at the end of ``src/pyFDN/__init__.py``.
 * ``src/pyFDN/eq/`` contains every EQ and absorption-filter design, while
   ``src/pyFDN/translate/`` converts between delay state-space, transfer
   function, pole-residue, impulse-response, and FLAMO representations.

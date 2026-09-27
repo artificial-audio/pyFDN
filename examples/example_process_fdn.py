@@ -44,13 +44,13 @@ def _(mo):
 def _():
     import warnings
 
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
     from pyFDN import td
 
-    return go, np, pyFDN, td, warnings
+    return np, plt, pyFDN, td, warnings
 
 
 @app.cell
@@ -146,7 +146,7 @@ def _(N, np, pyFDN):
 
 @app.cell
 def _(A, pyFDN):
-    pyFDN.plot_matrix(A, title="Feedback matrix A").show()
+    pyFDN.plot_matrix(A, title="Feedback matrix A")
     return
 
 
@@ -178,7 +178,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
         ("orthogonal", A),
         ("permutation", pyFDN.fdn_matrix_gallery(N, "permutation")),
     ]:
-        _ir = pyFDN.dss_to_impz(2 * fs, delays, _matrix, _B, _C, _D).squeeze()
+        _ir = pyFDN.dss_to_impz(delays, _matrix, _B, _C, _D, 2 * fs).squeeze()
         with warnings.catch_warnings():
             # "never mixes" is a result here, not a problem: echo_density warns
             # when the density does not reach the threshold, which is exactly
@@ -242,7 +242,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, delays, fs, ir_len_seconds, mo, pyFDN):
     ir_lossless = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A, B, C, D
+        delays, A, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     mo.vstack(
@@ -281,7 +281,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     g = pyFDN.rt_to_gain_per_sample(rt, fs)
     A_lossy = np.diag(g**delays) @ A
     ir_broadband = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A_lossy, B, C, D
+        delays, A_lossy, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     print(f"gain per sample: {g:.8f}")
@@ -358,7 +358,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 def _(build, pyFDN):
     # Every parameter of the finished FDN in one figure: delays, A, B, C, D and
     # the absorption response of each line.
-    pyFDN.plot_FDN_build(build, title="The complete FDN")
+    pyFDN.plot_fdn_build(build, title="The complete FDN")
 
     # Try this: pyFDN.plot_db_per_sample(absorption, delays, fs=fs, nfft=2**14)
     #   -> the attenuation each line applies per sample, which is the quantity
@@ -380,33 +380,23 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, ir, np, pyFDN, target_rt):
+def _(fs, ir, np, plt, pyFDN, target_rt):
     rt_measured, f_centre = pyFDN.estimate_rt_bands(ir, fs)
-
-    _fig = go.Figure()
-    _fig.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=target_rt[1:9],  # the same eight octave bands
-            mode="lines+markers",
-            name="target",
-            line={"dash": "dash"},
-        )
-    )
-    _fig.add_trace(
-        go.Scatter(x=f_centre, y=rt_measured, mode="lines+markers", name="measured")
-    )
-    _fig.update_layout(
-        title="T60: asked for vs. delivered",
-        xaxis={"title": "Frequency [Hz]", "type": "log"},
-        yaxis={"title": "T60 [s]", "range": [0, None]},
-        template="plotly_white",
-        height=380,
-    )
-    _fig.show()
-
     print(f"target   [s]: {np.round(target_rt[1:9], 2)}")
     print(f"measured [s]: {np.round(rt_measured, 2)}")
+
+    _fig, _ax = plt.subplots(figsize=(8, 3.8))
+    # the same eight octave bands
+    _ax.plot(f_centre, target_rt[1:9], "o--", label="target")
+    _ax.plot(f_centre, rt_measured, "o-", label="measured")
+    _ax.set_xscale("log")
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("T60: asked for vs. delivered")
+    _ax.set_xlabel("Frequency [Hz]")
+    _ax.set_ylabel("T60 [s]")
+    _ax.legend()
+    _fig.tight_layout()
+    _fig
     return
 
 

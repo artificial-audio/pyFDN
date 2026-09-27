@@ -5,9 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import plotly.io as pio
 import pytest
-from pytest import MonkeyPatch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = PROJECT_ROOT / "examples"
@@ -31,17 +29,14 @@ def _optional_requirements(script: Path) -> list[str]:
 
 
 @pytest.fixture(autouse=True)  # type: ignore[misc]
-def _headless_rendering(monkeypatch: MonkeyPatch) -> Iterator[None]:
+def _headless_rendering() -> Iterator[None]:
     """Neutralise display side-effects so examples run headless.
 
     Only *rendering* is suppressed — the underlying objects are still built, so
-    the example logic is exercised:
-      - matplotlib draws to the Agg buffer (no window);
-      - plotly's ``fig.show()`` becomes a no-op, so plotly never reaches the
-        notebook mime stack (which would otherwise need IPython + nbformat).
+    the example logic is exercised: matplotlib draws to the Agg buffer (no
+    window).
     """
     plt.switch_backend("Agg")
-    monkeypatch.setattr(pio, "show", lambda *args, **kwargs: None)
     yield
     plt.close("all")
 

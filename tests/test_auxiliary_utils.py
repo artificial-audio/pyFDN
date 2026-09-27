@@ -1,7 +1,5 @@
 """Tests for auxiliary.utils module."""
 
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
 
@@ -175,9 +173,9 @@ def test_is_bounding_curve_lower():
 
 def test_pole_boundaries_basic():
     delays = np.array([1, 2])
-    b = np.ones((2, 1, 4))
-    a = np.ones((2, 1, 4))
-    absorption = SimpleNamespace(b=b, a=a)
+    absorption = np.tile(
+        np.array([0.5, 0.2, 0.0, 1.0, -0.3, 0.0])[None, :, None], (2, 1, 2)
+    )
     feedback_matrix = np.ones((2, 2, 4))
     fs = 48000
     MinCurve, MaxCurve, f = pole_boundaries(

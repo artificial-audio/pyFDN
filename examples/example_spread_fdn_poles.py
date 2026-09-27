@@ -40,12 +40,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -140,19 +140,17 @@ def _(mo):
 
 
 @app.cell
-def _(edcs, fs, go, ir_len, np, types):
-    fig_edc = go.Figure()
+def _(edcs, fs, ir_len, np, plt, types):
+    fig_edc, _ax = plt.subplots(figsize=(8, 4.2))
     t_axis = np.arange(ir_len) / fs
     for _type in types:
-        fig_edc.add_trace(go.Scatter(x=t_axis, y=edcs[_type], mode="lines", name=_type))
-    fig_edc.update_layout(
-        title="Energy decay curve",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Energy Decay Curve (dB)"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_edc.show()
+        _ax.plot(t_axis, edcs[_type], label=_type)
+    _ax.set_title("Energy decay curve")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Energy Decay Curve (dB)")
+    _ax.legend()
+    fig_edc.tight_layout()
+    fig_edc
     return
 
 
@@ -167,28 +165,23 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, np, poles, pyFDN, rt, types):
-    fig_poles = go.Figure()
+def _(fs, np, plt, poles, pyFDN, rt, types):
+    fig_poles, _ax = plt.subplots(figsize=(8, 4.2))
     for _type in types:
         _pol = poles[_type]
-        fig_poles.add_trace(
-            go.Scatter(
-                x=np.angle(_pol),
-                y=pyFDN.slope_to_rt(pyFDN.lin_to_db(np.abs(_pol)), fs),
-                mode="markers",
-                marker={"size": 4},
-                name=_type,
-            )
+        _ax.scatter(
+            np.angle(_pol),
+            pyFDN.slope_to_rt(pyFDN.lin_to_db(np.abs(_pol)), fs),
+            s=8,
+            label=_type,
         )
-    fig_poles.update_layout(
-        title="Modal reverberation times",
-        xaxis={"title": "Pole angle (rad)"},
-        yaxis={"title": "Pole T60 (s)"},
-        template="plotly_white",
-        yaxis_range=[0, rt * 1.5],
-        height=420,
-    )
-    fig_poles.show()
+    _ax.set_ylim(0, rt * 1.5)
+    _ax.set_title("Modal reverberation times")
+    _ax.set_xlabel("Pole angle (rad)")
+    _ax.set_ylabel("Pole T60 (s)")
+    _ax.legend()
+    fig_poles.tight_layout()
+    fig_poles
     return
 
 

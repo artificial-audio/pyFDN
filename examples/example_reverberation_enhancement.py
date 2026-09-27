@@ -37,13 +37,13 @@ def _(mo):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
     from pyFDN import td
 
-    return go, np, pyFDN, td
+    return np, plt, pyFDN, td
 
 
 @app.cell(hide_code=True)
@@ -57,7 +57,7 @@ def _(mo):
 
 
 @app.cell
-def _(go, np):
+def _(mo, np, plt):
     import pyroomacoustics as pra
 
     fs = 48_000
@@ -101,60 +101,46 @@ def _(go, np):
     room.compute_rir()
 
     # Top-view layout.
-    fig_room = go.Figure()
-    fig_room.add_shape(
-        type="rect",
-        x0=0,
-        y0=0,
-        x1=room_dim[0],
-        y1=room_dim[1],
-        line={"color": "#444"},
-        fillcolor="rgba(0,0,0,0)",
+    fig_room, _ax = plt.subplots(figsize=(7, 5.4))
+    _ax.add_patch(
+        plt.Rectangle((0, 0), room_dim[0], room_dim[1], fill=False, edgecolor="#444")
     )
-    fig_room.add_trace(
-        go.Scatter(
-            x=mics[:, 0],
-            y=mics[:, 1],
-            mode="markers",
-            name="microphones",
-            marker={"size": 11, "symbol": "circle", "color": "#4f8a5e"},
-        )
+    _ax.scatter(
+        mics[:, 0], mics[:, 1], s=80, marker="o", color="#4f8a5e", label="microphones"
     )
-    fig_room.add_trace(
-        go.Scatter(
-            x=speakers[:, 0],
-            y=speakers[:, 1],
-            mode="markers",
-            name="loudspeakers",
-            marker={"size": 13, "symbol": "square", "color": "#3d6d9e"},
-        )
+    _ax.scatter(
+        speakers[:, 0],
+        speakers[:, 1],
+        s=100,
+        marker="s",
+        color="#3d6d9e",
+        label="loudspeakers",
     )
-    fig_room.add_trace(
-        go.Scatter(
-            x=[performer[0]],
-            y=[performer[1]],
-            mode="markers",
-            name="performer",
-            marker={"size": 15, "symbol": "star", "color": "#c0392b"},
-        )
+    _ax.scatter(
+        [performer[0]],
+        [performer[1]],
+        s=200,
+        marker="*",
+        color="#c0392b",
+        label="performer",
     )
-    fig_room.add_trace(
-        go.Scatter(
-            x=[listener[0]],
-            y=[listener[1]],
-            mode="markers",
-            name="listener",
-            marker={"size": 15, "symbol": "diamond", "color": "#7b5ea7"},
-        )
+    _ax.scatter(
+        [listener[0]],
+        [listener[1]],
+        s=120,
+        marker="D",
+        color="#7b5ea7",
+        label="listener",
     )
-    fig_room.update_layout(
-        title="RES layout (top view): stage at front, audience behind",
-        xaxis={"title": "x (m)", "range": [-1, 25]},
-        yaxis={"title": "y (m)", "range": [-1, 19], "scaleanchor": "x"},
-        template="plotly_white",
-        height=460,
-    )
-    fig_room.show()
+    _ax.set_xlim(-1, 25)
+    _ax.set_ylim(-1, 19)
+    _ax.set_aspect("equal")
+    _ax.set_title("RES layout (top view): stage at front, audience behind")
+    _ax.set_xlabel("x (m)")
+    _ax.set_ylabel("y (m)")
+    _ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0))
+    fig_room.tight_layout()
+    mo.output.replace(fig_room)
     return fs, room
 
 
@@ -342,7 +328,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, np, render):
+def _(fs, np, plt, render):
     def edc_db(x):
         energy = np.cumsum(x[::-1] ** 2)[::-1]
         return 10 * np.log10(energy / energy[0] + 1e-20)
@@ -360,26 +346,16 @@ def _(fs, go, np, render):
     assert enhancement_ratio > 5.0
 
     t = np.arange(len(dry)) / fs
-    fig_edc = go.Figure()
-    fig_edc.add_trace(
-        go.Scatter(x=t, y=edc_db(dry), name="dry room", line={"color": "#888"})
-    )
-    fig_edc.add_trace(
-        go.Scatter(
-            x=t,
-            y=edc_db(enhanced),
-            name=f"RES on (g={g_operating})",
-            line={"color": "#7b5ea7"},
-        )
-    )
-    fig_edc.update_layout(
-        title="Energy decay at the listener: RES extends the reverberation",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Energy decay (dB)", "range": [-60, 2]},
-        template="plotly_white",
-        height=380,
-    )
-    fig_edc.show()
+    fig_edc, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(t, edc_db(dry), color="#888", label="dry room")
+    _ax.plot(t, edc_db(enhanced), color="#7b5ea7", label=f"RES on (g={g_operating})")
+    _ax.set_ylim(-60, 2)
+    _ax.set_title("Energy decay at the listener: RES extends the reverberation")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Energy decay (dB)")
+    _ax.legend()
+    fig_edc.tight_layout()
+    fig_edc
     return
 
 
@@ -394,7 +370,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, np, render):
+def _(fs, np, plt, render):
     def envelope_db(x, win=2048, hop=512):
         starts = np.arange(0, len(x) - win, hop)
         env = np.array(
@@ -419,25 +395,19 @@ def _(fs, go, np, render):
     assert growth_varying < 1.0  # time-varying loop still decays
     assert growth_varying < growth_static
 
-    fig_msg = go.Figure()
     ts, es = envelope_db(rec_static)
     tv, ev = envelope_db(rec_varying)
-    fig_msg.add_trace(
-        go.Scatter(x=ts, y=es, name="static FDN (rings)", line={"color": "#c0392b"})
+    fig_msg, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(ts, es, color="#c0392b", label="static FDN (rings)")
+    _ax.plot(tv, ev, color="#7b5ea7", label="time-varying FDN (stable)")
+    _ax.set_title(
+        f"Short-time energy at g={g_challenge}: static grows, time-varying decays"
     )
-    fig_msg.add_trace(
-        go.Scatter(
-            x=tv, y=ev, name="time-varying FDN (stable)", line={"color": "#7b5ea7"}
-        )
-    )
-    fig_msg.update_layout(
-        title=f"Short-time energy at g={g_challenge}: static grows, time-varying decays",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Energy (dB)"},
-        template="plotly_white",
-        height=380,
-    )
-    fig_msg.show()
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Energy (dB)")
+    _ax.legend()
+    fig_msg.tight_layout()
+    fig_msg
     return
 
 
@@ -452,7 +422,7 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, render):
+def _(np, plt, render):
     gains = np.array([1.0, 1.4, 1.8, 2.2, 2.6])
 
     def growth_ratio(x):
@@ -464,38 +434,22 @@ def _(go, np, render):
         ratios_static.append(growth_ratio(render(time_varying=False, g=g)))
         ratios_varying.append(growth_ratio(render(time_varying=True, g=g)))
 
-    fig_sweep = go.Figure()
-    fig_sweep.add_trace(
-        go.Scatter(
-            x=gains,
-            y=ratios_static,
-            name="static FDN",
-            mode="lines+markers",
-            line={"color": "#c0392b"},
-        )
+    fig_sweep, _ax = plt.subplots(figsize=(8, 4))
+    _ax.plot(gains, ratios_static, "o-", color="#c0392b", label="static FDN")
+    _ax.plot(gains, ratios_varying, "o-", color="#7b5ea7", label="time-varying FDN")
+    _ax.axhline(1.0, linestyle="--", color="#444")
+    _ax.annotate(
+        "stability boundary", (gains[-1], 1.0), ha="right", va="bottom", color="#444"
     )
-    fig_sweep.add_trace(
-        go.Scatter(
-            x=gains,
-            y=ratios_varying,
-            name="time-varying FDN",
-            mode="lines+markers",
-            line={"color": "#7b5ea7"},
-        )
+    _ax.set_yscale("log")
+    _ax.set_title(
+        "Tail growth vs loop gain: time variation raises the maximum stable gain"
     )
-    fig_sweep.add_hline(
-        y=1.0,
-        line={"dash": "dash", "color": "#444"},
-        annotation_text="stability boundary",
-    )
-    fig_sweep.update_layout(
-        title="Tail growth vs loop gain: time variation raises the maximum stable gain",
-        xaxis={"title": "Loop gain g"},
-        yaxis={"title": "Tail growth ratio", "type": "log"},
-        template="plotly_white",
-        height=400,
-    )
-    fig_sweep.show()
+    _ax.set_xlabel("Loop gain g")
+    _ax.set_ylabel("Tail growth ratio")
+    _ax.legend()
+    fig_sweep.tight_layout()
+    fig_sweep
     return
 
 

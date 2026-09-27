@@ -4,30 +4,7 @@ line-length = 88
 indent-width = 4
 target-version = "py310"
 
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
-    "*.ipynb",
-]
+extend-exclude = ["*.ipynb"]
 
 [lint]
 select = ["E", "F", "I", "N", "W", "B", "C4", "UP"]
@@ -42,6 +19,11 @@ ignore = [
 ]
 fixable = ["ALL"]
 unfixable = []
+
+[lint.per-file-ignores]
+# marimo renders a cell's last expression, so a bare `fig` is how a notebook
+# displays a figure.
+"examples/*" = ["B018"]
 
 [format]
 quote-style = "double"

@@ -1746,11 +1746,11 @@ def test_shell_accepts_parts_built_with_a_string_device_and_moved_with_to():
 
     nfft = 2**10
     core = pyFDN.dss_to_flamo(
+        np.array([101, 137]),
         0.5 * np.eye(2),
         np.ones((2, 1)),
         np.ones((1, 2)),
         np.zeros((1, 1)),
-        np.array([101, 137]),
         48000,
         nfft=nfft,
         shell=False,
@@ -1802,11 +1802,11 @@ def test_wrap_fdn_shell_keeps_the_core_on_its_device(device):
     from pyFDN.auxiliary.flamo import wrap_fdn_shell
 
     core = pyFDN.dss_to_flamo(
+        np.array([101, 137]),
         0.5 * np.eye(2),
         np.ones((2, 1)),
         np.ones((1, 2)),
         np.zeros((1, 1)),
-        np.array([101, 137]),
         48000,
         nfft=2**10,
         shell=False,

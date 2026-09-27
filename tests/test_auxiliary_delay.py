@@ -44,11 +44,11 @@ def test_matrix_delay_approximation_uses_nanmean(monkeypatch):
 
 def _small_flamo_fdn():
     return dss_to_flamo(
+        np.array([11, 13]),
         np.eye(2),
         np.ones((2, 1)),
         np.ones((1, 2)),
         np.zeros((1, 1)),
-        np.array([11, 13]),
         48000,
         nfft=128,
         device="cpu",

@@ -12,6 +12,27 @@ from scipy.interpolate import interp1d
 from scipy.signal import freqz, group_delay
 
 
+def as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
+    """A NumPy ``Generator`` from a generator, an integer seed, or ``None``."""
+    if isinstance(rng, np.random.Generator):
+        return rng
+    return np.random.default_rng(rng)
+
+
+def array_namespace(x: Any) -> Any:
+    """The array module ``x`` belongs to: :mod:`torch` for tensors, else numpy.
+
+    Lets one formula serve both a NumPy design path and a differentiable torch
+    path: the few array functions it needs are looked up on the namespace of
+    its argument. torch is imported only when a tensor is actually passed.
+    """
+    if type(x).__module__.split(".", 1)[0] == "torch":
+        import torch
+
+        return torch
+    return np
+
+
 def skew(X: ArrayLike) -> np.ndarray:
     """Return skew-symmetric matrix from upper triangle.
 
@@ -21,6 +42,11 @@ def skew(X: ArrayLike) -> np.ndarray:
     X = np.asarray(X, dtype=np.float64)
     upper = np.triu(X, 1)
     return upper - upper.T
+
+
+def is_almost_zero(A: ArrayLike, tol: float = 1e-12) -> bool:
+    """Whether every entry of ``A`` is below ``tol`` in absolute value."""
+    return bool(np.max(np.abs(A)) < tol)
 
 
 def ensure_3d(matrix: ArrayLike) -> np.ndarray:
@@ -255,65 +281,55 @@ def is_bounding_curve(
 
 def pole_boundaries(
     delays: ArrayLike,
-    absorption: Any,
-    feedback_matrix: np.ndarray,
+    absorption: ArrayLike,
+    feedback_matrix: ArrayLike,
     fs: float,
     nfft: int = 2**12,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Find upper and lower pole boundaries for FDN loop.
+    """Upper and lower bounds of the pole magnitudes of an FDN loop.
+
+    Combines the singular values of the feedback matrix with the magnitude
+    and group delay of the per-line absorption filters.
+
     Args:
-        delays: 1D array of delays in samples (length N)
-        absorption: object with .b and .a attributes, each shape (N, 1, len)
-        feedback_matrix: 3D numpy array (N, N, len)
-        fs: sampling frequency
-        nfft: number of frequency bins (default: 4096)
+        delays: Delays in samples, shape ``(N,)``.
+        absorption: Per-line absorption as an SOS bank of shape
+            ``(sections, 6, N)``, the format of an :class:`~pyFDN.FDNBuild`'s
+            ``post_delay``.
+        feedback_matrix: ``(N, N)`` or FIR ``(N, N, L)`` in the z^{-1}
+            convention.
+        fs: Sampling frequency in Hz.
+        nfft: Number of frequency bins between 0 and Nyquist.
+
     Returns:
-        MinCurve: lower bound of pole magnitude (shape: nfft)
-        MaxCurve: upper bound of pole magnitude (shape: nfft)
-        f: frequency points (Hz, shape: nfft)
+        min_curve: Lower bound of the pole magnitude, shape ``(nfft,)``.
+        max_curve: Upper bound of the pole magnitude, shape ``(nfft,)``.
+        f: Frequency points in Hz, shape ``(nfft,)``.
     """
     delays_arr = np.asarray(delays, dtype=float).ravel()
-    N = len(delays_arr)
-    # Compute frequency points
-    w = np.linspace(0, np.pi, nfft)
-    # FFT along the third axis
-    FeedbackMatrix = np.fft.fft(feedback_matrix, n=nfft * 2, axis=2)
-    FeedbackMatrix = FeedbackMatrix[:, :, :nfft]
+    sos = np.asarray(absorption, dtype=float)
+    if sos.ndim != 3 or sos.shape[1] != 6 or sos.shape[2] != delays_arr.size:
+        raise ValueError("absorption must be an SOS bank of shape (sections, 6, N)")
+    # The FFT bins of a 2 * nfft transform: 0 up to (not including) Nyquist.
+    w = np.pi * np.arange(nfft) / nfft
 
-    Min = np.zeros(nfft)
-    Max = np.zeros(nfft)
-    for it in range(nfft):
-        s = svd(FeedbackMatrix[:, :, it], compute_uv=False)
-        Min[it] = np.min(np.abs(s)) ** (1 / np.min(delays_arr))
-        Max[it] = np.max(np.abs(s)) ** (1 / np.max(delays_arr))
+    spectrum = np.fft.fft(ensure_3d(feedback_matrix), n=nfft * 2, axis=2)[:, :, :nfft]
+    singular = np.array([svd(spectrum[:, :, k], compute_uv=False) for k in range(nfft)])
+    matrix_min = np.min(singular, axis=1) ** (1 / np.min(delays_arr))
+    matrix_max = np.max(singular, axis=1) ** (1 / np.max(delays_arr))
 
-    # Combine with absorption
-    b = np.transpose(absorption.b, (0, 2, 1))  # shape (N, len, 1)
-    a = np.transpose(absorption.a, (0, 2, 1))  # shape (N, len, 1)
-    b = b.squeeze(-1)  # shape (N, len)
-    a = a.squeeze(-1)  # shape (N, len)
+    magnitude = np.ones((nfft, delays_arr.size))
+    group = np.zeros((nfft, delays_arr.size))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        for line in range(delays_arr.size):
+            for section in sos[:, :, line]:
+                _, h = freqz(section[:3], section[3:], w)
+                _, gd = group_delay((section[:3], section[3:]), w)
+                magnitude[:, line] *= np.abs(h)
+                group[:, line] += gd
 
-    H = np.zeros((nfft, N), dtype=complex)
-    G = np.zeros((nfft, N))
-    for it in range(N):
-        # scipy freqz returns (w, h) — note the reversed order vs MATLAB
-        w, H[:, it] = freqz(b[it, :], a[it, :], nfft)
-        # group_delay returns (w, gd)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            _, gd = group_delay((b[it, :], a[it, :]), nfft)
-        G[:, it] = gd
-
-    # delays: shape (N,)
-    # G: shape (nfft, N)
-    # d: shape (nfft, N)
-    d = np.abs(H) ** (1.0 / (delays_arr + G))
-    dMin = np.min(d, axis=1)
-    dMax = np.max(d, axis=1)
-
-    MinCurve = dMin * Min
-    MaxCurve = dMax * Max
-    f = w / np.pi * fs / 2
-
-    return MinCurve, MaxCurve, f
+    per_line = magnitude ** (1.0 / (delays_arr + group))
+    min_curve = np.min(per_line, axis=1) * matrix_min
+    max_curve = np.max(per_line, axis=1) * matrix_max
+    return min_curve, max_curve, w / np.pi * fs / 2
