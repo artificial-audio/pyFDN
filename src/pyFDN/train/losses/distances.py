@@ -26,6 +26,22 @@ class AbsoluteError(Distance):
         return (pred - target).abs()
 
 
+class RelativeError(Distance):
+    r"""Elementwise :math:`|pred - target|^p` over the reference's mean :math:`|target|^p`.
+
+    Followed by :class:`~pyFDN.train.losses.reductions.Mean` this is the
+    normalized :math:`L^p` error :math:`\overline{|pred - target|^p} /
+    \overline{|target|^p}`, a scale-free number whatever the feature's units.
+    """
+
+    def __init__(self, p: float = 1.0) -> None:
+        self.p = float(p)
+
+    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        norm = target.abs().pow(self.p).mean().clamp_min(torch.finfo(target.dtype).tiny)
+        return (pred - target).abs().pow(self.p) / norm
+
+
 class CircularDistance(Distance):
     r"""Circular angular metric: 1 - cos(pred - target) bounded in [0, 2]."""
 

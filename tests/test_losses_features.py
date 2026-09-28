@@ -233,6 +233,7 @@ from pyFDN.train.losses.base import Sum as LossSum  # noqa: E402
 from pyFDN.train.losses.distances import FlatnessRatioDistance  # noqa: E402
 from pyFDN.train.losses.features import (  # noqa: E402
     OCTAVE_EDGES,
+    EchoDensityProfile,
     EnergyDecayCurve,
     Phase,
 )
@@ -330,6 +331,8 @@ def test_match_energy_decay_is_rms_over_the_masked_entries():
         lambda t: losses.MatchPhaseSpectrogram(t, nfft=(256, 512)),
         lambda t: losses.MatchMelMagnitude(t, n_mels=32),
         lambda t: losses.SpectralFlatness(),
+        lambda t: losses.MatchMelEnergyDecayRelief(t),
+        lambda t: losses.MatchEchoDensity(t),
     ],
 )
 @pytest.mark.parametrize("silent", ["prediction", "target"])
@@ -344,3 +347,21 @@ def test_new_losses_have_finite_gradients_on_silent_inputs(make_loss, silent):
     value.backward()
     assert torch.isfinite(value)
     assert torch.isfinite(h.grad).all()
+
+
+def test_echo_density_profile_reads_noise_as_diffuse_and_clicks_as_sparse():
+    """About 1 for Gaussian noise (the normalization), far below for a click train."""
+    g = torch.Generator().manual_seed(0)
+    noise = torch.randn(8192, 1, 1, generator=g, dtype=torch.float64)
+    clicks = torch.zeros_like(noise)
+    clicks[::500] = 1.0
+    feature = EchoDensityProfile(kappa=1e4)
+    assert abs(feature(noise, 48000.0).mean().item() - 1.0) < 0.05
+    assert feature(clicks, 48000.0).mean().item() < 0.2
+
+
+def test_mel_energy_decay_relief_is_zero_on_the_target_and_scale_free():
+    target = _decaying(n=8192)
+    loss = losses.MatchMelEnergyDecayRelief(target.numpy())
+    assert loss(Response(h=target, fs=48000.0)).item() == 0.0
+    assert loss(Response(h=0.5 * target, fs=48000.0)).item() > 0.0

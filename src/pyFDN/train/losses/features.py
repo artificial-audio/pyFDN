@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -364,3 +365,97 @@ class CumulativeEnergySurface(Feature):
             for direction in self.directions
         ]
         return torch.stack(surfaces, dim=0)
+
+
+class MelEnergyDecayRelief(Feature):
+    """Mel-band energy decay relief in dB, one relief per channel.
+
+    The mel power spectrogram (``torchaudio``'s ``MelSpectrogram``, power 2),
+    backward-integrated over frames (Schroeder) and converted to dB with a floor
+    ``top_db`` below the maximum over all channels (as ``torchaudio``'s
+    ``AmplitudeToDB``). Returns a
+    ``(n_channels, n_mels, n_frames)`` tensor.
+    """
+
+    def __init__(
+        self,
+        n_fft: int = 512,
+        win_length: int = 256,
+        hop_length: int = 128,
+        n_mels: int = 64,
+        top_db: float = 80.0,
+    ) -> None:
+        self.n_fft = int(n_fft)
+        self.win_length = int(win_length)
+        self.hop_length = int(hop_length)
+        self.n_mels = int(n_mels)
+        self.top_db = float(top_db)
+        self._mel: Any = None
+        self._key: tuple[Any, ...] | None = None
+
+    def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
+        key = (fs, h.device, h.dtype)
+        if self._mel is None or self._key != key:
+            from torchaudio.transforms import MelSpectrogram
+
+            self._key = key
+            self._mel = MelSpectrogram(
+                sample_rate=int(fs),
+                n_fft=self.n_fft,
+                win_length=self.win_length,
+                hop_length=self.hop_length,
+                n_mels=self.n_mels,
+                power=2.0,
+            ).to(device=h.device, dtype=h.dtype)
+        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
+        edr = schroeder_integral(self._mel(x).clamp_min(1e-8), axis=-1)
+        db = 10.0 * torch.log10(edr)
+        return torch.maximum(db, db.amax() - self.top_db)
+
+
+class EchoDensityProfile(Feature):
+    r"""Differentiable normalized echo density profile (Abel & Huang).
+
+    In a Hann window of ``win_duration`` seconds around each analysis point,
+    the fraction of samples whose magnitude exceeds the window's weighted RMS
+    :math:`\sigma`, normalized by :math:`\operatorname{erfc}(1/\sqrt{2})`, the
+    fraction expected of Gaussian noise -- so the profile reaches about 1 once
+    the reverberation is diffuse. The hard threshold is replaced by
+    :math:`\operatorname{sigmoid}(\kappa(|h| - \sigma))` so gradients flow;
+    :math:`\kappa` rises linearly from ``kappa[0]`` to ``kappa[1]`` over the
+    response, to stay sharp as the decaying signal gets smaller.
+
+    Returns a ``(n_channels, n_frames)`` tensor, one point every ``hop``
+    samples.
+    """
+
+    def __init__(
+        self,
+        win_duration: float = 0.02,
+        hop: int | None = None,
+        kappa: float | tuple[float, float] = (1e2, 1e5),
+    ) -> None:
+        self.win_duration = float(win_duration)
+        self.hop = hop
+        self.kappa = kappa
+
+    def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
+        win_len = int(self.win_duration * fs) | 1  # odd, centred
+        # ponytail: one (frames, win_len) tensor; hop=1 at a long nfft is GBs
+        hop = self.hop if self.hop is not None else max(1, win_len // 4)
+        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
+        if win_len > x.shape[-1]:
+            raise ValueError(
+                f"echo density window ({win_len} samples) is longer than the "
+                f"response ({x.shape[-1]} samples)"
+            )
+        frames = x.unfold(-1, win_len, hop).abs()
+        win = torch.hann_window(win_len, periodic=False, device=h.device, dtype=h.dtype)
+        win = win / win.sum()
+        # clamped: sqrt'(0) is inf, and an FDN is silent before its first delay
+        power = (win * frames**2).sum(dim=-1, keepdim=True)
+        sigma = power.clamp_min(torch.finfo(h.dtype).tiny).sqrt()
+        k0, k1 = self.kappa if isinstance(self.kappa, tuple) else (self.kappa,) * 2
+        kappa = torch.linspace(k0, k1, frames.shape[-2], device=h.device, dtype=h.dtype)
+        above = torch.sigmoid(kappa[:, None] * (frames - sigma))
+        return (win * above).sum(dim=-1) / math.erfc(1.0 / math.sqrt(2.0))
