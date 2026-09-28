@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.5.0 (2026-09-28)
+------------------
 
 * Fix GPU training (#231): ``model_response`` excites the model on its own
   device, ``wrap_fdn_shell`` / ``dss_to_flamo`` / ``trainable_from_build``
