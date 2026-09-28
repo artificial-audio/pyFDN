@@ -13,6 +13,10 @@ Unreleased
   ``save_fdn_system`` stamps ``metadata.created`` and
   ``metadata.pyfdn_version`` when they are missing. See
   ``docs/design/system-format.md``.
+* New ``pyFDN.auxiliary.graph_plot.plot_system_graph`` draws the signal flow of
+  a system document, a ``GraphNode`` tree or an ``FDNBuild`` without building
+  a FLAMO model. ``plot_flamo_graph`` now uses the same renderer; its output is
+  unchanged.
 * Fix GPU training (#231): ``model_response`` excites the model on its own
   device, ``wrap_fdn_shell`` / ``dss_to_flamo`` / ``trainable_from_build``
   build the FFT layers on the requested device, and ``train_fdn`` now defaults

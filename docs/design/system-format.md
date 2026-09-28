@@ -1,7 +1,7 @@
 # `pyfdn-system`: one JSON document for every pyFDN backend
 
 **Status:** proposal; PR 1 (schema, `pyFDN.system`) sketched; provenance
-metadata and the `pyfdn-results` plan (§9) added
+metadata added; results documents considered and rejected (§9)
 **Date:** 2026-09-07, updated 2026-09-27 with review decisions
 **Branch:** `docs/system-json-format`
 **Supersedes:** nothing. `pyfdn-fdn-build` v2 stays valid and unchanged.
@@ -89,7 +89,8 @@ Relevant prior art:
   arbitrary DSP graphs.
 - Model weights for training checkpoints. A document describes a *system*;
   optimiser state belongs in a torch checkpoint.
-- Rendered results go in a separate `pyfdn-results` document (§9).
+- Rendered results (impulse responses, EDCs, RT curves). Any result is one
+  line of pyFDN code away from the system document, so it is not stored (§9).
 - A binary format. Human-readable and diffable is a feature; a network with a
   100 000-tap FIR matrix is a legitimate reason to reach for `.npz` instead.
 
@@ -397,37 +398,31 @@ as a deprecated shim.
 6. **Provenance metadata — added.** `metadata.created` and
    `metadata.pyfdn_version` (§4.2), stamped by `save_fdn_system`.
 
-## 9. A separate `pyfdn-results` document
- 
-Not part of PR 1–4. Recorded here for later steps.
+7. **Diagrams — from the description, not a backend.**
+   `pyFDN.auxiliary.graph_plot.plot_system_graph` draws a system document, a
+   `GraphNode` tree or an `FDNBuild` without building a FLAMO model or a `td`
+   graph. `plot_flamo_graph` now uses the same renderer, so both draw the same
+   picture.
 
-It is often useful to share the result of the network and what it produces on its own: to compare a trained network against a target, share with a collaborator, presenting final or "in-progress" network, or with a teaching-oriented use, to show a required results.
-That is a suggestion for the second document format:
+## 9. Rendered results: considered, not stored
 
-```json
-{
-  "format": "pyfdn-results",
-  "version": 1,
-  "metadata": {"name": "...", "created": "...", "pyfdn_version": "..."},
-  "sample_rate": 48000,
-  "render": {"block_size": 64},
-  "results": {
-    "impulse_response": [[...]],
-    "edc": [[...]],
-    "rt_bands": {"center_hz": [...], "seconds": [...]},
-    "echo_density": {"curve": [...], "mixing_time_ms": 42.0}
-  }
-}
-```
+A separate `pyfdn-results` document (impulse response, EDC, RT per band, echo
+density), written next to each system file, was proposed in review for
+comparing a trained network against a target, for sharing, and for teaching.
 
-- **Data file:** A viewer plots the data, and two results
-  files can be compared numerically.
-- **Sharing is the access control.** Handing out only a results file can also keep the network private if needed;
-- **Saved together by default.** When a network has results, saving writes
-  both files side by side (e.g. `name.json` and `name.results.json`). Saving
-  only one of them is an explicit choice.
+**Decision: no results format.** A system document is complete: any result is
+one line of pyFDN code away from it, e.g. `pyFDN.build_to_impz(doc.as_build(),
+n)` today, or the backend-neutral `impulse_response` planned in #256. Storing
+results as well would add a second file that can drift from the system it
+claims to describe, and a second schema to version.
 
-Moreover, a simple GUI for saving, loading and viewing (graphs, plots) might be considered in a later step.
+What remains of the proposal:
+
+- **Provenance** (`metadata.created`, `metadata.pyfdn_version`, §4.2) is kept.
+  It records which pyFDN wrote a file, which is also what a reader needs to
+  reproduce a result exactly.
+- **Viewing** works on the system itself (§8.7): the diagram needs no backend,
+  and the existing analysis plots take the rendered response.
 
 ---
 
