@@ -19,18 +19,19 @@ def _():
         get_coupling_angles, get_coupling_matrix, get_decay_matrix,
         get_feedback_matrix, run_gfdn, gfdn_energy_ledger)
 
+
     return (
         TimeVaryingMatrix,
         block_diag,
+        create_diagonal_absorption_matrix,
+        create_lossless_coupling_matrix,
+        create_state_transition_matrix,
         expm,
+        get_coupling_angles,
+        get_coupling_matrix,
         get_decay_matrix,
         get_feedback_matrix,
         gfdn_energy_ledger,
-        get_coupling_matrix,
-        create_state_transition_matrix,
-        create_lossless_coupling_matrix,
-        create_diagonal_absorption_matrix,
-        get_coupling_angles,
         mo,
         np,
         plt,
@@ -143,9 +144,9 @@ def _(
     a1,
     a2,
     a3,
-    create_state_transition_matrix,
-    create_lossless_coupling_matrix,
     create_diagonal_absorption_matrix,
+    create_lossless_coupling_matrix,
+    create_state_transition_matrix,
     mo,
     np,
 ):
@@ -234,8 +235,8 @@ def _(
     beta_complete,
     dt_i,
     expm,
-    get_coupling_matrix,
     get_coupling_angles,
+    get_coupling_matrix,
     mo,
     num_rooms,
 ):
@@ -403,6 +404,14 @@ def _(Q_chain, Q_complete, fs, gamma, n_samp, np, num_rooms, trajectory):
     return Eref_chain, Eref_chain_lossy, Eref_complete, Eref_complete_lossy
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plot and compare trajectories for the lossless case
+    """)
+    return
+
+
 @app.cell
 def _(
     E_ex_chain,
@@ -451,7 +460,60 @@ def _(
         fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (tsec, )
+    return (tsec,)
+
+
+@app.cell
+def _(E_ex_chain, E_ex_complete, Eref_chain, Eref_complete, fs, np, num_rooms):
+    def calculate_time_constant(E_ledger, fs: float, is_rising: bool = False):
+        """
+        Estimates time constant of lossless energy trajectories by analyzing only the early, unclipped data points.
+        """
+        # 1. Isolate the unclipped data (e.g., grab the first 15% of the sample window)
+        # This assumes the system hasn't hit the saturation limit yet in this early window
+        num_samples = len(E_ledger)
+        unclipped_end_idx = int(num_samples * 0.5) 
+    
+        y_data = E_ledger[:unclipped_end_idx]
+        x_time = np.arange(unclipped_end_idx) / fs
+    
+        if not is_rising:
+            # Falling: Fit a straight line to ln(y) -> ln(y) = mx + c
+        
+            # where slope m = -1/tau
+            slope, intercept = np.polyfit(x_time, np.log(y_data), 1)
+            tau = -1.0 / slope
+        else:
+            # Rising: Requires estimating the true maximum via an optimization routine
+            from scipy.optimize import curve_fit
+        
+            def rising_func(t, E_max, tau_val):
+                return E_max * (1 - np.exp(-t / tau_val))
+            
+            # Fit only using the unclipped initial window
+            popt, _ = curve_fit(rising_func, x_time, y_data, p0=[E_ledger[-1]*2, 0.1])
+            tau = popt[1] # Extracted tau value
+        
+        return tau
+
+
+    for  _Eex, _Eref,in zip([E_ex_chain, E_ex_complete], [Eref_chain, Eref_complete]):
+        for _r in range(num_rooms):
+            is_rising = _r != 0
+            tau_ref = calculate_time_constant(_Eex[0, :, _r], fs, is_rising)
+            print(f'Cur reference time constant for room {_r+1} is {tau_ref:.3f}s')
+            tau_gfdn = calculate_time_constant(_Eref[:, _r], fs, is_rising)
+            print(f'Cur GFDN time constant for room {_r+1} is {tau_gfdn:.3f}s')
+
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plot and compare trajectories for the lossy case
+    """)
+    return
 
 
 @app.cell
@@ -499,6 +561,78 @@ def _(
         fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
+    return
+
+
+@app.cell
+def _(
+    E_ex_chain_lossy,
+    E_ex_complete_lossy,
+    Eref_chain_lossy,
+    Eref_complete_lossy,
+    fs,
+    np,
+    num_rooms,
+):
+    def calculate_t60_from_energy(E_ledger, fs: float) -> float:
+        """
+        Calculates T60 reverberation time from an energy trajectory array
+        using ISO 3382-1 standard T30 window evaluation [-5 dB to -35 dB].
+    
+        Parameters:
+        -----------
+        energy_ledger : np.ndarray
+            Array containing the sequential energy values (e.g., squared pressure samples, h^2).
+        fs : float
+            Sampling frequency of the trajectory in Hz.
+        
+        Returns:
+        --------
+        float : Estimated T60 decay time in seconds.
+        """
+        # 1. Convert the raw linear energy trajectory to a relative Decibel (dB) scale
+        # Normalize against the peak energy so the max point acts as 0 dB
+        peak_energy= np.max(E_ledger)
+        peak_idx = np.argmax(E_ledger)
+        energy_db = 10 * np.log10((E_ledger[peak_idx:] + np.finfo(np.float32).eps) / peak_energy)
+    
+        # Generate structural time track matching the array size (Time = Index / fs)
+        time_axis = np.arange(len(energy_db)) / fs
+    
+        # 2. Extract boundaries for the ISO standard T30 window (-5 dB down to -35 dB)
+        # Using np.argwhere to find where the signal crosses the boundary milestones
+        idx_start_arr = np.argwhere(energy_db <= -5.0)
+        idx_end_arr = np.argwhere(energy_db <= -35.0)
+    
+        if len(idx_start_arr) == 0 or len(idx_end_arr) == 0:
+            raise ValueError(
+                "The energy trajectory dynamic range is too narrow. "
+                "Ensure the signal decays by at least 35 dB to isolate the evaluation window."
+            )
+        
+        start_idx = idx_start_arr[0][0]
+        end_idx = idx_end_arr[0][0]
+    
+        # 3. Slice out the clean decay segment
+        decay_time_window = time_axis[start_idx:end_idx]
+        decay_db_window = energy_db[start_idx:end_idx]
+    
+        # 4. Use linear regression (y = mx + c) to find the slope (m) of the isolated window
+        slope, intercept = np.polyfit(decay_time_window, decay_db_window, 1)
+    
+        # 5. Extrapolate out to a full 60 dB drop
+        # T60 = Total targeted drop (-60 dB) divided by the calculated decay slope (dB/second)
+        t60 = float(-60.0 / slope)
+    
+        return t60
+
+    for  _Eex, _Eref,in zip([E_ex_chain_lossy, E_ex_complete_lossy], [Eref_chain_lossy, Eref_complete_lossy]):
+        for _r in range(num_rooms):
+            t60_ref = calculate_t60_from_energy(_Eex[0, :, _r], fs)
+            print(f'Cur reference T60 for room {_r+1} is {t60_ref:.3f}s')
+            t60_gfdn = calculate_t60_from_energy(_Eref[:, _r], fs)
+            print(f'Cur GFDN T60 for room {_r+1} is {t60_gfdn:.3f}s')
+
     return
 
 

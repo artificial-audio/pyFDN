@@ -25,14 +25,14 @@ def _():
         NDArray,
         TimeVaryingMatrix,
         block_diag,
+        create_diagonal_absorption_matrix,
+        create_lossless_coupling_matrix,
+        create_state_transition_matrix,
+        get_coupling_angles,
+        get_coupling_matrix,
         get_decay_matrix,
         get_feedback_matrix,
         gfdn_energy_ledger,
-        get_coupling_matrix,
-        create_state_transition_matrix,
-        create_lossless_coupling_matrix,
-        create_diagonal_absorption_matrix,
-        get_coupling_angles,
         mo,
         np,
         plt,
@@ -109,9 +109,18 @@ def _(mo):
 
 
 @app.cell
-def _(S12, V1, V2, a1, a2, create_state_transition_matrix,
-      create_lossless_coupling_matrix, create_diagonal_absorption_matrix, mo,
-      np):
+def _(
+    S12,
+    V1,
+    V2,
+    a1,
+    a2,
+    create_diagonal_absorption_matrix,
+    create_lossless_coupling_matrix,
+    create_state_transition_matrix,
+    mo,
+    np,
+):
     # --- Cremer-Muller generators for the two topologies -----------------------
     c = 343.0
     V = np.array([V1.value, V2.value])
@@ -182,7 +191,7 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
 
 
 @app.cell
-def _(beta, dt_i, get_coupling_matrix, get_coupling_angles, mo, np, num_rooms):
+def _(beta, dt_i, get_coupling_angles, get_coupling_matrix, mo, np, num_rooms):
     theta = get_coupling_angles(beta, dt_i)
     K = get_coupling_matrix(theta)
     R_room = np.array([[np.cos(theta[0, 1]),
@@ -208,7 +217,7 @@ def _(beta, dt_i, get_coupling_matrix, get_coupling_angles, mo, np, num_rooms):
     Consistency check ($\beta_{{ij}}\Delta t_i$ vs. $\beta_{{ji}}\Delta t_j$, should match by the $\Delta t_i\propto V_i$
     design): edge 1–2: ${_check[0][0]:.5f}$ vs ${_check[0][1]:.5f}$;
     """)
-    return (R_room, )
+    return (R_room,)
 
 
 @app.cell
@@ -303,7 +312,6 @@ def _(
 
     E_ex, n_ex = gfdn_energy_ledger(Y, num_rooms, N1, delays)
     E_ex_lossy, _ = gfdn_energy_ledger(Y_lossy, num_rooms, N1, delays)
-
     return E_ex, E_ex_lossy, Y, Y_lossy, n_ex, n_samp
 
 
@@ -374,7 +382,7 @@ def _(
         fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (db, )
+    return (db,)
 
 
 @app.cell
@@ -437,7 +445,7 @@ def _(N1, Y, Y_lossy, mo, np, num_rooms, plt, tsec):
         [Y_lossy[:, :, :N1].sum(-1), Y_lossy[:, :, N1:].sum(-1)], axis=-1)
 
     # --- The four impulse responses (microphone = sum of the room's lines) -----
-    _fig, _axs = plt.subplots(2, 2, figsize=(8, 4.6), sharex=True, sharey=True)
+    _fig, _axs = plt.subplots(2, 2, figsize=(8, 6), sharex=True, sharey=True)
     _tmax = min(0.5, tsec[-1])
     _nmax = int(_tmax * len(tsec) / tsec[-1])
     for _src in range(num_rooms):
@@ -459,6 +467,7 @@ def _(N1, Y, Y_lossy, mo, np, num_rooms, plt, tsec):
         _ax.set_ylabel("$h(t)$")
     _ymax = np.abs(h_mic[:, :_nmax]).max()
     _axs[0, 0].set_ylim(-_ymax, _ymax)
+    _axs[0, 0].legend(['Lossless', 'Lossy'])
     _fig.suptitle("Four lossless + lossy impulse responses (first %.0f ms)" %
                   (_tmax * 1000),
                   fontsize=10)

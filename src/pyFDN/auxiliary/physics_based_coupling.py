@@ -33,7 +33,7 @@ def create_diagonal_absorption_matrix(absorp_area: List,
 
 def create_state_transition_matrix(beta: NDArray):
     """Create the state transition matrix of the CT system from Cremer-Muller theory"""
-    Q = beta.copy()
+    Q = beta.T.copy()
     np.fill_diagonal(Q, -beta.sum(axis=1))
     return Q
 
