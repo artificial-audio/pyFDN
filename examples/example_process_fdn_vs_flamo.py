@@ -137,6 +137,7 @@ def _(
         post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
         dtype=torch.float64,
+        device="cpu",
     )
     ir_flamo = pyFDN.flamo_time_response(model).squeeze().astype(np.float64)[:ir_len]
 

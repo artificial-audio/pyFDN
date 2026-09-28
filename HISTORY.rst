@@ -13,6 +13,12 @@ Unreleased
   ``save_fdn_system`` stamps ``metadata.created`` and
   ``metadata.pyfdn_version`` when they are missing. See
   ``docs/design/system-format.md``.
+* Fix GPU training (#231): ``model_response`` excites the model on its own
+  device, ``wrap_fdn_shell`` / ``dss_to_flamo`` / ``trainable_from_build``
+  build the FFT layers on the requested device, and ``train_fdn`` now defaults
+  to the model's device instead of the CPU. Requires ``flamo>=0.2.20``, whose
+  canonical module devices let ``device="cpu"`` / ``"cuda"`` mix with
+  ``.to(...)`` (previously ``Shell`` rejected them as different devices).
 * ``import pyFDN`` no longer loads torch or flamo, which makes it about three
   times faster; the training API and ``flamo_to_pr`` load on first use. Every
   public name is still exported from ``pyFDN``.

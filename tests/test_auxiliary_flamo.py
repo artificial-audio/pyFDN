@@ -121,6 +121,6 @@ def test_wrap_fdn_shell_returns_the_time_response():
     impulse = torch.zeros(1, nfft, 1)
     impulse[:, 0, :] = 1.0
 
-    time = wrap_fdn_shell(core, nfft=nfft)(impulse)
+    time = wrap_fdn_shell(core, nfft=nfft, device="cpu")(impulse)
     assert time.shape == (1, nfft, 1)
     assert not time.is_complex()

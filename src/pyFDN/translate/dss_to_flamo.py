@@ -102,7 +102,7 @@ def dss_to_flamo(
     if shell:
         from pyFDN.auxiliary.flamo import wrap_fdn_shell
 
-        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
+        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, device=device)
     return core
 
 

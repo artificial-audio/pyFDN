@@ -122,6 +122,7 @@ def _(
         shell=False,
         post_delay=absorption,
         dtype=torch.float64,
+        device="cpu",
     )
     _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(
         model,

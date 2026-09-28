@@ -127,7 +127,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     # Modal reconstruction matches FLAMO's true impulse response (the only IR
     # reference once there is an IIR filter in the loop).
     ir_flamo = np.asarray(
-        model.get_time_response(fs=int(fs)).squeeze(), dtype=np.float64
+        model.get_time_response(fs=int(fs)).squeeze().cpu(), dtype=np.float64
     )
     if ir_flamo.ndim == 3:
         ir_flamo = ir_flamo[:, 0, 0]

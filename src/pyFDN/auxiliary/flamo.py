@@ -695,7 +695,9 @@ def core_alias_decay_db(core: Any) -> float:
     return abs(float(value))
 
 
-def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
+def wrap_fdn_shell(
+    core: Any, *, nfft: int, dtype: Any = None, device: Any = None
+) -> Any:
     r"""
     Wrap an FDN core in a FLAMO ``Shell`` that returns the impulse response.
 
@@ -721,6 +723,10 @@ def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
         FFT size.
     dtype : torch.dtype or None
         Dtype for the FFT/iFFT layers; defaults to float32.
+    device : torch.device or None
+        Device of the returned shell. Defaults to the core's own device, so
+        wrapping never moves a core; with neither given, CUDA if available,
+        else CPU.
 
     Returns
     -------
@@ -735,10 +741,17 @@ def wrap_fdn_shell(core: Any, *, nfft: int, dtype: Any = None) -> Any:
     from flamo.processor import dsp, system
 
     torch_dtype = torch.float32 if dtype is None else dtype
-    return system.Shell(
+    dev = default_device(
+        device if device is not None else getattr(core, "device", None)
+    )
+    shell = system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft, dtype=torch_dtype),
         output_layer=dsp.iFFTAntiAlias(
-            nfft, alias_decay_db=core_alias_decay_db(core), dtype=torch_dtype
+            nfft,
+            alias_decay_db=core_alias_decay_db(core),
+            device=dev,
+            dtype=torch_dtype,
         ),
     )
+    return shell.to(dev)

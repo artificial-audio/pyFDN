@@ -319,7 +319,7 @@ def trainable_from_build(
         post_matrix=build.post_matrix if post_matrix is None else post_matrix,
         post_output=build.post_output if post_output is None else post_output,
     )
-    return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
+    return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, device=device)
 
 
 def trainable_from_preset(
