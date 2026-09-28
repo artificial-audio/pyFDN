@@ -107,6 +107,7 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
         nfft=nfft,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     ir_vanilla = pyFDN.flamo_time_response(model).flatten()
     pyFDN.plot_flamo_graph(model)

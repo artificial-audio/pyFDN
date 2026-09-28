@@ -150,7 +150,7 @@ def _(fs, N, nfft, pyFDN):
         rng=6,
     )
 
-    model_fdn = pyFDN.build_to_flamo(fdn_build, nfft=nfft)
+    model_fdn = pyFDN.build_to_flamo(fdn_build, nfft=nfft, device="cpu")
     ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
     return fdn_build, ir_fdn
 
@@ -199,11 +199,13 @@ def _(
         fs,
         nfft=nfft,
         shell=False,
+        device="cpu",
     )
     model_fdn_allpass = pyFDN.build_to_flamo(
         fdn_build,
         nfft=nfft,
         post_delay=schroeder_core,
+        device="cpu",
     )
     ir_fdn_allpass = pyFDN.flamo_time_response(model_fdn_allpass).squeeze()
 

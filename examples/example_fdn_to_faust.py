@@ -123,6 +123,7 @@ def _(pyFDN, torch):
         nfft=2**18,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
     ir_flamo = pyFDN.flamo_time_response(model)[0]
