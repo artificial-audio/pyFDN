@@ -520,11 +520,15 @@ if TYPE_CHECKING:
         mimo_rir_eigenvalues_per_frequency,
         model_response,
         param,
-        params,
         train_fdn,
         trainable_from_build,
         trainable_from_preset,
     )
+
+    # ``params`` is also the name of the submodule it lives in; importing it
+    # from ``.train`` lets mypy resolve it to the module under some import
+    # orders ("already defined" no-redef).
+    from .train.params import params
     from .translate.flamo_to_pr import (
         FlamoDecompositionForPR,
         flamo_decompose_for_pr,
