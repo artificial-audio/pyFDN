@@ -360,7 +360,7 @@ def test_echo_density_profile_reads_noise_as_diffuse_and_clicks_as_sparse():
     assert feature(clicks, 48000.0).mean().item() < 0.2
 
 
-def test_mel_energy_decay_relief_is_zero_on_the_target_and_scale_free():
+def test_mel_energy_decay_relief_is_zero_on_the_target_and_sees_level():
     target = _decaying(n=8192)
     loss = losses.MatchMelEnergyDecayRelief(target.numpy())
     assert loss(Response(h=target, fs=48000.0)).item() == 0.0

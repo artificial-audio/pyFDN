@@ -425,6 +425,10 @@ class EchoDensityProfile(Feature):
     :math:`\kappa` rises linearly from ``kappa[0]`` to ``kappa[1]`` over the
     response, to stay sharp as the decaying signal gets smaller.
 
+    :math:`\kappa` acts on absolute amplitude, so the profile depends on level:
+    below about -60 dB the sigmoid softens and the profile reads high (noise at
+    -80 dB gives about 1.16). Compare responses normalized to the same level.
+
     Returns a ``(n_channels, n_frames)`` tensor, one point every ``hop``
     samples.
     """
