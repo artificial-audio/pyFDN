@@ -17,6 +17,10 @@ Unreleased
   a system document, a ``GraphNode`` tree or an ``FDNBuild`` without building
   a FLAMO model. ``plot_flamo_graph`` now uses the same renderer; its output is
   unchanged.
+
+0.5.0 (2026-09-28)
+------------------
+
 * Fix GPU training (#231): ``model_response`` excites the model on its own
   device, ``wrap_fdn_shell`` / ``dss_to_flamo`` / ``trainable_from_build``
   build the FFT layers on the requested device, and ``train_fdn`` now defaults
