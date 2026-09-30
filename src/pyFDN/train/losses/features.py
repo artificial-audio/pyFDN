@@ -463,3 +463,57 @@ class EchoDensityProfile(Feature):
         kappa = torch.linspace(k0, k1, frames.shape[-2], device=h.device, dtype=h.dtype)
         above = torch.sigmoid(kappa[:, None] * (frames - sigma))
         return (win * above).sum(dim=-1) / math.erfc(1.0 / math.sqrt(2.0))
+
+
+class PeakEnvelope(Feature):
+    r"""Smoothed peak envelope of the squared response, one per channel.
+
+    A peak follower on :math:`h^2`, :math:`a[n] = \max(h[n]^2, \alpha\, a[n-1])`
+    with :math:`\alpha = e^{-1/(f_s T)}` for a release time :math:`T`, then
+    zero-phase low-pass filtered (a least-squares FIR, passband to 3.2 kHz,
+    stopband from 4.8 kHz, about 1 ms long at any rate) and floored at zero.
+    Returns a ``(n_channels, n_samples)`` tensor.
+    """
+
+    def __init__(self, release_time: float = 2.8e-4) -> None:
+        if release_time <= 0:
+            raise ValueError("release_time must be positive")
+        self.release_time = float(release_time)
+        self._fir: torch.Tensor | None = None
+        self._key: tuple[Any, ...] | None = None
+
+    def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
+        if fs <= 9600:
+            raise ValueError(f"PeakEnvelope needs fs above 9.6 kHz; got {fs}")
+        key = (fs, h.device, h.dtype)
+        if self._fir is None or self._key != key:
+            from scipy.signal import firls
+
+            taps = round(15 * fs / 16000) | 1
+            fir = firls(taps, [0, 3200, 4800, fs / 2], [1, 1, 0, 0], fs=fs)
+            self._key = key
+            self._fir = torch.as_tensor(fir, device=h.device, dtype=h.dtype)
+        rate = 1.0 / (fs * self.release_time)  # -log(alpha)
+        x = h.permute(1, 2, 0).reshape(-1, h.shape[0]) ** 2
+        # a[n] = max_k alpha^(n-k) x[k], as a cummax within blocks plus the
+        # previous block's end; older peaks are down by alpha^block = e^-40.
+        n = x.shape[-1]
+        block = max(1, int(40.0 / rate))
+        blocks = torch.nn.functional.pad(x, (0, -n % block)).reshape(
+            x.shape[0], -1, block
+        )
+        grow = torch.exp(rate * torch.arange(block, device=h.device, dtype=h.dtype))
+        local = (blocks * grow).cummax(dim=-1).values / grow
+        carry = torch.nn.functional.pad(local[..., :-1, -1:], (0, 0, 1, 0))
+        peak = torch.maximum(local, carry / (grow * math.exp(rate))).flatten(-2)[
+            ..., :n
+        ]
+        # filtfilt with zero initial state: causal FIR, then anti-causal FIR
+        fir, m = self._fir[None, None], self._fir.numel()
+        y = torch.nn.functional.conv1d(
+            torch.nn.functional.pad(peak[:, None], (m - 1, 0)), fir.flip(-1)
+        )
+        y = torch.nn.functional.conv1d(torch.nn.functional.pad(y, (0, m - 1)), fir)[
+            :, 0
+        ]
+        return (2.0 - math.exp(-rate)) * y.clamp_min(0.0)

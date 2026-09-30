@@ -23,6 +23,7 @@ from .features import (
     EchoDensityProfile,
     EnergyDecayCurve,
     MelEnergyDecayRelief,
+    PeakEnvelope,
     Waveform,
 )
 from .match import Match
@@ -253,7 +254,8 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
     over the resolutions. Decay and colour at once, like
     :class:`MatchCumulativeEnergy`, but banded on the mel scale.
 
-    Contributed by Riccardo Giampiccolo; the defaults are his.
+    Contributed by Riccardo Giampiccolo. The defaults are his, tuned at 16 kHz;
+    at 48 kHz the same STFT sizes span a third of the time.
 
     Parameters
     ----------
@@ -333,5 +335,39 @@ class MatchEchoDensity(Match):
             target=target,
             feature=EchoDensityProfile(win_duration=win_duration, hop=hop, kappa=kappa),
             distance=SquaredError(),
+            reduction=Mean(),
+        )
+
+
+class MatchEnvelope(Match):
+    r"""Normalized :math:`L^p` error of the smoothed peak envelope.
+
+    :math:`\overline{|e - \hat e|^p} / \overline{|\hat e|^p}` between the
+    envelopes of prediction and reference, where the envelope is a fast peak
+    follower on :math:`h^2`, zero-phase low-passed. Sees the arrival and level
+    of individual reflections that an energy decay integrates away. See
+    :class:`~pyFDN.train.losses.features.PeakEnvelope`.
+
+    Contributed by Riccardo Giampiccolo.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    release_time : float
+        Release time of the peak follower in seconds.
+    p : float
+        Exponent of the error.
+    """
+
+    def __init__(
+        self, target: Any, *, release_time: float = 2.8e-4, p: float = 2.0
+    ) -> None:
+        super().__init__(
+            target=target,
+            feature=PeakEnvelope(release_time=release_time),
+            distance=RelativeError(p),
             reduction=Mean(),
         )

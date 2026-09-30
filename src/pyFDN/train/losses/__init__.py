@@ -27,6 +27,7 @@ from .temporal import (
     MatchCumulativeEnergy,
     MatchEchoDensity,
     MatchEnergyDecay,
+    MatchEnvelope,
     MatchImpulseResponse,
     MatchMelEnergyDecayRelief,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "MatchCumulativeEnergy",
     "MatchMelEnergyDecayRelief",
     "MatchEchoDensity",
+    "MatchEnvelope",
     "Energy",
     # parameter losses
     "Sparsity",

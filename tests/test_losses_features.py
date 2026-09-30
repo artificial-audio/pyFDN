@@ -235,6 +235,7 @@ from pyFDN.train.losses.features import (  # noqa: E402
     OCTAVE_EDGES,
     EchoDensityProfile,
     EnergyDecayCurve,
+    PeakEnvelope,
     Phase,
 )
 from pyFDN.train.response import Response  # noqa: E402
@@ -333,11 +334,15 @@ def test_match_energy_decay_is_rms_over_the_masked_entries():
         lambda t: losses.SpectralFlatness(),
         lambda t: losses.MatchMelEnergyDecayRelief(t),
         lambda t: losses.MatchEchoDensity(t),
+        lambda t: losses.MatchEnvelope(t),
     ],
 )
 @pytest.mark.parametrize("silent", ["prediction", "target"])
 def test_new_losses_have_finite_gradients_on_silent_inputs(make_loss, silent):
     h, target = _decaying(n=2048), _decaying(n=2048, seed=3)
+    loss = make_loss(np.asarray(target))
+    if silent == "target" and isinstance(loss, losses.MatchEnvelope):
+        pytest.skip("an error relative to a silent target is undefined")
     if silent == "prediction":
         h = torch.zeros_like(h)
     else:
@@ -365,3 +370,20 @@ def test_mel_energy_decay_relief_is_zero_on_the_target_and_sees_level():
     loss = losses.MatchMelEnergyDecayRelief(target.numpy())
     assert loss(Response(h=target, fs=48000.0)).item() == 0.0
     assert loss(Response(h=0.5 * target, fs=48000.0)).item() > 0.0
+
+
+def test_peak_envelope_is_the_peak_follower_recursion():
+    """Blockwise cummax equals a[n] = max(h[n]^2, alpha a[n-1]) before the low-pass."""
+    h = _decaying(n=3000, n_out=1, n_in=1).double()
+    h[1000:1600] = 0.0  # a gap longer than a block: the decay must carry across
+    feature = PeakEnvelope()
+    feature._fir = torch.ones(1, dtype=h.dtype)  # identity filter
+    feature._key = (16000.0, h.device, h.dtype)
+    alpha = math.exp(-1.0 / (16000.0 * feature.release_time))
+    x = h[:, 0, 0] ** 2
+    expected = torch.empty_like(x)
+    expected[0] = x[0]
+    for n in range(1, len(x)):
+        expected[n] = max(x[n], alpha * expected[n - 1])
+    out = feature(h, 16000.0)[0] / (2.0 - alpha)
+    torch.testing.assert_close(out, expected, rtol=1e-12, atol=1e-18 * x.max().item())
