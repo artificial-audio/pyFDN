@@ -361,6 +361,9 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.MatchImpulseResponse
    pyFDN.MatchEnergyDecay
    pyFDN.MatchCumulativeEnergy
+   pyFDN.MatchMelEnergyDecayRelief
+   pyFDN.MatchEchoDensity
+   pyFDN.MatchEnvelope
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1

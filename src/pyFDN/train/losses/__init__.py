@@ -25,8 +25,11 @@ from .spectral import (
 from .temporal import (
     Energy,
     MatchCumulativeEnergy,
+    MatchEchoDensity,
     MatchEnergyDecay,
+    MatchEnvelope,
     MatchImpulseResponse,
+    MatchMelEnergyDecayRelief,
 )
 
 __all__ = [
@@ -59,6 +62,9 @@ __all__ = [
     "MatchImpulseResponse",
     "MatchEnergyDecay",
     "MatchCumulativeEnergy",
+    "MatchMelEnergyDecayRelief",
+    "MatchEchoDensity",
+    "MatchEnvelope",
     "Energy",
     # parameter losses
     "Sparsity",
