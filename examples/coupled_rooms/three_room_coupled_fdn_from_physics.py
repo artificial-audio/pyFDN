@@ -225,6 +225,8 @@ def _(Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
     | $N_i$ | {N1} | {N2} | {N3} |
     | actual $\sum d_j$ | {int(delays[:N1].sum())} | {int(delays[N1:N1+N2].sum())} | {int(delays[N1+N2:].sum())} |
     | $\Delta t_i=M_i/(N_if_s)$ | {dt_i[0]*1000:.3f} ms | {dt_i[1]*1000:.3f} ms | {dt_i[2]*1000:.3f} ms |
+    | $V_i / \sum_i V_i$ | {V[0] / np.sum(V):.3f}  | {V[1] / np.sum(V):.3f} | {V[2] / np.sum(V):.3f} |
+    | $M_i / \sum_i M_i$ | {M1 / np.sum(M):.3f}  | {M2 / np.sum(M):.3f} | {M3 / np.sum(M):.3f} |
     """)
     return N1, N2, N3, Nroom, Ntot, delays, delays_per_fdn, dt_i, fs
 
@@ -360,14 +362,18 @@ def _(
                              C_lines,
                              delays,
                              n_samp,
-                             _src=src)
+                             _src=src,
+                             # tv_matrix=tv_matrix
+                            )
     Y_complete = run_gfdn(A_complete, B, C_lines, delays, n_samp, src)
     Y_complete_lossy = run_gfdn(A_complete_lossy,
                                 B,
                                 C_lines,
                                 delays,
                                 n_samp,
-                                _src=src)
+                                _src=src, 
+                                # tv_matrix=tv_matrix
+                               )
 
     E_ex_chain, n_ex = gfdn_energy_ledger(Y_chain, num_rooms, Nroom, delays)
     E_ex_chain_lossy, _ = gfdn_energy_ledger(Y_chain_lossy, num_rooms, Nroom,
@@ -380,6 +386,7 @@ def _(
         E_ex_chain_lossy,
         E_ex_complete,
         E_ex_complete_lossy,
+        Y_chain,
         Y_chain_lossy,
         Y_complete_lossy,
         n_ex,
@@ -390,7 +397,8 @@ def _(
 @app.cell
 def _(Q_chain, Q_complete, fs, gamma, n_samp, np, num_rooms, trajectory):
     src_weight = np.zeros(num_rooms)
-    src_weight[0] = 1.0
+    src_room = 0
+    src_weight[src_room] = 1.0
     rec_weight = np.eye(num_rooms)
 
     _, Eref_chain = trajectory(Q_chain, src_weight, rec_weight, fs, n_samp)
@@ -401,13 +409,19 @@ def _(Q_chain, Q_complete, fs, gamma, n_samp, np, num_rooms, trajectory):
                                   n_samp)
     _, Eref_complete_lossy = trajectory(Q_complete, src_weight, rec_weight, fs,
                                         n_samp, gamma)
-    return Eref_chain, Eref_chain_lossy, Eref_complete, Eref_complete_lossy
+    return (
+        Eref_chain,
+        Eref_chain_lossy,
+        Eref_complete,
+        Eref_complete_lossy,
+        src_room,
+    )
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Plot and compare trajectories for the lossless case
+    ### Plot and compare trajectories for the chained case
     """)
     return
 
@@ -415,9 +429,9 @@ def _(mo):
 @app.cell
 def _(
     E_ex_chain,
-    E_ex_complete,
+    E_ex_chain_lossy,
     Eref_chain,
-    Eref_complete,
+    Eref_complete_lossy,
     V,
     fs,
     mo,
@@ -426,20 +440,25 @@ def _(
     np,
     num_rooms,
     plt,
+    src_room,
 ):
     # --- The comparison plot -----------------------------------------------------
-    _fig, _axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+    _fig, _axs = plt.subplots(1, 2, figsize=(10.5, 4.2))
     _labels = ["room 1", "room 2", "room 3"]
     _colors = ["C0", "C1", "C2"]
     _targets = V / V.sum()
     tsec = np.arange(n_samp) / fs
 
+    def db(_Y, is_energy_signal: bool = True):
+        _tmp = np.log10(np.abs(_Y) + 1e-10)
+        return 10 * _tmp if is_energy_signal else 20 * _tmp
+
     for _ax, _Eex, _Eref, _title in zip(
-            _axs, [E_ex_chain, E_ex_complete], [Eref_chain, Eref_complete],
-        ["chain (1–2, 2–3)", "complete (all coupled)"]):
+            _axs, [E_ex_chain, db(E_ex_chain_lossy)], [Eref_chain, db(Eref_complete_lossy)],
+        ["lossless chained (1–2, 2–3)", "lossy chained"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
-                     _Eex[0, :, _r],
+                     _Eex[src_room, :, _r],
                      color=_colors[_r],
                      lw=1.1,
                      label=f"GFDN {_labels[_r]}")
@@ -452,15 +471,86 @@ def _(
             _ax.axhline(_targets[_r], color=_colors[_r], lw=0.5, ls=":")
         _ax.set_title(_title, fontsize=10)
         _ax.set_xlabel("time (s)")
-        _ax.set_ylim(-0.02, 1.0)
+    _axs[0].set_ylim(-0.02, 1.0)
+    _axs[1].set_ylim(-80, 5)
     _axs[0].set_ylabel("fraction of total energy")
-    _axs[1].legend(fontsize=7.5, loc="upper right")
-    _fig.suptitle(
-        "Solid = exact lossless GFDN ledger, dashed = physical $e^{tQ}$, dotted = target $V_i/V_{\\rm tot}$",
-        fontsize=9.5)
+    _axs[1].set_ylabel('fraction of total energy (dB)')
+    _axs[1].legend(fontsize=9, loc="upper right")
+    # _fig.suptitle(
+    #     "Solid = exact lossless GFDN ledger, dashed = physical $e^{tQ}$, dotted = target $V_i/V_{\\rm tot}$",
+    #     fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
-    return (tsec,)
+    return db, tsec
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plot and compare trajectories for the complete case
+    """)
+    return
+
+
+@app.cell
+def _(
+    E_ex_complete,
+    E_ex_complete_lossy,
+    Eref_complete,
+    Eref_complete_lossy,
+    V,
+    db,
+    mo,
+    n_ex,
+    num_rooms,
+    plt,
+    src_room,
+    tsec,
+):
+    _fig, _axs = plt.subplots(1, 2, figsize=(10.5, 4.2))
+    _labels = ["room 1", "room 2", "room 3"]
+    _colors = ["C0", "C1", "C2"]
+    _targets = V / V.sum()
+
+    for _ax, _Eex, _Eref, _title in zip(
+            _axs, [E_ex_complete, db(E_ex_complete_lossy)],
+        [Eref_complete, db(Eref_complete_lossy)],
+        ["lossless complete (all coupled)", "lossy complete"]):
+        for _r in range(num_rooms):
+            _ax.plot(tsec[:n_ex],
+                         _Eex[src_room, :, _r],
+                         color=_colors[_r],
+                         lw=1.1,
+                         label=f"GFDN {_labels[_r]}")
+            _ax.plot(tsec,
+                         _Eref[:, _r],
+                         "--",
+                         color=_colors[_r],
+                         lw=1.0,
+                         alpha=0.7)
+            _ax.axhline(_targets[_r], color=_colors[_r], lw=0.5, ls=":")
+        _ax.set_title(_title, fontsize=10)
+        _ax.set_xlabel("time (s)")
+
+    _axs[0].set_ylim(-0.02, 1.0)
+    _axs[1].set_ylim(-80, 5)
+    _axs[0].set_ylabel("fraction of total energy")
+    _axs[1].set_ylabel('fraction of total energy (dB)')
+    _axs[1].legend(fontsize=9, loc="upper right")
+    # _fig.suptitle(
+    #     "Solid = exact lossy GFDN ledger, dashed = physical $e^{t(Q-D)}$, dotted = target $V_i/V_{\\rm tot}$",
+    #     fontsize=9.5)
+    _fig.tight_layout()
+    mo.mpl.interactive(_fig)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Get time constants for the lossless trajectories and T60s for the lossy trajectories
+    """)
+    return
 
 
 @app.cell
@@ -473,94 +563,39 @@ def _(E_ex_chain, E_ex_complete, Eref_chain, Eref_complete, fs, np, num_rooms):
         # This assumes the system hasn't hit the saturation limit yet in this early window
         num_samples = len(E_ledger)
         unclipped_end_idx = int(num_samples * 0.5) 
-    
+
         y_data = E_ledger[:unclipped_end_idx]
         x_time = np.arange(unclipped_end_idx) / fs
-    
+
         if not is_rising:
             # Falling: Fit a straight line to ln(y) -> ln(y) = mx + c
-        
+
             # where slope m = -1/tau
             slope, intercept = np.polyfit(x_time, np.log(y_data), 1)
             tau = -1.0 / slope
         else:
             # Rising: Requires estimating the true maximum via an optimization routine
             from scipy.optimize import curve_fit
-        
+
             def rising_func(t, E_max, tau_val):
                 return E_max * (1 - np.exp(-t / tau_val))
-            
+
             # Fit only using the unclipped initial window
             popt, _ = curve_fit(rising_func, x_time, y_data, p0=[E_ledger[-1]*2, 0.1])
             tau = popt[1] # Extracted tau value
-        
+
         return tau
 
 
+    tau_ref = np.zeros(num_rooms)
+    tau_gfdn = np.zeros(num_rooms)
     for  _Eex, _Eref,in zip([E_ex_chain, E_ex_complete], [Eref_chain, Eref_complete]):
         for _r in range(num_rooms):
             is_rising = _r != 0
-            tau_ref = calculate_time_constant(_Eex[0, :, _r], fs, is_rising)
-            print(f'Cur reference time constant for room {_r+1} is {tau_ref:.3f}s')
-            tau_gfdn = calculate_time_constant(_Eref[:, _r], fs, is_rising)
-            print(f'Cur GFDN time constant for room {_r+1} is {tau_gfdn:.3f}s')
-
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ### Plot and compare trajectories for the lossy case
-    """)
-    return
-
-
-@app.cell
-def _(
-    E_ex_chain_lossy,
-    E_ex_complete_lossy,
-    Eref_chain_lossy,
-    Eref_complete_lossy,
-    V,
-    mo,
-    n_ex,
-    num_rooms,
-    plt,
-    tsec,
-):
-    _fig, _axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
-    _labels = ["room 1", "room 2", "room 3"]
-    _colors = ["C0", "C1", "C2"]
-    _targets = V / V.sum()
-
-    for _ax, _Eex, _Eref, _title in zip(
-            _axs, [E_ex_chain_lossy, E_ex_complete_lossy],
-        [Eref_chain_lossy, Eref_complete_lossy],
-        ["chain (1–2, 2–3)", "complete (all coupled)"]):
-        for _r in range(num_rooms):
-            _ax.semilogy(tsec[:n_ex],
-                         _Eex[0, :, _r],
-                         color=_colors[_r],
-                         lw=1.1,
-                         label=f"GFDN {_labels[_r]}")
-            _ax.semilogy(tsec,
-                         _Eref[:, _r],
-                         "--",
-                         color=_colors[_r],
-                         lw=1.0,
-                         alpha=0.7)
-            _ax.axhline(_targets[_r], color=_colors[_r], lw=0.5, ls=":")
-        _ax.set_title(_title, fontsize=10)
-        _ax.set_xlabel("time (s)")
-        _ax.set_ylim(1e-6, 1.0)
-    _axs[0].set_ylabel("fraction of total energy (log scale)")
-    _axs[1].legend(fontsize=7.5, loc="upper right")
-    _fig.suptitle(
-        "Solid = exact lossy GFDN ledger, dashed = physical $e^{t(Q-D)}$, dotted = target $V_i/V_{\\rm tot}$",
-        fontsize=9.5)
-    _fig.tight_layout()
-    mo.mpl.interactive(_fig)
+            tau_ref[_r] = calculate_time_constant(_Eex[0, :, _r], fs, is_rising)
+            print(f'Cur reference time constant for room {_r+1} is {tau_ref[_r]:.3f}s')
+            tau_gfdn[_r] = calculate_time_constant(_Eref[:, _r], fs, is_rising)
+            print(f'Cur GFDN time constant for room {_r+1} is {tau_gfdn[_r]:.3f}s')
     return
 
 
@@ -573,19 +608,20 @@ def _(
     fs,
     np,
     num_rooms,
+    src_room,
 ):
     def calculate_t60_from_energy(E_ledger, fs: float) -> float:
         """
         Calculates T60 reverberation time from an energy trajectory array
         using ISO 3382-1 standard T30 window evaluation [-5 dB to -35 dB].
-    
+
         Parameters:
         -----------
         energy_ledger : np.ndarray
             Array containing the sequential energy values (e.g., squared pressure samples, h^2).
         fs : float
             Sampling frequency of the trajectory in Hz.
-        
+
         Returns:
         --------
         float : Estimated T60 decay time in seconds.
@@ -595,43 +631,139 @@ def _(
         peak_energy= np.max(E_ledger)
         peak_idx = np.argmax(E_ledger)
         energy_db = 10 * np.log10((E_ledger[peak_idx:] + np.finfo(np.float32).eps) / peak_energy)
-    
+
         # Generate structural time track matching the array size (Time = Index / fs)
         time_axis = np.arange(len(energy_db)) / fs
-    
+
         # 2. Extract boundaries for the ISO standard T30 window (-5 dB down to -35 dB)
         # Using np.argwhere to find where the signal crosses the boundary milestones
         idx_start_arr = np.argwhere(energy_db <= -5.0)
         idx_end_arr = np.argwhere(energy_db <= -35.0)
-    
+
         if len(idx_start_arr) == 0 or len(idx_end_arr) == 0:
             raise ValueError(
                 "The energy trajectory dynamic range is too narrow. "
                 "Ensure the signal decays by at least 35 dB to isolate the evaluation window."
             )
-        
+
         start_idx = idx_start_arr[0][0]
         end_idx = idx_end_arr[0][0]
-    
+
         # 3. Slice out the clean decay segment
         decay_time_window = time_axis[start_idx:end_idx]
         decay_db_window = energy_db[start_idx:end_idx]
-    
+
         # 4. Use linear regression (y = mx + c) to find the slope (m) of the isolated window
         slope, intercept = np.polyfit(decay_time_window, decay_db_window, 1)
-    
+
         # 5. Extrapolate out to a full 60 dB drop
         # T60 = Total targeted drop (-60 dB) divided by the calculated decay slope (dB/second)
         t60 = float(-60.0 / slope)
-    
+
         return t60
 
     for  _Eex, _Eref,in zip([E_ex_chain_lossy, E_ex_complete_lossy], [Eref_chain_lossy, Eref_complete_lossy]):
         for _r in range(num_rooms):
-            t60_ref = calculate_t60_from_energy(_Eex[0, :, _r], fs)
+            t60_ref = calculate_t60_from_energy(_Eex[src_room, :, _r], fs)
             print(f'Cur reference T60 for room {_r+1} is {t60_ref:.3f}s')
             t60_gfdn = calculate_t60_from_energy(_Eref[:, _r], fs)
             print(f'Cur GFDN T60 for room {_r+1} is {t60_gfdn:.3f}s')
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plot the delay line energy distribution of the GFDN at steady state - these should be uniform
+    """)
+    return
+
+
+@app.cell
+def _(
+    Nroom,
+    Y_chain,
+    avg_delays,
+    db,
+    fs,
+    mo,
+    np,
+    num_rooms,
+    plt,
+    pyFDN,
+    src_room,
+):
+    from pathlib import Path
+
+    def delay_line_kl_divergence(_E_ss):
+        """
+        KL divergence of the delay-line steady-state energy
+        distribution from the uniform distribution.
+        """
+
+        _p = _E_ss / np.sum(_E_ss)
+        _N = len(_p)
+
+        _D_KL = np.sum(
+            _p * np.log(_p * _N)
+        )
+
+        return _D_KL
+
+    def plot_gfdn_delay_element_distributions(
+        _Y,
+        _steady_state_start:int,
+    ):
+        """
+        Plot the distribution of delay-element energies at selected times.
+        """
+
+        # squared delay-line states
+        _S2 = _Y**2
+
+        # Select steady-state samples
+        _S2_ss = _S2[_steady_state_start:, :]
+
+        # Average over input/realisation and time
+        _E_ss = _S2_ss.mean(axis=0)
+        _E_ss_per_group = np.zeros(num_rooms, dtype=np.float32)
+        for _k in range(num_rooms):
+            _E_ss_per_group[_k] = _E_ss[_k*Nroom:(_k+1)*Nroom].mean()
+        _E_ss_group_variance = np.std(_E_ss_per_group)/ np.mean(_E_ss_per_group)
+
+
+        _fig, _ax = plt.subplots(figsize=(6, 4))
+
+        _ax.bar(
+            np.arange(len(_E_ss)),
+            _E_ss,
+        )
+
+        kl_div = delay_line_kl_divergence(_E_ss)
+
+        _ax.axhline(
+            _E_ss.mean(),
+            linestyle="--",
+            color='k',
+            label=rf"mean energy",
+        )
+
+        _ax.set_xlabel("Delay line $j$")
+        _ax.set_ylabel(r"$\mathbb{{E}}[s^{j}(m_j + \infty)^2]$")
+        _ax.set_title(rf"$D_{{KL}}(\mathrm{{unif.}}= {kl_div:.4f}, \text{{Var}} \left(\mathbb{{E}}(\sum_{{i \in \text{{FDN_i}}}}s_i^2(\infty)) \right) = {db(_E_ss_group_variance):.4f}$")
+        _ax.legend()
+    
+        return _E_ss, _ax, _fig
+
+
+    steady_state_start_ms, echo_density = pyFDN.echo_density(ir=Y_chain[src_room, ...].sum(axis=-1), fs=fs)
+    steady_state_start_samp = int(steady_state_start_ms * 1e-3 * fs)
+    Ess, _ax, _fig = plot_gfdn_delay_element_distributions(Y_chain[src_room, ...], steady_state_start_samp)
+
+    fig_path = Path(f'../GroupedFDN/figures/delay_line_energy_dist_del_len={avg_delays.value}_Ngrp={Nroom}.png')
+    _fig.savefig(fig_path, dpi=300)
+
+    mo.mpl.interactive(_fig)
 
     return
 
@@ -722,6 +854,7 @@ def _(
     N2,
     Y_chain_lossy,
     Y_complete_lossy,
+    db,
     mo,
     np,
     num_rooms,
@@ -741,10 +874,6 @@ def _(
         Y_complete_lossy[:, :, N1 + N2:].sum(-1)
     ],
                                     axis=-1)
-
-    def db(_Y, is_energy_signal: bool = True):
-        tmp = np.log10(np.abs(_Y) + 1e-10)
-        return 10 * tmp if is_energy_signal else 20 * tmp
 
     _fig, _axs = plt.subplots(3, 3, figsize=(8, 6.6), sharex=True, sharey=True)
     _tmax = tsec[-1]

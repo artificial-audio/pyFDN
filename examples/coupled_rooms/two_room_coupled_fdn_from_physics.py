@@ -9,7 +9,7 @@ def _():
     import marimo as mo
     import numpy as np
     import matplotlib.pyplot as plt
-    from scipy.linalg import block_diag
+    from scipy.linalg import block_diag, expm
     from typing import Optional
     from numpy.typing import NDArray
 
@@ -28,6 +28,7 @@ def _():
         create_diagonal_absorption_matrix,
         create_lossless_coupling_matrix,
         create_state_transition_matrix,
+        expm,
         get_coupling_angles,
         get_coupling_matrix,
         get_decay_matrix,
@@ -146,6 +147,7 @@ def _(
 
     $\mathbf \Gamma$ :
     $$\mathbf \Gamma = \begin{{pmatrix}}{gamma[0,0]:.4f}&{gamma[0,1]:.4f}\\{gamma[1,0]:.4f}&{gamma[1,1]:.4f}\end{{pmatrix}}\ \mathrm{{s}}^{{-1}}$$
+
     """)
     return Q, V, beta, gamma, num_rooms
 
@@ -177,6 +179,7 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
     k2 = Nroom / np.sum(delays[N1:])
     dt_i = 1.0 / (np.array([k1, k2], dtype=np.float32) * fs)
 
+
     mo.md(rf"""
     ## 1 · Geometry — $M_i \propto V_i$, equal $N_i$ (so $\mathbf D=\mathbf I$, no weighting needed)
 
@@ -191,9 +194,21 @@ def _(Nper, V, avg_delays, mo, np, pyFDN):
 
 
 @app.cell
-def _(beta, dt_i, get_coupling_angles, get_coupling_matrix, mo, np, num_rooms):
+def _(
+    Q,
+    beta,
+    dt_i,
+    expm,
+    fs,
+    get_coupling_angles,
+    get_coupling_matrix,
+    mo,
+    np,
+    num_rooms,
+):
     theta = get_coupling_angles(beta, dt_i)
     K = get_coupling_matrix(theta)
+    true_coupling = expm(Q/fs)
     R_room = np.array([[np.cos(theta[0, 1]),
                         np.sin(theta[0, 1])],
                        [-np.sin(theta[1, 0]),
@@ -206,12 +221,16 @@ def _(beta, dt_i, get_coupling_angles, get_coupling_matrix, mo, np, num_rooms):
             _check.append((beta[_i, _j] * dt_i[_i], beta[_j, _i] * dt_i[_j]))
 
     mo.md(rf"""
+
+    The true coupling values are $\begin{{bmatrix}}{true_coupling[0,0]:.3f} & {true_coupling[0, 1]:.3f} \\ 
+    {true_coupling[1, 0]:.3f} & {true_coupling[1, 1]:.3f}\end{{bmatrix}}$
+
     ## 2 · Pairwise angles $\theta_{{ij}}$ (rate‑matched, $\sin^2\theta_{{ij}}=\beta_{{ij}}\Delta t_i$)
 
-    | edge | $\theta_{{ij}}$|
+    | edge | $\theta^2_{{ij}}$|
     |---|---|
-    | 1-2 | {K[0,1]:.4f} | 
-    | 2-1 | {K[1, 0]: .4f} |
+    | 1-2 | {K[0,1]**2:.4f} | 
+    | 2-1 | {K[1, 0]**2: .4f} |
 
 
     Consistency check ($\beta_{{ij}}\Delta t_i$ vs. $\beta_{{ji}}\Delta t_j$, should match by the $\Delta t_i\propto V_i$
@@ -301,14 +320,16 @@ def _(
                  delays,
                  n_samp,
                  _src=[0, 1],
-                 tv_matrix=tv_matrix)
+                 tv_matrix=tv_matrix
+                )
     Y_lossy = run_gfdn(A_lossy,
                        B,
                        C_lines,
                        delays,
                        n_samp,
                        _src=[0, 1],
-                       tv_matrix=tv_matrix)
+                       tv_matrix=tv_matrix
+                      )
 
     E_ex, n_ex = gfdn_energy_ledger(Y, num_rooms, N1, delays)
     E_ex_lossy, _ = gfdn_energy_ledger(Y_lossy, num_rooms, N1, delays)
@@ -319,9 +340,9 @@ def _(
 def _(Q, fs, gamma, n_samp, np, num_rooms, trajectory):
     # --- True physical trajectory e(t) = expm(Q t) e(0), source = room 1 -------
     tsec = np.arange(n_samp) / fs
-    _, Eref = trajectory(Q, np.array([1.0, 0]), np.eye(num_rooms), fs, n_samp)
+    _, Eref = trajectory(Q, np.array([1.0, 0.0]), np.eye(num_rooms), fs, n_samp)
     _, Eref_lossy = trajectory(Q,
-                               np.array([1.0, 0]),
+                               np.array([1.0, 0.0]),
                                np.eye(num_rooms),
                                fs,
                                n_samp,
@@ -356,7 +377,7 @@ def _(
 
     for _ax, _Eex, _Eref, _title in zip(_axs, [E_ex, db(E_ex_lossy)],
                                         [Eref, db(Eref_lossy)],
-                                        ["Lossless", "Lossy"]):
+                                        ["Lossless, src = R1", "Lossy, src = R1"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
                      _Eex[0, :, _r],
@@ -373,13 +394,13 @@ def _(
         _ax.set_title(_title, fontsize=10)
         _ax.set_xlabel("time (s)")
     _axs[0].set_ylim(-0.02, 1.0)
-    _axs[1].set_ylim(-40, 10.0)
+    _axs[1].set_ylim(-80, 5.0)
     _axs[0].set_ylabel("fraction of total energy")
-    _axs[1].legend(fontsize=7.5, loc="upper right")
+    _axs[1].legend(fontsize=9.0, loc="upper right")
     _axs[1].set_ylabel('fraction of total energy (dB)')
-    _fig.suptitle(
-        "Solid = exact GFDN ledger, dashed = physical $e^{tQ}$, dotted = target $V_i/V_{\\rm tot}$",
-        fontsize=9.5)
+    # _fig.suptitle(
+    #     "Solid = exact GFDN ledger, dashed = physical $e^{tQ}$, dotted = target $V_i/V_{\\rm tot}$",
+    #     fontsize=9.5)
     _fig.tight_layout()
     mo.mpl.interactive(_fig)
     return (db,)
