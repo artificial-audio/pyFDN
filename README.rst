@@ -7,8 +7,8 @@ pyFDN
    :align: center
    :width: 300px
 
-.. image:: https://img.shields.io/badge/python-3.10%20%7C%203.11-blue
-        :target: https://www.python.org/downloads/
+.. image:: https://img.shields.io/pypi/pyversions/pyfdn.svg
+        :target: https://pypi.org/project/pyfdn/
         :alt: Python versions
 
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
