@@ -9,7 +9,10 @@ def _():
     import marimo as mo
     import numpy as np
     import matplotlib.pyplot as plt
+
+    from numpy.typing import NDArray
     from scipy.linalg import block_diag, expm
+    from tqdm import tqdm
 
     import pyFDN
     from pyFDN.td import TimeVaryingMatrix
@@ -21,6 +24,7 @@ def _():
 
 
     return (
+        NDArray,
         TimeVaryingMatrix,
         block_diag,
         create_diagonal_absorption_matrix,
@@ -188,27 +192,32 @@ def _(
 
 
 @app.cell
-def _(Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
+def _(NDArray, Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
     # --- Geometry: equal N per room, M_i proportional to V_i -------------------
     fs = 48000
     Nroom = Nper.value
     N1 = N2 = N3 = Nroom
     Ntot = N1 + N2 + N3
 
-    gscale = V / V[0]
-    delay_min = 0.5 * avg_delays.value
-    delay_max = 2.0 * avg_delays.value
-    delays = []
+    def sample_delay_line_lengths(avg_tau: float, num_del_per_group:int) -> NDArray:
+        """Sample co-prime delay line lengths according to the volume ratio"""
+        gscale = V / V[0]
+        delay_min = 0.9 * avg_tau
+        delay_max = 1.1 * avg_tau
+        delays = []
 
-    for _i in range(num_rooms):
-        delays.append(
-            pyFDN.sample_delay_lengths(
-                Nroom,
-                (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])),
-                coprime=True,
-                rng=331 + 10 * _i))
+        for _i in range(num_rooms):
+            delays.append(
+                pyFDN.sample_delay_lengths(
+                    num_del_per_group,
+                    (int(delay_min * gscale[_i]), int(delay_max * gscale[_i])),
+                    coprime=True,
+                    rng=331 + 10 * _i))
 
-    delays = np.concatenate(delays).astype(int)
+        delays = np.concatenate(delays).astype(int)
+        return delays
+
+    delays = sample_delay_line_lengths(avg_delays.value, Nroom)
     M1, M2, M3 = int(delays[:N1].sum()), int(delays[N1:N1 + N2].sum()), int(
         delays[N1 + N2:].sum())
     delays_per_fdn = np.asarray(
@@ -228,7 +237,18 @@ def _(Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
     | $V_i / \sum_i V_i$ | {V[0] / np.sum(V):.3f}  | {V[1] / np.sum(V):.3f} | {V[2] / np.sum(V):.3f} |
     | $M_i / \sum_i M_i$ | {M1 / np.sum(M):.3f}  | {M2 / np.sum(M):.3f} | {M3 / np.sum(M):.3f} |
     """)
-    return N1, N2, N3, Nroom, Ntot, delays, delays_per_fdn, dt_i, fs
+    return (
+        N1,
+        N2,
+        N3,
+        Nroom,
+        Ntot,
+        delays,
+        delays_per_fdn,
+        dt_i,
+        fs,
+        sample_delay_line_lengths,
+    )
 
 
 @app.cell
@@ -294,7 +314,7 @@ def _(
     np,
     pyFDN,
 ):
-    np.random.seed(1)
+    np.random.seed(12314)
 
     # time varying matrix for faster mixing
     modulation_frequency = 1.0  # hz
@@ -555,7 +575,7 @@ def _(mo):
 
 @app.cell
 def _(E_ex_chain, E_ex_complete, Eref_chain, Eref_complete, fs, np, num_rooms):
-    def calculate_time_constant(E_ledger, fs: float, is_rising: bool = False):
+    def calculate_time_constant(E_ledger, fs: float, is_rising: bool = False) -> float:
         """
         Estimates time constant of lossless energy trajectories by analyzing only the early, unclipped data points.
         """
@@ -674,7 +694,7 @@ def _(
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### Plot the delay line energy distribution of the GFDN at steady state - these should be uniform
+    ### Plot the delay line energy of the GFDN at steady state - these should be uniform
     """)
     return
 
@@ -695,7 +715,7 @@ def _(
 ):
     from pathlib import Path
 
-    def delay_line_kl_divergence(_E_ss):
+    def delay_line_kl_divergence(_E_ss) -> float:
         """
         KL divergence of the delay-line steady-state energy
         distribution from the uniform distribution.
@@ -760,9 +780,229 @@ def _(
     steady_state_start_samp = int(steady_state_start_ms * 1e-3 * fs)
     Ess, _ax, _fig = plot_gfdn_delay_element_distributions(Y_chain[src_room, ...], steady_state_start_samp)
 
-    fig_path = Path(f'../GroupedFDN/figures/delay_line_energy_dist_del_len={avg_delays.value}_Ngrp={Nroom}.png')
-    _fig.savefig(fig_path, dpi=300)
+    fig_path = Path(f'../GroupedFDN/figures')
+    _fig.savefig(fig_path / f'delay_line_energy_dist_del_len={avg_delays.value}_Ngrp={Nroom}.png', dpi=300)
 
+    mo.mpl.interactive(_fig)
+    return (fig_path,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Sweep over different delay line lengths and numbers and plot the energy distribution histograms
+    """)
+    return
+
+
+@app.cell
+def _(
+    NDArray,
+    Y_chain,
+    avg_delays,
+    beta_chain,
+    block_diag,
+    db,
+    delays,
+    dur,
+    expm,
+    fig_path,
+    fs,
+    get_coupling_angles,
+    get_coupling_matrix,
+    get_feedback_matrix,
+    mo,
+    np,
+    num_rooms,
+    plt,
+    pyFDN,
+    run_gfdn,
+    sample_delay_line_lengths,
+):
+    def run_chain_for_Nroom(_avg_tau: float, _Nroom: int) -> NDArray:
+            N1 = N2 = N3 = _Nroom
+            Ntot = num_rooms * _Nroom
+
+            # ------------------------------------------------------------
+            # Delay lengths
+            # -----------------------------------------------------------
+            delays = sample_delay_line_lengths(_avg_tau, _Nroom)
+
+            M = np.array([
+                delays[:N1].sum(),
+                delays[N1:N1 + N2].sum(),
+                delays[N1 + N2:].sum(),
+            ])
+
+            dt_i = M / (_Nroom * fs)
+
+            # ------------------------------------------------------------
+            # Coupling matrix
+            # ------------------------------------------------------------
+            theta_chain = get_coupling_angles(beta_chain, dt_i)
+            K_chain = get_coupling_matrix(theta_chain)
+            R_room_chain = expm(K_chain)
+
+            # ------------------------------------------------------------
+            # Internal room mixers
+            # ------------------------------------------------------------
+            np.random.seed(1)
+
+            Qblocks = block_diag(
+                pyFDN.random_orthogonal(N1),
+                pyFDN.random_orthogonal(N2),
+                pyFDN.random_orthogonal(N3),
+            )
+
+            A_chain = get_feedback_matrix(
+                R_room_chain,
+                Qblocks,
+                _Nroom,
+            )
+
+            # ------------------------------------------------------------
+            # Input
+            # ------------------------------------------------------------
+            B = np.zeros((Ntot, num_rooms))
+
+            B[:N1, 0] = 1.0 / np.sqrt(N1)
+            B[N1:N1 + N2, 1] = 1.0 / np.sqrt(N2)
+            B[N1 + N2:, 2] = 1.0 / np.sqrt(N3)
+
+            C_lines = np.eye(Ntot)
+            n_samp = int(dur.value * fs)
+
+            Y_chain = run_gfdn(
+                A_chain,
+                B,
+                C_lines,
+                delays,
+                n_samp,
+                src=0,
+            )
+
+            return Y_chain, delays
+
+
+    Nroom_values = [8, 16, 24, 32]
+    avg_delay_values = [1000, 2000, 4000, 8000]
+    _fig, _ax = plt.subplots(figsize=(7, 4.5))
+
+    for _i, _Nroom in enumerate(Nroom_values):
+
+        print(f"Running Nroom = {_Nroom}...")
+
+        _Y_chain, _delays = run_chain_for_Nroom(avg_delay_values[-1], _Nroom)
+
+        # --------------------------------------------------------
+        # Use the valid portion of the signal
+        # --------------------------------------------------------
+        _n_ex = _Y_chain.shape[1] - _delays.max() - 1
+        _ind_slice = np.arange(max(_n_ex - delays.sum(), 0), _n_ex, dtype=np.int32)
+        _S2_ss = _Y_chain[0, _ind_slice, :]**2
+
+        _E_ss = _S2_ss.flatten()
+
+        _Ntot = Y_chain.shape[-1]
+        _E_expected = _S2_ss.sum() / _Ntot
+        _to_plot = _E_ss / _E_expected
+
+        # --------------------------------------------------------
+        # Histogram
+        # --------------------------------------------------------
+        _counts, _bins = np.histogram(
+            _to_plot,
+            bins=50000,
+            range=(0, 0.1),
+            density=True,
+        )
+
+        _ax.stairs(
+            _counts,
+            _bins,
+            label=rf"$K_i={_Nroom}, \sigma = {db(np.std(_to_plot)):.3f}$ dB",
+        )
+   
+
+    _ax.set_xlabel(
+        r"Normalised delay-line energy"
+    )
+    _ax.set_ylabel("Num delay elements")
+    _ax.set_xlim(0, 5*1e-5)
+    _ax.legend()
+
+    _fig.tight_layout()
+
+    mo.mpl.interactive(_fig)
+
+    _fig.savefig(fig_path / f'delay_line_energy_histogram_del_len={avg_delays.value}_Ngrp_sweep.png', dpi=300)
+    mo.mpl.interactive(_fig)
+    return Nroom_values, avg_delay_values, run_chain_for_Nroom
+
+
+@app.cell
+def _(
+    Nroom_values,
+    Y_chain,
+    avg_delay_values,
+    db,
+    delays,
+    fig_path,
+    fs,
+    mo,
+    np,
+    plt,
+    run_chain_for_Nroom,
+):
+    _fig, _ax = plt.subplots(figsize=(7, 4.5))
+
+    for _i, _avg_tau in enumerate(avg_delay_values):
+
+        print(f"Running delay line length = {_avg_tau}...")
+
+        _Y_chain, _delays = run_chain_for_Nroom(_avg_tau, Nroom_values[-1])
+
+        # --------------------------------------------------------
+        # Use the valid portion of the signal
+        # --------------------------------------------------------
+        _n_ex = _Y_chain.shape[1] - _delays.max() - 1
+        _ind_slice = np.arange(max(_n_ex - delays.sum(), 0), _n_ex, dtype=np.int32)
+        _S2_ss = _Y_chain[0, _ind_slice, :]**2
+
+        _E_ss = _S2_ss.flatten()
+
+        _Ntot = Y_chain.shape[-1]
+        _E_expected = _S2_ss.sum() / _Ntot
+        _to_plot = _E_ss / _E_expected
+
+        # --------------------------------------------------------
+        # Histogram
+        # --------------------------------------------------------
+        _counts, _bins = np.histogram(
+            _to_plot,
+            bins=50000,
+            range=(0, 0.1),
+            density=True,
+        )
+
+        _ax.stairs(
+            _counts,
+            _bins,
+            label=rf"$\bar{{m}}={_avg_tau / fs * 1e3:.3f}ms, \sigma = {db(np.std(_to_plot)):.3f}$ dB",
+        )
+   
+    _ax.set_xlabel(
+        r"Normalised delay-line energy"
+    )
+    _ax.set_ylabel("Num delay elements")
+    _ax.set_xlim(0, 5*1e-5)
+    _ax.legend()
+
+    _fig.tight_layout()
+
+    mo.mpl.interactive(_fig)
+
+    _fig.savefig(fig_path / f'delay_line_energy_histogram_Ngrp={Nroom_values[-1]}_avg_delay_line_length_sweep.png', dpi=300)
     mo.mpl.interactive(_fig)
     return
 

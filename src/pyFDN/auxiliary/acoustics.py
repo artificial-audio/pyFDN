@@ -56,12 +56,12 @@ def schroeder_integral(energy: Any,
             # normalize acc to CV SDN paper
             norm_vals = np.sum(energy, axis=axis, keepdims=True)  # per channel
             edc = edc / norm_vals
-
-    flipped = xp.flip(energy, dims=[axis])
-    edc = xp.flip(xp.cumsum(flipped, dim=axis), dims=[axis])
-    if normalize:
-        norm_vals = energy.sum(axis=(axis))
-        edc = edc / norm_vals
+    else:
+        flipped = xp.flip(energy, dims=[axis])
+        edc = xp.flip(xp.cumsum(flipped, dim=axis), dims=[axis])
+        if normalize:
+            norm_vals = energy.sum(axis=(axis))
+            edc = edc / norm_vals
     return edc
 
 
