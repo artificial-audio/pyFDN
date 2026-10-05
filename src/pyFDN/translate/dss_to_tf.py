@@ -17,19 +17,23 @@ from pyFDN.auxiliary.math import general_char_poly
 
 def dss_to_tf(
     delays: ArrayLike,
-    A: np.ndarray,
+    A: ArrayLike,
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    From delay state-space to transfer function matrix (numerator and denominator).
+    From a delay state-space (DSS) system to a transfer function matrix.
+
+    No ``build_to_tf`` counterpart exists: the result does not depend on
+    ``fs`` or an :class:`~pyFDN.FDNBuild`'s filter hooks, so pass
+    ``build.delays`` and ``build.A``/``B``/``C``/``D`` directly.
 
     Parameters
     ----------
     delays : array-like
         Delays in samples, shape (N,).
-    A : ndarray
+    A : array-like
         Feedback matrix, shape (N, N) or (N, N, order) for polynomial matrix.
     B : array-like
         Input gains, shape (N, num_input).

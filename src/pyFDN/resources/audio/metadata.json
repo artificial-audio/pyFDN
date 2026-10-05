@@ -33,6 +33,17 @@
     "modifications": "Cropped for use as a compact pyFDN example. Commercial use is prohibited without written permission from the copyright owners."
   },
   {
+    "name": "meetingroom_to_hallway_290cm",
+    "filename": "meetingroom_to_hallway_290cm.wav",
+    "category": "rir",
+    "creator": "Thomas McKenzie, Sebastian J. Schlecht, and Ville Pulkki",
+    "source": "A dataset of measured spatial room impulse responses for the transition between coupled rooms",
+    "source_url": "https://doi.org/10.5281/zenodo.4636068",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": "Omnidirectional (W) component of the 4th-order ambisonic response at receiver position 290 cm in Meeting Room to Hallway / Source in Meeting Room / No Continuous Line-of-Sight, peak normalised and cropped before the trailing fade-out."
+  },
+  {
     "name": "P1_Set1_8",
     "filename": "P1_Set1_8.wav",
     "category": "speech",

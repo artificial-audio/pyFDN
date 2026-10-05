@@ -33,12 +33,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -98,15 +98,16 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
     # Bake delay-proportional broadband decay into the lossless feedback matrix.
     A = np.diag(gain_per_sample**build.delays) @ build.A
     model = pyFDN.dss_to_flamo(
+        build.delays,
         A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=nfft,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     ir_vanilla = pyFDN.flamo_time_response(model).flatten()
     pyFDN.plot_flamo_graph(model)
@@ -169,7 +170,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
+def _(fs, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, plt, pyFDN):
     t = np.arange(len(ir_vanilla)) / fs
 
     _, echo_vanilla = pyFDN.echo_density(ir_vanilla, n=1024, fs=fs)
@@ -189,50 +190,22 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         title="Delay feedback matrix density",
     )
 
-    fig2 = go.Figure()
-    fig2.add_trace(
-        pyFDN.downsampled_scatter(
-            x=t,
-            y=echo_vanilla,
-            mode="lines",
-            name="Vanilla FDN",
-            line={"width": 0.8},
-            opacity=0.8,
-        )
-    )
-    fig2.add_trace(
-        pyFDN.downsampled_scatter(
-            x=t,
-            y=echo_delay_matrix,
-            mode="lines",
-            name="Delay+matrix+delay in feedback",
-            line={"width": 0.8},
-            opacity=0.8,
-        )
-    )
-    fig2.add_trace(
-        pyFDN.downsampled_scatter(
-            x=t,
-            y=echo_swapped,
-            mode="lines",
-            name="Swapped feedforward/feedback",
-            line={"width": 0.8},
-            opacity=0.8,
-        )
-    )
-    fig2.add_hline(
-        y=1.0, line_dash="dash", line_color="gray", annotation_text="mixing thresh"
-    )
-    fig2.update_layout(
-        title="Echo density (Abel & Huang 2006)",
-        xaxis_title="Time [s]",
-        yaxis_title="Echo density",
-        xaxis={"range": [0, 0.8], "showgrid": True, "gridwidth": 1, "griddash": "dot"},
-        yaxis={"showgrid": True, "gridwidth": 1, "griddash": "dot"},
-        legend={"yanchor": "bottom", "y": 0.99, "xanchor": "right", "x": 0.99},
-        height=350,
-        margin={"l": 60, "r": 40, "t": 50, "b": 50},
-    )
+    fig2, _ax = plt.subplots(figsize=(8, 3.5))
+    for _echo, _name in [
+        (echo_vanilla, "Vanilla FDN"),
+        (echo_delay_matrix, "Delay+matrix+delay in feedback"),
+        (echo_swapped, "Swapped feedforward/feedback"),
+    ]:
+        _ax.plot(t, _echo, linewidth=0.8, alpha=0.8, label=_name)
+    _ax.axhline(1.0, linestyle="--", color="gray")
+    _ax.annotate("mixing thresh", (0.8, 1.0), ha="right", va="bottom", color="gray")
+    _ax.set_xlim(0, 0.8)
+    _ax.set_title("Echo density (Abel & Huang 2006)")
+    _ax.set_xlabel("Time [s]")
+    _ax.set_ylabel("Echo density")
+    _ax.grid(True, linestyle=":")
+    _ax.legend(loc="lower right")
+    fig2.tight_layout()
 
     plots = mo.vstack([fig, fig2])
 

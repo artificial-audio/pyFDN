@@ -319,7 +319,7 @@ def _(
                  C_lines,
                  delays,
                  n_samp,
-                 _src=[0, 1],
+                 src=[0, 1],
                  tv_matrix=tv_matrix
                 )
     Y_lossy = run_gfdn(A_lossy,
@@ -327,7 +327,7 @@ def _(
                        C_lines,
                        delays,
                        n_samp,
-                       _src=[0, 1],
+                       src=[0, 1],
                        tv_matrix=tv_matrix
                       )
 

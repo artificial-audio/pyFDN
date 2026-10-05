@@ -40,6 +40,11 @@ Matrix Generators
    pyFDN.construct_velvet_feedback_matrix
    pyFDN.tiny_rotation_matrix
    pyFDN.rotation_matrix_from_angles
+   pyFDN.rotation_kernel
+   pyFDN.reflection_kernel
+   pyFDN.kronecker_angles
+   pyFDN.kronecker_matrix
+   pyFDN.kronecker_transform
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
@@ -100,10 +105,11 @@ EQ Design (``pyFDN.eq``)
 
 Explicit functions map either decay targets or gain targets onto a named
 filter design. The same functions run in NumPy or Torch; the trainable
-:class:`pyFDN.DecayFilter` and :class:`pyFDN.OutputEQ` modules use these
+:class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
-modules.
+modules. The target-to-EQ functions accept ``return_design=True`` when their
+JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
    :toctree: generated/
@@ -129,7 +135,7 @@ Time-Domain Graph (``pyFDN.td``)
 --------------------------------
 
 Stateful block-processing operators, wired into a graph by the connectors and
-rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
+rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
 
 .. autosummary::
    :toctree: generated/
@@ -140,10 +146,18 @@ rendered with ``.process(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Gain
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
+   pyFDN.td.DCBlocker
+   pyFDN.td.ControllableFullWaveRect
+   pyFDN.td.SDFD
+   pyFDN.td.RingModulator
+   pyFDN.td.PitchShift
+   pyFDN.td.GranularPitchShift
    pyFDN.td.SOSBank
    pyFDN.td.MatrixFIR
    pyFDN.td.MatrixConvolver
+   pyFDN.td.KroneckerMatrix
    pyFDN.td.TimeVaryingMatrix
+   pyFDN.td.TimeVaryingKroneckerMatrix
    pyFDN.td.RecursionState
    pyFDN.td.Series
    pyFDN.td.Parallel
@@ -168,7 +182,8 @@ Building a FLAMO Graph
 An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
 ``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
 ``post_output`` on the wet signal -- are the same three
-:func:`pyFDN.process_fdn` takes, in the same positions and under the same names.
+:func:`pyFDN.process_dss` takes, in the same positions and under the same
+names.
 
 .. autosummary::
    :toctree: generated/
@@ -182,7 +197,7 @@ An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
    pyFDN.hook_module
-   pyFDN.DecayFilter
+   pyFDN.AttenuationFilter
    pyFDN.OutputEQ
 
 Polynomial & Matrix Maths
@@ -246,6 +261,11 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
+   pyFDN.get_fdn_preset
+   pyFDN.FDNPreset
+   pyFDN.fdn_preset_to_dict
+   pyFDN.fdn_preset_from_dict
+   pyFDN.save_fdn_preset
    pyFDN.load_fdn_preset
    pyFDN.fdn_build_to_dict
    pyFDN.fdn_build_from_dict
@@ -257,6 +277,11 @@ Build Files, Packaged Examples & References
 State-Space Translators
 -----------------------
 
+Convert a delay state-space (DSS) system -- ``A``, ``B``, ``C``, ``D``,
+``delays`` -- to another representation. Each ``build_to_*`` function is a
+thin wrapper over its ``dss_to_*`` counterpart that unpacks an
+:class:`~pyFDN.FDNBuild` instead.
+
 .. autosummary::
    :toctree: generated/
    :nosignatures:
@@ -264,6 +289,8 @@ State-Space Translators
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
    pyFDN.build_to_impz
+   pyFDN.dss_to_td
+   pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
@@ -283,6 +310,7 @@ FDN Processing
    :toctree: generated/
    :nosignatures:
 
+   pyFDN.process_dss
    pyFDN.process_fdn
    pyFDN.flamo_process
 
@@ -295,6 +323,7 @@ Training
 
    pyFDN.build_fdn
    pyFDN.trainable_from_build
+   pyFDN.trainable_from_preset
    pyFDN.build_set_decay
    pyFDN.Trainable
    pyFDN.train_fdn
@@ -318,19 +347,29 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.params
    pyFDN.ParamRef
    pyFDN.Loss
+   pyFDN.Match
    pyFDN.FlatMagnitude
    pyFDN.AsymmetricFlatMagnitude
    pyFDN.FlatSpectrogram
+   pyFDN.SpectralFlatness
    pyFDN.MatchMagnitude
+   pyFDN.MatchPhase
+   pyFDN.MatchPhaseSpectrogram
+   pyFDN.MatchMelMagnitude
    pyFDN.MatchSpectrogram
    pyFDN.MatchMelSpectrogram
    pyFDN.MatchImpulseResponse
    pyFDN.MatchEnergyDecay
    pyFDN.MatchCumulativeEnergy
+   pyFDN.MatchMelEnergyDecayRelief
+   pyFDN.MatchEchoDensity
+   pyFDN.MatchEnvelope
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1
    pyFDN.L2
+   pyFDN.mimo_rir_eigenvalues_per_frequency
+   pyFDN.energy_decay_curve
 
 Plotting
 --------
@@ -343,16 +382,14 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
-   pyFDN.plot_FDN_build
+   pyFDN.plot_fdn_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
    pyFDN.plot_edc
    pyFDN.plot_spectrogram
    pyFDN.animate
-   pyFDN.downsampled_scatter
    pyFDN.downsample_minmax
-   pyFDN.downsample_plotly_trace
 
 Notebook Display
 ----------------

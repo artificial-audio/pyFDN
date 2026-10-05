@@ -59,20 +59,21 @@ def _(pyFDN, torch):
         direct_gain=1.0,
         rt=2.0,
         rt_nyquist=0.5,
-        eq_db_dc=0.0,
-        eq_db_nyquist=-6.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-6.0,
         rng=42,
     )
     model = pyFDN.dss_to_flamo(
+        build.delays,
         build.A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=2**18,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     ir = pyFDN.flamo_time_response(model).flatten()
     return build, fs, ir, model
@@ -90,7 +91,7 @@ def _(mo):
 
 @app.cell
 def _(build, pyFDN):
-    pyFDN.plot_FDN_build(build, title="Vanilla FDN parameters")
+    pyFDN.plot_fdn_build(build, title="Vanilla FDN parameters")
     return
 
 

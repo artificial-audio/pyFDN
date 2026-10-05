@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -11,6 +12,8 @@ from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db, ms_to_sam
 
 from scipy.signal import sosfreqz, fftconvolve
 from scipy.special import erfc
+
+from pyFDN.auxiliary.utils import array_namespace
 
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
@@ -29,9 +32,37 @@ def slope_to_rt(slope: ArrayLike, fs: float) -> np.ndarray:
 def rt_to_gain_per_sample(rt: float, fs: float) -> float:
     """Convert reverb time (seconds) to gain coefficient per sample.
 
-    The gain g satisfies g^(rt*fs) = 10^(-3), i.e. about -30 dB after rt seconds.
+    The gain g satisfies g^(rt*fs) = 10^(-3), i.e. -60 dB after rt seconds.
     """
     return 10**(-3 / (rt * fs))
+
+
+def schroeder_integral(energy: Any,
+                       axis: int = 0,
+                       normalize: bool = False) -> Any:
+    r"""Backward (Schroeder) integration of ``energy`` along ``axis``.
+
+    .. math:: E[n] = \sum_{m=n}^{L-1} e[m]
+
+    Works on NumPy arrays and on torch tensors (differentiably), so the same
+    integral serves analysis and the training losses.
+    """
+    xp = array_namespace(energy)
+    if xp is np:
+        energy = np.asarray(energy, dtype=float)
+        edc = np.flip(np.cumsum(np.flip(energy, axis=axis), axis=axis),
+                      axis=axis)
+        if normalize:
+            # normalize acc to CV SDN paper
+            norm_vals = np.sum(energy, axis=axis, keepdims=True)  # per channel
+            edc = edc / norm_vals
+
+    flipped = xp.flip(energy, dims=[axis])
+    edc = xp.flip(xp.cumsum(flipped, dim=axis), dims=[axis])
+    if normalize:
+        norm_vals = energy.sum(axis=(axis))
+        edc = edc / norm_vals
+    return edc
 
 
 def edc(ir: ArrayLike, axis: int = 0, normalize: bool = False) -> np.ndarray:
@@ -39,6 +70,7 @@ def edc(ir: ArrayLike, axis: int = 0, normalize: bool = False) -> np.ndarray:
 
     EDC(t) = sum(ir[t:]^2), so the curve decreases from total energy to zero.
     Typically used with impulse responses with shape (n_samples, n_channels).
+    Accepts NumPy arrays and torch tensors, see :func:`schroeder_integral`.
 
     Parameters
     ----------
@@ -55,20 +87,9 @@ def edc(ir: ArrayLike, axis: int = 0, normalize: bool = False) -> np.ndarray:
     np.ndarray
         Same shape as ir. Values are non-negative and non-increasing along axis.
     """
-    ir = np.asarray(ir, dtype=float)
-    rev = np.flip(ir, axis=axis)
-    cum = np.cumsum(rev**2, axis=axis)
-    out = np.flip(cum, axis=axis)
-
-    if normalize:
-        # normalize acc to CV SDN paper
-        norm_vals = np.sum(np.abs(np.power(ir, 2)), axis=axis,
-                           keepdims=True)  # per channel
-        # norm_vals = np.max(out, keepdims=True)  # global max for all channels
-        out = out / norm_vals if not np.isnan(norm_vals).any() else out
-        return out
-    else:
-        return out
+    if array_namespace(ir) is np:
+        ir = np.asarray(ir, dtype=float)
+    return schroeder_integral(ir**2, axis=axis, normalize=normalize)
 
 
 def calculate_energy_envelope(sig: NDArray,

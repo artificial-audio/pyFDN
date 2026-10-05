@@ -356,22 +356,22 @@ def _(
     C_lines = np.eye(Ntot)
     src = 0
 
-    Y_chain = run_gfdn(A_chain, B, C_lines, delays, n_samp, _src=src)
+    Y_chain = run_gfdn(A_chain, B, C_lines, delays, n_samp, src=src)
     Y_chain_lossy = run_gfdn(A_chain_lossy,
                              B,
                              C_lines,
                              delays,
                              n_samp,
-                             _src=src,
+                             src=src,
                              # tv_matrix=tv_matrix
                             )
-    Y_complete = run_gfdn(A_complete, B, C_lines, delays, n_samp, src)
+    Y_complete = run_gfdn(A_complete, B, C_lines, delays, n_samp, src=src)
     Y_complete_lossy = run_gfdn(A_complete_lossy,
                                 B,
                                 C_lines,
                                 delays,
                                 n_samp,
-                                _src=src, 
+                                src=src, 
                                 # tv_matrix=tv_matrix
                                )
 
@@ -752,7 +752,7 @@ def _(
         _ax.set_ylabel(r"$\mathbb{{E}}[s^{j}(m_j + \infty)^2]$")
         _ax.set_title(rf"$D_{{KL}}(\mathrm{{unif.}}= {kl_div:.4f}, \text{{Var}} \left(\mathbb{{E}}(\sum_{{i \in \text{{FDN_i}}}}s_i^2(\infty)) \right) = {db(_E_ss_group_variance):.4f}$")
         _ax.legend()
-    
+
         return _E_ss, _ax, _fig
 
 
@@ -764,7 +764,6 @@ def _(
     _fig.savefig(fig_path, dpi=300)
 
     mo.mpl.interactive(_fig)
-
     return
 
 

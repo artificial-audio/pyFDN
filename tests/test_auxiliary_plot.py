@@ -9,9 +9,8 @@ import pytest
 from pyFDN.auxiliary.plot import (
     animate,
     downsample_minmax,
-    downsampled_scatter,
     plot_edc,
-    plot_FDN_build,
+    plot_fdn_build,
     plot_fdn_parameter,
     plot_matrix,
     plot_matrix_grid,
@@ -54,36 +53,17 @@ def test_downsample_minmax_rejects_invalid_inputs():
         downsample_minmax(None, np.array([1.0 + 1.0j, 0.0]))
 
 
-def test_downsampled_scatter_mirrors_plotly_scatter_kwargs():
-    x = np.arange(100)
-    y = np.sin(x)
-
-    trace = downsampled_scatter(
-        x=x,
-        y=y,
-        max_points=21,
-        mode="lines",
-        name="ir",
-        line={"width": 0.5},
-    )
-
-    assert trace.mode == "lines"
-    assert trace.name == "ir"
-    assert trace.line.width == 0.5
-    assert len(trace.x) <= 21
-
-
 def test_plot_edc_overlays_one_trace_per_ir_in_db():
     ir = np.exp(-np.arange(2000) / 200.0)
 
     fig = plot_edc(ir, ir, fs=48000.0, labels=["a", "b"])
 
-    assert len(fig.data) == 2
-    assert [t.name for t in fig.data] == ["a", "b"]
+    ax = fig.axes[0]
+    assert [line.get_label() for line in ax.get_lines()] == ["a", "b"]
     # dB EDC of a decaying signal is monotonically non-increasing.
-    y = np.asarray(fig.data[0].y)
+    y = np.asarray(ax.get_lines()[0].get_ydata())
     assert np.all(np.diff(y) <= 1e-9)
-    assert fig.layout.yaxis.title.text == "Energy [dB]"
+    assert ax.get_ylabel() == "Energy [dB]"
 
 
 def test_plot_edc_normalize_starts_at_zero_db():
@@ -91,9 +71,10 @@ def test_plot_edc_normalize_starts_at_zero_db():
 
     fig = plot_edc(ir, normalize=True, max_points=1000)
 
-    assert float(np.asarray(fig.data[0].y)[0]) == pytest.approx(0.0)
+    ax = fig.axes[0]
+    assert float(np.asarray(ax.get_lines()[0].get_ydata())[0]) == pytest.approx(0.0)
     # Default dynamic range floors the axis 100 dB below the 0 dB peak.
-    lo, hi = fig.layout.yaxis.range
+    lo, hi = ax.get_ylim()
     assert hi == pytest.approx(0.0)
     assert lo == pytest.approx(-100.0)
 
@@ -103,8 +84,9 @@ def test_plot_edc_default_dynamic_range_clamps_yaxis_below_peak():
 
     fig = plot_edc(ir)
 
-    lo, hi = fig.layout.yaxis.range
-    peak = float(np.asarray(fig.data[0].y)[0])  # LTTB preserves the endpoints
+    ax = fig.axes[0]
+    lo, hi = ax.get_ylim()
+    peak = float(np.asarray(ax.get_lines()[0].get_ydata())[0])  # LTTB keeps endpoints
     assert hi == pytest.approx(peak)
     assert hi - lo == pytest.approx(100.0)
 
@@ -112,7 +94,11 @@ def test_plot_edc_default_dynamic_range_clamps_yaxis_below_peak():
 def test_plot_edc_dynamic_range_none_leaves_axis_auto():
     fig = plot_edc(np.exp(-np.arange(500) / 50.0), dynamic_range=None)
 
-    assert fig.layout.yaxis.range is None
+    # Autoscaled: Matplotlib's default 5 % margin around the data.
+    ax = fig.axes[0]
+    y = np.asarray(ax.get_lines()[0].get_ydata())
+    lo, hi = ax.get_ylim()
+    assert lo == pytest.approx(y.min() - 0.05 * (y.max() - y.min()))
 
 
 def test_plot_edc_rejects_mismatched_labels():
@@ -120,8 +106,8 @@ def test_plot_edc_rejects_mismatched_labels():
         plot_edc(np.zeros(10), labels=["a", "b"])
 
 
-def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
-    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+def test_plot_fdn_build_forwards_build_parameters(monkeypatch):
+    from pyFDN.build import FDNBuild
 
     build = FDNBuild(
         A=np.eye(2),
@@ -142,7 +128,7 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
 
     monkeypatch.setattr("pyFDN.auxiliary.plot.plot_fdn_parameter", fake_plot)
 
-    result = plot_FDN_build(build, nfft=1024, title="FDN")
+    result = plot_fdn_build(build, nfft=1024, title="FDN")
 
     assert result == "figure"
     forwarded = captured["args"]
@@ -160,7 +146,7 @@ def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
     assert captured["kwargs"]["title"] == "FDN"
 
 
-def test_plot_FDN_build_renders_multichannel_post_eq():
+def test_plot_fdn_build_renders_multichannel_post_eq():
     import pyFDN
 
     build = pyFDN.fdn_build_gallery(
@@ -168,14 +154,19 @@ def test_plot_FDN_build_renders_multichannel_post_eq():
         num_outputs=3,
         rt=2.0,
         rt_nyquist=0.5,
-        eq_db_dc=[0.0, -3.0, -6.0],
-        eq_db_nyquist=-6.0,
+        output_gain_db=[0.0, -3.0, -6.0],
+        output_gain_db_nyquist=-6.0,
         rng=0,
     )
-    fig = pyFDN.plot_FDN_build(build)
+    fig = pyFDN.plot_fdn_build(build)
 
-    eq_traces = [t for t in fig.data if t.name and t.name.startswith("out ")]
-    assert len(eq_traces) == 3
+    eq_lines = [
+        line
+        for ax in fig.axes
+        for line in ax.get_lines()
+        if line.get_label().startswith("out ")
+    ]
+    assert len(eq_lines) == 3
 
 
 def test_plot_fdn_parameter_labels_quantities_on_y_axes():
@@ -195,14 +186,14 @@ def test_plot_fdn_parameter_labels_quantities_on_y_axes():
     )
 
     # one row per hook the caller supplied, labelled with the hook's own name
-    yaxis_titles = [axis.title.text for axis in fig.select_yaxes()]
-    assert "Delays [samples]" in yaxis_titles
-    assert "post_delay [dB/sample]" in yaxis_titles
-    assert "post_matrix [dB/sample]" in yaxis_titles
-    assert "post_output [dB]" in yaxis_titles
+    ylabels = [ax.get_ylabel() for ax in fig.axes]
+    assert "Delays [samples]" in ylabels
+    assert "post_delay [dB/sample]" in ylabels
+    assert "post_matrix [dB/sample]" in ylabels
+    assert "post_output [dB]" in ylabels
 
-    subplot_titles = [annotation.text for annotation in fig.layout.annotations]
-    assert "delays [samples]" not in subplot_titles
+    subplot_titles = [ax.get_title() for ax in fig.axes]
+    assert subplot_titles[:4] == ["A", "b", "c", "d"]
     assert "post_delay [dB/sample]" not in subplot_titles
     assert "post_output [dB]" not in subplot_titles
 
@@ -220,18 +211,18 @@ def test_plot_fdn_parameter_omits_the_rows_for_hooks_that_are_absent():
     }
     bare = plot_fdn_parameter(**base)
     one = plot_fdn_parameter(**base, post_matrix_sos=np.repeat(identity_sos, 2, axis=2))
-    assert len(list(one.select_yaxes())) == len(list(bare.select_yaxes())) + 1
-    assert "post_matrix [dB/sample]" in [a.title.text for a in one.select_yaxes()]
-    assert "post_delay [dB/sample]" not in [a.title.text for a in bare.select_yaxes()]
+    assert len(one.axes) == len(bare.axes) + 1
+    assert "post_matrix [dB/sample]" in [ax.get_ylabel() for ax in one.axes]
+    assert "post_delay [dB/sample]" not in [ax.get_ylabel() for ax in bare.axes]
 
 
 def test_plot_matrix_block_boundaries_draws_dividing_lines():
     fig = plot_matrix(np.eye(4), block_boundaries=[2])
 
     # One horizontal and one vertical dashed line.
-    shapes = fig.layout.shapes
-    assert len(shapes) == 2
-    assert all(s.line.dash == "dash" for s in shapes)
+    lines = fig.axes[0].get_lines()
+    assert len(lines) == 2
+    assert all(line.get_linestyle() == "--" for line in lines)
 
 
 def test_plot_matrix_grid_lays_out_all_matrices():
@@ -239,9 +230,11 @@ def test_plot_matrix_grid_lays_out_all_matrices():
 
     fig = plot_matrix_grid(mats, titles=["a", "b", "c"], ncols=2)
 
-    assert len(fig.data) == 3
-    # Only the last heatmap carries the shared colorbar.
-    assert [bool(t.showscale) for t in fig.data] == [False, False, True]
+    heatmaps = [ax for ax in fig.axes if ax.get_visible() and ax.images]
+    assert [ax.get_title() for ax in heatmaps] == ["a", "b", "c"]
+    # One shared colorbar; the unused fourth grid cell is hidden.
+    assert len(fig.axes) == 5
+    assert sum(not ax.get_visible() for ax in fig.axes) == 1
 
 
 def test_plot_matrix_grid_rejects_mismatched_titles():
@@ -253,7 +246,7 @@ def test_animate_builds_one_frame_per_input_over_plot_matrix():
     C = np.random.default_rng(0).standard_normal((4, 4, 5))
     t = np.linspace(0.0, 1.0, 5)
 
-    fig = animate(
+    anim = animate(
         functools.partial(plot_matrix, zmin=-1, zmax=1),
         [C[:, :, k] for k in range(C.shape[2])],
         labels=t,
@@ -261,22 +254,30 @@ def test_animate_builds_one_frame_per_input_over_plot_matrix():
         label_format=".2f",
     )
 
-    assert len(fig.frames) == 5
-    # First frame is the initial display; its heatmap matches C[..., 0].
-    np.testing.assert_allclose(np.asarray(fig.data[0].z), C[:, :, 0])
-    steps = fig.layout.sliders[0].steps
-    assert [s.label for s in steps] == [f"{v:.2f}" for v in t]
-    assert fig.layout.sliders[0].currentvalue.prefix == "t = "
-    assert fig.layout.updatemenus  # play/pause controls present
+    frames = list(anim.new_frame_seq())
+    assert frames == list(range(5))
+    label = anim._fig.texts[-1]
+    assert label.get_text() == "t = 0.00"
+    anim._func(3)
+    assert label.get_text() == f"t = {t[3]:.2f}"
+    # The interactive player renders without a display.
+    assert "<script" in anim.to_jshtml()
 
 
 def test_animate_works_with_arbitrary_plot_fn():
     # Any builder returning a single-subplot figure should animate.
-    fig = animate(plot_edc, [np.exp(-np.arange(50) / 10.0) * a for a in (1.0, 0.5)])
+    anim = animate(plot_edc, [np.exp(-np.arange(50) / 10.0) * a for a in (1.0, 0.5)])
 
-    assert len(fig.frames) == 2
+    assert list(anim.new_frame_seq()) == [0, 1]
+    assert "<script" in anim.to_jshtml()
 
 
 def test_animate_rejects_empty_frames():
     with pytest.raises(ValueError, match="at least one frame"):
         animate(plot_matrix, [])
+
+
+def test_plot_FDN_build_alias():
+    import pyFDN
+
+    assert pyFDN.plot_FDN_build is pyFDN.plot_fdn_build

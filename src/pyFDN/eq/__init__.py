@@ -8,6 +8,7 @@ from .biquads import (
     peaking_biquad,
 )
 from .design import (
+    EQ_DESIGNS,
     EQDesign,
     decay_to_first_order_shelf,
     decay_to_geq,
@@ -18,6 +19,7 @@ from .design import (
 from .graphic_eq import (
     BANDWIDTH_R,
     CENTER_FREQUENCIES,
+    COMMAND_FREQUENCIES,
     SHELVING_CROSSOVER,
     gain_to_bounded_geq,
     gain_to_geq,
@@ -28,7 +30,9 @@ from .probe_sos import probe_sos
 __all__ = [
     "BANDWIDTH_R",
     "CENTER_FREQUENCIES",
+    "COMMAND_FREQUENCIES",
     "EQDesign",
+    "EQ_DESIGNS",
     "SHELVING_CROSSOVER",
     "decay_to_first_order_shelf",
     "decay_to_geq",

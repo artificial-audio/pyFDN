@@ -31,13 +31,13 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
 
-    return go, np, pyFDN, torch
+    return np, plt, pyFDN, torch
 
 
 @app.cell(hide_code=True)
@@ -62,7 +62,7 @@ def _(np, pyFDN):
     direct = np.zeros((1, 1))
 
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "RandomDense", num_stages=num_stages, stage_matrix_type="random"
+        num_delays, "random_dense", num_stages=num_stages, stage_matrix_type="random"
     )
     print(f"Delays: {delays} (sum = {delays.sum()})")
     print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
@@ -136,7 +136,7 @@ def _(
     torch,
 ):
     ir_time = pyFDN.dss_to_impz(
-        ir_len, delays, feedback_matrix, input_gain, output_gain, direct
+        delays, feedback_matrix, input_gain, output_gain, direct, ir_len
     )[:, 0, 0]
 
     # pole count = degree of the generalized characteristic polynomial in w = z^{-1}
@@ -148,10 +148,11 @@ def _(
         B=input_gain,
         C=output_gain,
         D=direct,
-        m=delays,
+        delays=delays,
         fs=fs,
         shell=False,
         dtype=torch.float64,
+        device="cpu",
     )
     residues, poles, direct_term, is_pair, _meta = pyFDN.flamo_to_pr(
         model,
@@ -205,34 +206,22 @@ def _(mo):
 
 
 @app.cell
-def _(go, np, poles, pyFDN, residues):
-    fig_pr = go.Figure()
-    fig_pr.add_trace(
-        go.Scatter(
-            x=np.angle(poles),
-            y=pyFDN.lin_to_db(np.abs(poles)),
-            mode="markers",
-            marker={"size": 4},
-            name="Poles",
-        )
+def _(np, plt, poles, pyFDN, residues):
+    fig_pr, _ax = plt.subplots(figsize=(8, 4.2))
+    _ax.scatter(np.angle(poles), pyFDN.lin_to_db(np.abs(poles)), s=8, label="Poles")
+    _ax.scatter(
+        np.angle(poles),
+        pyFDN.lin_to_db(np.abs(residues[:, 0, 0])),
+        s=12,
+        marker="x",
+        label="Residues",
     )
-    fig_pr.add_trace(
-        go.Scatter(
-            x=np.angle(poles),
-            y=pyFDN.lin_to_db(np.abs(residues[:, 0, 0])),
-            mode="markers",
-            marker={"size": 4, "symbol": "x"},
-            name="Residues",
-        )
-    )
-    fig_pr.update_layout(
-        title="Pole and residue magnitudes over pole angle",
-        xaxis={"title": "Pole angle (rad)"},
-        yaxis={"title": "Magnitude (dB)"},
-        template="plotly_white",
-        height=420,
-    )
-    fig_pr.show()
+    _ax.set_title("Pole and residue magnitudes over pole angle")
+    _ax.set_xlabel("Pole angle (rad)")
+    _ax.set_ylabel("Magnitude (dB)")
+    _ax.legend()
+    fig_pr.tight_layout()
+    fig_pr
     return
 
 

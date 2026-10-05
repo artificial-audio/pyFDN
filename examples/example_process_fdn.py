@@ -44,13 +44,13 @@ def _(mo):
 def _():
     import warnings
 
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
     from pyFDN import td
 
-    return go, np, pyFDN, td, warnings
+    return np, plt, pyFDN, td, warnings
 
 
 @app.cell
@@ -137,8 +137,8 @@ def _(N, np, pyFDN):
     A = pyFDN.fdn_matrix_gallery(N, "orthogonal")
 
     # Try this:
-    #   A = pyFDN.fdn_matrix_gallery(N, "Hadamard")     -> maximal mixing, +/-1 only
-    #   A = pyFDN.fdn_matrix_gallery(N, "Householder")  -> cheap: one inner product
+    #   A = pyFDN.fdn_matrix_gallery(N, "hadamard")     -> maximal mixing, +/-1 only
+    #   A = pyFDN.fdn_matrix_gallery(N, "householder")  -> cheap: one inner product
     #   A = pyFDN.fdn_matrix_gallery(N, "permutation")  -> lossless but never mixes
     #   A = pyFDN.fdn_matrix_gallery(N, "circulant")
     return (A,)
@@ -146,7 +146,7 @@ def _(N, np, pyFDN):
 
 @app.cell
 def _(A, pyFDN):
-    pyFDN.plot_matrix(A, title="Feedback matrix A").show()
+    pyFDN.plot_matrix(A, title="Feedback matrix A")
     return
 
 
@@ -178,7 +178,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
         ("orthogonal", A),
         ("permutation", pyFDN.fdn_matrix_gallery(N, "permutation")),
     ]:
-        _ir = pyFDN.dss_to_impz(2 * fs, delays, _matrix, _B, _C, _D).squeeze()
+        _ir = pyFDN.dss_to_impz(delays, _matrix, _B, _C, _D, 2 * fs).squeeze()
         with warnings.catch_warnings():
             # "never mixes" is a result here, not a problem: echo_density warns
             # when the density does not reach the threshold, which is exactly
@@ -188,7 +188,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
         _mixed = f"{_mixing_time:.0f} ms" if _mixing_time else "never"
         print(f"{_label:12s} mixes after {_mixed}")
 
-    # Try this: add "Hadamard" or "circulant" to the list and rank them.
+    # Try this: add "hadamard" or "circulant" to the list and rank them.
     return
 
 
@@ -242,7 +242,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, delays, fs, ir_len_seconds, mo, pyFDN):
     ir_lossless = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A, B, C, D
+        delays, A, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     mo.vstack(
@@ -281,7 +281,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     g = pyFDN.rt_to_gain_per_sample(rt, fs)
     A_lossy = np.diag(g**delays) @ A
     ir_broadband = pyFDN.dss_to_impz(
-        int(ir_len_seconds * fs), delays, A_lossy, B, C, D
+        delays, A_lossy, B, C, D, int(ir_len_seconds * fs)
     ).squeeze()
 
     print(f"gain per sample: {g:.8f}")
@@ -323,8 +323,8 @@ def _(mo):
     Real rooms absorb high frequencies faster than low ones, so a single number
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
-    `decay_to_geq` designs those filters from a target curve at ten bands (DC,
-    the eight octave bands 63 Hz – 8 kHz, and Nyquist).
+    `decay_to_geq` designs those filters from a target curve at ten octave
+    centres (31.25 Hz – 16 kHz).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
     the plain lossless `A` — all the decay is now in the filters. Bundling the
@@ -358,7 +358,7 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 def _(build, pyFDN):
     # Every parameter of the finished FDN in one figure: delays, A, B, C, D and
     # the absorption response of each line.
-    pyFDN.plot_FDN_build(build, title="The complete FDN")
+    pyFDN.plot_fdn_build(build, title="The complete FDN")
 
     # Try this: pyFDN.plot_db_per_sample(absorption, delays, fs=fs, nfft=2**14)
     #   -> the attenuation each line applies per sample, which is the quantity
@@ -380,33 +380,23 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, ir, np, pyFDN, target_rt):
+def _(fs, ir, np, plt, pyFDN, target_rt):
     rt_measured, f_centre = pyFDN.estimate_rt_bands(ir, fs)
-
-    _fig = go.Figure()
-    _fig.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=target_rt[1:9],  # the same eight octave bands
-            mode="lines+markers",
-            name="target",
-            line={"dash": "dash"},
-        )
-    )
-    _fig.add_trace(
-        go.Scatter(x=f_centre, y=rt_measured, mode="lines+markers", name="measured")
-    )
-    _fig.update_layout(
-        title="T60: asked for vs. delivered",
-        xaxis={"title": "Frequency [Hz]", "type": "log"},
-        yaxis={"title": "T60 [s]", "range": [0, None]},
-        template="plotly_white",
-        height=380,
-    )
-    _fig.show()
-
     print(f"target   [s]: {np.round(target_rt[1:9], 2)}")
     print(f"measured [s]: {np.round(rt_measured, 2)}")
+
+    _fig, _ax = plt.subplots(figsize=(8, 3.8))
+    # the same eight octave bands
+    _ax.plot(f_centre, target_rt[1:9], "o--", label="target")
+    _ax.plot(f_centre, rt_measured, "o-", label="measured")
+    _ax.set_xscale("log")
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("T60: asked for vs. delivered")
+    _ax.set_xlabel("Frequency [Hz]")
+    _ax.set_ylabel("T60 [s]")
+    _ax.legend()
+    _fig.tight_layout()
+    _fig
     return
 
 
@@ -447,9 +437,9 @@ def _(mo):
     mo.md(r"""
     ### Run audio through it
 
-    `process_fdn` is the same recursion, driven by a signal instead of an impulse.
-    The absorption filters go into the `post_delay` hook — the point in the loop
-    just after the delay outputs, which is where `build_to_impz` put them too.
+    `process_fdn` turns the complete build into a `td` graph and drives it with
+    a signal instead of an impulse. The build's absorption filters become
+    `SOSBank` nodes at the `post_delay` hook, just after the delay outputs.
 
     Pad the input with silence, or the tail is cut off where the signal ends.
     """)
@@ -457,19 +447,11 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td):
+def _(build, fs, mo, np, pyFDN):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_fdn(
-        x,
-        delays,
-        A,
-        B,
-        C,
-        D,
-        post_delay=td.SOSBank(absorption),  # absorption inside the loop
-    )
+    wet = pyFDN.process_fdn(x, build)
 
     mo.hstack(
         [
@@ -485,7 +467,7 @@ def _(mo):
     mo.md(r"""
     ## Three hooks, one loop
 
-    `process_fdn` takes a filter at three points, and each one is an entire family
+    `pyFDN.process_dss` takes an operator at three points, and each one is an entire family
     of reverbs:
 
     | hook | where it sits | what it buys |
@@ -494,7 +476,7 @@ def _(mo):
     | `post_matrix` | after the feedback matrix | time variation, non-linearity |
     | `post_output` | on the wet signal | output EQ, voicing |
 
-    A hook is any object with a `.filter(block)` method, so your own DSP drops
+    A hook is any object with a `.process_block(block)` method, so your own DSP drops
     straight in. The cell below is the same FDN with a moving matrix in the loop:
     `TimeVaryingMatrix` stays orthogonal at every sample, so the decay is
     unchanged — but the modes never sit still, and the metallic ringing of a
@@ -506,7 +488,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
     np.random.seed(11)  # TimeVaryingMatrix draws its phases from the global stream
-    wet_moving = pyFDN.process_fdn(
+    wet_moving = pyFDN.process_dss(
         x,
         delays,
         A,

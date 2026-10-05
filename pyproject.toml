@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyFDN"
-version = "0.4.1"
+version = "0.5.0"
 description = "Python library for Feedback Delay Networks"
 readme = "README.rst"
 authors = [
@@ -34,8 +34,7 @@ dependencies = [
   "numpy",
   "soundfile",
   "scipy",
-  "flamo>=0.2.14",
-  "flareverb",
+  "flamo>=0.2.20",  # canonical module devices (string "cpu"/"cuda" mix with .to())
 ]
 
 [project.optional-dependencies]
@@ -43,7 +42,6 @@ examples = [
     "marimo",  # the example notebooks are marimo apps
     "adac",  # example_fdn_to_faust compiles a FLAMO model to FAUST
     "matplotlib>=3.5.0",  # examples build matplotlib figures
-    "plotly>=5.0.0",  # examples build plotly figures
     "multislope>=0.1.1",  # multi-slope decay estimation (DecayFitNet), example only
     "pyroomacoustics",  # shoebox image-source RIRs for example_reverberation_enhancement
 ]
@@ -51,7 +49,6 @@ test = [
     "marimo",  # deps to run the example notebooks under test
     "adac",
     "matplotlib>=3.5.0",
-    "plotly>=5.0.0",
     "multislope>=0.1.1",
     "pyroomacoustics",
     "pytest>=7.0.0",  # testing
@@ -80,7 +77,6 @@ docs = [
     "nbsphinx>=0.9.0",
     "ipykernel>=6.0.0",
     "pandoc>=2.0",
-    "plotly>=5.0.0",
     "matplotlib>=3.5.0",
     "multislope>=0.1.1",  # rendered by the multi-slope example notebook
     "pyroomacoustics",  # rendered by the reverberation-enhancement notebook
@@ -113,7 +109,7 @@ include = ["pyFDN*"]
 # triggers on. Usage: bump-my-version bump {major|minor|patch}
 
 [tool.bumpversion]
-current_version = "0.4.1"
+current_version = "0.5.0"
 allow_dirty = false
 commit = true
 message = "Bump version: {current_version} → {new_version}"
@@ -161,10 +157,12 @@ disable_error_code = ["no-any-return"]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
     "flamo.*",
+    "marimo.*",
+    "mpl_toolkits.*",
     "multislope.*",
-    "plotly.*",
     "scipy.*",
     "soundfile",
+    "torchaudio.*",
 ]
 ignore_missing_imports = true
 
@@ -212,24 +210,6 @@ disable_error_code = ["no-untyped-call", "no-untyped-def"]
 module = "pyFDN.auxiliary.flamo"
 allow_untyped_defs = true
 disable_error_code = ["no-untyped-call", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-# FLAMO-based PR translation: annotation work in progress
-module = "pyFDN.translate.dss_to_pr_flamo"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "unused-ignore"]
-
-[[tool.mypy.overrides]]
-# Coupled rooms: research code, annotation work in progress
-module = "pyFDN.auxiliary.coupled_rooms"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined"]
-
-[[tool.mypy.overrides]]
-# Recursive module: PyTorch-heavy, annotation work in progress
-module = "pyFDN.recursive.*"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "override", "arg-type", "call-arg"]
 
 [[tool.mypy.overrides]]
 # Acoustics helpers: ArrayLike-heavy DSP code

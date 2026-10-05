@@ -3,19 +3,31 @@
 import numpy as np
 import pytest
 
+# Force PyTorch to use CPU only for the test suite
+import torch
+
+if hasattr(torch, "set_default_device"):
+    torch.set_default_device("cpu")
+# Disable CUDA detection so downstream libraries (e.g., flamo) stay on CPU
+torch.cuda.is_available = lambda: False
+
 pytest.importorskip("torch")
 pytest.importorskip("flamo")
 
 import pyFDN  # noqa: E402
-from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
+from pyFDN.build import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     LOSSLESS_ALIAS_DECAY_DB,
     FlatMagnitude,
     FlatSpectrogram,
     MatchCumulativeEnergy,
     MatchEnergyDecay,
+    MatchMelMagnitude,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
     Sparsity,
+    SpectralFlatness,
     Trainable,
     build_fdn,
     build_set_decay,
@@ -161,8 +173,8 @@ def test_det_negative_orthogonal_warns_and_projects():
     assert np.linalg.det(out.A) > 0
 
 
-def test_a_decay_filter_reproduces_the_designed_absorption_filters():
-    """The trainable decay filter agrees with ``decay_to_geq``."""
+def test_an_attenuation_filter_reproduces_the_designed_absorption_filters():
+    """The trainable attenuation filter agrees with ``decay_to_geq``."""
     from scipy.signal import sosfreqz
 
     fs = 48000.0
@@ -859,6 +871,235 @@ def test_match_energy_decay_rejects_a_window_longer_than_the_response():
         MatchEnergyDecay(np.zeros(2**10), window=2**12).check(model)
 
 
+# --- spectral flatness loss ------
+
+
+def test_spectral_flatness_is_between_zero_and_one():
+    """Spectral flatness should be 1 for flat spectrum, approaching 0 for peaky."""
+    from pyFDN.train import Response
+
+    # Flat spectrum: all bins equal magnitude
+    flat_spectrum = np.ones(256)
+    loss = SpectralFlatness()
+    flat_ir = np.fft.irfft(flat_spectrum)
+    score_flat = float(loss(Response(h=_as_h(flat_ir), fs=48000.0)).detach())
+    assert 0.0 <= score_flat <= 1.0
+    # The ideal flat should be closest to target 1.0, so loss should be small
+    assert score_flat < 0.01
+
+    # Peaky spectrum: single dominant bin
+    peaky = np.zeros(256)
+    peaky[50] = 1.0
+    peaky_ir = np.fft.irfft(peaky)
+    score_peaky = float(loss(Response(h=_as_h(peaky_ir), fs=48000.0)).detach())
+    assert score_peaky > score_flat
+
+
+def test_spectral_flatness_is_gain_invariant():
+    """Flatness (geometric/arithmetic mean ratio) is invariant to overall gain."""
+    from pyFDN.train import Response
+
+    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=4)
+    loss = SpectralFlatness()
+    r = model_response(model)
+    scaled = Response(h=r.h * 50.0, fs=r.fs)
+    np.testing.assert_allclose(
+        float(loss(r).detach()), float(loss(scaled).detach()), rtol=1e-5
+    )
+
+
+def test_spectral_flatness_warns_without_alias_decay():
+    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    with pytest.warns(UserWarning, match="alias_decay_db=0"):
+        train_fdn(model, SpectralFlatness(), max_steps=2, rng=0, **_FAST)
+
+
+# --- phase matching loss ------
+
+
+def test_match_phase_circular_distance():
+    """Phase distance should be 0 when phases match, up to 2 for phase opposition."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**12
+    # Create target with some phase
+    target_ir = np.sin(2 * np.pi * np.arange(n) * 440 / fs)
+    loss = MatchPhase(target_ir)
+
+    # Matching phase: same signal should give low loss
+    r1 = Response(h=_as_h(target_ir), fs=fs)
+    score1 = float(loss(r1).detach())
+    assert score1 < 0.1, "Same phase should give near-zero loss"
+
+    # Opposite phase: negated signal
+    r2 = Response(h=_as_h(-target_ir), fs=fs)
+    score2 = float(loss(r2).detach())
+    assert score2 > score1, "Opposite phase should give higher loss"
+
+
+def test_match_phase_runs_and_improves():
+    """MatchPhase should integrate into training loop."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
+
+    log = train_fdn(
+        fresh,
+        MatchPhase(target_ir),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+# --- phase spectrogram matching loss ------
+
+
+def test_match_phase_spectrogram_runs():
+    """MatchPhaseSpectrogram should compute loss across multiple STFT scales."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
+
+    log = train_fdn(
+        fresh,
+        MatchPhaseSpectrogram(target_ir, nfft=(256, 512, 1024)),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+def test_match_phase_spectrogram_rejects_window_longer_than_response():
+    model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="longer than the response"):
+        MatchPhaseSpectrogram(np.zeros(2**9), nfft=(2048,))(model_response(model))
+
+
+def test_match_phase_spectrogram_mimo_target():
+    """MatchPhaseSpectrogram should handle MIMO targets correctly."""
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(5)
+    ref = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=16,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=17,
+    )
+    log = train_fdn(
+        fresh,
+        MatchPhaseSpectrogram(target, nfft=(256, 512)),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+
+
+# --- mel magnitude matching loss ------
+
+
+def test_match_mel_magnitude_runs():
+    """MatchMelMagnitude should compute loss on mel-scaled bins."""
+    nfft = 2**11
+    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
+
+    log = train_fdn(
+        fresh,
+        MatchMelMagnitude(target_ir, n_mels=64),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+def test_match_mel_magnitude_focuses_on_low_freq():
+    """Mel scaling should weight low frequencies more heavily."""
+    from pyFDN.train import Response
+
+    fs, n = 48000.0, 2**12
+    # Target with energy mostly at low frequencies
+    t = np.arange(n) / fs
+    low_freq = 0.5 * np.sin(2 * np.pi * 100 * t)  # 100 Hz
+    high_freq = 0.1 * np.sin(2 * np.pi * 8000 * t)  # 8000 Hz
+    target_ir = low_freq + high_freq
+
+    loss = MatchMelMagnitude(target_ir, n_mels=64)
+
+    # Response that matches high freq well but low freq poorly
+    bad_low = 0.1 * np.sin(2 * np.pi * 100 * t)
+    good_high = 0.1 * np.sin(2 * np.pi * 8000 * t)
+    score_bad_low = float(loss(Response(h=_as_h(bad_low + good_high), fs=fs)).detach())
+
+    # Response that matches low freq well
+    good_low = 0.5 * np.sin(2 * np.pi * 100 * t)
+    bad_high = 0.01 * np.sin(2 * np.pi * 8000 * t)
+    score_good_low = float(loss(Response(h=_as_h(good_low + bad_high), fs=fs)).detach())
+
+    # Low frequency match should be favored (lower loss)
+    assert score_good_low < score_bad_low
+
+
+def test_match_mel_magnitude_mimo_target():
+    """MatchMelMagnitude should handle MIMO targets correctly."""
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(6)
+    ref = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=20,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N,
+        rt=0.05,
+        nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu",
+        rng=21,
+    )
+    log = train_fdn(
+        fresh,
+        MatchMelMagnitude(target, n_mels=64),
+        max_steps=10,
+        rng=0,
+        **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+
+
 # --- the doubly-cumulated energy loss --------------------------------------
 
 
@@ -876,7 +1117,7 @@ def test_cumulative_energy_surface_is_cumulative_in_both_directions():
     rng = np.random.default_rng(0)
     ir = _decaying_noise(n, fs, 0.4, rng)
     loss = MatchCumulativeEnergy(ir, window=512)
-    (tensor,) = loss._surfaces(_as_h(ir).double())
+    (tensor,) = loss.feature(_as_h(ir).double(), fs)
     surface = tensor.numpy()
 
     # non-increasing towards later times and towards higher frequencies
@@ -984,10 +1225,12 @@ def _post_output_db(model, fs, freqs):
 
 def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's in-loop decay as a trainable module, on a named design."""
-    return pyFDN.DecayFilter(
-        rt,
+    rt_value, rt_nyquist = (rt, None) if design == "graphic_eq" else rt
+    return pyFDN.AttenuationFilter(
+        rt_value,
         build.delays,
         build.fs,
+        rt_nyquist=rt_nyquist,
         design=design,
         nfft=nfft,
         device="cpu",
@@ -997,10 +1240,12 @@ def _decay(build, rt, *, design="graphic_eq", nfft=2**12, **kw):
 
 def _out_eq(build, gain_db, *, design="graphic_eq", nfft=2**12, **kw):
     """The build's output EQ as a trainable module, on a named design."""
+    gain_value, gain_nyquist = (gain_db, None) if design == "graphic_eq" else gain_db
     return pyFDN.OutputEQ(
-        gain_db,
+        gain_value,
         np.shape(build.C)[0],
         build.fs,
+        gain_db_nyquist=gain_nyquist,
         design=design,
         nfft=nfft,
         device="cpu",
@@ -1245,30 +1490,32 @@ def test_shelf_crossover_moves_the_transition():
     )
 
 
-def test_shelf_endpoints_are_two_numbers_and_a_wrong_count_is_rejected():
-    with pytest.raises(ValueError, match="takes 2 values"):
-        pyFDN.DecayFilter(
-            np.ones(3),
+def test_endpoint_targets_are_separate_and_validate_the_channel_axis():
+    with pytest.raises(ValueError, match="graphic_eq uses one target array"):
+        pyFDN.AttenuationFilter(
+            np.ones(10),
             np.array([100.0, 150.0]),
             48000.0,
-            design="first_order_shelf",
+            rt_nyquist=1.0,
+            design="graphic_eq",
             nfft=2**10,
         )
 
-    # The role still checks the channel axis, which is the role's business.
     with pytest.raises(ValueError, match="must have 2 columns"):
-        pyFDN.DecayFilter(
-            np.ones((2, 3)),
+        pyFDN.AttenuationFilter(
+            np.ones(3),
             np.array([100.0, 150.0]),
             48000.0,
+            rt_nyquist=np.ones(3),
             design="first_order_shelf",
             nfft=2**10,
         )
     with pytest.raises(ValueError, match="must have 1 columns"):
         pyFDN.OutputEQ(
-            np.ones((2, 3)),
+            np.ones(3),
             1,
             48000.0,
+            gain_db_nyquist=np.ones(3),
             design="first_order_shelf",
             nfft=2**10,
         )
@@ -1324,13 +1571,15 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     import torch
 
     delays = np.array([809.0, 1153.0, 1583.0, 2069.0])
-    module = pyFDN.DecayFilter(
-        (-5.0, 1.0),
+    module = pyFDN.AttenuationFilter(
+        -5.0,
         delays,
         48000.0,
+        rt_nyquist=1.0,
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     sos = module.map(module.param).detach().numpy()
     assert np.all(np.isfinite(sos))
@@ -1338,13 +1587,15 @@ def test_shelf_decay_pulled_below_zero_stays_at_the_floor():
     assert np.all(np.abs(sos[0, 0, :] + sos[0, 1, :]) < 1.0)
     # and it saturates: many knees below zero is the same filter as -5 s, the
     # floor's own, rather than an ever-faster decay
-    deeper = pyFDN.DecayFilter(
-        (-50.0, 1.0),
+    deeper = pyFDN.AttenuationFilter(
+        -50.0,
         delays,
         48000.0,
+        rt_nyquist=1.0,
         design="first_order_shelf",
         nfft=2**10,
         dtype=torch.float64,
+        device="cpu",
     )
     np.testing.assert_allclose(
         sos, deeper.map(deeper.param).detach().numpy(), rtol=1e-6
@@ -1409,11 +1660,11 @@ def test_per_line_rt_floor_is_each_line_s_own_round_trip():
 
     fs, nfft = 48000.0, 2**10
     delays = np.array([809.0, 4096.0])
-    shared = pyFDN.DecayFilter(
-        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+    shared = pyFDN.AttenuationFilter(
+        np.full(10, 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
-    per_line = pyFDN.DecayFilter(
-        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64
+    per_line = pyFDN.AttenuationFilter(
+        np.full((10, 2), 1.0), delays, fs, nfft=nfft, dtype=torch.float64, device="cpu"
     )
     assert shared.rt_floor.ndim == 0
     np.testing.assert_allclose(float(shared.rt_floor), 4096.0 / fs)
@@ -1446,3 +1697,121 @@ def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
     designed = pyFDN.decay_to_one_pole(1.5, 0.6, build.delays, build.fs)
     trained = param(one_pole_model, "post_delay").value().detach().numpy()
     np.testing.assert_allclose(trained, designed, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "make_loss",
+    [
+        lambda ref: MatchCumulativeEnergy(ref, window=512),
+        lambda ref: MatchEnergyDecay(ref, window=512),
+        lambda ref: pyFDN.MatchMagnitude(ref),
+        lambda ref: pyFDN.MatchImpulseResponse(ref),
+        lambda ref: MatchSpectrogram(ref, nfft=(256,)),
+        lambda ref: pyFDN.MatchMelSpectrogram(ref, nfft=(256,)),
+    ],
+)
+def test_a_loss_reused_on_a_new_response_rebuilds_its_reference(make_loss):
+    """A loss caches its reference, but only for the response it was built for.
+
+    Reusing one loss object across runs is the normal way a notebook cell works,
+    and the second run may be at another length, dtype or device -- a GPU run
+    after a CPU one used to hand a CPU reference to a CUDA step.
+    """
+    import torch
+
+    from pyFDN.train import Response
+
+    fs = 48000.0
+    rng = np.random.default_rng(7)
+    reference = _decaying_noise(2**13, fs, 0.4, rng)
+    ir = _decaying_noise(2**13, fs, 0.3, rng)
+
+    loss = make_loss(reference)
+    float(loss(Response(h=_as_h(ir), fs=fs)))  # caches against this response
+
+    # Longer, and in another dtype: a fresh loss is the ground truth.
+    long_ir = np.concatenate([ir, np.zeros(2**12)])
+    moved = Response(h=_as_h(long_ir).to(torch.float64), fs=fs)
+    assert float(loss(moved)) == pytest.approx(float(make_loss(reference)(moved)))
+
+
+# --- devices (#231) ------------------------------------------------------------
+
+
+def test_shell_accepts_parts_built_with_a_string_device_and_moved_with_to():
+    """Regression for #231: a core built with ``device="cpu"`` next to layers
+    moved with ``.to("cpu")`` used to fail inside ``Shell`` (FLAMO < 0.2.20
+    compared the string with the ``torch.device`` that ``.to`` stores)."""
+    from flamo.processor import dsp, system
+
+    nfft = 2**10
+    core = pyFDN.dss_to_flamo(
+        np.array([101, 137]),
+        0.5 * np.eye(2),
+        np.ones((2, 1)),
+        np.ones((1, 2)),
+        np.zeros((1, 1)),
+        48000,
+        nfft=nfft,
+        shell=False,
+        device="cpu",
+    )
+    model = system.Shell(
+        core=core,
+        input_layer=dsp.FFT(nfft).to("cpu"),
+        output_layer=dsp.iFFT(nfft).to("cpu"),
+    )
+    impulse = torch.zeros(1, nfft, 1)
+    impulse[0, 0, 0] = 1.0
+    assert torch.isfinite(model(impulse)).all()
+
+
+def _devices():
+    """CPU always; each accelerator when present, else a skipped CUDA case."""
+    accelerators = []
+    if torch.cuda.is_available():
+        accelerators.append("cuda")
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        accelerators.append("mps")
+    if not accelerators:
+        accelerators.append(
+            pytest.param("cuda", marks=pytest.mark.skip(reason="no GPU available"))
+        )
+    return ["cpu", *accelerators]
+
+
+@pytest.mark.parametrize("device", _devices())
+def test_training_stays_on_the_device_the_model_was_built_on(device):
+    """Build on the accelerator, then render and train with default arguments:
+    the response and the trained parameters stay on that device (#231)."""
+    model = build_fdn(N=4, rt=None, nfft=2**10, device=device, rng=0)
+
+    response = model_response(model)
+    assert response.h.device.type == device
+
+    log = train_fdn(model, FlatMagnitude(), max_steps=3, lr=3e-3, rng=0)
+    assert log.steps_run > 0
+    assert all(p.device.type == device for p in model.parameters())
+
+
+@pytest.mark.parametrize("device", _devices())
+def test_wrap_fdn_shell_keeps_the_core_on_its_device(device):
+    """Without ``device=``, the shell follows the core instead of the default
+    accelerator, so wrapping a CPU core on a GPU machine does not fail."""
+    from pyFDN.auxiliary.flamo import wrap_fdn_shell
+
+    core = pyFDN.dss_to_flamo(
+        np.array([101, 137]),
+        0.5 * np.eye(2),
+        np.ones((2, 1)),
+        np.ones((1, 2)),
+        np.zeros((1, 1)),
+        48000,
+        nfft=2**10,
+        shell=False,
+        device=device,
+    )
+    shell = wrap_fdn_shell(core, nfft=2**10)
+    assert torch.device(shell.device).type == device
+    assert model_response(shell).h.device.type == device

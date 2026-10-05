@@ -4,16 +4,33 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._targets import _CachedTarget
+import torch
+
 from .base import ResponseLoss
 
 if TYPE_CHECKING:
-    import torch
-
     from pyFDN.train.response import Response
 
+from .distances import (
+    CompressedEnergyDistance,
+    MaskedSquaredError,
+    RelativeError,
+    SquaredError,
+)
+from .features import (
+    OCTAVE_EDGES,
+    CumulativeEnergySurface,
+    EchoDensityProfile,
+    EnergyDecayCurve,
+    MelEnergyDecayRelief,
+    PeakEnvelope,
+    Waveform,
+)
+from .match import Match
+from .reductions import Mean, MeanRmsOverGroups, Rms
 
-class MatchImpulseResponse(ResponseLoss):
+
+class MatchImpulseResponse(Match):
     """Mean squared error against a reference impulse response, sample by sample.
 
     The strictest of the matching losses -- it fits phase as well as magnitude,
@@ -30,12 +47,12 @@ class MatchImpulseResponse(ResponseLoss):
     """
 
     def __init__(self, target: Any) -> None:
-        self._target = _CachedTarget(target)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        return torch.nn.functional.mse_loss(response.h, self._target(response))
+        super().__init__(
+            target=target,
+            feature=Waveform(),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
 
 
 class Energy(ResponseLoss):
@@ -53,17 +70,11 @@ class Energy(ResponseLoss):
         return (energy - self.target) ** 2
 
 
-# Octave band edges around the 63 Hz … 8 kHz centres, the range a measured RIR
-# actually carries. Below the first edge and above the last, a room impulse
-# response is noise, and its "decay" is the noise floor's.
-_OCTAVE_EDGES = (44.0, 88.0, 177.0, 354.0, 707.0, 1414.0, 2828.0, 5657.0, 11314.0)
-
-
-class MatchEnergyDecay(ResponseLoss):
+class MatchEnergyDecay(Match):
     """RMS dB error of the octave-band energy decay curves against a reference.
 
     The loss that sees the *decay* -- and the one to add when the decay is a
-    trained parameter (a :class:`~pyFDN.DecayFilter` in the ``post_delay``
+    trained parameter (a :class:`~pyFDN.AttenuationFilter` in the ``post_delay``
     hook). A magnitude
     spectrogram distance is not a substitute for fitting a decay; see :doc:`the
     design note </training_losses>`.
@@ -106,12 +117,18 @@ class MatchEnergyDecay(ResponseLoss):
         self.window = int(window)
         self.hop = int(hop) if hop is not None else int(window) // 4
         self.bands = tuple(
-            float(f) for f in (bands if bands is not None else _OCTAVE_EDGES)
+            float(f) for f in (bands if bands is not None else OCTAVE_EDGES)
         )
         self.floor_db = float(floor_db)
-        self._target = _CachedTarget(target)
-        self._reference: torch.Tensor | None = None
-        self._mask: torch.Tensor | None = None
+        distance = MaskedSquaredError(floor_db=self.floor_db)
+        super().__init__(
+            target=target,
+            feature=EnergyDecayCurve(
+                window=self.window, hop=self.hop, bands=self.bands
+            ),
+            distance=distance,
+            reduction=Rms(),
+        )
 
     def check(self, model: Any) -> None:
         nfft = int(model.nfft)
@@ -121,62 +138,8 @@ class MatchEnergyDecay(ResponseLoss):
                 f"model's nfft ({nfft}); there is no decay to read."
             )
 
-    def _band_edc_db(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        """``(n_channels, n_bands, n_frames)`` normalized Schroeder curves in dB."""
-        import torch
 
-        # (n_samples, n_out, n_in) -> (n_out * n_in, n_samples), the batch layout
-        # torch.stft wants.
-        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
-        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
-        spectrum = torch.stft(
-            x,
-            n_fft=self.window,
-            hop_length=self.hop,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        power = spectrum.real**2 + spectrum.imag**2  # (batch, freq, frames)
-        freqs = torch.fft.rfftfreq(self.window, 1.0 / fs).to(x.device)
-
-        band_power = torch.stack(
-            [
-                power[:, (freqs >= lo) & (freqs < hi), :].sum(dim=1)
-                for lo, hi in zip(self.bands[:-1], self.bands[1:], strict=True)
-            ],
-            dim=1,
-        )  # (batch, n_bands, frames)
-        # Schroeder backward integration, per band.
-        edc = torch.flip(torch.cumsum(torch.flip(band_power, [-1]), dim=-1), [-1])
-        eps = torch.finfo(edc.dtype).tiny
-        return 10.0 * torch.log10(edc / (edc[..., :1] + eps) + eps)
-
-    def __call__(self, response: Response) -> torch.Tensor:
-        import torch
-
-        if self._reference is None:
-            self._reference = self._band_edc_db(self._target(response), response.fs)
-            self._mask = self._reference > self.floor_db
-            if not bool(self._mask.any()):
-                raise ValueError(
-                    f"the reference never rises above floor_db={self.floor_db}; "
-                    "it carries no decay to fit"
-                )
-        difference = (self._band_edc_db(response.h, response.fs) - self._reference)[
-            self._mask
-        ]
-        return torch.sqrt((difference**2).mean())
-
-
-def _reverse_cumsum(x: torch.Tensor, axis: int) -> torch.Tensor:
-    """Cumulative sum running from the far end of ``axis`` back towards the near one."""
-    import torch
-
-    return torch.flip(torch.cumsum(torch.flip(x, [axis]), axis), [axis])
-
-
-class MatchCumulativeEnergy(ResponseLoss):
+class MatchCumulativeEnergy(Match):
     r"""Doubly-cumulated energy against a reference -- decay *and* colour, no bands.
 
     Takes the short-time power spectrum of both signals and integrates it twice,
@@ -260,9 +223,17 @@ class MatchCumulativeEnergy(ResponseLoss):
                 f"{frequency!r}"
             )
         self.frequency = frequency
-        self._target = _CachedTarget(target)
-        self._reference: list[torch.Tensor] | None = None
-        self._scale: list[torch.Tensor] | None = None
+        directions = (
+            ("descending", "ascending") if frequency == "both" else (frequency,)
+        )
+        super().__init__(
+            target=target,
+            feature=CumulativeEnergySurface(
+                window=self.window, hop=self.hop, directions=directions
+            ),
+            distance=CompressedEnergyDistance(power=self.power, floor_db=self.floor_db),
+            reduction=MeanRmsOverGroups(),
+        )
 
     def check(self, model: Any) -> None:
         nfft = int(model.nfft)
@@ -272,76 +243,131 @@ class MatchCumulativeEnergy(ResponseLoss):
                 f"model's nfft ({nfft}); there is no decay to read."
             )
 
-    def _directions(self) -> tuple[str, ...]:
-        """The cumulation directions this loss scores, one surface each."""
-        if self.frequency == "both":
-            return ("descending", "ascending")
-        return (self.frequency,)
 
-    def _energy(self, h: torch.Tensor) -> torch.Tensor:
-        """``(n_channels, n_freq, n_frames)`` short-time power, cumulated in time."""
-        import torch
+class MatchMelEnergyDecayRelief(ResponseLoss):
+    r"""Multi-resolution mel energy decay relief (EDR) distance to a reference.
 
-        # (n_samples, n_out, n_in) -> (n_out * n_in, n_samples), the batch layout
-        # torch.stft wants.
-        x = h.permute(1, 2, 0).reshape(-1, h.shape[0])
-        window = torch.hann_window(self.window, dtype=x.dtype, device=x.device)
-        spectrum = torch.stft(
-            x,
-            n_fft=self.window,
-            hop_length=self.hop,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        energy = spectrum.real**2 + spectrum.imag**2  # (batch, freq, frames)
-        return _reverse_cumsum(energy, -1)  # backwards in time
+    At each STFT resolution, the mel power spectrogram of both signals is
+    backward-integrated over time and taken to dB (with an 80 dB floor), and
+    the normalized :math:`L^p` error
+    :math:`\overline{|E - \hat E|^p} / \overline{|\hat E|^p}` is averaged
+    over the resolutions. Decay and colour at once, like
+    :class:`MatchCumulativeEnergy`, but banded on the mel scale.
 
-    def _surfaces(self, h: torch.Tensor) -> list[torch.Tensor]:
-        """The doubly-cumulated energy, one surface per cumulation direction."""
-        import torch
+    Contributed by Riccardo Giampiccolo. The defaults are his, tuned at 16 kHz;
+    at 48 kHz the same STFT sizes span a third of the time.
 
-        energy = self._energy(h)
-        return [
-            _reverse_cumsum(energy, -2)
-            if direction == "descending"
-            else torch.cumsum(energy, -2)
-            for direction in self._directions()
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    fft_sizes, win_lengths, hop_lengths : sequence of int
+        One STFT resolution per entry; all three the same length.
+    n_mels : int
+        Number of mel bands.
+    p : float
+        Exponent of the error.
+    """
+
+    def __init__(
+        self,
+        target: Any,
+        *,
+        fft_sizes: tuple[int, ...] = (1024, 2048, 512),
+        win_lengths: tuple[int, ...] = (600, 1200, 240),
+        hop_lengths: tuple[int, ...] = (120, 240, 50),
+        n_mels: int = 64,
+        p: float = 1.0,
+    ) -> None:
+        if not len(fft_sizes) == len(win_lengths) == len(hop_lengths):
+            raise ValueError(
+                "fft_sizes, win_lengths and hop_lengths must have the same length"
+            )
+        self.resolutions = [
+            Match(
+                target,
+                feature=MelEnergyDecayRelief(n_fft, win, hop, n_mels),
+                distance=RelativeError(p),
+                reduction=Mean(),
+            )
+            for n_fft, win, hop in zip(fft_sizes, win_lengths, hop_lengths, strict=True)
         ]
-
-    def _compressed(self, surface: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
-        floor = 10.0 ** (self.floor_db / 10.0)
-        return (surface / scale).clamp_min(floor) ** self.power
 
     def __call__(self, response: Response) -> torch.Tensor:
-        import torch
+        return torch.stack([m(response) for m in self.resolutions]).mean()
 
-        # Both are set together, and mypy needs the guard to say so.
-        if self._reference is None or self._scale is None:
-            references = self._surfaces(self._target(response))
-            # The largest value on a surface is the total energy: everything
-            # after frame 0, on whichever side of the spectrum the cumulation
-            # started from. One number for the whole reference, so relative
-            # levels between input/output paths survive the normalization.
-            self._scale = [
-                r.amax(dim=(-2, -1)).mean().clamp_min(torch.finfo(r.dtype).tiny)
-                for r in references
-            ]
-            if not all(bool(scale > 0) for scale in self._scale):
-                raise ValueError("the reference carries no energy to fit")
-            self._reference = [
-                self._compressed(r, scale)
-                for r, scale in zip(references, self._scale, strict=True)
-            ]
 
-        # Each direction is normalized and compressed on its own before it is
-        # scored: averaging the raw surfaces instead would let the one that
-        # starts from the loud end of the spectrum swamp the other, which is
-        # the whole thing "both" exists to avoid.
-        terms = [
-            torch.sqrt(((self._compressed(surface, scale) - reference) ** 2).mean())
-            for surface, scale, reference in zip(
-                self._surfaces(response.h), self._scale, self._reference, strict=True
-            )
-        ]
-        return sum(terms[1:], terms[0]) / len(terms)
+class MatchEchoDensity(Match):
+    """Mean squared error of the differentiable echo density profile.
+
+    Scores how fast the response builds up to a diffuse, Gaussian-like tail --
+    the one property of a reverberator that neither a spectrogram nor an energy
+    decay sees. See :class:`~pyFDN.train.losses.features.EchoDensityProfile`.
+
+    Contributed by Riccardo Giampiccolo.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    win_duration : float
+        Analysis window in seconds.
+    hop : int, optional
+        Samples between profile points; defaults to a quarter window. 1 is the
+        textbook profile, at a memory cost of ``nfft * window`` per channel.
+    kappa : float or (float, float)
+        Sigmoid slope, or its linear ramp from start to end of the response.
+    """
+
+    def __init__(
+        self,
+        target: Any,
+        *,
+        win_duration: float = 0.02,
+        hop: int | None = None,
+        kappa: float | tuple[float, float] = (1e2, 1e5),
+    ) -> None:
+        super().__init__(
+            target=target,
+            feature=EchoDensityProfile(win_duration=win_duration, hop=hop, kappa=kappa),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
+
+
+class MatchEnvelope(Match):
+    r"""Normalized :math:`L^p` error of the smoothed peak envelope.
+
+    :math:`\overline{|e - \hat e|^p} / \overline{|\hat e|^p}` between the
+    envelopes of prediction and reference, where the envelope is a fast peak
+    follower on :math:`h^2`, zero-phase low-passed. Sees the arrival and level
+    of individual reflections that an energy decay integrates away. See
+    :class:`~pyFDN.train.losses.features.PeakEnvelope`.
+
+    Contributed by Riccardo Giampiccolo.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    release_time : float
+        Release time of the peak follower in seconds.
+    p : float
+        Exponent of the error.
+    """
+
+    def __init__(
+        self, target: Any, *, release_time: float = 2.8e-4, p: float = 2.0
+    ) -> None:
+        super().__init__(
+            target=target,
+            feature=PeakEnvelope(release_time=release_time),
+            distance=RelativeError(p),
+            reduction=Mean(),
+        )

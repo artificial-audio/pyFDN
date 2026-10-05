@@ -38,12 +38,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
 
     import pyFDN
 
-    return go, np, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -100,7 +100,7 @@ def _(mo):
     mo.md(r"""
     ## Define FDN and absorption filters
 
-    A 16-delay FDN with a random orthogonal feedback matrix. The target RT at the 10 GEQ design bands (DC, 63 Hz … 8 kHz, Nyquist) extends the octave band estimates, shortening the lowest and the two highest bands (air and boundary absorption shortens the decay at the spectral edges).
+    A 16-delay FDN with a random orthogonal feedback matrix. The target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz) extends the octave band estimates, shortening the lowest and the two highest bands (air and boundary absorption shortens the decay at the spectral edges).
     """)
     return
 
@@ -163,15 +163,16 @@ def _(
 ):
     nfft = int(2 ** np.ceil(np.log2(rir_len)))
     _model = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct_gain,
-        delays,
         fs,
         nfft=nfft,
         post_delay=sos_absorption,
         shell=True,
+        device="cpu",
     )
     ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
     print(f"Unequalized FDN IR computed: {rir_len} samples")
@@ -183,7 +184,7 @@ def _(mo):
     mo.md(r"""
     ## Output equalization
 
-    The initial level of the unequalized FDN is roughly flat; an output GEQ shapes it to the spectral envelope of the target RIR. The GEQ target is the band-wise dB difference between target and FDN initial levels, with extra attenuation at the extrapolated DC and Nyquist bands.
+    The initial level of the unequalized FDN is roughly flat; an output GEQ shapes it to the spectral envelope of the target RIR. The GEQ target is the band-wise dB difference between target and FDN initial levels, with extra attenuation at the extrapolated 31.25 Hz and 16 kHz bands.
 
     The equalizer is placed at the end of the FLAMO graph (`output_filter`), so the final model renders the complete RIR in one pass: input → B → [delays → SOS → A] → C → GEQ → output.
     """)
@@ -216,16 +217,17 @@ def _(
     equalization_sos = pyFDN.gain_to_bounded_geq(target_level_db, fs=fs)
 
     model_eq = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct_gain,
-        delays,
         fs,
         nfft=nfft,
         post_delay=sos_absorption,
         post_output=equalization_sos[:, :, np.newaxis],
         shell=True,
+        device="cpu",
     )
     ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
 
@@ -314,50 +316,33 @@ def _(fs, ir_fdn, pyFDN):
 
 
 @app.cell
-def _(est_rt, f_centre, fdn_rt, go):
-    fig_rt = go.Figure()
-    fig_rt.add_trace(
-        go.Scatter(x=f_centre, y=est_rt, mode="lines+markers", name="Target RIR")
-    )
-    fig_rt.add_trace(go.Scatter(x=f_centre, y=fdn_rt, mode="lines+markers", name="FDN"))
-    fig_rt.update_layout(
-        title="Reverberation time",
-        xaxis={"title": "Frequency (Hz)", "type": "log"},
-        yaxis={"title": "Reverberation time (s)", "rangemode": "tozero"},
-        template="plotly_white",
-        height=380,
-    )
-    fig_rt.show()
+def _(est_rt, f_centre, fdn_rt, plt):
+    fig_rt, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(f_centre, est_rt, "o-", label="Target RIR")
+    _ax.plot(f_centre, fdn_rt, "o-", label="FDN")
+    _ax.set_xscale("log")
+    _ax.set_ylim(bottom=0)
+    _ax.set_title("Reverberation time")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("Reverberation time (s)")
+    _ax.legend()
+    fig_rt.tight_layout()
+    fig_rt
     return
 
 
 @app.cell
-def _(est_level, f_centre, fdn_level, go, pyFDN):
-    fig_level = go.Figure()
-    fig_level.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=pyFDN.lin_to_db(est_level),
-            mode="lines+markers",
-            name="Target RIR",
-        )
-    )
-    fig_level.add_trace(
-        go.Scatter(
-            x=f_centre,
-            y=pyFDN.lin_to_db(fdn_level),
-            mode="lines+markers",
-            name="FDN",
-        )
-    )
-    fig_level.update_layout(
-        title="Initial level",
-        xaxis={"title": "Frequency (Hz)", "type": "log"},
-        yaxis={"title": "Initial level (dB)"},
-        template="plotly_white",
-        height=380,
-    )
-    fig_level.show()
+def _(est_level, f_centre, fdn_level, plt, pyFDN):
+    fig_level, _ax = plt.subplots(figsize=(8, 3.8))
+    _ax.plot(f_centre, pyFDN.lin_to_db(est_level), "o-", label="Target RIR")
+    _ax.plot(f_centre, pyFDN.lin_to_db(fdn_level), "o-", label="FDN")
+    _ax.set_xscale("log")
+    _ax.set_title("Initial level")
+    _ax.set_xlabel("Frequency (Hz)")
+    _ax.set_ylabel("Initial level (dB)")
+    _ax.legend()
+    fig_level.tight_layout()
+    fig_level
     return
 
 

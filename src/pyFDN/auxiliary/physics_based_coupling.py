@@ -228,41 +228,41 @@ def get_feedback_matrix(R_room: NDArray,
 
 
 def run_gfdn(A,
-             _B: NDArray,
-             _C: NDArray,
+             B: NDArray,
+             C: NDArray,
              delays: ArrayLike,
              n_samp: int,
-             _src: Union[int, List] = 0,
+             src: Union[int, List] = 0,
              tv_matrix: Optional[TimeVaryingMatrix] = None):
     """
     Generic wrapper around process_fdn.
     Args:
         A (NDArray): Ntot x Ntot feedback matrix (with losses)
-        _B (NDArray): (Ntot, num_inputs) input matrix
-        _C (NDArray) : (num_outputs, Ntot) output matrix
+        B (NDArray): (Ntot, num_inputs) input matrix
+        C (NDArray) : (num_outputs, Ntot) output matrix
         delays (ArrayLike): delay line lengths in samples
-        _src (int, list): room where the source is
+        src (int, list): room where the source is
         n_samp (int): number of time samples
         tv_matrix (Optional): if using a time varying matrix for increased mixing
     Returns:
         NDArray : GFDN output of size (num_inputs, n_samp, num_outputs)
     """
 
-    num_inputs = _B.shape[1]
-    num_outputs = _C.shape[0]
+    num_inputs = B.shape[1]
+    num_outputs = C.shape[0]
 
     Y = np.zeros((num_inputs, n_samp, num_outputs))
     for n_src in range(num_inputs):
         x = np.zeros((n_samp, num_inputs))
-        k = _src[n_src] if isinstance(_src, list) else _src
+        k = src[n_src] if isinstance(src, list) else src
         x[0, k] = 1.0
 
-        Y[n_src] = pyFDN.process_fdn(
+        Y[n_src] = pyFDN.process_dss(
             x,
             delays,
             A,
-            _B,
-            _C,
+            B,
+            C,
             np.zeros((num_outputs, num_inputs)),
             post_matrix=tv_matrix,
         )

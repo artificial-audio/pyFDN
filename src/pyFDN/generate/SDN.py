@@ -11,14 +11,6 @@ import math
 
 import numpy as np
 
-try:
-    import plotly.graph_objects as go
-
-    _HAS_PLOTLY = True
-except ImportError:
-    go = None
-    _HAS_PLOTLY = False
-
 # ---------------------------------------------------------------------------
 # Minimal geometry (no dependency on Geometry.py)
 # ---------------------------------------------------------------------------
@@ -357,30 +349,32 @@ class SDN:
 
     def visualize(self, show=True, room_alpha=0.08, room_edge_color="gray"):
         """
-        Plot the 3D room with source, receiver, and wall node positions (Plotly).
+        Plot the 3D room with source, receiver, and wall node positions (Matplotlib).
         Call compute() first (or it will be called for you).
 
         Parameters
         ----------
         show : bool
-            If True, call fig.show() at the end.
+            If True, show the figure with ``matplotlib.pyplot.show()``.
         room_alpha : float
             Transparency of room faces (0=invisible, 1=opaque).
         room_edge_color : str
-            Color of room wireframe edges (e.g. "gray", "rgb(128,128,128)").
+            Matplotlib color of room wireframe edges (e.g. "gray").
 
         Returns
         -------
-        fig : plotly.graph_objects.Figure
+        fig : matplotlib.figure.Figure
+            The 3-D axes is ``fig.axes[0]``.
         """
-        if not _HAS_PLOTLY:
-            raise ImportError("visualize() requires plotly (pip install plotly)")
+        from matplotlib import pyplot as plt
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
         if self._result is None:
             self.compute()
         r = self._result
         assert r is not None
         Lx, Ly, Lz = self.room_size
-        nodes = r["node_positions"]
+        nodes = np.asarray(r["node_positions"], dtype=float)
         sp = self.source_pos
         rp = self.receiver_pos
         wall_labels = ("floor", "ceiling", "left", "right", "front", "back")
@@ -411,92 +405,57 @@ class SDN:
             (2, 6),
             (3, 7),
         ]
-        xe, ye, ze = [], [], []
-        for i, j in edges:
-            xe.extend([corners[i, 0], corners[j, 0], None])
-            ye.extend([corners[i, 1], corners[j, 1], None])
-            ze.extend([corners[i, 2], corners[j, 2], None])
-
-        # Room mesh faces (12 triangles for 6 quads)
-        tri_i = [0, 0, 2, 2, 0, 0, 1, 1, 0, 0, 4, 4]
-        tri_j = [1, 2, 3, 7, 3, 7, 2, 6, 1, 2, 5, 6]
-        tri_k = [2, 3, 7, 6, 7, 4, 6, 5, 2, 3, 6, 7]
-
+        faces = [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [0, 1, 5, 4],
+            [1, 2, 6, 5],
+            [2, 3, 7, 6],
+            [3, 0, 4, 7],
+        ]
         node_colors = [
-            "rgb(31, 119, 180)",
-            "rgb(255, 127, 14)",
-            "rgb(44, 160, 44)",
-            "rgb(214, 39, 40)",
-            "rgb(148, 103, 189)",
-            "rgb(140, 86, 75)",
+            "tab:blue",
+            "tab:orange",
+            "tab:green",
+            "tab:red",
+            "tab:purple",
+            "tab:brown",
         ]
-        data = [
-            go.Scatter3d(
-                x=xe,
-                y=ye,
-                z=ze,
-                mode="lines",
-                line={"color": room_edge_color, "width": 2},
-                name="Room",
-            ),
-            go.Mesh3d(
-                x=corners[:, 0],
-                y=corners[:, 1],
-                z=corners[:, 2],
-                i=tri_i,
-                j=tri_j,
-                k=tri_k,
-                opacity=room_alpha,
-                color="lightgray",
-                name="Room",
-            ),
-            go.Scatter3d(
-                x=[sp[0]],
-                y=[sp[1]],
-                z=[sp[2]],
-                mode="markers+text",
-                text=["Source"],
-                textposition="top center",
-                marker={"size": 10, "color": "red", "symbol": "circle"},
-                name="Source",
-            ),
-            go.Scatter3d(
-                x=[rp[0]],
-                y=[rp[1]],
-                z=[rp[2]],
-                mode="markers+text",
-                text=["Receiver"],
-                textposition="top center",
-                marker={"size": 10, "color": "lime", "symbol": "square"},
-                name="Receiver",
-            ),
-            go.Scatter3d(
-                x=[p[0] for p in nodes],
-                y=[p[1] for p in nodes],
-                z=[p[2] for p in nodes],
-                mode="markers+text",
-                text=wall_labels,
-                textposition="top center",
-                marker={"size": 8, "color": node_colors, "symbol": "diamond"},
-                name="Walls",
-            ),
-        ]
-        fig = go.Figure(
-            data=data,
-            layout=go.Layout(
-                title="SDN room",
-                scene={
-                    "xaxis": {"title": "x (m)", "range": [0, Lx]},
-                    "yaxis": {"title": "y (m)", "range": [0, Ly]},
-                    "zaxis": {"title": "z (m, up)", "range": [0, Lz]},
-                    "aspectmode": "data",
-                },
-                template="plotly_white",
-                height=500,
-            ),
+
+        fig = plt.figure(figsize=(7, 5))
+        ax = fig.add_subplot(111, projection="3d")
+        for k, (i, j) in enumerate(edges):
+            ax.plot(
+                *corners[[i, j]].T,
+                color=room_edge_color,
+                linewidth=1.5,
+                label="Room" if k == 0 else None,
+            )
+        ax.add_collection3d(
+            Poly3DCollection(
+                [corners[f] for f in faces],
+                facecolor="lightgray",
+                alpha=room_alpha,
+            )
         )
+        ax.scatter(*sp, s=80, color="red", marker="o", label="Source")
+        ax.text(*sp, "Source", ha="center", va="bottom")
+        ax.scatter(*rp, s=80, color="lime", marker="s", label="Receiver")
+        ax.text(*rp, "Receiver", ha="center", va="bottom")
+        ax.scatter(*nodes.T, s=50, c=node_colors, marker="D", label="Walls")
+        for p, name in zip(nodes, wall_labels, strict=False):
+            ax.text(*p, name, ha="center", va="bottom")
+        ax.set_xlim(0, Lx)
+        ax.set_ylim(0, Ly)
+        ax.set_zlim(0, Lz)
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("y (m)")
+        ax.set_zlabel("z (m, up)")
+        ax.set_box_aspect((Lx, Ly, Lz))
+        ax.set_title("SDN room")
+        ax.legend(loc="upper left")
         if show:
-            fig.show()
+            plt.show()
         return fig
 
     @property
@@ -571,17 +530,16 @@ def _result_to_flamo(r, nfft, device):
     """Build FLAMO model from SDN result dict."""
     from collections import OrderedDict
 
-    try:
-        from flamo.processor import dsp, system
-    except ImportError as e:
-        raise ImportError("sdn_to_flamo requires flamo (pip install flamo)") from e
+    from flamo.processor import dsp, system
 
-    import torch
+    from ..auxiliary.flamo import (
+        default_device,
+        delay_module,
+        gain_module,
+        sos_filter_module,
+    )
 
-    from ..auxiliary.flamo import delay_module, gain_module, sos_filter_module
-
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = default_device(device)
     N = 30
     n_nodes = 6
     S_block = np.zeros((N, N))

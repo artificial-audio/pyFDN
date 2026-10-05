@@ -81,7 +81,10 @@ def train_fdn(
     tol : float
         Relative-improvement threshold for the plateau early stop.
     device, dtype : optional
-        Torch device / dtype (default cpu / float32).
+        Torch device / dtype. ``device`` defaults to the model's own device
+        (``model.device``, e.g. CUDA when it was built there), so training
+        does not silently move a GPU model back to the CPU; ``dtype``
+        defaults to float32.
     rng : int or None
         Integer seed for ``torch.manual_seed``.
     log : bool
@@ -92,7 +95,7 @@ def train_fdn(
     import torch
     from flamo.optimize.trainer import EagerTrainer
 
-    dev = "cpu" if device is None else device
+    dev = getattr(model, "device", "cpu") if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
 
     if rng is not None:

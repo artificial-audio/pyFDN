@@ -23,9 +23,14 @@ from .build import (
     build_fdn,
     build_set_decay,
     trainable_from_build,
+    trainable_from_preset,
 )
 from .engine import TrainLog, train_fdn
-from .filters import DecayFilter, EQDesign, OutputEQ
+from .features import (
+    energy_decay_curve,
+    mimo_rir_eigenvalues_per_frequency,
+)
+from .filters import AttenuationFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
     L2,
@@ -34,15 +39,23 @@ from .losses import (
     FlatMagnitude,
     FlatSpectrogram,
     Loss,
+    Match,
     MatchCumulativeEnergy,
+    MatchEchoDensity,
     MatchEnergyDecay,
+    MatchEnvelope,
     MatchImpulseResponse,
     MatchMagnitude,
+    MatchMelEnergyDecayRelief,
+    MatchMelMagnitude,
     MatchMelSpectrogram,
+    MatchPhase,
+    MatchPhaseSpectrogram,
     MatchSpectrogram,
     ParameterLoss,
     ResponseLoss,
     Sparsity,
+    SpectralFlatness,
 )
 from .params import ParamRef, param, params
 from .response import Response, impulse_excitation, model_response
@@ -51,11 +64,12 @@ __all__ = [
     # build
     "build_fdn",
     "trainable_from_build",
+    "trainable_from_preset",
     "build_set_decay",
     "Trainable",
     "MatrixParam",
     "LOSSLESS_ALIAS_DECAY_DB",
-    "DecayFilter",
+    "AttenuationFilter",
     "OutputEQ",
     "EQDesign",
     # train
@@ -72,17 +86,28 @@ __all__ = [
     "Loss",
     "ResponseLoss",
     "ParameterLoss",
+    "Match",
     "FlatMagnitude",
     "AsymmetricFlatMagnitude",
     "FlatSpectrogram",
+    "SpectralFlatness",
     "MatchMagnitude",
+    "MatchPhase",
+    "MatchPhaseSpectrogram",
+    "MatchMelMagnitude",
     "MatchSpectrogram",
     "MatchMelSpectrogram",
     "MatchImpulseResponse",
     "MatchEnergyDecay",
     "MatchCumulativeEnergy",
+    "MatchMelEnergyDecayRelief",
+    "MatchEchoDensity",
+    "MatchEnvelope",
     "Energy",
     "Sparsity",
     "L1",
     "L2",
+    # features
+    "mimo_rir_eigenvalues_per_frequency",
+    "energy_decay_curve",
 ]

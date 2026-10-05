@@ -42,11 +42,9 @@ def test_visualization_marks_z_as_up():
         receiver_pos=(2.8, 0.9, 2.0),
     )
 
-    scene = sdn.visualize(show=False).layout.scene
+    ax = sdn.visualize(show=False).axes[0]
 
-    assert scene.xaxis.title.text == "x (m)"
-    assert scene.yaxis.title.text == "y (m)"
-    assert scene.zaxis.title.text == "z (m, up)"
-    assert scene.camera.up.x is None
-    assert scene.camera.up.y is None
-    assert scene.camera.up.z is None
+    assert ax.get_xlabel() == "x (m)"
+    assert ax.get_ylabel() == "y (m)"
+    assert ax.get_zlabel() == "z (m, up)"
+    assert ax.get_zlim() == (0.0, 5.0)

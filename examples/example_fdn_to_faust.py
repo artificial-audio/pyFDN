@@ -87,7 +87,7 @@ def _(mo):
     mo.md(r"""
     ## 1. Design the FDN
 
-    A six-line FDN from the gallery, mono in and stereo out: random orthogonal feedback, one-pole absorption per delay line giving 1.8 s at DC and 0.4 s at Nyquist, unity direct path.
+    A six-line FDN from the gallery, mono in and stereo out: random orthogonal feedback, a first-order absorption shelf per delay line giving 1.8 s at DC and 0.4 s at Nyquist, unity direct path.
 
     The output matrix `C` is `(2, 6)` with random gains, so the two channels are decorrelated mixes of the same delay lines — with `io_type="ones"` both columns would be identical and the result would be dual mono.
 
@@ -114,15 +114,16 @@ def _(pyFDN, torch):
         rng=42,
     )
     model = pyFDN.dss_to_flamo(
+        build.delays,
         build.A,
         build.B,
         build.C,
         build.D,
-        build.delays,
         build.fs,
         nfft=2**18,
         post_delay=build.post_delay,
         post_output=build.post_output,
+        device="cpu",
     )
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
     ir_flamo = pyFDN.flamo_time_response(model)[0]

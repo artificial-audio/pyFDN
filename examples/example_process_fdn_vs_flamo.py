@@ -22,7 +22,7 @@ def _(mo, pyFDN):
 
     The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
 
-    1. **`process_fdn`** — block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
+    1. **`pyFDN.process_dss`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
     The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the attenuation is a 10-band graphic EQ (`decay_to_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
@@ -34,14 +34,14 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
+    import matplotlib.pyplot as plt
     import numpy as np
-    import plotly.graph_objects as go
     import torch
 
     import pyFDN
     from pyFDN import td
 
-    return go, np, pyFDN, td, torch
+    return np, plt, pyFDN, td, torch
 
 
 @app.cell(hide_code=True)
@@ -61,7 +61,7 @@ def _(np, pyFDN):
 
     delays = np.sort(np.random.randint(500, 2001, num_delays))
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "Velvet", num_stages=3, sparsity=3
+        num_delays, "velvet", num_stages=3, sparsity=3
     )
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
@@ -81,7 +81,7 @@ def _(mo):
 
 @app.cell
 def _(delays, fs, np, pyFDN):
-    # Target RT at the 10 GEQ bands (seconds), decaying towards high frequencies
+    # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz), decaying towards high frequencies
     target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
 
     sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
@@ -94,7 +94,7 @@ def _(mo):
     mo.md(r"""
     ## Render with both implementations
 
-    `process_fdn` filters the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
+    `pyFDN.process_dss` processes the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
     """)
     return
 
@@ -116,7 +116,7 @@ def _(
 ):
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_fdn(
+    ir_td = pyFDN.process_dss(
         impulse,
         delays,
         feedback_matrix,
@@ -127,16 +127,17 @@ def _(
     )
 
     model = pyFDN.dss_to_flamo(
+        delays,
         feedback_matrix,
         input_gain,
         output_gain,
         direct,
-        delays,
         fs,
         nfft=2**17,
         post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
         dtype=torch.float64,
+        device="cpu",
     )
     ir_flamo = pyFDN.flamo_time_response(model).squeeze().astype(np.float64)[:ir_len]
 
@@ -163,8 +164,8 @@ def _(ir_flamo, ir_td, np, pyFDN):
     pyFDN.plot_impulse_response(
         ir_td,
         ir_flamo,
-        labels=["process_fdn (time domain)", "FLAMO (frequency domain)"],
-        title="Impulse response: process_fdn vs FLAMO",
+        labels=["pyFDN.process_dss (time domain)", "FLAMO (frequency domain)"],
+        title="Impulse response: pyFDN.process_dss vs FLAMO",
     )
     return (t_axis,)
 
@@ -178,25 +179,20 @@ def _(mo):
 
 
 @app.cell
-def _(difference, fs, go, pyFDN, t_axis):
-    fig_err = go.Figure()
-    fig_err.add_trace(
-        go.Scatter(
-            x=t_axis / fs,
-            y=pyFDN.lin_to_db(difference),
-            mode="lines",
-            name="|IR_process - IR_flamo|",
-            line={"width": 0.8},
-        )
+def _(difference, fs, plt, pyFDN, t_axis):
+    fig_err, _ax = plt.subplots(figsize=(8, 3.6))
+    _ax.plot(
+        t_axis / fs,
+        pyFDN.lin_to_db(difference),
+        linewidth=0.8,
+        label="|IR_process - IR_flamo|",
     )
-    fig_err.update_layout(
-        title="Difference between the two implementations",
-        xaxis={"title": "Time (s)"},
-        yaxis={"title": "Error (dB)"},
-        template="plotly_white",
-        height=360,
-    )
-    fig_err.show()
+    _ax.set_title("Difference between the two implementations")
+    _ax.set_xlabel("Time (s)")
+    _ax.set_ylabel("Error (dB)")
+    _ax.legend()
+    fig_err.tight_layout()
+    fig_err
     return
 
 

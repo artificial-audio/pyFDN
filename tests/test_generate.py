@@ -4,33 +4,33 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.generate.anderson_matrix import anderson_matrix
-from pyFDN.generate.complete_orthogonal import complete_orthogonal
-from pyFDN.generate.construct_cascaded_paraunitary_matrix import (
-    construct_cascaded_paraunitary_matrix,
-)
-from pyFDN.generate.construct_velvet_feedback_matrix import (
-    construct_velvet_feedback_matrix,
-)
-from pyFDN.generate.degree_one_lossless import degree_one_lossless
-from pyFDN.generate.fdn_matrix_gallery import fdn_build_gallery, fdn_matrix_gallery
-from pyFDN.generate.householder_matrix import householder_matrix
-from pyFDN.generate.is_almost_zero import is_almost_zero
-from pyFDN.generate.nearest_orthogonal import nearest_orthogonal
-from pyFDN.generate.nearest_sign_agnostic_orthogonal import (
+from pyFDN.auxiliary.utils import is_almost_zero
+from pyFDN.generate.fdn_build_gallery import fdn_build_gallery
+from pyFDN.generate.fdn_matrix_gallery import fdn_matrix_gallery
+from pyFDN.generate.orthogonal import (
+    anderson_matrix,
+    complete_orthogonal,
+    householder_matrix,
+    nearest_orthogonal,
     nearest_sign_agnostic_orthogonal,
+    random_orthogonal,
+    rotation_matrix_from_angles,
+    tiny_rotation_matrix,
 )
-from pyFDN.generate.random_matrix_shift import random_matrix_shift
-from pyFDN.generate.random_orthogonal import random_orthogonal
+from pyFDN.generate.paraunitary import (
+    construct_cascaded_paraunitary_matrix,
+    construct_velvet_feedback_matrix,
+    degree_one_lossless,
+    random_matrix_shift,
+    shift_matrix,
+    shift_matrix_distribute,
+)
 from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
-from pyFDN.generate.shift_matrix import shift_matrix
-from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
 
 
 @pytest.fixture()
-def deterministic_rng(monkeypatch):
-    generator = np.random.default_rng(42)
-    monkeypatch.setattr(np.random, "default_rng", lambda: generator)
+def deterministic_rng():
+    np.random.seed(42)
 
 
 def test_random_orthogonal_produces_unitary_matrix():
@@ -80,9 +80,17 @@ def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
     np.testing.assert_(np.all(right >= 0))
 
 
+def test_cascaded_paraunitary_matrix_is_reproducible_with_global_seed():
+    np.random.seed(0)
+    first, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    np.random.seed(0)
+    second, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    np.testing.assert_array_equal(first, second)
+
+
 def test_construct_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
     monkeypatch.setattr(
-        "pyFDN.generate.shift_matrix_distribute.shift_matrix_distribute",
+        "pyFDN.generate.paraunitary.shift_matrix_distribute",
         lambda *args, **kwargs: np.zeros(args[0].shape[0], dtype=int),
     )
     matrix, rev = construct_cascaded_paraunitary_matrix(4, 0, matrix_type="Hadamard")
@@ -94,7 +102,7 @@ def test_construct_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
 
 def test_construct_velvet_feedback_matches_wrapper(monkeypatch):
     monkeypatch.setattr(
-        "pyFDN.generate.construct_velvet_feedback_matrix.construct_cascaded_paraunitary_matrix",
+        "pyFDN.generate.paraunitary.construct_cascaded_paraunitary_matrix",
         lambda *args, **kwargs: (np.ones((2, 2, 1)), np.ones((2, 2, 1))),
     )
     matrix, rev = construct_velvet_feedback_matrix(2, 1, 0.5)
@@ -108,7 +116,7 @@ def test_filter_matrix_gallery_types_are_paraunitary():
     np.random.seed(0)
     n = 4
     types = pyFDN.filter_matrix_gallery()
-    assert types == ["RandomDense", "Velvet", "FromElementals"]
+    assert types == ["random_dense", "velvet", "from_elementals"]
     for mtype in types:
         mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2)
         assert mat.ndim == 3 and mat.shape[:2] == (n, n)
@@ -117,7 +125,7 @@ def test_filter_matrix_gallery_types_are_paraunitary():
 
     # stage_matrix_type is honored for the cascaded types
     mat_rnd = pyFDN.filter_matrix_gallery(
-        n, "Velvet", num_stages=2, stage_matrix_type="random"
+        n, "velvet", num_stages=2, stage_matrix_type="random"
     )
     is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd.transpose(2, 0, 1))
     assert is_pu
@@ -241,11 +249,11 @@ def test_degree_one_lossless_z1_is_rank1():
 def test_fdn_matrix_gallery_returns_type_list():
     types = fdn_matrix_gallery()
     assert isinstance(types, list)
-    assert "Hadamard" in types
+    assert "hadamard" in types
     assert "orthogonal" in types
 
 
-@pytest.mark.parametrize("matrix_type", ["orthogonal", "Householder", "circulant"])
+@pytest.mark.parametrize("matrix_type", ["orthogonal", "householder", "circulant"])
 def test_fdn_matrix_gallery_orthogonal_types(matrix_type):
     A = fdn_matrix_gallery(4, matrix_type)
     assert isinstance(A, np.ndarray)
@@ -253,9 +261,17 @@ def test_fdn_matrix_gallery_orthogonal_types(matrix_type):
 
 
 def test_fdn_matrix_gallery_hadamard():
-    A = fdn_matrix_gallery(8, "Hadamard")
+    A = fdn_matrix_gallery(8, "hadamard")
     assert isinstance(A, np.ndarray)
     np.testing.assert_allclose(A @ A.T, np.eye(8), atol=1e-10)
+
+
+def test_fdn_matrix_gallery_accepts_legacy_type_names():
+    np.testing.assert_allclose(
+        fdn_matrix_gallery(8, "Hadamard") @ fdn_matrix_gallery(8, "Hadamard").T,
+        np.eye(8),
+        atol=1e-10,
+    )
 
 
 def test_fdn_matrix_gallery_parallel():
@@ -272,6 +288,10 @@ def test_fdn_matrix_gallery_unknown_type_raises():
 # ---------------------------------------------------------------------------
 
 
+def test_fdn_build_gallery_has_its_own_module():
+    assert fdn_build_gallery.__module__ == "pyFDN.generate.fdn_build_gallery"
+
+
 def test_fdn_build_gallery_is_complete_and_reproducible():
     first = fdn_build_gallery(4, rng=12)
     second = fdn_build_gallery(4, rng=12)
@@ -283,6 +303,61 @@ def test_fdn_build_gallery_is_complete_and_reproducible():
     assert first.delays.shape == (4,)
     np.testing.assert_allclose(first.A, second.A)
     np.testing.assert_array_equal(first.delays, second.delays)
+
+
+def test_fdn_build_gallery_optionally_returns_its_design():
+    plain = fdn_build_gallery(4, rng=12)
+    build, design = fdn_build_gallery(
+        4,
+        delay_range=(40, 120),
+        delay_distribution="geometric",
+        coprime=True,
+        rt=1.5,
+        rt_nyquist=0.6,
+        rt_crossover=4_000.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-3.0,
+        output_crossover=6_000.0,
+        rng=12,
+        return_design=True,
+    )
+
+    assert not isinstance(plain, tuple)
+    assert design["delays"] == {
+        "type": "geometric",
+        "range": [40, 120],
+        "coprime": True,
+        "sort": False,
+    }
+    assert design["feedback_matrix"] == {"type": "orthogonal"}
+    assert design["input_matrix"] == {"type": "normalised"}
+    assert design["output_matrix"] == {"type": "normalised"}
+    assert design["post_delay"] == {
+        "type": "first_order_shelf",
+        "rt": 1.5,
+        "rt_nyquist": 0.6,
+        "rt_crossover": 4_000.0,
+    }
+    assert design["post_output"] == {
+        "type": "first_order_shelf",
+        "gain_db": [0.0],
+        "gain_db_nyquist": [-3.0],
+        "crossover": 6_000.0,
+    }
+    assert build.post_delay is not None
+    assert build.post_output is not None
+    for i, delay in enumerate(build.delays):
+        for other in build.delays[i + 1 :]:
+            assert np.gcd(delay, other) == 1
+
+
+def test_fdn_build_gallery_does_not_label_explicit_delays():
+    _, design = fdn_build_gallery(
+        delays=np.array([41, 53, 67]),
+        rt=None,
+        return_design=True,
+    )
+    assert "delays" not in design
 
 
 def test_fdn_build_gallery_lossless_has_no_filters():
@@ -341,9 +416,13 @@ def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
 def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_attenuation(rt, rt_nyquist, rt_crossover, delays, fs):
+    def fake_attenuation(
+        rt, rt_nyquist, rt_crossover, delays, fs, *, return_design=False
+    ):
         captured["crossover"] = rt_crossover
-        return np.ones((1, 6, len(delays)))
+        sos = np.ones((1, 6, len(delays)))
+        design = {"type": "first_order_shelf", "rt": rt, "rt_nyquist": rt_nyquist}
+        return (sos, design) if return_design else sos
 
     monkeypatch.setattr("pyFDN.eq.decay_to_first_order_shelf", fake_attenuation)
 
@@ -360,8 +439,8 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
         4,
         num_outputs=2,
         rt=None,
-        eq_db_dc=0.0,
-        eq_db_nyquist=-6.0,
+        output_gain_db=0.0,
+        output_gain_db_nyquist=-6.0,
         rng=7,
     )
     assert scalar.post_output is not None
@@ -373,8 +452,8 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
         4,
         num_outputs=3,
         rt=None,
-        eq_db_dc=[0.0, -3.0, -6.0],
-        eq_db_nyquist=-6.0,
+        output_gain_db=[0.0, -3.0, -6.0],
+        output_gain_db_nyquist=-6.0,
         rng=7,
     )
     assert per_channel.post_output is not None
@@ -391,7 +470,7 @@ def test_fdn_build_gallery_rejects_invalid_configuration():
     with pytest.raises(ValueError, match="delays must contain exactly N values"):
         fdn_build_gallery(3, delays=np.array([1, 2]))
     with pytest.raises(ValueError, match="scalar or length num_outputs"):
-        fdn_build_gallery(4, num_outputs=2, eq_db_dc=[0.0, -3.0, -6.0])
+        fdn_build_gallery(4, num_outputs=2, output_gain_db=[0.0, -3.0, -6.0])
 
 
 # ---------------------------------------------------------------------------
@@ -478,3 +557,43 @@ def test_delay_lengths_invalid_distribution_raises():
 def test_delay_lengths_invalid_range_raises():
     with pytest.raises(ValueError, match="delay_range"):
         sample_delay_lengths(8, (1000, 400))
+
+
+def test_tiny_rotation_matrix_is_orthogonal_with_prescribed_angles():
+    np.random.seed(42)
+    delta, n = 0.12, 7
+    rotation = tiny_rotation_matrix(n, delta, spread=0.1)
+    np.testing.assert_allclose(rotation @ rotation.T, np.eye(n), atol=1e-12)
+    angles = np.sort(np.abs(np.angle(np.linalg.eigvals(rotation))))
+    # One eigenvalue at 1 (odd n); the rest within the spread around delta*pi.
+    assert angles[0] < 1e-10
+    assert np.all(np.abs(angles[1:] / (delta * np.pi) - 1.0) <= 0.1 + 1e-9)
+
+    np.random.seed(42)
+    np.testing.assert_array_equal(rotation, tiny_rotation_matrix(n, delta))
+
+
+def test_rotation_matrix_from_angles_block_structure():
+    rotation = rotation_matrix_from_angles([0.1, 0.2], n=5)
+    np.testing.assert_allclose(rotation @ rotation.T, np.eye(5), atol=1e-12)
+    np.testing.assert_allclose(
+        rotation[:2, :2], [[np.cos(0.1), -np.sin(0.1)], [np.sin(0.1), np.cos(0.1)]]
+    )
+    assert rotation[-1, -1] == 1.0
+
+
+def test_galleries_accept_historical_spellings():
+    import pyFDN
+
+    np.random.seed(3)
+    new = pyFDN.filter_matrix_gallery(4, "velvet", num_stages=2)
+    np.random.seed(3)
+    old = pyFDN.filter_matrix_gallery(4, "Velvet", num_stages=2)
+    np.testing.assert_array_equal(new, old)
+
+    assert "allpass_in_fdn" in pyFDN.fdn_system_gallery()
+    np.random.seed(3)
+    new_sys = pyFDN.fdn_system_gallery(4, "nested_allpass")
+    np.random.seed(3)
+    old_sys = pyFDN.fdn_system_gallery(4, "nestedAllpass")
+    np.testing.assert_array_equal(new_sys.A, old_sys.A)
