@@ -401,3 +401,30 @@ def test_build_to_impz_applies_the_post_output_hook() -> None:
     np.testing.assert_allclose(
         build_to_impz(quiet, 256), 0.5 * build_to_impz(plain, 256), atol=1e-12
     )
+
+
+def test_delay_lines_can_be_filled_and_reset_to_zero() -> None:
+    rng = np.random.default_rng(0)
+    delays = np.array([7, 11, 13])
+    N = delays.size
+    lines = [rng.standard_normal(m) for m in delays]
+    B, C, D = np.ones((N, 1)), np.eye(N), np.zeros((N, 1))
+
+    # No feedback: each line plays its content out once, in output order,
+    # also when filled mid-stream.
+    graph = pyFDN.dss_to_td(delays, np.zeros((N, N)), B, C, D, block_size=5)
+    graph.process_signal(np.zeros(3))
+    state = graph.ops[0].ops[1].state
+    state.set_lines(lines)
+    y = graph.process_signal(np.zeros(20))
+    for i, m in enumerate(delays):
+        np.testing.assert_array_equal(y[:m, i], lines[i])
+        np.testing.assert_array_equal(y[m:, i], 0.0)
+
+    graph.reset()
+    np.testing.assert_array_equal(graph.process_signal(np.zeros(20)), 0.0)
+    state.fill_noise(0.5, rng)
+    assert np.all(graph.process_signal(np.zeros(7)) != 0.0)
+
+    with pytest.raises(ValueError, match="lines"):
+        state.set_lines([s[:-1] for s in lines])
