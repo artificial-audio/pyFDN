@@ -2,6 +2,22 @@
 History
 =======
 
+Unreleased
+----------
+
+* New ``pyFDN.system`` module (draft, not yet exported from ``pyFDN``): the
+  ``pyfdn-system`` v1 JSON document, which holds either an unchanged
+  ``pyfdn-fdn-build`` or a node ``graph`` for systems a build cannot express.
+  Includes validation with path-named errors, ``build_to_graph`` /
+  ``graph_to_build`` and ``save_fdn_system`` / ``load_fdn_system``.
+  ``save_fdn_system`` stamps ``metadata.created`` and
+  ``metadata.pyfdn_version`` when they are missing. See
+  ``docs/design/system-format.md``.
+* New ``pyFDN.auxiliary.graph_plot.plot_system_graph`` draws the signal flow of
+  a system document, a ``GraphNode`` tree or an ``FDNBuild`` without building
+  a FLAMO model. ``plot_flamo_graph`` now uses the same renderer; its output is
+  unchanged.
+
 0.5.0 (2026-09-28)
 ------------------
 
