@@ -2,6 +2,13 @@
 History
 =======
 
+Unreleased
+----------
+
+* New ``gain_to_passive_geq`` designs graphic-EQ attenuation filters that stay below unit gain, so an FDN with a lossless feedback matrix always decays. It warns when the result misses the requested profile by more than ``rt_tolerance``.
+* **Behaviour change:** ``decay_to_geq`` uses ``gain_to_passive_geq`` by default. Sharp RT profiles may decay more slowly than requested and raise a ``RuntimeWarning``. Pass ``passive=False`` for the previous fit, which is required for torch input. The design record gains a ``passive`` field.
+* The trainable ``AttenuationFilter`` is unchanged and can still exceed unit gain.
+
 0.5.0 (2026-09-28)
 ------------------
 

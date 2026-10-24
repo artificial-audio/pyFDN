@@ -19,6 +19,7 @@ from .biquads import first_order_shelf_biquad, one_pole_biquad
 from .graphic_eq import (
     N_GRAPHIC_EQ_BANDS,
     N_GRAPHIC_EQ_SECTIONS,
+    _passive_geq,
     gain_to_geq,
     geq_design_matrix,
 )
@@ -28,18 +29,32 @@ EQ_DESIGNS = get_args(EQDesign)
 
 
 def decay_to_geq(
-    rt: Any, delays: Any, fs: float, *, return_design: bool = False
+    rt: Any,
+    delays: Any,
+    fs: float,
+    *,
+    passive: bool = True,
+    return_design: bool = False,
 ) -> Any:
     """Design attenuation GEQs from ten reverberation times in seconds.
 
-    ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES`
-    (31.25 Hz through 16 kHz).
+    ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
+
+    With ``passive=True`` (default) each filter is designed with :func:`~pyFDN.eq.graphic_eq.gain_to_passive_geq`, so the FDN always decays. Pass ``passive=False`` for the unconstrained :func:`gain_to_geq` fit, which accepts torch tensors but can exceed unit gain.
     """
     gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
-    sos = gain_to_geq(gain_db, fs)
+    if passive:
+        if array_namespace(gain_db) is not np:
+            raise TypeError(
+                "decay_to_geq is NumPy-only when passive=True; "
+                "pass passive=False for a differentiable design"
+            )
+        sos = _passive_geq(gain_db, fs)
+    else:
+        sos = gain_to_geq(gain_db, fs)
     return with_design(
         sos,
-        {"type": "graphic_eq", "rt": design_value(rt)},
+        {"type": "graphic_eq", "rt": design_value(rt), "passive": passive},
         return_design,
     )
 
