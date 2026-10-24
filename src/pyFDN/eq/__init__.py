@@ -23,6 +23,7 @@ from .graphic_eq import (
     SHELVING_CROSSOVER,
     gain_to_bounded_geq,
     gain_to_geq,
+    gain_to_passive_geq,
     geq_design_matrix,
 )
 from .probe_sos import probe_sos
@@ -42,6 +43,7 @@ __all__ = [
     "gain_to_first_order_shelf",
     "gain_to_geq",
     "gain_to_one_pole",
+    "gain_to_passive_geq",
     "geq_design_matrix",
     "highshelf_biquad",
     "lowshelf_biquad",
