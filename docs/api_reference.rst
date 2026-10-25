@@ -121,6 +121,7 @@ JSON-compatible design record is also needed for an ``FDNPreset``.
    pyFDN.decay_to_one_pole
    pyFDN.gain_to_geq
    pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_passive_geq
    pyFDN.gain_to_first_order_shelf
    pyFDN.gain_to_one_pole
    pyFDN.geq_design_matrix
