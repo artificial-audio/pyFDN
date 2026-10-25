@@ -30,6 +30,7 @@ N_GRAPHIC_EQ_SECTIONS = 11
 
 _NUM_CONTROL = 100
 _NUM_CEILING = 600
+_NUM_CHECK = 2**13
 _CEILING_TOLERANCE_DB = 1e-3
 _FFT_LEN = 2**16
 _PROTOTYPE_GAIN_DB = 10.0
@@ -341,7 +342,7 @@ def _passive_command_gains(
     upper = -lower
     x = np.clip(np.linalg.lstsq(system, target, rcond=None)[0], lower, upper)
     correction = np.zeros_like(frequencies)
-    unconverged = None
+    converged = False
     for _ in range(max_iterations):
         x = minimize(
             lambda x: 0.5 * np.sum((system @ x - target) ** 2),
@@ -362,13 +363,14 @@ def _passive_command_gains(
         actual = _cascade_db(x, frequencies, fs)
         excess = actual.max() - ceiling_db
         if excess <= _CEILING_TOLERANCE_DB:
+            converged = True
             break
         correction = actual - ceiling_system @ x
-    else:
-        unconverged = float(excess)
-    # The flat gain shifts the cascade exactly, so it removes any excess left.
-    x[0] -= max(excess, 0.0)
-    return x, unconverged
+    # The flat gain shifts the cascade exactly, so it removes any excess left, including peaks between grid points.
+    check = np.r_[0.0, np.logspace(0, np.log10(fs / 2), _NUM_CHECK)]
+    excess = max(_cascade_db(x, check, fs).max() - ceiling_db, 0.0)
+    x[0] -= excess
+    return x, None if converged else excess
 
 
 def _cascade_db(command_gains: np.ndarray, frequencies: np.ndarray, fs: float) -> Any:

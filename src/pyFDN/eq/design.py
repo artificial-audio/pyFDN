@@ -33,22 +33,19 @@ def decay_to_geq(
     delays: Any,
     fs: float,
     *,
-    passive: bool = True,
+    passive: bool = False,
     return_design: bool = False,
 ) -> Any:
     """Design attenuation GEQs from ten reverberation times in seconds.
 
     ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
 
-    With ``passive=True`` (default) each filter is designed with :func:`~pyFDN.eq.graphic_eq.gain_to_passive_geq`, so the FDN always decays. Pass ``passive=False`` for the unconstrained :func:`gain_to_geq` fit, which accepts torch tensors but can exceed unit gain.
+    By default each filter is fitted with :func:`gain_to_geq`, which accepts torch tensors and suits smooth RT profiles but can exceed unit gain when neighbouring bands differ sharply. Pass ``passive=True`` to design with :func:`~pyFDN.eq.graphic_eq.gain_to_passive_geq` instead, so the FDN always decays (NumPy only).
     """
     gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
     if passive:
         if array_namespace(gain_db) is not np:
-            raise TypeError(
-                "decay_to_geq is NumPy-only when passive=True; "
-                "pass passive=False for a differentiable design"
-            )
+            raise TypeError("decay_to_geq is NumPy-only when passive=True")
         sos = _passive_geq(gain_db, fs)
     else:
         sos = gain_to_geq(gain_db, fs)

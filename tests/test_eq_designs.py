@@ -224,6 +224,14 @@ _OVERSHOOTING_DIPS = [
 ]
 
 
+def test_gain_to_passive_geq_stays_below_unit_gain_between_grid_points():
+    # Sections near +-40 dB peak between the ceiling grid points here.
+    gain_db = _dip_gain_db(4260, 2, 2.367 / 30.0, rt=2.367)
+    sos = gain_to_passive_geq(gain_db, 48000.0, rt_tolerance=None)
+    _, response = sosfreqz(sos, worN=np.linspace(62.0, 63.0, 2001), fs=48000.0)
+    assert 20.0 * np.log10(np.abs(response).max()) < -0.04
+
+
 @pytest.mark.parametrize(("delay", "band", "dip_rt"), _OVERSHOOTING_DIPS)
 def test_gain_to_passive_geq_keeps_cascade_below_unit_gain(delay, band, dip_rt):
     gain_db = _dip_gain_db(delay, band, dip_rt)
@@ -356,29 +364,29 @@ def test_gain_to_passive_geq_one_line_fdn_decays():
     assert np.all(np.diff(rms_db) < 0.0)
 
 
-def test_decay_to_geq_multi_line_fdn_decays_by_default():
+def test_passive_decay_to_geq_multi_line_fdn_decays():
     delays = np.array([1441, 1999, 2687, 3361])
     rt = np.full(10, 10.0)
     rt[4] = 0.1
     with pytest.warns(RuntimeWarning, match="misses the requested decay"):
-        absorption = decay_to_geq(rt, delays, 48000.0)
+        absorption = decay_to_geq(rt, delays, 48000.0, passive=True)
     A = np.linalg.qr(np.random.default_rng(0).standard_normal((4, 4)))[0]
     rms_db = _impulse_response_rms_db(delays, A, absorption, 3)
     assert np.all(np.diff(rms_db) < 0.0)
 
 
-def test_decay_to_geq_is_passive_unless_asked_otherwise():
+def test_decay_to_geq_is_passive_only_when_asked():
     delays = np.array([1441, 3361])
     rt = np.full(10, 10.0)
     rt[4] = 0.1
     gain_db = -60.0 * delays / (48000.0 * rt[:, None])
     with pytest.warns(RuntimeWarning, match="misses the requested decay") as record:
-        passive = decay_to_geq(rt, delays, 48000.0)
+        passive = decay_to_geq(rt, delays, 48000.0, passive=True)
     assert record[0].filename == __file__
     for channel in range(len(delays)):
         assert _peak_db(passive[:, :, channel]) < -0.04
     np.testing.assert_allclose(
-        decay_to_geq(rt, delays, 48000.0, passive=False),
+        decay_to_geq(rt, delays, 48000.0),
         gain_to_geq(gain_db, 48000.0),
         atol=1e-12,
     )
@@ -387,9 +395,9 @@ def test_decay_to_geq_is_passive_unless_asked_otherwise():
 def test_passive_decay_to_geq_rejects_torch():
     torch = pytest.importorskip("torch")
     rt = torch.full((10,), 1.0, dtype=torch.float64)
-    with pytest.raises(TypeError, match="passive=False"):
-        decay_to_geq(rt, [1000.0], 48000.0)
-    assert torch.is_tensor(decay_to_geq(rt, [1000.0], 48000.0, passive=False))
+    with pytest.raises(TypeError, match="passive=True"):
+        decay_to_geq(rt, [1000.0], 48000.0, passive=True)
+    assert torch.is_tensor(decay_to_geq(rt, [1000.0], 48000.0))
 
 
 def test_decay_to_geq_shape():
@@ -466,7 +474,7 @@ def test_eq_design_functions_optionally_return_their_targets():
     _, decay_pole = pyFDN.decay_to_one_pole(1.5, 0.6, delays, fs, return_design=True)
     _, gain_pole = pyFDN.gain_to_one_pole(0.0, -6.0, return_design=True)
 
-    assert decay_geq == {"type": "graphic_eq", "rt": rt.tolist(), "passive": True}
+    assert decay_geq == {"type": "graphic_eq", "rt": rt.tolist(), "passive": False}
     assert gain_geq == {"type": "graphic_eq", "gain_db": gain_db.tolist()}
     assert decay_shelf == {
         "type": "first_order_shelf",
@@ -555,12 +563,12 @@ def test_decay_and_gain_geq_are_the_same_mapping():
     gain_db = -60.0 * delays / (rt[:, None] * fs)
     np.testing.assert_allclose(
         pyFDN.decay_to_geq(rt, delays, fs),
-        pyFDN.gain_to_passive_geq(gain_db, fs),
+        pyFDN.gain_to_geq(gain_db, fs),
         atol=1e-12,
     )
     np.testing.assert_allclose(
-        pyFDN.decay_to_geq(rt, delays, fs, passive=False),
-        pyFDN.gain_to_geq(gain_db, fs),
+        pyFDN.decay_to_geq(rt, delays, fs, passive=True),
+        pyFDN.gain_to_passive_geq(gain_db, fs),
         atol=1e-12,
     )
 
