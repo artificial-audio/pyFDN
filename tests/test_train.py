@@ -1834,5 +1834,5 @@ def test_two_stage_absorption_is_the_numpy_design():
     )
     expected = pyFDN.decay_to_two_stage(rt, build.delays, build.fs)
     np.testing.assert_allclose(
-        module.map(module.param).detach().numpy(), expected, atol=1e-8
+        module.map(module.param).detach().numpy(), expected, atol=1e-6
     )

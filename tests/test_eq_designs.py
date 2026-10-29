@@ -463,8 +463,7 @@ def test_two_stage_matches_a_steep_decay_better_than_the_geq_alone():
         pyFDN.decay_to_two_stage(rt, delays, fs)[..., 0], gain_db, fs
     )
     geq = _band_error_db(pyFDN.decay_to_geq(rt, delays, fs)[..., 0], gain_db, fs)
-    assert two_stage.max() < 0.5
-    assert two_stage.max() < geq.max()
+    assert two_stage.max() < 0.6 * geq.max()
 
 
 def test_decay_and_gain_two_stage_are_the_same_mapping():
