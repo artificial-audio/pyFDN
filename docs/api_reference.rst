@@ -107,8 +107,8 @@ Explicit functions map either decay targets or gain targets onto a named
 filter design. The same functions run in NumPy or Torch; the trainable
 :class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
-``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
-modules. The target-to-EQ functions accept ``return_design=True`` when their
+``"graphic_eq"``, ``"first_order_shelf"``, ``"one_pole"``, or ``"two_stage"``
+used by those modules. The target-to-EQ functions accept ``return_design=True`` when their
 JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
@@ -119,10 +119,12 @@ JSON-compatible design record is also needed for an ``FDNPreset``.
    pyFDN.decay_to_geq
    pyFDN.decay_to_first_order_shelf
    pyFDN.decay_to_one_pole
+   pyFDN.decay_to_two_stage
    pyFDN.gain_to_geq
    pyFDN.gain_to_bounded_geq
    pyFDN.gain_to_first_order_shelf
    pyFDN.gain_to_one_pole
+   pyFDN.gain_to_two_stage
    pyFDN.geq_design_matrix
    pyFDN.lowshelf_biquad
    pyFDN.highshelf_biquad

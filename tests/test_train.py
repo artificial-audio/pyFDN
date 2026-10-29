@@ -1815,3 +1815,24 @@ def test_wrap_fdn_shell_keeps_the_core_on_its_device(device):
     shell = wrap_fdn_shell(core, nfft=2**10)
     assert torch.device(shell.device).type == device
     assert model_response(shell).h.device.type == device
+
+
+def test_two_stage_absorption_is_the_numpy_design():
+    """A two-stage attenuation is the NumPy design, differentiably."""
+    import torch
+
+    build = _plain_build()
+    rt = np.linspace(2.0, 0.5, 10)
+    module = pyFDN.AttenuationFilter(
+        rt,
+        build.delays,
+        build.fs,
+        design="two_stage",
+        nfft=2**12,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    expected = pyFDN.decay_to_two_stage(rt, build.delays, build.fs)
+    np.testing.assert_allclose(
+        module.map(module.param).detach().numpy(), expected, atol=1e-8
+    )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scipy.signal import sosfreqz
 
 import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
@@ -433,3 +434,59 @@ def test_attenuation_designs_flatten_delays(design_fn):
         design_fn(*args, flat, fs),
     )
     assert design_fn(*args, flat.reshape(1, 4), fs).shape == (1, 6, 4)
+
+
+def _band_error_db(sos, gain_db, fs):
+    _, h = sosfreqz(np.ascontiguousarray(sos), worN=COMMAND_FREQUENCIES, fs=fs)
+    return np.abs(20.0 * np.log10(np.abs(h)) - gain_db)
+
+
+def test_two_stage_is_a_shelf_followed_by_a_geq():
+    fs = 48000.0
+    gain_db = np.array([-1.0, -1.2, -1.1, -1.3, -1.5, -1.8, -2.3, -3.2, -4.8, -8.0])
+    sos = pyFDN.gain_to_two_stage(gain_db, fs, 1000.0)
+    assert sos.shape == (12, 6)
+    np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
+    np.testing.assert_allclose(
+        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, 1000.0, fs)
+    )
+    np.testing.assert_allclose(pyFDN.gain_to_two_stage(gain_db, fs), sos, atol=1e-12)
+
+
+def test_two_stage_matches_a_steep_decay_better_than_the_geq_alone():
+    """The case the pre-filter is for: a large gain spread across the bands."""
+    fs = 48000.0
+    rt = np.array([1.8, 2.2, 2.0, 1.9, 1.7, 1.5, 1.2, 0.9, 0.6, 0.25])
+    delays = np.array([6000.0])
+    gain_db = -60.0 * delays[0] / (rt * fs)
+    two_stage = _band_error_db(
+        pyFDN.decay_to_two_stage(rt, delays, fs)[..., 0], gain_db, fs
+    )
+    geq = _band_error_db(pyFDN.decay_to_geq(rt, delays, fs)[..., 0], gain_db, fs)
+    assert two_stage.max() < 0.5
+    assert two_stage.max() < geq.max()
+
+
+def test_decay_and_gain_two_stage_are_the_same_mapping():
+    fs = 48000.0
+    rt = np.linspace(2.0, 0.6, 10)
+    delays = np.array([809.0, 1153.0])
+    gain_db = -60.0 * delays / (rt[:, None] * fs)
+    sos, design = pyFDN.decay_to_two_stage(rt, delays, fs, return_design=True)
+    np.testing.assert_allclose(sos, pyFDN.gain_to_two_stage(gain_db, fs), atol=1e-12)
+    assert sos.shape == (12, 6, 2)
+    assert design == {"type": "two_stage", "rt": rt.tolist(), "crossover": 1000.0}
+
+
+def test_gain_to_two_stage_is_the_same_design_in_torch():
+    torch = pytest.importorskip("torch")
+    target = np.stack([np.linspace(-1.0, -9.0, 10), np.full(10, -2.0)], axis=1)
+    tensor_target = torch.tensor(target, dtype=torch.float64, requires_grad=True)
+    tensor_sos = pyFDN.gain_to_two_stage(tensor_target, 48000.0)
+    np.testing.assert_allclose(
+        tensor_sos.detach().numpy(),
+        pyFDN.gain_to_two_stage(target, 48000.0),
+        atol=1e-12,
+    )
+    tensor_sos.sum().backward()
+    assert torch.all(torch.isfinite(tensor_target.grad))
