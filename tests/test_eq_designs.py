@@ -489,3 +489,10 @@ def test_gain_to_two_stage_is_the_same_design_in_torch():
     )
     tensor_sos.sum().backward()
     assert torch.all(torch.isfinite(tensor_target.grad))
+
+
+def test_gain_to_two_stage_rejects_wrong_band_count():
+    with pytest.raises(ValueError, match="two_stage takes 10 gains, got 9"):
+        pyFDN.gain_to_two_stage(np.zeros(9), 48000.0)
+    with pytest.raises(ValueError, match="got 0"):
+        pyFDN.gain_to_two_stage(0.0, 48000.0)
