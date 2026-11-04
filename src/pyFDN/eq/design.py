@@ -13,17 +13,18 @@ from typing import Any, Literal, get_args
 
 import numpy as np
 
-from ..auxiliary.utils import array_namespace
+from ..auxiliary.utils import array_namespace, hertz_to_rad
 from ._design_record import design_value, with_design
 from .biquads import first_order_shelf_biquad, one_pole_biquad
 from .graphic_eq import (
+    COMMAND_FREQUENCIES,
     N_GRAPHIC_EQ_BANDS,
     N_GRAPHIC_EQ_SECTIONS,
     gain_to_geq,
     geq_design_matrix,
 )
 
-EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole"]
+EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole", "two_stage"]
 EQ_DESIGNS = get_args(EQDesign)
 
 
@@ -158,6 +159,94 @@ def decay_to_one_pole(
     )
 
 
+TWO_STAGE_CROSSOVER = 1000.0
+
+
+def gain_to_two_stage(
+    gain_db: Any,
+    fs: float,
+    crossover: float | None = None,
+    *,
+    design_matrix: Any = None,
+    return_design: bool = False,
+) -> Any:
+    """Design a two-stage EQ from ten amplitudes in dB.
+
+    The first stage is a first-order shelf through the lowest and highest
+    band targets, which fixes the gain towards DC and Nyquist. The second
+    stage is a graphic EQ fitted to what the shelf leaves over in each band.
+    ``crossover`` is the shelf crossover in Hz; ``None`` uses 1 kHz.
+
+    ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered on
+    :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES` (31.25 Hz through
+    16 kHz). The result stacks the shelf section before the
+    :func:`gain_to_geq` sections.
+
+    Reference: V. Välimäki, K. Prawda, and S. J. Schlecht, "Two-Stage
+    Attenuation Filter for Artificial Reverberation," IEEE Signal Process.
+    Lett., vol. 31, pp. 391-395, 2024, doi:10.1109/LSP.2024.3352510.
+    """
+    xp = array_namespace(gain_db)
+    if xp is np:
+        gain_db = np.asarray(gain_db, dtype=float)
+    if gain_db.ndim == 0 or gain_db.shape[0] != N_GRAPHIC_EQ_BANDS:
+        got = 0 if gain_db.ndim == 0 else gain_db.shape[0]
+        raise ValueError(f"two_stage takes {N_GRAPHIC_EQ_BANDS} gains, got {got}")
+
+    crossover = TWO_STAGE_CROSSOVER if crossover is None else crossover
+    shelf = gain_to_first_order_shelf(gain_db[0], gain_db[-1], crossover, fs)
+    residual_db = gain_db - _first_order_gain_db(shelf[0], fs, gain_db)
+    geq = gain_to_geq(residual_db, fs, design_matrix=design_matrix)
+    return with_design(
+        xp.concatenate([shelf, geq], 0),
+        {
+            "type": "two_stage",
+            "gain_db": design_value(gain_db),
+            "crossover": crossover,
+        },
+        return_design,
+    )
+
+
+def decay_to_two_stage(
+    rt: Any,
+    delays: Any,
+    fs: float,
+    crossover: float | None = None,
+    *,
+    return_design: bool = False,
+) -> Any:
+    """Design two-stage attenuation filters from ten reverberation times.
+
+    ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES`
+    (31.25 Hz through 16 kHz). See :func:`gain_to_two_stage`.
+    """
+    gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
+    sos = gain_to_two_stage(gain_db, fs, crossover)
+    return with_design(
+        sos,
+        {
+            "type": "two_stage",
+            "rt": design_value(rt),
+            "crossover": TWO_STAGE_CROSSOVER if crossover is None else crossover,
+        },
+        return_design,
+    )
+
+
+def _first_order_gain_db(section: Any, fs: float, like: Any) -> Any:
+    """Magnitude in dB of a first-order section on the command frequencies."""
+    xp = array_namespace(like)
+    cos_w = np.cos(hertz_to_rad(COMMAND_FREQUENCIES, fs))
+    if xp is not np:
+        cos_w = xp.as_tensor(cos_w, dtype=like.dtype, device=like.device)
+    cos_w = cos_w.reshape((-1,) + (1,) * (like.ndim - 1))
+    b0, b1, a1 = section[0], section[1], section[4]
+    numerator = b0**2 + b1**2 + 2.0 * b0 * b1 * cos_w
+    denominator = 1.0 + a1**2 + 2.0 * a1 * cos_w
+    return 10.0 * xp.log10(numerator / denominator)
+
+
 def _decay_to_gain_db(
     rt: Any,
     delays: Any,
@@ -189,17 +278,19 @@ def _decay_to_gain_db(
 
 def _design_parameter_count(design: EQDesign) -> int:
     _validate_filter_design(design)
-    return N_GRAPHIC_EQ_BANDS if design == "graphic_eq" else 2
+    return N_GRAPHIC_EQ_BANDS if design in ("graphic_eq", "two_stage") else 2
 
 
 def _design_section_count(design: EQDesign) -> int:
     _validate_filter_design(design)
+    if design == "two_stage":
+        return N_GRAPHIC_EQ_SECTIONS + 1
     return N_GRAPHIC_EQ_SECTIONS if design == "graphic_eq" else 1
 
 
 def _design_buffers(design: EQDesign, fs: float) -> dict[str, np.ndarray]:
     _validate_filter_design(design)
-    if design == "graphic_eq":
+    if design in ("graphic_eq", "two_stage"):
         return {"graphic_eq_matrix": geq_design_matrix(fs)}
     return {}
 
@@ -215,6 +306,10 @@ def _gain_to_design(
     _validate_filter_design(design)
     if design == "graphic_eq":
         return gain_to_geq(gain_db, fs, design_matrix=graphic_eq_matrix)
+    if design == "two_stage":
+        return gain_to_two_stage(
+            gain_db, fs, crossover, design_matrix=graphic_eq_matrix
+        )
     if design == "first_order_shelf":
         return gain_to_first_order_shelf(gain_db[0], gain_db[1], crossover, fs)
     return gain_to_one_pole(gain_db[0], gain_db[1])
@@ -223,7 +318,8 @@ def _gain_to_design(
 def _validate_filter_design(design: str) -> None:
     if design not in EQ_DESIGNS:
         raise ValueError(
-            "design must be 'graphic_eq', 'first_order_shelf', or 'one_pole', "
+            "design must be 'graphic_eq', 'first_order_shelf', 'one_pole', "
+            "or 'two_stage', "
             f"got {design!r}"
         )
 
@@ -233,7 +329,10 @@ __all__ = [
     "EQDesign",
     "decay_to_first_order_shelf",
     "decay_to_geq",
+    "TWO_STAGE_CROSSOVER",
     "decay_to_one_pole",
+    "decay_to_two_stage",
     "gain_to_first_order_shelf",
     "gain_to_one_pole",
+    "gain_to_two_stage",
 ]

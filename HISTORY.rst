@@ -2,6 +2,17 @@
 History
 =======
 
+Unreleased
+----------
+
+* New ``gain_to_two_stage`` / ``decay_to_two_stage`` design the two-stage
+  attenuation filter of Välimäki, Prawda and Schlecht (IEEE SPL, 2024): a
+  first-order shelf sets the gain towards DC and Nyquist, and the ten-band
+  graphic EQ fits the remainder per band. It follows steep high-frequency
+  decays more closely than the graphic EQ alone.
+* ``EQDesign`` gains ``"two_stage"``, so ``AttenuationFilter`` and
+  ``OutputEQ`` can train it and preset design records accept it.
+
 0.5.0 (2026-09-28)
 ------------------
 
