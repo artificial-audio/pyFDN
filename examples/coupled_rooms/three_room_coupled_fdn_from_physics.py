@@ -189,7 +189,18 @@ def _(
     Both have zero column sums (pure exchange, no absorption in this notebook) and are reversible w.r.t.
     $\pi_i\propto V_i$ — target long‑run split $V_1{{:}}V_2{{:}}V_3 = {V1.value}{{:}}{V2.value}{{:}}{V3.value}$.
     """)
-    return Q_chain, Q_complete, V, beta_chain, beta_complete, gamma, num_rooms
+    return (
+        Q_chain,
+        Q_complete,
+        S_chain,
+        S_complete,
+        V,
+        beta_chain,
+        beta_complete,
+        c,
+        gamma,
+        num_rooms,
+    )
 
 
 @app.cell
@@ -276,18 +287,39 @@ def _(ArrayLike, NDArray, Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
 
 
 @app.cell
+def _(mo):
+    coupling_angle_rule = mo.ui.dropdown(
+        options=["arcsin(sqrt(p))", "sqrt(p)"], value="arcsin(sqrt(p))",
+        label="Coupling angle rule, p = beta_ij * dt_i")
+    mo.vstack([coupling_angle_rule])
+    return (coupling_angle_rule,)
+
+
+@app.cell
 def _(
     beta_chain,
     beta_complete,
+    coupling_angle_rule,
     dt_i,
     expm,
     get_coupling_angles,
     get_coupling_matrix,
     mo,
+    np,
     num_rooms,
 ):
-    theta_chain, theta_complete = get_coupling_angles(
-        beta_chain, dt_i), get_coupling_angles(beta_complete, dt_i)
+    if coupling_angle_rule.value == "sqrt(p)":
+        # Symmetrise the two directional probabilities, as in the helper.
+        # With exact volume/delay ratios these directional values coincide.
+        _p_chain = beta_chain * dt_i[:, None]
+        _p_complete = beta_complete * dt_i[:, None]
+        theta_chain = np.sqrt(0.5 * (_p_chain + _p_chain.T))
+        theta_complete = np.sqrt(0.5 * (_p_complete + _p_complete.T))
+        _rule = r"\theta_{ij}^2=\beta_{ij}\Delta t_i"
+    else:
+        theta_chain, theta_complete = get_coupling_angles(
+            beta_chain, dt_i), get_coupling_angles(beta_complete, dt_i)
+        _rule = r"\sin^2\theta_{ij}=\beta_{ij}\Delta t_i"
     K_chain, K_complete = get_coupling_matrix(
         theta_chain), get_coupling_matrix(theta_complete)
     R_room_chain, R_room_complete = expm(K_chain), expm(K_complete)
@@ -300,7 +332,7 @@ def _(
                 (beta_complete[_i, _j] * dt_i[_i], beta_complete[_j, _i] * dt_i[_j]))
 
     mo.md(rf"""
-    ## 2 · Pairwise angles $\theta_{{ij}}$ (rate‑matched, $\sin^2\theta_{{ij}}=\beta_{{ij}}\Delta t_i$)
+    ## 2 · Pairwise angles (${_rule}$)
 
     | edge | $\theta_{{ij}}$ (chain) | $\theta_{{ij}}$ (complete) |
     |---|---|---|
@@ -316,6 +348,77 @@ def _(
     ${_check[1][1]:.5f}$; edge 2–3: ${_check[2][0]:.5f}$ vs ${_check[2][1]:.5f}$.
     """)
     return R_room_chain, R_room_complete
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Coupling transfer comparison
+    """)
+    return
+
+
+@app.cell
+def _(
+    Nroom,
+    R_room_chain,
+    R_room_complete,
+    S_chain,
+    S_complete,
+    V,
+    c,
+    delays_per_fdn,
+    fs,
+    mo,
+    np,
+    plt,
+):
+    _tau = np.sum(delays_per_fdn, axis=1)
+    _v = V / _tau
+    coupling_rate_scale = np.diag(Nroom * _v * fs)
+    _reference_scale = max(float(np.max(c * _S / 4)) for _S in (S_chain, S_complete))
+    _reference_scale = max(_reference_scale, np.finfo(float).eps)
+    coupling_transfer_matrices = {}
+    for _name, _phi, _apertures in (
+        ("Chained", R_room_chain, S_chain),
+        ("Complete", R_room_complete, S_complete),
+    ):
+        _gfdn = coupling_rate_scale @ np.square(_phi)
+        _physical = c * _apertures / 4
+        np.fill_diagonal(_gfdn, 0)
+        np.fill_diagonal(_physical, 0)
+        _normalized_error = np.abs(_gfdn - _physical) / _reference_scale
+        coupling_transfer_matrices[_name] = (_gfdn, _physical, _normalized_error)
+
+    _transfer_max = max(float(_matrix.max()) for _matrices in coupling_transfer_matrices.values()
+                        for _matrix in _matrices[:2])
+    _plots = []
+    for _name, _matrices in coupling_transfer_matrices.items():
+        _fig, _axes = plt.subplots(1, 3, figsize=(11.5, 3.8), layout="constrained")
+        for _column, _matrix in enumerate(_matrices):
+            _ax = _axes[_column]
+            _maximum = 1.0 if _column == 2 else _transfer_max
+            _image = _ax.imshow(_matrix, vmin=0, vmax=max(_maximum, 1e-12), cmap="coolwarm")
+            if _column == 2:
+                _error_image = _image
+            else:
+                _transfer_image = _image
+            _ax.set_xticks(range(len(V)), [f"R{_i+1}" for _i in range(len(V))])
+            _ax.set_yticks(range(len(V)), [f"R{_i+1}" for _i in range(len(V))])
+            _ax.set_xlabel("Sending room $j$")
+            _ax.set_ylabel("Receiving room $i$")
+            _ax.set_title((r"$H\Phi^{\odot 2}$", r"$cS/4$",
+                           "Normalized absolute error")[_column])
+        _fig.colorbar(_transfer_image, ax=_axes[:2], label=r"Transfer ($\mathrm{m^3/s}$)")
+        _fig.colorbar(
+            _error_image, ax=_axes[2], ticks=np.linspace(0, 1, 6), format="%.1f",
+            label=r"$|H\Phi^{\odot 2}-cS/4|\,/\,T_{\max}$")
+        _aperture_13 = S_chain[0, 2] if _name == "Chained" else S_complete[0, 2]
+        _fig.suptitle(
+            rf"{_name} topology: $S_{{13}}={_aperture_13:g}\,\mathrm{{m^2}}$ — zero diagonals")
+        _plots.append(mo.mpl.interactive(_fig))
+    mo.vstack(_plots)
+    return
 
 
 @app.cell
@@ -738,15 +841,6 @@ def _(
             print(f'Cur reference T60 for room {_r+1} is {t60_ref:.3f}s')
             t60_gfdn = calculate_t60_from_energy(_Eref[:, _r], fs)
             print(f'Cur GFDN T60 for room {_r+1} is {t60_gfdn:.3f}s')
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
-    Parameter-sweep plots and comparison tables have moved to
-    `examples/coupled_rooms/three_coupled_room_metrics.py`.
-    """)
     return
 
 
