@@ -157,6 +157,7 @@ disable_error_code = ["no-any-return"]
 [[tool.mypy.overrides]]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
+    "cloudpickle",
     "flamo.*",
     "marimo.*",
     "mpl_toolkits.*",
