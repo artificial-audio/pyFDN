@@ -1,0 +1,2 @@
+{"stage": "before_residue_extraction", "small_poles": [[-0.10552458873454648, 0.0], [-0.16232273072537987, 0.0], [-0.1522174775015173, 0.0], [-0.13954125551772606, 0.0]], "nonfinite_small_P": [true, true, true, true]}
+{"stage": "failure", "error": "FLAMO residue extraction failed after LF found 1962/1962 poles: SVD did not converge"}

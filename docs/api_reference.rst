@@ -213,6 +213,7 @@ Polynomial & Matrix Maths
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
+   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
@@ -304,6 +305,141 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
    pyFDN.impz_to_res
    pyFDN.mtf_to_impz
    pyFDN.pr_to_impz
+
+Experimental Lindsey–Fox modal decomposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``dss_to_pr(delays, A, B, C, D, mode="lindsey_fox")`` tests an FFT
+grid-search alternative to the existing ``eig``, ``roots``, and ``eai``
+backends. It searches the generalized characteristic polynomial on concentric
+circles, polishes 3-by-3 modulus minima with Laguerre iterations, and checks
+both the root count and reconstructed coefficients before extracting residues.
+The coefficients are constructed once by :func:`pyFDN.general_char_poly_fft`:
+sample ``det(I - diag(w**delays) @ A)`` on one unit circle, then recover the
+``M+1`` coefficients with an inverse FFT, where ``M = sum(delays)``. Each
+search circle reuses these coefficients with radius weighting and an FFT;
+no further matrix determinants are needed during grid scanning or polishing.
+The original :func:`pyFDN.general_char_poly` remains the principal-minor
+reference used by the existing ``roots`` backend and other callers.
+The annulus comes from the singular values of the static feedback matrix and
+the smallest/largest delays. The default remains ``mode="eig"``.
+
+This independent, restricted implementation follows Sitton, Burrus, Fox and
+Treitel, `Factoring very-high-degree polynomials (2003)
+<https://doi.org/10.1109/MSP.2003.1253552>`_, with Laguerre polishing as in
+the authors' `2006 description
+<https://www.ece.rice.edu/dsp/software/polyhelp/LindseyFox3Stages.htm>`_.
+It requires real, nonsingular static feedback, positive integer delays, and
+simple, sufficiently separated poles. It retries with finer grids but does
+not implement quotient deflation, repeated-root recovery, or the reference
+program's reciprocal search outside the unit circle. Failure raises
+``RuntimeError`` in the scalar root kernel. The public modal route instead
+refines against the original FDN matrix, checks the all-port response, and
+falls back to EAI with a warning and metadata if LF fails. The fallback must
+pass the same count and response checks. ``lf_max_seconds`` bounds only root
+search; default eig/EAI behavior is unchanged.
+Polynomial construction costs ``O(L N^3 + L log L)`` for ``N`` delay lines
+and an FFT length ``L > M``. Determinants are evaluated in batches to avoid
+storing all sampled matrices. Small coefficients can still be obscured by
+determinant roundoff; terms are not thresholded or trimmed, and the known
+constant/terminal coefficients are set directly to ``1`` and ``det(-A)``.
+Conjugate pairing and polishing remain quadratic in the number of poles.
+This is an experiment for long-delay FDNs, not a general replacement for
+the existing methods.
+
+``flamo_to_pr(model, mode="lindsey_fox", num_poles=known_order)`` provides
+the same policy for real float64 canonical FLAMO FDNs, clearing known SOS
+denominators before coefficient recovery. FIR loops require an explicit
+order. Incomplete EAI fallback results are rejected unless
+``allow_approximate=True`` and both all-port and external response checks
+pass. Metadata distinguishes complete decompositions from validated
+approximations. These sampled checks are not uniform response error bounds;
+see :doc:`lindsey_fox_examples` for acceptance criteria and the 30-case run.
+
+Upper-size stress trials validate coefficient construction at degree 100000
+and matrix size 128, but do not establish a complete modal decomposition at
+that size. Current polishing, conjugate pairing, and all-port validation have
+quadratic scaling limits. The public API does not include the stress runner's
+memory preflight; see the detailed report before attempting large solves.
+
+To compare one-time coefficient construction against principal minors::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_general_char_poly.py --lines 4 8 12 16 --repeat 3
+
+One local run on macOS arm64/Python 3.11.15 with seeded ``A = 0.9 Q`` and
+delays ``31 + 2 * arange(N)`` gave these median construction times in seconds:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Delay lines
+     - Degree
+     - Principal minors
+     - FFT recovery
+   * - 4
+     - 136
+     - 0.000078
+     - 0.000102
+   * - 8
+     - 304
+     - 0.001144
+     - 0.000290
+   * - 12
+     - 504
+     - 0.019713
+     - 0.000468
+   * - 16
+     - 736
+     - 0.343874
+     - 0.001538
+
+The maximum coefficient difference was below ``1e-14`` in all four cases.
+
+Run the reproducible acceptance benchmark from the checkout::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_lindsey_fox.py --scales 1 4 10 --repeat 3 --modes eig roots lindsey_fox eai
+
+The benchmark reports complete decomposition time (including residues), pole
+agreement with the first requested backend, and reconstructed impulse-response
+error against time-domain simulation. Imports are warmed up, but each timed
+EAI call includes its model construction. Timing assertions are intentionally
+excluded from CI. One local run on macOS arm64, Python 3.11.15, yielded these
+median times in seconds for a seeded three-line FDN with ``A = 0.95 Q``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Poles
+     - eig
+     - roots
+     - lindsey_fox
+     - eai
+   * - 117
+     - 0.019031
+     - 0.006029
+     - 0.003532
+     - 0.099798
+   * - 450
+     - 0.414931
+     - 0.110904
+     - 0.016855
+     - 0.400557
+   * - 1116
+     - 2.857218
+     - 0.723895
+     - 0.057545
+     - 1.021086
+
+Across this run, all non-reference pole errors were below ``4e-14`` and all
+impulse-response errors below ``1.3e-13``. These timings establish a promising
+case for this implementation on one FDN family, not a universal speedup.
+
+Coverage and timings on the repository's static, FIR, and SOS modal examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   lindsey_fox_examples
 
 FDN Processing
 --------------

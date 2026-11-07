@@ -1,0 +1,4 @@
+{"inner_radius": 0.9, "boundary_norm_bound": 5.926149811867766e-06}
+{"seconds": [2.452885708073154, 2.1233462499221787, 2.1280835409415886], "median": 2.1280835409415886, "retained_poles": 1578, "dropped_poles": 8, "quotient_tail": 1.2011875868966904e-14}
+{"ir_samples": 48000, "ir_max_error": 9.154352623164108e-15, "ir_relative_wet_l2": 5.979505418801664e-14, "wet_ir_peak": 0.65, "ir_relative_wet_l2_dB": -264.4666947241386}
+{"frequency_points": 32769, "frequency_max_abs_error": 3.8121027266305963e-13, "frequency_normalized_max_error": 2.3906812638939917e-13, "frequency_relative_l2": 5.965145050114162e-14, "frequency_wet_peak": 1.5945675336164904}
