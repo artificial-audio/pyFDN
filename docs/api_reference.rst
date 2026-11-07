@@ -213,6 +213,7 @@ Polynomial & Matrix Maths
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
+   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
@@ -313,6 +314,13 @@ grid-search alternative to the existing ``eig``, ``roots``, and ``eai``
 backends. It searches the generalized characteristic polynomial on concentric
 circles, polishes 3-by-3 modulus minima with Laguerre iterations, and checks
 both the root count and reconstructed coefficients before extracting residues.
+The coefficients are constructed once by :func:`pyFDN.general_char_poly_fft`:
+sample ``det(I - diag(w**delays) @ A)`` on one unit circle, then recover the
+``M+1`` coefficients with an inverse FFT, where ``M = sum(delays)``. Each
+search circle reuses these coefficients with radius weighting and an FFT;
+no further matrix determinants are needed during grid scanning or polishing.
+The original :func:`pyFDN.general_char_poly` remains the principal-minor
+reference used by the existing ``roots`` backend and other callers.
 The annulus comes from the singular values of the static feedback matrix and
 the smallest/largest delays. The default remains ``mode="eig"``.
 
@@ -326,10 +334,47 @@ simple, sufficiently separated poles. It retries with finer grids but does
 not implement quotient deflation, repeated-root recovery, or the reference
 program's reciprocal search outside the unit circle. Failure raises
 ``RuntimeError`` rather than silently falling back to another solver.
-The polynomial construction still enumerates principal minors (exponential
-in the number of delay lines); conjugate pairing and polishing also remain
-quadratic in the number of poles. This is an experiment for long-delay FDNs,
-not a general replacement for the existing methods.
+Polynomial construction costs ``O(L N^3 + L log L)`` for ``N`` delay lines
+and an FFT length ``L > M``. Determinants are evaluated in batches to avoid
+storing all sampled matrices. Small coefficients can still be obscured by
+determinant roundoff; terms are not thresholded or trimmed, and the known
+constant/terminal coefficients are set directly to ``1`` and ``det(-A)``.
+Conjugate pairing and polishing remain quadratic in the number of poles.
+This is an experiment for long-delay FDNs, not a general replacement for
+the existing methods.
+
+To compare one-time coefficient construction against principal minors::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_general_char_poly.py --lines 4 8 12 16 --repeat 3
+
+One local run on macOS arm64/Python 3.11.15 with seeded ``A = 0.9 Q`` and
+delays ``31 + 2 * arange(N)`` gave these median construction times in seconds:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Delay lines
+     - Degree
+     - Principal minors
+     - FFT recovery
+   * - 4
+     - 136
+     - 0.000078
+     - 0.000102
+   * - 8
+     - 304
+     - 0.001144
+     - 0.000290
+   * - 12
+     - 504
+     - 0.019713
+     - 0.000468
+   * - 16
+     - 736
+     - 0.343874
+     - 0.001538
+
+The maximum coefficient difference was below ``1e-14`` in all four cases.
 
 Run the reproducible acceptance benchmark from the checkout::
 
@@ -351,20 +396,20 @@ median times in seconds for a seeded three-line FDN with ``A = 0.95 Q``:
      - lindsey_fox
      - eai
    * - 117
-     - 0.018849
-     - 0.005977
-     - 0.003535
-     - 0.099446
+     - 0.019031
+     - 0.006029
+     - 0.003532
+     - 0.099798
    * - 450
-     - 0.414117
-     - 0.106836
-     - 0.016221
-     - 0.385656
+     - 0.414931
+     - 0.110904
+     - 0.016855
+     - 0.400557
    * - 1116
-     - 2.787983
-     - 0.889627
-     - 0.072990
-     - 1.072686
+     - 2.857218
+     - 0.723895
+     - 0.057545
+     - 1.021086
 
 Across this run, all non-reference pole errors were below ``4e-14`` and all
 impulse-response errors below ``1.3e-13``. These timings establish a promising

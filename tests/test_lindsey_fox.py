@@ -5,6 +5,7 @@ import pytest
 from scipy.optimize import linear_sum_assignment
 
 from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
+from pyFDN.auxiliary.math import general_char_poly_fft
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_pr import dss_to_pr
 from pyFDN.translate.pr_to_impz import pr_to_impz
@@ -102,3 +103,26 @@ def test_singular_feedback_rejected():
             [[0]],
             mode="lindsey_fox",
         )
+
+
+def test_modal_backend_constructs_polynomial_once_without_principal_minors(monkeypatch):
+    from importlib import import_module
+
+    module = import_module("pyFDN.translate.dss_to_pr")
+    calls = []
+
+    def construct(delays, a):
+        calls.append(1)
+        return general_char_poly_fft(delays, a)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Modal FFT backend must not enumerate principal minors")
+
+    monkeypatch.setattr(module, "general_char_poly_fft", construct)
+    monkeypatch.setattr("pyFDN.auxiliary.math.combinations", forbidden)
+    a = np.array([[0.6, 0.1], [-0.2, 0.7]])
+    result = dss_to_pr(
+        [17, 23], a, np.ones((2, 1)), np.ones((1, 2)), [[0]], mode="lindsey_fox"
+    )
+    assert len(calls) == 1
+    assert np.sum(1 + result[3]) == 40

@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.math import general_char_poly
+from pyFDN.auxiliary.math import general_char_poly, general_char_poly_fft
 from pyFDN.auxiliary.poles import (
     reduce_conjugate_pairs,
     residue_at_pole,
@@ -194,7 +194,7 @@ def dss_to_pr(
         bounds = singular_values[[0, -1], None] ** (
             1.0 / delays_arr[[np.argmin(delays_arr), np.argmax(delays_arr)]]
         )
-        p = general_char_poly(delays_arr, a_poly)
+        p = general_char_poly_fft(delays_arr, a_poly)
         # Reverse the GCP to solve directly in z, including strongly damped poles.
         poles = lindsey_fox_roots(p[::-1], float(bounds.min()), float(bounds.max()))
     elif mode_l == "roots":
