@@ -415,6 +415,13 @@ Across this run, all non-reference pole errors were below ``4e-14`` and all
 impulse-response errors below ``1.3e-13``. These timings establish a promising
 case for this implementation on one FDN family, not a universal speedup.
 
+Coverage and timings on the repository's static, FIR, and SOS modal examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   lindsey_fox_examples
+
 FDN Processing
 --------------
 
