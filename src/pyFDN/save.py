@@ -114,12 +114,12 @@ def resave_fdn(path: str | PathLike[str]) -> None:
 
 
 def available_fdn_presets() -> tuple[str, ...]:
-    """Return the names accepted by :func:`get_fdn_preset`."""
+    """Return the names accepted by :func:`load_fdn_preset`."""
     names = (r.name for r in _PRESETS.iterdir() if r.name.endswith(".json"))
     return tuple(sorted(name.removesuffix(".json") for name in names))
 
 
-def get_fdn_preset(name: str) -> DSS:
+def load_fdn_preset(name: str) -> DSS:
     """Return a packaged FDN as a :class:`~pyFDN.DSS`.
 
     The colorless presets come from Dal Santo et al., *Differentiable Feedback
@@ -137,7 +137,7 @@ __all__ = [
     "DSS_FORMAT",
     "RENAMED",
     "available_fdn_presets",
-    "get_fdn_preset",
+    "load_fdn_preset",
     "load_fdn",
     "resave_fdn",
     "save_fdn",

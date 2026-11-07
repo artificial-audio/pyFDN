@@ -35,9 +35,9 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
     tvm_kwargs = {
         "N": N,
-        "cycles_per_second": 1.3,
-        "amplitude": 0.2,
         "fs": fs,
+        "rate": 1.3,
+        "depth": 0.2,
         "spread": 0.1,
     }
     return tvm_kwargs
@@ -210,12 +210,12 @@ def test_recursion_filter_forward_delay() -> None:
     out_sig_td = np.zeros((n_samples, N), dtype=float)
 
     out_sig_ref = pyFDN.process_dss(
-        input_signal=in_sig,
         delays=dss.delays + BLOCK_SIZE,
         A=A_ref,
         B=I_ref,
         C=I_ref,
         D=0 * I_ref,
+        signal=in_sig,
     )
 
     out_sig_td = recursion_conn.process_block(in_sig)
@@ -594,11 +594,9 @@ def test_res_tvfdn_block_process():
     absorp_ref = td.SOSBank(sos)
 
     # Generate tv matrices
-    # Identical modulation in both renders: seed the global RNG the TVM draws from.
-    np.random.seed(7)
-    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs)
-    np.random.seed(7)
-    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs)
+    # Identical modulation in both renders: the same seed.
+    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
+    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
 
     # td engine
     # Physical room

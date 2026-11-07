@@ -26,9 +26,9 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
     tvm_kwargs = {
         "N": N,
-        "cycles_per_second": 1.3,
-        "amplitude": 0.2,
         "fs": fs,
+        "rate": 1.3,
+        "depth": 0.2,
         "spread": 0.1,
     }
     return tvm_kwargs
@@ -311,8 +311,7 @@ def test_tvmatrix() -> None:
     fs = 48_000.0
 
     # td engine
-    np.random.seed(3)
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs))
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
 
     # input signal
     n_samples = 400
@@ -321,8 +320,8 @@ def test_tvmatrix() -> None:
     # reference: build the rotation matrix sample by sample and apply it
     out_sig_ref = np.zeros_like(in_sig)
     for n in range(n_samples):
-        angles = tvmatrix_td.angle_amplitude * np.sin(
-            2 * np.pi * tvmatrix_td.frequency * (n / fs) + tvmatrix_td.phase
+        angles = tvmatrix_td.depth * np.sin(
+            2 * np.pi * tvmatrix_td.rate * (n / fs) + tvmatrix_td.phase
         )
         rotation = np.zeros((N, N))
         for pair, angle in enumerate(angles):
@@ -351,8 +350,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     fs = 48_000.0
 
     # td engine
-    np.random.seed(3)
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs))
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
 
     # input signal
     n_samples = 400
@@ -382,15 +380,9 @@ def test_tvmatrix_rejects_odd_channel_count() -> None:
     """Test that TimeVaryingMatrix rejects channel counts it cannot pair up"""
 
     # Test
-    with pytest.raises(ValueError, match="N must be even"):
-        td.TimeVaryingMatrix(
-            N=3, cycles_per_second=1.3, amplitude=0.2, fs=48_000.0, spread=0.1
-        )
-
-    with pytest.raises(ValueError, match="N must be a positive integer"):
-        td.TimeVaryingMatrix(
-            N=0, cycles_per_second=1.3, amplitude=0.2, fs=48_000.0, spread=0.1
-        )
+    for N in (3, 0):
+        with pytest.raises(ValueError, match="positive even integer"):
+            td.TimeVaryingMatrix(N, 48_000.0, rate=1.3, depth=0.2)
 
 
 def test_absolute_value() -> None:

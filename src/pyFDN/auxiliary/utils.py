@@ -75,7 +75,7 @@ def max_corr(signals: ArrayLike) -> np.ndarray:
     ----------
     signals : array
         MIMO signal matrix of shape (N1, N2, time), e.g. an adjugate
-        polynomial matrix from :func:`pyFDN.adj_poly`.
+        polynomial matrix from :func:`pyFDN.adjugate_polynomial`.
 
     Returns
     -------

@@ -21,7 +21,7 @@ def _impulse(n: int = 2048) -> np.ndarray:
 
 
 def test_a_dss_is_saved_as_readable_json_and_round_trips(tmp_path) -> None:
-    dss = pyFDN.get_fdn_preset("colorless_N4_d1")
+    dss = pyFDN.load_fdn_preset("colorless_N4_d1")
     path = tmp_path / "fdn.json"
     pyFDN.save_fdn(dss, path)
 

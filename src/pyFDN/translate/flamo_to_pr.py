@@ -817,8 +817,7 @@ def flamo_to_pr(
         if model is None:
             raise ValueError("Provide model or decomposition.")
         decomposition = flamo_decompose_for_pr(model)
-    mode_l = str(mode).lower()
-    if mode_l not in ("eai", "lindsey_fox"):
+    if mode not in ("eai", "lindsey_fox"):
         raise ValueError("mode must be 'eai' or 'lindsey_fox'")
     delays_arr = decomposition.delays
 
@@ -841,7 +840,7 @@ def flamo_to_pr(
         if verbose:
             print(f"Overriding detected pole count: num_poles={n_poles}")
 
-    if mode_l == "lindsey_fox":
+    if mode == "lindsey_fox":
         from pyFDN.translate._lindsey_fox_flamo import lindsey_fox_flamo
 
         if dtype != torch.complex128:

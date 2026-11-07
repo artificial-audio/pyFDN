@@ -14,7 +14,7 @@ from pyFDN.auxiliary.math import outer_sum_approximation
 from pyFDN.auxiliary.utils import ensure_3d
 
 
-def ms_to_smp(ms: float | np.ndarray, fs: float) -> np.ndarray:
+def ms_to_samples(ms: float | np.ndarray, fs: float) -> np.ndarray:
     """Convert milliseconds to samples."""
     return np.round(np.array(ms) * fs / 1000).astype(int)
 
@@ -91,7 +91,7 @@ def swap_flamo_recursion_paths(model: Any, *, inplace: bool = False) -> Any:
     return target
 
 
-def mgrpdelay(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
+def matrix_group_delay(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     """Group delay for each entry of an FIR matrix."""
 
     mat = ensure_3d(matrix)
@@ -122,7 +122,7 @@ def mgrpdelay(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
 def matrix_delay_approximation(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     """Rank-1 approximation of matrix group delay."""
 
-    GD, _ = mgrpdelay(matrix)
+    GD, _ = matrix_group_delay(matrix)
     GD[np.isinf(GD)] = np.nan
     matrix_delay = np.nanmean(GD, axis=2)
 

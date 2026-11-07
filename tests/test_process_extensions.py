@@ -295,10 +295,9 @@ def test_a_lossless_fir_fdn_renders_through_flamo_with_alias_decay() -> None:
         np.zeros((1, 1)),
     )
     nfft, alias = 2**12, 60.0
-    model = pyFDN.trainable_from_dss(
+    model = pyFDN.dss_to_flamo(
         *dss,
         48_000.0,
-        matrix="random",
         nfft=nfft,
         alias_decay_db=alias,
         dtype=torch.float64,

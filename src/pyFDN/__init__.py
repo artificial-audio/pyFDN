@@ -21,8 +21,8 @@ __all__ = [
     "sos_gain_per_sample_curves",
     # delay utilities
     "matrix_delay_approximation",
-    "mgrpdelay",
-    "ms_to_smp",
+    "matrix_group_delay",
+    "ms_to_samples",
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     "flamo_time_response",
@@ -45,7 +45,7 @@ __all__ = [
     "paper_link",
     "paper_reference",
     "available_fdn_presets",
-    "get_fdn_preset",
+    "load_fdn_preset",
     "save_fdn",
     "load_fdn",
     "resave_fdn",
@@ -100,15 +100,14 @@ __all__ = [
     "peaking_biquad",
     "probe_sos",
     # polynomial and matrix maths
-    "adj_poly",
+    "adjugate_polynomial",
     "adjugate",
     "det_polynomial",
     "general_char_poly",
-    "general_char_poly_fft",
     "interpolate_orthogonal",
     "is_orthogonal",
     "is_unilossless",
-    "loop_tf",
+    "loop_transfer_function",
     "matrix_convolution",
     "matrix_polyval",
     "outer_sum_approximation",
@@ -145,7 +144,7 @@ __all__ = [
     # fdn processing
     "process_dss",
     # training
-    "build_fdn",
+    "trainable_fdn",
     "trainable_from_dss",
     "LOSSLESS_ALIAS_DECAY_DB",
     "Trainable",
@@ -185,7 +184,6 @@ __all__ = [
     "L2",
     # features
     "mimo_rir_eigenvalues_per_frequency",
-    "energy_decay_curve",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -213,7 +211,7 @@ __all__ = [
     "complete_full_mimo_halmos",
     "complete_general_mimo_svd",
     "homogeneous_allpass_fdn",
-    "rand_admissible_homogeneous_allpass",
+    "random_admissible_homogeneous_allpass",
     "poletti_allpass",
     "series_allpass",
     "nested_allpass",
@@ -249,8 +247,8 @@ from .auxiliary.audio import audio_metadata, available_audio, load_audio
 from .auxiliary.delay import (
     flamo_delay_feedback_matrix,
     matrix_delay_approximation,
-    mgrpdelay,
-    ms_to_smp,
+    matrix_group_delay,
+    ms_to_samples,
     swap_flamo_recursion_paths,
 )
 from .auxiliary.flamo import (
@@ -274,15 +272,14 @@ from .auxiliary.marimo_utils import labeled_audio
 
 # polynomial and matrix maths
 from .auxiliary.math import (
-    adj_poly,
     adjugate,
+    adjugate_polynomial,
     det_polynomial,
     general_char_poly,
-    general_char_poly_fft,
     interpolate_orthogonal,
     is_orthogonal,
     is_unilossless,
-    loop_tf,
+    loop_transfer_function,
     matrix_convolution,
     matrix_polyval,
     outer_sum_approximation,
@@ -347,8 +344,8 @@ from .generate.allpass_FDN.allpass_completion import (
     complete_general_mimo_svd,
 )
 from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
-from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
-    rand_admissible_homogeneous_allpass,
+from .generate.allpass_FDN.random_admissible_homogeneous_allpass import (
+    random_admissible_homogeneous_allpass,
 )
 from .generate.fdn_dss_gallery import fdn_dss_gallery
 from .generate.fdn_matrix_gallery import (
@@ -402,8 +399,8 @@ from .process import process_dss
 from .references import paper_link, paper_reference
 from .save import (
     available_fdn_presets,
-    get_fdn_preset,
     load_fdn,
+    load_fdn_preset,
     resave_fdn,
     save_fdn,
 )
@@ -455,14 +452,13 @@ if TYPE_CHECKING:
         SpectralFlatness,
         Trainable,
         TrainLog,
-        build_fdn,
-        energy_decay_curve,
         impulse_excitation,
         mimo_rir_eigenvalues_per_frequency,
         model_response,
         param,
         params,
         train_fdn,
+        trainable_fdn,
         trainable_from_dss,
     )
     from .translate.flamo_to_pr import (
@@ -503,8 +499,7 @@ _LAZY_MODULES = {
     "SpectralFlatness": ".train",
     "Trainable": ".train",
     "TrainLog": ".train",
-    "build_fdn": ".train",
-    "energy_decay_curve": ".train",
+    "trainable_fdn": ".train",
     "impulse_excitation": ".train",
     "mimo_rir_eigenvalues_per_frequency": ".train",
     "model_response": ".train",

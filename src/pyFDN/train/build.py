@@ -1,6 +1,6 @@
 """Build a trainable flamo FDN model from a config or from a DSS system.
 
-:func:`build_fdn` turns a config (delays/N, decay, which gains train) into a
+:func:`trainable_fdn` turns a config (delays/N, decay, which gains train) into a
 trainable flamo ``Shell`` you can render, train, and extract.
 :func:`trainable_from_dss` does the same starting from an existing
 :class:`~pyFDN.DSS`.
@@ -53,7 +53,7 @@ class Trainable:
     direct: bool = False
 
 
-def build_fdn(
+def trainable_fdn(
     *,
     delays: np.ndarray | None = None,
     N: int | None = None,

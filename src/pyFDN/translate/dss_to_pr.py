@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.math import general_char_poly_fft
+from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.auxiliary.modal import modal_result_metadata
 from pyFDN.auxiliary.poles import (
     assemble_residues,
@@ -43,7 +43,7 @@ def _validated_lindsey_fox(
     order = int(delays.sum())
     identity = np.eye(delays.size)
 
-    p = general_char_poly_fft(delays, a)
+    p = general_char_poly(delays, a)
     poles = lindsey_fox_roots(
         p[::-1], float(bounds.min()), float(bounds.max()), max_seconds=max_seconds
     )
@@ -213,9 +213,7 @@ def dss_to_pr(
     if a_mat.shape != (n, n):
         raise ValueError(f"A must have shape ({n},{n}), got {a_mat.shape}")
 
-    mode_l = str(mode).lower()
-
-    if mode_l == "eai":
+    if mode == "eai":
         # Lazy: torch + FLAMO are imported only when EAI is actually requested,
         # keeping the eig/roots path numpy-only. Float64 by default for
         # machine-precision EAI (FLAMO's own default is float32).
@@ -252,7 +250,7 @@ def dss_to_pr(
             response_tolerance=response_tolerance,
         )
 
-    if mode_l == "lindsey_fox":
+    if mode == "lindsey_fox":
         if not np.all(np.isfinite(a_mat)) or np.any(a_mat.imag != 0):
             raise ValueError("lindsey_fox requires finite real A")
         if b_mat.ndim != 2 or b_mat.shape[0] != n or b_mat.shape[1] == 0:
@@ -273,10 +271,10 @@ def dss_to_pr(
         )
     a_poly = np.asarray(np.real(a_poly), dtype=float)
 
-    if mode_l == "eig":
+    if mode == "eig":
         aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
         poles = np.linalg.eigvals(aa)
-    elif mode_l == "lindsey_fox":
+    elif mode == "lindsey_fox":
         raw_delays = np.asarray(delays)
         if np.any(delays_arr <= 0) or not np.array_equal(raw_delays, delays_arr):
             raise ValueError("lindsey_fox requires positive integer delays")
@@ -307,9 +305,9 @@ def dss_to_pr(
             lf_max_seconds,
             response_tolerance,
         )
-    elif mode_l == "roots":
+    elif mode == "roots":
         # The w coefficients are the descending z coefficients, including zero poles.
-        p = general_char_poly_fft(delays_arr, a_poly)
+        p = general_char_poly(delays_arr, a_poly)
         poles = np.roots(p)
 
     else:
@@ -321,7 +319,7 @@ def dss_to_pr(
     )
 
     meta_data: dict[str, Any] = {
-        **modal_result_metadata(is_conjugate_pair, int(delays_arr.sum()), mode_l),
+        **modal_result_metadata(is_conjugate_pair, int(delays_arr.sum()), mode),
         "nonPairedPoles": non_paired,
         "undrivenResidues": undriven,
         "eigenvectors": eigenvectors,

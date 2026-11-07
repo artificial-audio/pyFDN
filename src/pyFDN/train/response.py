@@ -109,7 +109,7 @@ def require_time_output(model: Any) -> None:
         raise ValueError(
             f"model's output layer is {type(layer).__name__}, so it does not "
             "return an impulse response. Build the shell with "
-            "pyFDN.wrap_fdn_shell (or pyFDN.build_fdn), which pairs the FFT "
+            "pyFDN.wrap_fdn_shell (or pyFDN.trainable_fdn), which pairs the FFT "
             "input layer with the iFFT the core's alias_decay_db calls for."
         )
 

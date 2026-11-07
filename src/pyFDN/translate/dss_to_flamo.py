@@ -24,6 +24,7 @@ def dss_to_flamo(
     fs: float,
     *,
     nfft: int = 2**16,
+    alias_decay_db: float = 0.0,
     device: Any = None,
     shell: bool = True,
     dtype: Any = None,
@@ -55,6 +56,11 @@ def dss_to_flamo(
         Sampling rate in Hz.
     nfft : int
         FFT size for FLAMO (default 2**16).
+    alias_decay_db : float
+        Anti-time-aliasing decay, the accuracy of the rendered response in dB;
+        see :func:`pyFDN.trainable_from_dss`. Leave at 0 for a decaying FDN; a
+        lossless one needs it, e.g. :data:`pyFDN.LOSSLESS_ALIAS_DECAY_DB`. A
+        module passed into a hook must have been built with the same value.
     device : torch device or None
         Device; default is cuda if available else cpu.
     shell : bool
@@ -66,7 +72,7 @@ def dss_to_flamo(
         If None, wrapper defaults are used.
     post_delay : array, FLAMO module, sequence, or None
         In-loop filter applied to the delay output, inside the recursion -- the
-        same hook :func:`pyFDN.process_dss` calls ``post_delay``. An
+        same hook :func:`pyFDN.dss_to_td` calls ``post_delay``. An
         ``(n_sections, 6, N)`` SOS bank, a FLAMO module of input/output size N
         (e.g. a Schroeder allpass core from ``shell=False``), or a sequence of
         both applied in order. See :func:`pyFDN.hook_module`.
@@ -93,6 +99,7 @@ def dss_to_flamo(
         nfft,
         device=device,
         dtype=dtype,
+        alias_decay_db=alias_decay_db,
         post_delay=post_delay,
         post_matrix=post_matrix,
         post_output=post_output,

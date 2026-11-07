@@ -223,9 +223,9 @@ def _(fs, np, pyFDN, td):
             [td.Delay(fdn_delays - fdn_block), td.SOSBank(fdn_absorption)]
         )
         if time_varying:
-            np.random.seed(3)  # deterministic modulation across rebuilds
+            # a fixed seed keeps the modulation identical across rebuilds
             tvm = td.TimeVaryingMatrix(
-                N=n_lines, cycles_per_second=1.2, amplitude=0.7, fs=fs, spread=0.2
+                n_lines, fs, rate=1.2, depth=0.7, spread=0.2, seed=3
             )
             feedback = td.Series([td.Gain(A), tvm])
         else:

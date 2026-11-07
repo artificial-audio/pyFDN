@@ -231,12 +231,12 @@ def fdn_system_gallery(
 
     if system_type == "homogeneous_allpass":
         from .allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
-        from .allpass_FDN.rand_admissible_homogeneous_allpass import (
-            rand_admissible_homogeneous_allpass,
+        from .allpass_FDN.random_admissible_homogeneous_allpass import (
+            random_admissible_homogeneous_allpass,
         )
 
         G = np.diag(np.random.uniform(0.9, 0.99, N))
-        X = rand_admissible_homogeneous_allpass(G, (0.8, 0.99))
+        X = random_admissible_homogeneous_allpass(G, (0.8, 0.99))
         return homogeneous_allpass_fdn(G, X)[:4]
 
     if system_type == "schroeder_reverberator":

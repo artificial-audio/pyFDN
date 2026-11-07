@@ -51,7 +51,7 @@ def flamo_process(
     model,
     signal: np.ndarray,
     *,
-    fs: int | None = None,
+    fs: float | None = None,
     tail_seconds: float = 0.0,
     dtype=None,
 ) -> np.ndarray:
@@ -75,7 +75,7 @@ def flamo_process(
         of :func:`pyFDN.dss_to_flamo`).
     signal : np.ndarray
         1-D input signal.
-    fs : int, optional
+    fs : float, optional
         Sampling rate, required only when ``tail_seconds > 0``.
     tail_seconds : float
         Trailing silence to reserve so the reverb tail does not wrap around.
@@ -557,7 +557,7 @@ def assemble_fdn_core(
 
     with the direct path ``direct`` summed in parallel when provided.
 
-    The three optional filter slots are the hooks :func:`pyFDN.process_dss`
+    The three optional filter slots are the hooks :func:`pyFDN.dss_to_td`
     takes and :func:`pyFDN.flamo_to_dss` returns: ``post_delay`` on the delay
     output (shaping both the output and the feedback), ``post_matrix`` on the
     feedback path only, ``post_output`` on the wet signal only.

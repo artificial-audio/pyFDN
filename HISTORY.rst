@@ -42,8 +42,9 @@ Unreleased
   it; ``pyFDN.save.RENAMED`` maps classes that moved since. The JSON build
   format (``save_fdn_build`` / ``load_fdn_build`` / ``fdn_build_*_dict``),
   ``FDNPreset`` with its design records, ``trainable_from_preset`` and the EQ
-  designers' ``return_design`` option are removed. ``get_fdn_preset`` returns a
-  ``DSS``; the packaged presets are DSS JSON files. New dependency:
+  designers' ``return_design`` option are removed. ``get_fdn_preset`` is now
+  ``load_fdn_preset``, pairing with ``load_audio`` and ``load_fdn``, and returns
+  a ``DSS``; the packaged presets are DSS JSON files. New dependency:
   ``cloudpickle>=3``.
 * **Breaking: one convention per concept.**
 
@@ -70,6 +71,29 @@ Unreleased
     their modules. Removed as unused: ``flamo_freq_response``,
     ``flamo_extract_pr_decomposition``, ``matrix_polyder``, ``matrix_sqrt``,
     ``mulaw_decode``, ``db_to_lin``, ``db_to_sq``.
+  * The system comes before the signal: ``process_dss(*dss, x)``, as in
+    ``dss_to_impz`` and ``flamo_process(model, x)``.
+  * ``TimeVaryingMatrix(N, fs, *, rate, depth, spread=0.0, seed=None)`` names
+    its knobs as ``TimeVaryingKroneckerMatrix`` does (``rate``, ``depth``,
+    ``phase`` attributes) and draws from its own ``seed`` instead of NumPy's
+    global generator.
+  * ``build_fdn`` is ``trainable_fdn``, pairing with ``trainable_from_dss``.
+  * One function per quantity: ``general_char_poly`` uses the FFT route of
+    the former ``general_char_poly_fft`` for a static ``A`` (principal minors
+    remain for a polynomial ``A``), and ``energy_decay_curve`` is removed in
+    favour of ``edc``, which already takes tensors.
+  * Descriptive names for the MATLAB-style ones: ``mgrpdelay`` ->
+    ``matrix_group_delay``, ``ms_to_smp`` -> ``ms_to_samples``, ``adj_poly``
+    -> ``adjugate_polynomial``, ``loop_tf`` -> ``loop_transfer_function``,
+    ``rand_admissible_homogeneous_allpass`` ->
+    ``random_admissible_homogeneous_allpass``.
+  * Option names are matched exactly: ``construct_cascaded_paraunitary_matrix``
+    takes ``"hadamard"`` / ``"random"`` and ``dss_to_pr`` / ``flamo_to_pr``
+    their ``mode`` in lower case only.
+  * ``SDN`` defaults to ``fs=48_000.0`` like the rest of pyFDN, and
+    ``flamo_process`` types ``fs`` as a float.
+* ``dss_to_flamo`` takes ``alias_decay_db``, so a lossless FDN renders through
+  it without time aliasing, as through ``trainable_from_dss``.
 * ``DCBlocker`` drops its ``env_tau_s`` / ``gain_tau_s`` arguments and
   ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
   are now fixed at 50 ms, 20 ms and 3 samples.

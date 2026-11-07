@@ -228,19 +228,13 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     return determinant
 
 
-def general_char_poly_fft(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
-    """Static FDN characteristic coefficients from one circle of determinants.
+def _char_poly_fft(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
+    """Static branch of :func:`general_char_poly`: one circle of determinants.
 
     Samples ``det(I - diag(w**delays) @ A)`` at roots of unity and uses an
-    inverse FFT to recover coefficients in the same z^{-1} order as
-    :func:`general_char_poly`. For M = sum(delays), returns exactly M+1
-    coefficients, without trimming small terms. Real static A and positive
-    integer delays are required. Cost is O(L N^3 + L log L), with L the next
-    power of two above M; determinant samples are batched to limit memory.
-
-    Coefficient accuracy depends on determinant conditioning; small terms may
-    be obscured by roundoff. This avoids principal-minor enumeration, not the
-    conditioning limitations of a scalar coefficient representation.
+    inverse FFT to recover the coefficients. Cost is O(L N^3 + L log L), with L
+    the next power of two above M; determinant samples are batched to limit
+    memory.
     """
     raw_delays = np.asarray(delays)
     if (
@@ -286,13 +280,21 @@ def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     matrices in feedback delay networks. J. Acoust. Soc. Amer., 138(3), 1389-1398.
     Matches the reference generalCharPoly.m.
 
+    For a static ``(N, N)`` A the coefficients come from one circle of
+    determinant samples, ``det(I - diag(w**delays) @ A)`` at roots of unity,
+    and an inverse FFT: exactly ``M + 1`` of them for ``M = sum(delays)``, with
+    small terms not trimmed, and no principal-minor enumeration, so N is not
+    limited. Their accuracy is that of the determinants; small terms may be
+    obscured by roundoff. A polynomial ``(N, N, L)`` A is expanded over its
+    principal minors, which is exponential in N.
+
     Parameters
     ----------
     delays : array-like
-        Vector of delays in samples (length ND); used with z^{-1} convention.
+        Positive integer delays in samples (length N); z^{-1} convention.
     A : array-like
-        Feedback matrix. If 2D (scalar matrix), GCP is built via submatrix
-        determinants. If 3D of shape (N, N, L), polynomial matrix in z^{-1}.
+        Real feedback matrix, static ``(N, N)`` or polynomial ``(N, N, L)`` in
+        z^{-1}.
 
     Returns
     -------
@@ -300,22 +302,12 @@ def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
         Generalized characteristic polynomial coefficients in z^{-1} ordering
         (index 0 = z^0, index k = z^{-k}).
     """
+    if np.ndim(A) == 2:
+        return _char_poly_fft(delays, A)
     delays = np.asarray(delays, dtype=int).ravel()
     A = np.asarray(A, dtype=float)
     ND = len(delays)
     N = A.shape[1]
-
-    if A.ndim == 2:
-        # Scalar matrix: p_len = sum(d) + 1, iterate over submatrix determinants
-        p_len = int(delays.sum()) + 1
-        p = np.zeros(p_len)
-        p[0] = 1.0
-        for nn in range(1, N + 1):
-            for ind_tup in combinations(range(ND), nn):
-                ind = np.array(ind_tup)
-                p_ind = int(delays[ind].sum())
-                p[p_ind] += ((-1) ** nn) * np.linalg.det(A[np.ix_(ind, ind)])
-        return p
 
     # Polyphase: A is (N, N, L); m = degree of det(A)
     det_A = det_polynomial(A)
@@ -359,7 +351,7 @@ def adjugate(A: np.ndarray) -> np.ndarray:
     return det_uv * (Vh.conj().T * adj_s) @ U.conj().T
 
 
-def adj_poly(
+def adjugate_polynomial(
     polynomial_matrix: ArrayLike, var: str = "z^1", tol: float = -200.0
 ) -> np.ndarray:
     """Adjugate of a polynomial matrix via FFT evaluation.
@@ -375,7 +367,7 @@ def adj_poly(
     var : str
         Coefficient convention along axis 2:
         ``"z^1"`` — descending powers of z, last slice = z^0 (the
-        :func:`loop_tf` convention); ``"z^-1"`` — ascending powers of z^{-1},
+        :func:`loop_transfer_function` convention); ``"z^-1"`` — ascending powers of z^{-1},
         first slice = z^0 (the pyFDN convention used by
         :func:`det_polynomial`).
     tol : float
@@ -390,7 +382,9 @@ def adj_poly(
     """
     P = np.asarray(polynomial_matrix)
     if P.ndim != 3 or P.shape[0] != P.shape[1]:
-        raise ValueError("adj_poly expects a square polynomial matrix (N, N, L)")
+        raise ValueError(
+            "adjugate_polynomial expects a square polynomial matrix (N, N, L)"
+        )
     if var not in ("z^1", "z^-1"):
         raise ValueError("var must be 'z^1' or 'z^-1'")
     N, _, L = P.shape
@@ -416,7 +410,7 @@ def adj_poly(
     return adj
 
 
-def loop_tf(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
+def loop_transfer_function(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     """Loop transfer function ``P(z) = diag(z^m) - A`` as a polynomial matrix.
 
     Coefficients are stored in the ``z^1`` convention along axis 2

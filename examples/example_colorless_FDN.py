@@ -99,7 +99,7 @@ def _(mo):
     mo.md(r"""
     ## Load the packaged preset
 
-    `pyFDN.get_fdn_preset` retrieves the packaged preset as a `DSS` system. We
+    `pyFDN.load_fdn_preset` retrieves the packaged preset as a `DSS` system. We
     add the desired decay as a first-order shelf in the `post_delay` hook and
     render it directly.
     """)
@@ -109,7 +109,7 @@ def _(mo):
 @app.cell
 def _(N, delay_set, fs, ir_len, pyFDN, rt):
     _preset = f"colorless_N{N}_d{delay_set}"
-    _lossless = pyFDN.get_fdn_preset(_preset)
+    _lossless = pyFDN.load_fdn_preset(_preset)
     _decay = pyFDN.decay_to_first_order_shelf(rt, rt, None, _lossless.delays, fs)
     ir_optim = (
         pyFDN.dss_to_td(*_lossless, post_delay=_decay)
@@ -139,7 +139,7 @@ def _(mo):
 @app.cell
 def _(N, delay_set, fs, ir_len, pyFDN, rt):
     _preset = f"colorless_init_N{N}_d{delay_set}"
-    _lossless = pyFDN.get_fdn_preset(_preset)
+    _lossless = pyFDN.load_fdn_preset(_preset)
     _decay = pyFDN.decay_to_first_order_shelf(rt, rt, None, _lossless.delays, fs)
     ir_init = (
         pyFDN.dss_to_td(*_lossless, post_delay=_decay)

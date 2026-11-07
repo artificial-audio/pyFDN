@@ -102,7 +102,7 @@ def _(N, fs, np, pyFDN):
     #   distribution="uniform"     -> flat in samples instead of flat per octave
     #
     # Or set them by hand, in milliseconds:
-    #   delays = pyFDN.ms_to_smp(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
+    #   delays = pyFDN.ms_to_samples(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
     return (delays,)
 
 
@@ -488,8 +488,7 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
-    np.random.seed(11)  # TimeVaryingMatrix draws its phases from the global stream
+def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
     wet_moving = pyFDN.dss_to_td(
         delays,
         A,
@@ -497,7 +496,9 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
         C,
         D,
         post_delay=td.SOSBank(absorption),
-        post_matrix=td.TimeVaryingMatrix(len(delays), 10.0, 1.1, fs, 0.7),
+        post_matrix=td.TimeVaryingMatrix(
+            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, seed=11
+        ),
     ).process_signal(x, squeeze=True)
 
     # Try this:

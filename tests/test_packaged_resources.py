@@ -72,9 +72,9 @@ def test_colorless_presets_are_packaged_dss_systems() -> None:
     assert "colorless_init_N16_d2" in names
 
     for name in names:
-        assert isinstance(pyFDN.get_fdn_preset(name), pyFDN.DSS), name
+        assert isinstance(pyFDN.load_fdn_preset(name), pyFDN.DSS), name
 
-    dss = pyFDN.get_fdn_preset("colorless_N4_d1")
+    dss = pyFDN.load_fdn_preset("colorless_N4_d1")
     assert dss.A.shape == (4, 4)
     assert dss.B.shape == (4, 1)
     assert dss.C.shape == (1, 4)
@@ -82,11 +82,11 @@ def test_colorless_presets_are_packaged_dss_systems() -> None:
     assert dss.delays.shape == (4,)
     np.testing.assert_allclose(dss.A.T @ dss.A, np.eye(4), atol=1e-12)
 
-    with_extension = pyFDN.get_fdn_preset("colorless_N4_d1.json")
+    with_extension = pyFDN.load_fdn_preset("colorless_N4_d1.json")
     np.testing.assert_array_equal(with_extension.A, dss.A)
 
     with pytest.raises(ValueError, match="Available presets"):
-        pyFDN.get_fdn_preset("not-a-preset")
+        pyFDN.load_fdn_preset("not-a-preset")
 
 
 def test_every_example_citation_resolves_from_packaged_bibliography() -> None:

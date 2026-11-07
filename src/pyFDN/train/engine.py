@@ -1,6 +1,6 @@
 """Train an FDN toward an objective.
 
-:func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` to a loss built from
+:func:`train_fdn` fits a model from :func:`pyFDN.trainable_fdn` to a loss built from
 :mod:`pyFDN.train.losses`, in place, and returns a :class:`TrainLog`. Read the
 result back with :func:`pyFDN.flamo_to_dss`.
 
@@ -64,7 +64,7 @@ def train_fdn(
     Parameters
     ----------
     model : flamo Shell
-        A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_dss``.
+        A trainable model from :func:`pyFDN.trainable_fdn` / ``trainable_from_dss``.
         It must return its impulse response -- every loss is a function of it --
         which every pyFDN shell does by construction.
     loss : Loss

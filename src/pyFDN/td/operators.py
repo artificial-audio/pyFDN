@@ -726,7 +726,7 @@ class SOSBank(TimeOperator):
 
     Notes
     -----
-    Pass an instance as ``post_delay`` to :func:`pyFDN.process_dss` to apply
+    Pass an instance as ``post_delay`` to :func:`pyFDN.dss_to_td` to apply
     frequency-dependent absorption inside the feedback loop.
     :func:`pyFDN.dss_to_td` constructs this class for every SOS bank passed as
     a filter hook.
@@ -776,8 +776,8 @@ class MatrixFIR(TimeOperator):
 
     Notes
     -----
-    :func:`pyFDN.process_dss` constructs this filter automatically when its
-    feedback matrix ``A`` has shape ``(n_out, n_in, n_taps)``.
+    An FIR feedback matrix is not a DSS matrix: pass an instance as
+    ``post_matrix`` to :func:`pyFDN.dss_to_td`, with ``A`` the identity.
     """
 
     def __init__(self, coeffs: ArrayLike) -> None:
@@ -865,10 +865,13 @@ class TimeVaryingMatrix(TimeOperator):
     Each adjacent channel pair is rotated by a sinusoidally modulated angle, so
     the operator is orthogonal at every sample but never constant. Sitting on a
     :class:`~pyFDN.td.connectors.Recursion` feedback path, e.g.
-    ``Series([Gain(A), TimeVaryingMatrix(N, 1.5, 0.35, fs, 0.1)])``, it makes the
-    loop genuinely time-varying -- there is no static transfer function. This is
-    the operator form of the ``post_matrix`` argument of
-    :func:`pyFDN.process_dss`.
+    ``Series([Gain(A), TimeVaryingMatrix(N, fs, rate=1.5, depth=0.35)])``, it
+    makes the loop genuinely time-varying -- there is no static transfer
+    function. It also goes straight into a graph's ``post_matrix`` hook, e.g.
+    ``pyFDN.dss_to_td(*dss, post_matrix=TimeVaryingMatrix(N, fs, rate=1.5,
+    depth=0.35))``.
+
+    The knobs are named as in :class:`TimeVaryingKroneckerMatrix`.
 
     Translation of the MATLAB implementation ``timeVaryingMatrix.m`` from
     fdnToolbox. Original MATLAB code: (c) Sebastian Jiro Schlecht, 2019.
@@ -878,23 +881,24 @@ class TimeVaryingMatrix(TimeOperator):
     ----------
     N : int
         Number of channels (the matrix is N x N). Must be a positive even integer.
-    cycles_per_second : float
-        Frequency of the time variation in Hz (controls oscillation speed).
-    amplitude : float
-        Maximum angle deflection in radians (strength of modulation).
     fs : float
-        Sampling rate in Hz.
+        Sampling rate in Hz; the modulation clock.
+    rate : float
+        Modulation frequency in Hz.
+    depth : float
+        Modulation amplitude (maximum angle deflection) in radians.
     spread : float
-        Randomness factor (controls how differently each eigenmode behaves).
+        Relative random spread of ``rate`` and ``depth`` across the rotation
+        planes: each plane draws from ``value * (1 +- spread)``.
+    seed : int or None
+        Seed for the random per-plane phases and spread.
 
     Attributes
     ----------
     num_pairs : int
         Number of eigenmode pairs (``N // 2``), i.e. independent 2-D rotation planes.
-    phase, frequency, angle_amplitude : ndarray
-        Per-pair modulation parameters, drawn from the global NumPy RNG at
-        construction. Seed ``np.random.seed`` beforehand for a reproducible
-        modulation.
+    rate, depth, phase : ndarray
+        Per-plane modulation frequency, amplitude and initial phase.
     sample_index : int
         Current sample index; the modulation clock.
     """
@@ -902,42 +906,25 @@ class TimeVaryingMatrix(TimeOperator):
     def __init__(
         self,
         N: int,
-        cycles_per_second: float,
-        amplitude: float,
         fs: float,
-        spread: float,
+        *,
+        rate: float,
+        depth: float,
+        spread: float = 0.0,
+        seed: int | None = None,
     ) -> None:
-        # Enforce N to be a positive, even integer.
         N = int(N)
-        if N <= 0:
-            raise ValueError("N must be a positive integer")
-        if N % 2 != 0:
-            raise ValueError("N must be even")
-
+        if N <= 0 or N % 2:
+            raise ValueError(f"N must be a positive even integer, got {N}")
         self.N = N
         self.in_channels = self.out_channels = N
-        self.cycles_per_second = cycles_per_second
-        self.amplitude = amplitude
-        self.fs = fs
-        self.spread = spread
-
-        # Number of independent 2-D rotation planes (conjugate eigenvalue pairs)
+        self.fs = float(fs)
         self.num_pairs = N // 2
 
-        # Random initial phase between 0 and 2*pi for each 2-D plane
-        self.phase = 2 * np.pi * np.random.rand(self.num_pairs)
-
-        # Unique modulation frequency for each pair, using the spread factor
-        self.frequency = self.cycles_per_second * (
-            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
-        )
-
-        # Modulation amplitude
-        self.angle_amplitude = self.amplitude * (
-            1 + self.spread * (2 * np.random.rand(self.num_pairs) - 1)
-        )
-
-        # Global time tracker index, initialized to 0
+        rng = np.random.default_rng(seed)
+        self.phase = 2 * np.pi * rng.random(self.num_pairs)
+        self.rate = rate * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
+        self.depth = depth * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
         self.sample_index = 0
 
     def process_block(self, block: ArrayLike) -> np.ndarray:
@@ -954,14 +941,12 @@ class TimeVaryingMatrix(TimeOperator):
         length = x.shape[0]
         sample_indices = self.sample_index + np.arange(length)
         time = sample_indices[:, np.newaxis] / self.fs
-        angles = self.angle_amplitude * np.sin(
-            2 * np.pi * self.frequency * time + self.phase
-        )
+        angles = self.depth * np.sin(2 * np.pi * self.rate * time + self.phase)
         cos = np.cos(angles)
         sin = np.sin(angles)
 
         x_pairs = x.reshape(length, self.num_pairs, 2)
-        out = np.empty(x.shape, dtype=np.result_type(x, self.angle_amplitude, float))
+        out = np.empty(x.shape, dtype=np.result_type(x, self.depth, float))
         out_pairs = out.reshape(length, self.num_pairs, 2)
         out_pairs[..., 0] = cos * x_pairs[..., 0] - sin * x_pairs[..., 1]
         out_pairs[..., 1] = sin * x_pairs[..., 0] + cos * x_pairs[..., 1]
@@ -1040,7 +1025,7 @@ class TimeVaryingKroneckerMatrix(TimeOperator):
 
     Sits on the feedback path of a :class:`~pyFDN.td.connectors.Recursion`, or
     goes straight into the ``post_matrix`` argument of
-    :func:`pyFDN.process_dss` with ``A`` left as the identity, in which case
+    :func:`pyFDN.dss_to_td` with ``A`` left as the identity, in which case
     this operator *is* the feedback matrix.
 
     Parameters

@@ -56,7 +56,7 @@ def _(fs, np, pyFDN):
     g = pyFDN.rt_to_gain_per_sample(0.5, fs)
     G = np.diag(g**delays)
 
-    X = pyFDN.rand_admissible_homogeneous_allpass(G, (0.7, 0.99))
+    X = pyFDN.random_admissible_homogeneous_allpass(G, (0.7, 0.99))
     A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(G, X, verbose=False)
     return A, b, c, d, delays
 

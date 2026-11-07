@@ -569,7 +569,7 @@ def plot_fdn_parameter(
     """Plot all FDN parameters in one figure.
 
     Extends :func:`plot_system_matrix` with the delay lengths and, optionally,
-    any of the three filter hooks, named as :func:`pyFDN.process_dss` names
+    any of the three filter hooks, named as :func:`pyFDN.dss_to_td` names
     them, so a system and its filters unpack straight in:
     ``plot_fdn_parameter(*dss, **filters, fs=fs)``:
 

@@ -1,6 +1,6 @@
 """Training pipeline for FDNs -- an explicit three-step API over flamo.
 
-1. **build** a trainable flamo model from a config (:func:`build_fdn`, or
+1. **build** a trainable flamo model from a config (:func:`trainable_fdn`, or
    :func:`trainable_from_dss` from an existing :class:`~pyFDN.DSS`).
 2. **train** it toward an objective (:func:`train_fdn`), built by composing
    losses with ``+`` and ``*``::
@@ -20,14 +20,11 @@ from .build import (
     LOSSLESS_ALIAS_DECAY_DB,
     MatrixParam,
     Trainable,
-    build_fdn,
+    trainable_fdn,
     trainable_from_dss,
 )
 from .engine import TrainLog, train_fdn
-from .features import (
-    energy_decay_curve,
-    mimo_rir_eigenvalues_per_frequency,
-)
+from .features import mimo_rir_eigenvalues_per_frequency
 from .filters import AttenuationFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
@@ -60,7 +57,7 @@ from .response import Response, impulse_excitation, model_response
 
 __all__ = [
     # build
-    "build_fdn",
+    "trainable_fdn",
     "trainable_from_dss",
     "Trainable",
     "MatrixParam",
@@ -105,5 +102,4 @@ __all__ = [
     "L2",
     # features
     "mimo_rir_eigenvalues_per_frequency",
-    "energy_decay_curve",
 ]

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.acoustics import rt_to_slope, slope_to_rt
-from pyFDN.auxiliary.delay import ms_to_smp
+from pyFDN.auxiliary.delay import ms_to_samples
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
 from pyFDN.auxiliary.utils import (
     ensure_3d,
@@ -27,7 +27,7 @@ def test_ms_to_smp_round_trip_simple_values():
     fs = 48_000
     times_ms = [0.0, 0.5, 1.0, 10.0]
     expected = np.array([0, 24, 48, 480])
-    assert np.array_equal(ms_to_smp(times_ms, fs), expected)
+    assert np.array_equal(ms_to_samples(times_ms, fs), expected)
 
 
 def test_hertz_to_unit_maps_to_nyquist():

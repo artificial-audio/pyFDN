@@ -33,11 +33,11 @@ from pyFDN.train import (  # noqa: E402
     Sparsity,
     SpectralFlatness,
     Trainable,
-    build_fdn,
     model_response,
     param,
     params,
     train_fdn,
+    trainable_fdn,
     trainable_from_dss,
 )
 
@@ -121,14 +121,14 @@ def test_build_fdn_default_is_so_n_without_warning():
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # default draw must already be in SO(N)
-        model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+        model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     b = pyFDN.flamo_to_dss(model)[0]
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(b.A) > 0
 
 
 def test_extract_roundtrip_with_direct_always_present():
-    model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=3)
+    model = trainable_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=3)
     b, filters = pyFDN.flamo_to_dss(model)
     assert isinstance(b, DSS)
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
@@ -140,7 +140,7 @@ def test_extract_roundtrip_with_direct_always_present():
 
 
 def test_build_rt_sets_absorption_and_renders():
-    model = build_fdn(N=6, rt=2.0, nfft=2**12, device="cpu", rng=1)
+    model = trainable_fdn(N=6, rt=2.0, nfft=2**12, device="cpu", rng=1)
     ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
     assert np.all(np.isfinite(ir))
     _, filters = pyFDN.flamo_to_dss(model)
@@ -148,7 +148,7 @@ def test_build_rt_sets_absorption_and_renders():
 
 
 def test_extracted_dss_renders_through_dss_to_flamo():
-    model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=5)
+    model = trainable_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=5)
     b, filters = pyFDN.flamo_to_dss(model)
     ir = pyFDN.flamo_time_response(
         pyFDN.dss_to_flamo(*b, FS, nfft=2**12, device="cpu", **filters)
@@ -312,7 +312,7 @@ def test_a_trained_rt_still_decays():
 
 
 def test_colorless_improves_and_preserves_structure():
-    model = build_fdn(N=6, rt=None, nfft=2**11, device="cpu", rng=0)
+    model = trainable_fdn(N=6, rt=None, nfft=2**11, device="cpu", rng=0)
     init_dss = pyFDN.flamo_to_dss(model)[0]
     init = _decayed_flatness(init_dss)
     delays0 = init_dss.delays
@@ -338,9 +338,9 @@ def test_lossless_build_defaults_to_alias_decay():
     """
     from pyFDN.auxiliary.flamo_graph import feedback_matrix_module
 
-    lossless = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
-    decaying = build_fdn(N=4, rt=2.0, nfft=2**10, device="cpu", rng=0)
-    opted_out = build_fdn(
+    lossless = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    decaying = trainable_fdn(N=4, rt=2.0, nfft=2**10, device="cpu", rng=0)
+    opted_out = trainable_fdn(
         N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0
     )
 
@@ -372,14 +372,16 @@ def test_lossless_build_defaults_to_alias_decay():
 
 
 def test_colorless_without_alias_decay_warns():
-    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    model = trainable_fdn(
+        N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0
+    )
     with pytest.warns(UserWarning, match="alias_decay_db=0"):
         train_fdn(model, FlatMagnitude(), max_steps=2, rng=0, **_FAST)
 
 
 def test_train_is_reproducible():
     def run():
-        model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
+        model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
         loss = FlatMagnitude() + 0.2 * Sparsity(param(model, "feedback"))
         return train_fdn(model, loss, max_steps=50, rng=0, **_FAST)
 
@@ -388,9 +390,9 @@ def test_train_is_reproducible():
 
 def test_match_spectrogram_runs_and_renders():
     nfft = 2**11
-    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
+    target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
     target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
-    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
+    fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
 
     log = train_fdn(
         fresh,
@@ -431,7 +433,7 @@ def _mimo_ir(model, nfft, n_in, n_out):
 def test_match_spectrogram_mimo_target():
     nfft, N, n_in, n_out = 2**11, 4, 2, 2
     rng = np.random.default_rng(0)
-    ref = build_fdn(
+    ref = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -443,7 +445,7 @@ def test_match_spectrogram_mimo_target():
     target = _mimo_ir(ref, nfft, n_in, n_out)
     assert target.shape == (nfft, n_out, n_in)
 
-    fresh = build_fdn(
+    fresh = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -464,7 +466,7 @@ def test_match_spectrogram_mimo_target():
 
 
 def test_mimo_target_wrong_shape_raises():
-    model = build_fdn(
+    model = trainable_fdn(
         N=4,
         rt=None,
         nfft=2**10,
@@ -482,9 +484,9 @@ def test_mimo_target_wrong_shape_raises():
 
 
 def test_a_first_order_shelf_decay_realizes_rt():
-    dss = pyFDN.flamo_to_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[
-        0
-    ]
+    dss = pyFDN.flamo_to_dss(
+        trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    )[0]
     sos = pyFDN.decay_to_first_order_shelf(0.3, 0.3, None, dss.delays, FS)
     assert sos.shape == (1, 6, 6)
 
@@ -503,7 +505,7 @@ def test_a_first_order_shelf_decay_realizes_rt():
 def test_response_is_the_true_ir_matrix():
     """h is the impulse response itself, shaped like dss_to_impz's."""
     nfft, n_in, n_out = 2**12, 2, 3
-    model = build_fdn(
+    model = trainable_fdn(
         N=5,
         rt=None,
         nfft=nfft,
@@ -533,7 +535,7 @@ def test_alias_decay_db_is_the_response_accuracy_in_db():
 
     nfft = 2**13
     for alias_db in (30.0, 60.0):
-        model = build_fdn(
+        model = trainable_fdn(
             N=6,
             rt=None,
             nfft=nfft,
@@ -551,7 +553,7 @@ def test_alias_decay_db_is_the_response_accuracy_in_db():
 
 
 def test_response_spectrum_is_computed_once():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     r = model_response(model)
     assert r.spectrum is r.spectrum  # cached, so several losses share one FFT
 
@@ -560,7 +562,7 @@ def test_response_spectrum_is_computed_once():
 
 
 def test_params_lists_every_parameter_with_trainability():
-    model = build_fdn(N=5, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=5, rt=None, nfft=2**10, device="cpu", rng=0)
     by_name = {p.name: p for p in params(model)}
     assert {"input_gain", "output_gain", "fB", "fF"} <= set(by_name)
     assert by_name["fB"].shape == (5, 5)
@@ -569,7 +571,7 @@ def test_params_lists_every_parameter_with_trainability():
 
 
 def test_param_resolves_alias_and_returns_mapped_value():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     ref = param(model, "feedback")
     assert ref.name == "fB"
     assert ref is not None and ref.module is param(model, "fB").module
@@ -585,13 +587,13 @@ def test_param_resolves_alias_and_returns_mapped_value():
 
 
 def test_param_unknown_name_lists_what_is_available():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="no parameter named 'A'.*available"):
         param(model, "A")
 
 
 def test_param_accepts_a_module_directly():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     module = param(model, "feedback").module
     assert param(module).module is module
 
@@ -600,7 +602,7 @@ def test_param_accepts_a_module_directly():
 
 
 def test_losses_compose_and_weights_reach_the_leaves():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     flat, sparse = FlatMagnitude(), Sparsity(param(model, "feedback"))
     loss = 0.5 * (flat + 0.4 * sparse)
 
@@ -619,7 +621,7 @@ def test_losses_compose_and_weights_reach_the_leaves():
 
 
 def test_sparsity_rejects_a_non_square_parameter():
-    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="square matrix"):
         Sparsity(param(model, "input_gain"))
 
@@ -629,16 +631,16 @@ def test_one_objective_can_hold_two_different_references():
     nfft = 2**11
     ref_a = np.asarray(
         pyFDN.flamo_time_response(
-            build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
+            trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
         )
     ).reshape(-1)
     ref_b = np.asarray(
         pyFDN.flamo_time_response(
-            build_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8)
+            trainable_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8)
         )
     ).reshape(-1)
 
-    model = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
+    model = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
     loss = MatchSpectrogram(ref_a, nfft=(256,)) + 0.5 * pyFDN.MatchMagnitude(ref_b)
     log = train_fdn(model, loss, max_steps=10, rng=0, **_FAST)
     assert set(log.loss_log) == {"MatchSpectrogram", "MatchMagnitude"}
@@ -652,7 +654,7 @@ def test_flat_spectrogram_is_gain_invariant():
     """Each scale is normalized by its own mean, so only shape is measured."""
     from pyFDN.train import Response
 
-    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    model = trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     loss, r = FlatSpectrogram(), model_response(model)
     scaled = Response(h=r.h * 37.0, fs=r.fs)
     np.testing.assert_allclose(
@@ -667,9 +669,9 @@ def test_flat_spectrogram_resolution_comes_from_its_own_windows():
     spectrum of a rectangularly truncated, non-decaying IR, which grows steeply
     with the truncation length. That is the sensitivity FlatSpectrogram removes.
     """
-    dss = pyFDN.flamo_to_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[
-        0
-    ]
+    dss = pyFDN.flamo_to_dss(
+        trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    )[0]
 
     def spread(loss):
         values = [
@@ -691,14 +693,14 @@ def test_flat_spectrogram_resolution_comes_from_its_own_windows():
 
 
 def test_flat_spectrogram_rejects_a_window_longer_than_the_response():
-    model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than the response"):
         FlatSpectrogram(nfft=(2048,))(model_response(model))
 
 
 def test_flat_spectrogram_flattens_and_densifies():
     """It reaches FlatMagnitude's flatness, and unlike it also improves density."""
-    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=0)
+    model = trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=0)
     init = _decayed_flatness(pyFDN.flamo_to_dss(model)[0])
 
     log = train_fdn(
@@ -731,7 +733,7 @@ def _asymmetric_reference(magnitude, peak_power):
 
 def test_asymmetric_flat_magnitude_matches_its_definition():
     """The peak/dip split, spelled out independently."""
-    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=1)
+    model = trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=1)
     magnitude = model_response(model).magnitude.detach().numpy()
 
     for peak_power in (2.0, 3.0, 4.0, 6.0):
@@ -757,7 +759,7 @@ def test_asymmetric_flat_magnitude_is_zero_only_on_a_flat_response():
     assert float(loss(Response(h=dirac, fs=48000.0)).detach()) == pytest.approx(
         0.0, abs=1e-9
     )
-    peaky = model_response(build_fdn(N=4, rt=None, nfft=2**10, rng=0))
+    peaky = model_response(trainable_fdn(N=4, rt=None, nfft=2**10, rng=0))
     assert float(loss(peaky).detach()) > 0.0
 
 
@@ -765,7 +767,7 @@ def test_asymmetric_flat_magnitude_is_gain_invariant():
     """The reference is the response's own RMS, so the overall level cancels."""
     from pyFDN.train import Response
 
-    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
+    model = trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     loss, r = pyFDN.AsymmetricFlatMagnitude(), model_response(model)
     np.testing.assert_allclose(
         float(loss(r).detach()),
@@ -806,7 +808,7 @@ def test_peak_power_lowers_the_tallest_mode():
     """
 
     def train(peak_power):
-        model = build_fdn(
+        model = trainable_fdn(
             delays=_COLORLESS_DELAYS, rt=None, nfft=2**14, device="cpu", rng=2
         )
         train_fdn(
@@ -830,7 +832,9 @@ def test_asymmetric_flat_magnitude_rejects_a_peak_power_below_two():
 
 
 def test_asymmetric_flat_magnitude_warns_without_alias_decay():
-    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    model = trainable_fdn(
+        N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0
+    )
     with pytest.warns(UserWarning, match="AsymmetricFlatMagnitude fits"):
         train_fdn(model, pyFDN.AsymmetricFlatMagnitude(), max_steps=2, rng=0, **_FAST)
 
@@ -877,7 +881,7 @@ def test_match_energy_decay_is_minimized_at_the_reference_decay():
 
 
 def test_match_energy_decay_rejects_a_window_longer_than_the_response():
-    model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than"):
         MatchEnergyDecay(np.zeros(2**10), window=2**12).check(model)
 
@@ -910,7 +914,7 @@ def test_spectral_flatness_is_gain_invariant():
     """Flatness (geometric/arithmetic mean ratio) is invariant to overall gain."""
     from pyFDN.train import Response
 
-    model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=4)
+    model = trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=4)
     loss = SpectralFlatness()
     r = model_response(model)
     scaled = Response(h=r.h * 50.0, fs=r.fs)
@@ -920,7 +924,9 @@ def test_spectral_flatness_is_gain_invariant():
 
 
 def test_spectral_flatness_warns_without_alias_decay():
-    model = build_fdn(N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0)
+    model = trainable_fdn(
+        N=4, rt=None, nfft=2**10, alias_decay_db=0.0, device="cpu", rng=0
+    )
     with pytest.warns(UserWarning, match="alias_decay_db=0"):
         train_fdn(model, SpectralFlatness(), max_steps=2, rng=0, **_FAST)
 
@@ -951,9 +957,9 @@ def test_match_phase_circular_distance():
 def test_match_phase_runs_and_improves():
     """MatchPhase should integrate into training loop."""
     nfft = 2**11
-    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
+    target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
     target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
-    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
+    fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
 
     log = train_fdn(
         fresh,
@@ -972,9 +978,9 @@ def test_match_phase_runs_and_improves():
 def test_match_phase_spectrogram_runs():
     """MatchPhaseSpectrogram should compute loss across multiple STFT scales."""
     nfft = 2**11
-    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
+    target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
     target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
-    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
+    fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
 
     log = train_fdn(
         fresh,
@@ -988,7 +994,7 @@ def test_match_phase_spectrogram_runs():
 
 
 def test_match_phase_spectrogram_rejects_window_longer_than_response():
-    model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than the response"):
         MatchPhaseSpectrogram(np.zeros(2**9), nfft=(2048,))(model_response(model))
 
@@ -997,7 +1003,7 @@ def test_match_phase_spectrogram_mimo_target():
     """MatchPhaseSpectrogram should handle MIMO targets correctly."""
     nfft, N, n_in, n_out = 2**11, 4, 2, 2
     rng = np.random.default_rng(5)
-    ref = build_fdn(
+    ref = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -1009,7 +1015,7 @@ def test_match_phase_spectrogram_mimo_target():
     target = _mimo_ir(ref, nfft, n_in, n_out)
     assert target.shape == (nfft, n_out, n_in)
 
-    fresh = build_fdn(
+    fresh = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -1034,9 +1040,9 @@ def test_match_phase_spectrogram_mimo_target():
 def test_match_mel_magnitude_runs():
     """MatchMelMagnitude should compute loss on mel-scaled bins."""
     nfft = 2**11
-    target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
+    target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
     target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
-    fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
+    fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
 
     log = train_fdn(
         fresh,
@@ -1080,7 +1086,7 @@ def test_match_mel_magnitude_mimo_target():
     """MatchMelMagnitude should handle MIMO targets correctly."""
     nfft, N, n_in, n_out = 2**11, 4, 2, 2
     rng = np.random.default_rng(6)
-    ref = build_fdn(
+    ref = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -1092,7 +1098,7 @@ def test_match_mel_magnitude_mimo_target():
     target = _mimo_ir(ref, nfft, n_in, n_out)
     assert target.shape == (nfft, n_out, n_in)
 
-    fresh = build_fdn(
+    fresh = trainable_fdn(
         N=N,
         rt=0.05,
         nfft=nfft,
@@ -1217,7 +1223,7 @@ def test_cumulative_energy_rejects_a_power_outside_the_unit_interval():
 
 
 def test_cumulative_energy_rejects_a_window_longer_than_the_response():
-    model = build_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
+    model = trainable_fdn(N=4, rt=0.5, nfft=2**10, device="cpu", rng=0)
     with pytest.raises(ValueError, match="longer than"):
         MatchCumulativeEnergy(np.zeros(2**10), window=2**12).check(model)
 
@@ -1801,7 +1807,7 @@ def _devices():
 def test_training_stays_on_the_device_the_model_was_built_on(device):
     """Build on the accelerator, then render and train with default arguments:
     the response and the trained parameters stay on that device (#231)."""
-    model = build_fdn(N=4, rt=None, nfft=2**10, device=device, rng=0)
+    model = trainable_fdn(N=4, rt=None, nfft=2**10, device=device, rng=0)
 
     response = model_response(model)
     assert response.h.device.type == device

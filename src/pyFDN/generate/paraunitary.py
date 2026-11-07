@@ -146,17 +146,18 @@ def construct_cascaded_paraunitary_matrix(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Construct a paraunitary matrix and its reverse response."""
 
-    matrix_type_lower = matrix_type.lower()
-    if matrix_type_lower == "hadamard":
+    if matrix_type == "hadamard":
         if n & (n - 1) != 0:
             raise ValueError("Hadamard construction requires n to be a power of two")
 
         def generate_matrix(size: int) -> np.ndarray:
             return hadamard(size) / math.sqrt(size)
-    elif matrix_type_lower == "random":
+    elif matrix_type == "random":
         generate_matrix = random_orthogonal  # type: ignore[assignment]
     else:
-        raise ValueError("matrix_type must be 'Hadamard' or 'random'")
+        raise ValueError(
+            f"matrix_type must be 'hadamard' or 'random', got {matrix_type!r}"
+        )
 
     sparsity_vector = np.concatenate(([sparsity], np.ones(max(k - 1, 0))))
     matrix = ensure_3d(generate_matrix(n))

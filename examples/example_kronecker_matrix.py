@@ -380,12 +380,12 @@ def _(
 
     stereo_ir = {
         percent: pyFDN.process_dss(
-            _impulse,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
+            _impulse,
         )
         for percent, angles in coupling_angles.items()
     }
@@ -538,12 +538,12 @@ def _(
 ):
     stereo_wet = {
         percent: pyFDN.process_dss(
-            stereo_note,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
+            stereo_note,
         )
         for percent, angles in coupling_angles.items()
     }

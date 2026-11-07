@@ -22,7 +22,7 @@ def _(mo, pyFDN):
 
     The companion to **Colorless FDN**, which loads pre-optimized, packaged presets. Here we run the optimization ourselves with `pyFDN`'s training API, following *{pyFDN.paper_link("Differentiable_FDN_For_Colorless_Reverberation")}* (and its "tiny colorless FDN" follow-up):
 
-    1. `pyFDN.build_fdn` -- a standard FDN skeleton with random orthogonal feedback matrix.
+    1. `pyFDN.trainable_fdn` -- a standard FDN skeleton with random orthogonal feedback matrix.
     2. `pyFDN.train_fdn(model, loss)` -- optimize the feedback matrix and gains toward an objective we write out in full, in place.
     3. `pyFDN.flamo_to_dss` -- read both the initial and optimized FDNs back out.
 
@@ -43,7 +43,7 @@ def _(mo, pyFDN):
 
     ## Two details that make or break the fit
 
-    * **Rendering.** A **lossless** FDN has every pole *exactly* on the unit circle, where the FFT-domain evaluation is near-singular and the impulse response comes out wrong. `build_fdn(rt=None)` therefore defaults to `alias_decay_db=`{pyFDN.LOSSLESS_ALIAS_DECAY_DB}: flamo evaluates the system on a slightly smaller circle, and the `"time"` output layer removes that $\\gamma^n$ envelope again. What a loss sees is the impulse response *itself*, accurate to {pyFDN.LOSSLESS_ALIAS_DECAY_DB:.0f} dB -- which is all `alias_decay_db` means. It never reaches the extracted build.
+    * **Rendering.** A **lossless** FDN has every pole *exactly* on the unit circle, where the FFT-domain evaluation is near-singular and the impulse response comes out wrong. `trainable_fdn(rt=None)` therefore defaults to `alias_decay_db=`{pyFDN.LOSSLESS_ALIAS_DECAY_DB}: flamo evaluates the system on a slightly smaller circle, and the `"time"` output layer removes that $\\gamma^n$ envelope again. What a loss sees is the impulse response *itself*, accurate to {pyFDN.LOSSLESS_ALIAS_DECAY_DB:.0f} dB -- which is all `alias_decay_db` means. It never reaches the extracted DSS.
     * **Reading the result.** The numbers below are the loss terms themselves: `TrainLog.loss_log` keeps each term's history *unweighted*, so `FlatMagnitude` is exactly the mean squared deviation of $|H|$ from 1 that was optimized, and `Sparsity` the density of the feedback matrix. They compare across runs at the same `nfft` -- but not across different `nfft`, since truncating to a longer window widens the peak-to-median range of $|H|$ and the same FDN then scores a larger MSE.
 
     - pyFDN training pipeline: Jeremy B. Bai, 2026-06-19
@@ -74,7 +74,7 @@ def _(pyFDN):
     delays = pyFDN.sample_delay_lengths(
         16, (200, 600), distribution="geometric", coprime=True, sort=True, rng=2
     )
-    model = pyFDN.build_fdn(delays=delays, rt=None, nfft=nfft, device="cpu", rng=2)
+    model = pyFDN.trainable_fdn(delays=delays, rt=None, nfft=nfft, device="cpu", rng=2)
     init_dss, _ = pyFDN.flamo_to_dss(model)  # random init, before training
 
     # |H| exactly as the loss sees it: the rfft of the model's impulse response.

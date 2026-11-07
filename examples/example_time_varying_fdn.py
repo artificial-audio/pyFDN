@@ -161,7 +161,7 @@ def _(mo):
     mo.md(r"""
     ## Three modulation rates
 
-    `td.TimeVaryingMatrix` rotates the feedback matrix continuously, and takes a modulation frequency, an amplitude and a spread over the delay lines. The same phrase is rendered three times: static, 1 Hz, and 10 Hz.
+    `td.TimeVaryingMatrix` rotates the feedback matrix continuously, and takes a modulation `rate` in Hz, a `depth` in radians and a `spread` over the delay lines. The same phrase is rendered three times: static, 1 Hz, and 10 Hz.
     """)
     return
 
@@ -201,7 +201,7 @@ def _(
             spread = 0.7
 
         tv_matrix = td.TimeVaryingMatrix(
-            N, modulation_frequency, modulation_amplitude, fs, spread
+            N, fs, rate=modulation_frequency, depth=modulation_amplitude, spread=spread
         )
 
         reverbed_synth[matrix_type] = pyFDN.dss_to_td(

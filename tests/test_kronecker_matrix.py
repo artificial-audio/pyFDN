@@ -346,7 +346,7 @@ def test_kronecker_feedback_matrix_renders_a_lossless_fdn() -> None:
 
     impulse = np.zeros(4000)
     impulse[0] = 1.0
-    ir = pyFDN.process_dss(impulse, delays, A, B, C, D)
+    ir = pyFDN.process_dss(delays, A, B, C, D, impulse)
 
     # Lossless: the tail neither grows nor dies away.
     assert np.isfinite(ir).all()

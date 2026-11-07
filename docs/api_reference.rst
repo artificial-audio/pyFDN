@@ -63,7 +63,7 @@ Allpass FDN
    :nosignatures:
 
    pyFDN.homogeneous_allpass_fdn
-   pyFDN.rand_admissible_homogeneous_allpass
+   pyFDN.random_admissible_homogeneous_allpass
    pyFDN.complete_fdn
    pyFDN.complete_full_mimo_halmos
    pyFDN.complete_general_mimo_svd
@@ -174,8 +174,8 @@ Delay Utilities
    :nosignatures:
 
    pyFDN.matrix_delay_approximation
-   pyFDN.mgrpdelay
-   pyFDN.ms_to_smp
+   pyFDN.matrix_group_delay
+   pyFDN.ms_to_samples
    pyFDN.flamo_time_response
 
 Building a FLAMO Graph
@@ -184,7 +184,7 @@ Building a FLAMO Graph
 An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
 ``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
 ``post_output`` on the wet signal -- are the same three
-:func:`pyFDN.process_dss` takes, in the same positions and under the same
+:func:`pyFDN.dss_to_td` takes, in the same positions and under the same
 names.
 
 .. autosummary::
@@ -209,15 +209,14 @@ Polynomial & Matrix Maths
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.adj_poly
+   pyFDN.adjugate_polynomial
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
-   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
-   pyFDN.loop_tf
+   pyFDN.loop_transfer_function
    pyFDN.matrix_convolution
    pyFDN.matrix_polyval
    pyFDN.outer_sum_approximation
@@ -261,7 +260,7 @@ only load pickles you trust. The packaged presets are DSS JSON files.
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
-   pyFDN.get_fdn_preset
+   pyFDN.load_fdn_preset
    pyFDN.save_fdn
    pyFDN.load_fdn
    pyFDN.resave_fdn
@@ -305,11 +304,9 @@ completion, or response validation raises without switching to EAI. Direct EAI
 calls may accept incomplete results with explicit ``allow_approximate=True``
 and successful response checks; this option does not relax LF acceptance.
 
-:func:`pyFDN.general_char_poly_fft` recovers the static characteristic
+:func:`pyFDN.general_char_poly` recovers the static characteristic
 coefficients once from determinant samples and reuses them on every search
 circle. The static ``"roots"`` backend uses these FFT coefficients too.
-:func:`pyFDN.general_char_poly` retains the principal-minor implementation as
-a reference and for polynomial feedback matrices.
 
 All modal backends report solver and pole-count metadata. Complete eig, roots,
 and direct EAI results have ``responseValidation=None``; LF always checks the
@@ -342,7 +339,7 @@ Training
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.build_fdn
+   pyFDN.trainable_fdn
    pyFDN.trainable_from_dss
    pyFDN.Trainable
    pyFDN.train_fdn
@@ -388,7 +385,6 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.L1
    pyFDN.L2
    pyFDN.mimo_rir_eigenvalues_per_frequency
-   pyFDN.energy_decay_curve
 
 Plotting
 --------

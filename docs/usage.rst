@@ -36,7 +36,7 @@ alongside, as plain keyword arguments::
 the same pair from a FLAMO model, and :func:`pyFDN.trainable_from_dss` takes
 it back: ``trainable_from_dss(*dss, fs, **filters)``. The matrix-only
 functions -- ``dss_to_impz``, ``process_dss``, ``dss_to_tf``, ``dss_to_ss``,
-``dss_to_pr`` -- take ``*dss`` alone; with filters, build the graph.
+``dss_to_pr`` -- take ``*dss`` first and no filters; with filters, build the graph.
 
 A filter (FIR) feedback matrix, such as a paraunitary scattering matrix, is
 an operator on the feedback path rather than a DSS matrix. Keep ``A`` the
@@ -56,7 +56,7 @@ public API, independent of the current working directory::
 
     dry, fs = pyFDN.load_audio("synth_dry")
 
-    dss = pyFDN.get_fdn_preset("colorless_N8_d1")
+    dss = pyFDN.load_fdn_preset("colorless_N8_d1")
     decay = pyFDN.decay_to_first_order_shelf(1.5, 1.5, None, dss.delays, fs)
     wet = pyFDN.dss_to_td(*dss, post_delay=decay).process_signal(dry, squeeze=True)
 
