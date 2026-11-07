@@ -243,3 +243,123 @@ discarded coefficient tail was ``1.20e-14``. Measured response differences:
 
 Measurements are saved in
 ``docs/benchmarks/lindsey_fox_two_tap_approximation.jsonl``.
+
+Follow-up on all twelve problematic configurations
+------------------------------------------------------------
+
+The group-factor approximation was extended to the first-order IIR absorption
+example, removing its four known numerator-zero factors together. Both filtered
+cases now choose a tighter inner search radius from the same matrix norm
+bound, retaining a bound below 0.5. This avoids scanning the large flat
+interior that made the conservative ``|z| >= 0.9`` IIR run take 21.7 seconds.
+The root finder is unchanged. Reproduce both absorption cases with::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_two_tap_approximation.py --all-absorption
+
+.. list-table:: Absorption approximations, median of three runs
+   :header-rows: 1
+
+   * - Example
+     - Retained / omitted poles
+     - Inner radius
+     - Seconds
+     - Relative wet IR L2 error (48000 samples)
+     - All-port relative IR error (4096 samples)
+   * - Two-tap FIR
+     - 1578 / 8
+     - 0.982917
+     - 1.4105
+     - ``6.85e-14``
+     - ``1.86e-13``
+   * - First-order IIR
+     - 1958 / 4
+     - 0.995904
+     - 1.4501
+     - ``2.30e-13``
+     - ``2.30e-13``
+
+Both pass the response checks. On the same 32769-point unit-circle frequency
+grid, maximum errors normalized by peak wet response are ``3.34e-13`` (FIR)
+and ``8.09e-13`` (IIR). The all-port test replaces the notebook's input and
+output gains with identities and its direct gain with zero, checking the
+entire internal-to-output transfer matrix rather than one selected channel.
+
+The ten failing Kronecker configurations have no absorption-zero group to
+remove. A separate diagnostic tested the same pragmatic question: would
+accepting their partial root sets and omitting the unresolved modes be safe?
+It inspects LF's final candidates after the verification exception, without
+changing the kernel, and checks the retained roots against an independent
+reference. No reference roots are inserted into the approximation. Run::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_problematic_cases.py
+
+.. list-table:: Omitting unresolved Kronecker modes is not acceptable
+   :header-rows: 1
+
+   * - Configuration index
+     - Omitted poles
+     - Original-I/O IR relative L2 error
+     - All-port IR relative L2 error
+   * - 00 (static)
+     - 2
+     - 4.140%
+     - 5.653%
+   * - 01
+     - 2
+     - 4.140%
+     - 5.653%
+   * - 05
+     - 2
+     - 0.0156%
+     - 5.477%
+   * - 07
+     - 2
+     - 10.986%
+     - 5.311%
+   * - 08
+     - 2
+     - 11.320%
+     - 5.320%
+   * - 09
+     - 2
+     - 6.689%
+     - 6.244%
+   * - 13
+     - 2
+     - 11.865%
+     - 5.325%
+   * - 16
+     - 2
+     - 6.469%
+     - 4.989%
+   * - 20
+     - 2
+     - 10.654%
+     - 5.298%
+   * - 21
+     - 4
+     - 12.582%
+     - 8.319%
+
+The omitted Kronecker poles lie on the unit circle, unlike the rapidly
+decaying absorption-zero modes. All ten configurations fail the partial-mode
+response test. Case 05 also shows why a selected input/output channel can
+hide a failure that becomes substantial when the gains are changed.
+The original-I/O test uses 48000 samples; the all-port test uses 4096 samples.
+Since the lossless model has unit-circle poles, the frequency check uses
+``|z| = exp(1/4800)`` (an exponential window), not a claimed finite uniform
+error bound on the unit circle. Its relative frequency errors range from
+``1.75e-4`` to ``0.130``, likewise rejecting the omission.
+
+The practical policy supported by these runs is: use the certified filter-zero
+group approximation for these absorption examples, and retain EAI as the
+fallback for the ten unresolved Kronecker configurations. Do not accept an
+incomplete modal decomposition merely because its current single-channel IR
+looks adequate. No automatic fallback or approximation API is introduced by
+these diagnostics.
+
+Raw data:
+
+* ``docs/benchmarks/lindsey_fox_absorption_approximation_all_ports.jsonl``
+* ``docs/benchmarks/lindsey_fox_absorption_conservative.jsonl``
+* ``docs/benchmarks/lindsey_fox_problematic_partial_modes.jsonl``

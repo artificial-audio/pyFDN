@@ -1,0 +1,8 @@
+{"example": "example_pole_boundaries.py", "inner_radius": 0.9, "boundary_norm_bound": 5.926149811867767e-06}
+{"example": "example_pole_boundaries.py", "seconds": [2.4337411660235375, 2.1080887499265373, 2.1094757500104606], "median": 2.1094757500104606, "retained_poles": 1578, "dropped_poles": 8, "quotient_tail": 1.2239341484754362e-14}
+{"example": "example_pole_boundaries.py", "ir_samples": 48000, "ir_max_error": 6.979659905592683e-15, "ir_relative_wet_l2": 6.842498509210224e-14, "wet_ir_peak": 0.65, "ir_relative_wet_l2_dB": -263.2957057707699}
+{"example": "example_pole_boundaries.py", "frequency_points": 32769, "frequency_max_abs_error": 5.331706761469547e-13, "frequency_normalized_max_error": 3.343669458374835e-13, "frequency_relative_l2": 6.7614696811006e-14, "frequency_wet_peak": 1.5945675336164904}
+{"example": "example_dss_to_pr_flamo.py", "inner_radius": 0.9, "boundary_norm_bound": 2.5209005230193585e-17}
+{"example": "example_dss_to_pr_flamo.py", "seconds": [21.41391395800747, 21.762920832959935, 21.712637250078842], "median": 21.712637250078842, "retained_poles": 1958, "dropped_poles": 4, "quotient_tail": 1.7698066805844034e-14}
+{"example": "example_dss_to_pr_flamo.py", "ir_samples": 48000, "ir_max_error": 8.710588673965791e-15, "ir_relative_wet_l2": 2.288193141317153e-13, "wet_ir_peak": 0.6561452663029053, "ir_relative_wet_l2_dB": -252.81014640992208}
+{"example": "example_dss_to_pr_flamo.py", "frequency_points": 32769, "frequency_max_abs_error": 3.4509733605823168e-12, "frequency_normalized_max_error": 8.087431429534956e-13, "frequency_relative_l2": 2.0092414038112398e-13, "frequency_wet_peak": 4.267082065115889}

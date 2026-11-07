@@ -4,12 +4,14 @@ Run with example dependencies from an editable checkout::
 
     OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_two_tap_approximation.py
 
-This is approximate modal analysis, not a complete decomposition or a public
-API. The known common filter zero supplies a group factor, removed using FFT
-samples. The LF kernel and original-model residue extractor are unchanged.
-Assertions check numerical accuracy, not timing. The cutoff is case-specific.
+Add --all-absorption to include the first-order IIR example. This is approximate
+modal analysis, not a complete decomposition or a public API. Known filter
+zeros supply the group factor, removed using FFT samples. The LF kernel and
+original-model residue extractor are unchanged. Assertions check numerical
+accuracy, not timing. The inner radius is certified for each example.
 """
 
+import argparse
 import contextlib
 import json
 import sys
@@ -19,34 +21,40 @@ import benchmark_modal_examples as bench
 import numpy as np
 
 
-def main():
-    with contextlib.redirect_stdout(sys.stderr):
-        setup = bench.setup_cell("example_pole_boundaries.py", "absorption")
-    build = bench.pyFDN.FDNBuild(
-        A=setup["feedback_matrix"],
-        B=setup["input_gain"],
-        C=setup["output_gain"],
-        D=setup["direct"],
-        delays=setup["delays"],
-        fs=setup["fs"],
-        post_delay=setup["absorption"],
-    )
-    model = bench.pyFDN.build_to_flamo(build, dtype=bench.torch.float64)
+def run_case(case):
+    build, model = case["build"], case["model"]
     n = len(build.delays)
     degree = int(sum(build.delays))
-    zero = -0.3 / 0.65
-    inner = 0.9
-    assert np.all(build.post_delay[0, 0] == 0.65) and np.all(
-        build.post_delay[0, 1] == 0.3
+    assert build.post_delay.shape == (1, 6, n)
+    b0, b1, b2, a0, a1, a2 = build.post_delay[0]
+    assert np.all(b0 != 0) and np.all(b2 == 0) and np.all(a2 == 0)
+    zeros = -b1 / b0
+    assert np.all(np.abs(zeros) < 0.9)
+    # Matrix Rouche bound counts the per-line numerator-zero modes inside.
+    radii = np.linspace(0.9, 0.9999, 101)
+    bounds = (
+        np.max(
+            radii[:, None] ** build.delays
+            * (np.abs(a0) * radii[:, None] + np.abs(a1))
+            / (np.abs(b0) * radii[:, None] - np.abs(b1)),
+            axis=1,
+        )
+        / np.linalg.svd(build.A, compute_uv=False)[-1]
     )
-    assert np.all(build.post_delay[0, 2] == 0) and np.all(build.post_delay[0, 3] == 1)
-    assert np.all(build.post_delay[0, 4:] == 0)
-    # Matrix Rouche bound: inside this circle are precisely the eight zero modes.
-    bound = inner ** (int(min(build.delays)) + 1) / (
-        (0.65 * inner - 0.3) * np.linalg.svd(build.A, compute_uv=False)[-1]
+    # Avoid a large flat search interior while retaining a bound below one.
+    admissible = np.flatnonzero(bounds < 0.5)
+    assert admissible.size > 0
+    inner, bound = float(radii[admissible[-1]]), float(bounds[admissible[-1]])
+    print(
+        json.dumps(
+            {
+                "example": case["name"],
+                "inner_radius": inner,
+                "boundary_norm_bound": bound,
+            }
+        ),
+        flush=True,
     )
-    assert bound < 1
-    print(json.dumps({"inner_radius": inner, "boundary_norm_bound": bound}), flush=True)
     timings = []
     for _ in range(3):
         start = perf_counter()
@@ -54,7 +62,8 @@ def main():
         nfft = 1 << (degree + n).bit_length()
         w = np.exp(-2j * np.pi * np.arange(nfft // 2 + 1) / nfft)
         quotient = np.fft.irfft(
-            np.fft.rfft(coefficients, nfft) / (1 - zero * w) ** n, n=nfft
+            np.fft.rfft(coefficients, nfft) / np.prod(1 - zeros[:, None] * w, axis=0),
+            n=nfft,
         )
         tail = float(np.max(np.abs(quotient[degree + 1 :])))
         assert tail < 1e-10
@@ -71,6 +80,7 @@ def main():
     print(
         json.dumps(
             {
+                "example": case["name"],
                 "seconds": timings,
                 "median": float(np.median(timings)),
                 "retained_poles": degree,
@@ -92,6 +102,7 @@ def main():
     print(
         json.dumps(
             {
+                "example": case["name"],
                 "ir_samples": length,
                 "ir_max_error": float(np.max(np.abs(error))),
                 "ir_relative_wet_l2": relative,
@@ -113,7 +124,8 @@ def main():
     max_error, max_wet, error_sq, ref_sq = 0.0, 0.0, 0.0, 0.0
     for start in range(0, len(ws), 256):
         w = ws[start : start + 256]
-        forward = w[:, None] ** build.delays * (0.65 + 0.3 * w[:, None])
+        absorption = (b0 + b1 * w[:, None]) / (a0 + a1 * w[:, None])
+        forward = w[:, None] ** build.delays * absorption
         matrices = np.eye(n) - forward[:, :, None] * build.A
         hf = (build.C @ np.linalg.solve(matrices, forward[:, :, None] * build.B))[
             ..., 0, 0
@@ -127,6 +139,7 @@ def main():
     print(
         json.dumps(
             {
+                "example": case["name"],
                 "frequency_points": len(ws),
                 "frequency_max_abs_error": max_error,
                 "frequency_normalized_max_error": max_error / max_wet,
@@ -138,6 +151,57 @@ def main():
     )
     assert np.max(np.abs(error)) < 1e-10 and relative < 1e-9
     assert max_error / max_wet < 1e-9
+    mimo_build = bench.pyFDN.FDNBuild(
+        A=build.A,
+        B=np.eye(n),
+        C=np.eye(n),
+        D=np.zeros((n, n)),
+        delays=build.delays,
+        fs=build.fs,
+        post_delay=build.post_delay,
+    )
+    mimo_model = bench.pyFDN.build_to_flamo(mimo_build, dtype=bench.torch.float64)
+    mimo_decomposition = bench.pyFDN.flamo_decompose_for_pr(mimo_model)
+    mimo_residues, mimo_direct, _, _ = bench._dss_to_res_flamo(
+        poles, loop, mimo_decomposition
+    )
+    mimo_length = 4096
+    mimo_ir = bench.pyFDN.pr_to_impz(
+        mimo_residues, poles, mimo_direct, paired, mimo_length, mode="lowMemory"
+    )
+    mimo_reference = bench.pyFDN.build_to_impz(mimo_build, mimo_length)
+    mimo_relative = float(
+        np.linalg.norm(mimo_ir - mimo_reference) / np.linalg.norm(mimo_reference)
+    )
+    print(
+        json.dumps(
+            {
+                "example": case["name"],
+                "mimo_ir_samples": mimo_length,
+                "mimo_ir_max_error": float(np.max(np.abs(mimo_ir - mimo_reference))),
+                "mimo_ir_relative_l2": mimo_relative,
+            }
+        ),
+        flush=True,
+    )
+    assert mimo_relative < 1e-9
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--all-absorption",
+        action="store_true",
+        help="Also test the first-order IIR absorption example",
+    )
+    args = parser.parse_args()
+    with contextlib.redirect_stdout(sys.stderr):
+        cases = bench.cases()
+    for case in cases:
+        if "build" not in case or case["build"].post_delay is None:
+            continue
+        if args.all_absorption or case["name"] == "example_pole_boundaries.py":
+            run_case(case)
 
 
 if __name__ == "__main__":
