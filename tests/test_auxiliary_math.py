@@ -312,6 +312,23 @@ def test_general_char_poly_fft_long_delays_and_singular_feedback():
     assert actual[-1] == 0
 
 
+@pytest.mark.parametrize("n,order", [(4, 100000), (128, 1024)])
+def test_general_char_poly_fft_large_cycle_has_exact_sparse_polynomial(n, order):
+    # A single directed cycle has det(I - D(w) A) = 1 - gain**n * w**sum(m).
+    # This provides an independent oracle without enumerating minors or roots.
+    delays = np.full(n, order // n)
+    delays[: order % n] += 1
+    a = 0.9 * np.roll(np.eye(n), 1, axis=1)
+    expected = np.zeros(order + 1)
+    expected[[0, -1]] = [1, -(0.9**n)]
+    actual = general_char_poly_fft(delays, a)
+    # Forming high-delay sample phases accumulates roundoff with the order.
+    np.testing.assert_allclose(
+        actual, expected, atol=order * np.finfo(float).eps, rtol=1e-12
+    )
+    assert actual.size == order + 1
+
+
 def test_general_char_poly_fft_many_lines_matches_direct_determinants(monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("FFT construction must not enumerate principal minors")

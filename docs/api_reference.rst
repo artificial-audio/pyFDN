@@ -356,6 +356,12 @@ pass. Metadata distinguishes complete decompositions from validated
 approximations. These sampled checks are not uniform response error bounds;
 see :doc:`lindsey_fox_examples` for acceptance criteria and the 30-case run.
 
+Upper-size stress trials validate coefficient construction at degree 100000
+and matrix size 128, but do not establish a complete modal decomposition at
+that size. Current polishing, conjugate pairing, and all-port validation have
+quadratic scaling limits. The public API does not include the stress runner's
+memory preflight; see the detailed report before attempting large solves.
+
 To compare one-time coefficient construction against principal minors::
 
    OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_general_char_poly.py --lines 4 8 12 16 --repeat 3

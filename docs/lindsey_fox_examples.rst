@@ -55,6 +55,99 @@ repetitions take about 8--9 seconds including reference rendering, so this
 conservative fallback is slower than the separate group-factor experiment.
 Raw results are in ``docs/benchmarks/lindsey_fox_validated_examples.jsonl``.
 
+Upper-size stress tests: 100000 poles and 128 delay lines
+------------------------------------------------------------
+
+The current implementation is not yet practical for a complete 100000-pole
+decomposition. The one-time coefficient FFT scales to this size, but root
+polishing and postprocessing remain major limits. EAI fallback shares the
+pairing/residue/validation costs; it does not solve these scaling problems.
+
+``tests/benchmark_lindsey_fox_large.py`` runs isolated workers for every
+combination of orders 1000, 10000, 100000 and matrix sizes 4, 16, 64, 128.
+Matrices are seeded dense orthogonal matrices times 0.9; unequal integer
+delays sum exactly to the requested order. Thirty-two independent off-grid
+determinants validate the recovered polynomial. Three separate polynomials
+``z**order - 0.9`` provide analytic root oracles. All timings below are single
+trials with one BLAS thread, not medians or timing assertions.
+
+At order 100000, all four coefficient constructions pass:
+
+.. list-table:: One-time coefficient construction at degree 100000
+   :header-rows: 1
+
+   * - Matrix size
+     - Construction seconds
+     - Off-grid normalized maximum error
+   * - 4
+     - 0.033
+     - 6.33e-12
+   * - 16
+     - 0.167
+     - 3.08e-12
+   * - 64
+     - 2.75
+     - 1.34e-12
+   * - 128
+     - 10.17
+     - 5.78e-13
+
+The coefficient FFT has 131072 samples and returns exactly 100001
+coefficients. The 128-line worker's peak process RSS after construction is
+198 MiB, including imports. Its peak after the interrupted root search is
+272 MiB; these figures do not include a full modal decomposition.
+
+All four full 1000-pole modal decompositions pass the independent 4096-sample
+IR comparison and the production all-port check. Total stage times, including
+that independent IR check, are 0.208, 0.412, 2.618, and 12.356 seconds as matrix
+size grows from 4 to 128. The 128-line case peaks at 932 MiB process RSS and
+has relative IR error ``9.72e-15``.
+
+At order 10000, all four dense scalar root searches exceed the default
+three-second cooperative budget. With a 30-second budget and a 45-second
+external deadline, 4-line and 128-line scalar searches recover all 10000
+roots. In a follow-up including 32 original-matrix checks, they take 7.90
+and 13.09 seconds. Maximum sampled ``sigma_min(P)/sigma_max(P)`` values
+are ``6.7e-13`` and ``3.4e-10``. These are scalar root sets, not complete
+modal decompositions or verified response reconstructions. The sparse
+10000-root oracle finishes in 2.26 seconds with maximum pole error ``9.6e-16``.
+
+At order 100000, all four dense searches and the sparse oracle reach the
+15-second external deadline inside ``polyval``. The sparse oracle already
+has all 100000 grid candidates: full-degree Horner/Laguerre polishing is
+the immediate bottleneck even in that simple case. The cooperative budget
+cannot interrupt a single long polynomial evaluation. No complete 100000-
+root set was verified within these deadlines; timeout is not an accuracy
+failure or proof that more time could never complete the root search.
+
+Full decompositions above order 1000 are deliberately not attempted by this
+stress runner. It preflights order and memory before calling EAI or Hungarian
+pairing. This guard belongs to the benchmark, not the production API:
+
+* At 100000 poles, current conjugate pairing forms an 80 GB float cost array
+  and a 160 GB complex subtraction temporary, about 240 GB together. At
+  10000 poles the corresponding estimate is 2.4 GB. These are source-based
+  allocation estimates, not measured allocations.
+* At 100000 poles / 128 ports, one expanded complex all-port residue array
+  alone is 26.2 GB; other arrays and temporaries add to that.
+* The sampled modal-response summation uses O(order**2 * ports**2) work.
+  Replacing pairing alone would therefore not make the whole pipeline scale.
+
+Large-scale support needs changes to full-degree polynomial polishing,
+quadratic-memory pairing, and dense all-port validation. The present method
+should not be advertised as a tested 100000-pole modal solver.
+
+Reproduce the default and extended-budget root trials::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_lindsey_fox_large.py
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_lindsey_fox_large.py --orders 10000 --lines 4 128 --root-seconds 30 --root-timeout 45
+
+Raw stage measurements, process RSS, skipped stages, and timeout locations
+are in ``docs/benchmarks/lindsey_fox_large_default.jsonl`` and
+``docs/benchmarks/lindsey_fox_large_relaxed.jsonl``. Lightweight CI cases
+independently verify exact cyclic-matrix characteristic coefficients at
+degree 100000 and matrix size 128, without allocating a large root assignment.
+
 Initial four-grid experiment
 ------------------------------------------------------------
 
