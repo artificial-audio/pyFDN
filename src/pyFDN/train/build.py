@@ -66,7 +66,7 @@ def build_fdn(
     trainable: Trainable | None = None,
     train_rt: bool = False,
     fs: float = 48000.0,
-    nfft: int = 2**14,
+    nfft: int = 2**16,
     alias_decay_db: float | None = None,
     device: Any = None,
     dtype: Any = None,
@@ -205,7 +205,7 @@ def trainable_from_dss(
     post_delay: Any = None,
     post_matrix: Any = None,
     post_output: Any = None,
-    nfft: int = 2**14,
+    nfft: int = 2**16,
     alias_decay_db: float = 0.0,
     device: Any = None,
     dtype: Any = None,
@@ -227,7 +227,7 @@ def trainable_from_dss(
                 design="first_order_shelf", nfft=nfft),
         )
 
-    Baked filters from :func:`pyFDN.extract_dss` go straight back in:
+    Baked filters from :func:`pyFDN.flamo_to_dss` go straight back in:
     ``trainable_from_dss(*dss, fs, **filters)``.
 
     Both modules default to ``requires_grad=True``.
@@ -276,7 +276,7 @@ def trainable_from_dss(
         circle the FFT-domain evaluation is near-singular and the response comes
         out wrong, not merely aliased. It does not affect the extracted system
         (it enters the frequency-domain evaluation, not the parameter ``map``,
-        so :func:`pyFDN.extract_dss` still returns the undamped ``A``/``B``/
+        so :func:`pyFDN.flamo_to_dss` still returns the undamped ``A``/``B``/
         ``C``). A module you pass into a hook must have been built with the same
         value: it is a change of evaluation radius for the whole system, not a
         per-module gain.

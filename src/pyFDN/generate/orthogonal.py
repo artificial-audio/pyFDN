@@ -181,7 +181,7 @@ def householder_matrix(u: np.ndarray) -> np.ndarray:
 def anderson_matrix(
     N: int,
     K: int | None = None,
-    matrix_type: str = "Hadamard",
+    matrix_type: str = "hadamard",
 ) -> np.ndarray:
     """Build an N×N block-circulant orthogonal matrix.
 
@@ -192,7 +192,7 @@ def anderson_matrix(
         N: Total matrix size.
         K: Block size.  Defaults to the smallest prime factor of N.
         matrix_type: Type string passed to :func:`fdn_matrix_gallery` for each
-                     block (default ``"Hadamard"``).
+                     block (default ``"hadamard"``).
 
     Returns:
         Orthogonal matrix of shape ``(N, N)``.

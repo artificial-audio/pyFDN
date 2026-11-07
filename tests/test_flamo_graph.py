@@ -6,7 +6,7 @@ import pytest
 import pyFDN
 
 
-def test_extract_dss_from_dss_model():
+def test_flamo_to_dss_from_dss_model():
     pytest.importorskip("flamo")
 
     A = np.array([[0.0, 0.5], [-0.5, 0.0]])
@@ -32,7 +32,7 @@ def test_extract_dss_from_dss_model():
         post_delay=attenuation,
         post_output=post_eq,
     )
-    parameters, filters = pyFDN.extract_dss(model)
+    parameters, filters = pyFDN.flamo_to_dss(model)
 
     np.testing.assert_array_equal(parameters.delays, delays)
     np.testing.assert_allclose(parameters.A, A)

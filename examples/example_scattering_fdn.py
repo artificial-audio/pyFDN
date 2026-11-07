@@ -71,7 +71,7 @@ def _(np, pyFDN):
         _name: pyFDN.filter_matrix_gallery(
             num_delays, _name, num_stages=num_stages, sparsity=sparsity
         )
-        for _name in pyFDN.filter_matrix_gallery()
+        for _name in pyFDN.FILTER_MATRIX_TYPES
     }
     # a static matrix is a one-tap filter matrix
     feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays)[:, :, None]

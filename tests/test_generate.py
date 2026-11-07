@@ -6,7 +6,7 @@ import pytest
 from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.auxiliary.utils import is_almost_zero
 from pyFDN.generate.fdn_dss_gallery import fdn_dss_gallery
-from pyFDN.generate.fdn_matrix_gallery import fdn_matrix_gallery
+from pyFDN.generate.fdn_matrix_gallery import FEEDBACK_MATRIX_TYPES, fdn_matrix_gallery
 from pyFDN.generate.orthogonal import (
     anderson_matrix,
     complete_orthogonal,
@@ -93,7 +93,7 @@ def test_construct_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
         "pyFDN.generate.paraunitary.shift_matrix_distribute",
         lambda *args, **kwargs: np.zeros(args[0].shape[0], dtype=int),
     )
-    matrix, rev = construct_cascaded_paraunitary_matrix(4, 0, matrix_type="Hadamard")
+    matrix, rev = construct_cascaded_paraunitary_matrix(4, 0, matrix_type="hadamard")
     product = matrix_convolution(matrix, rev)
     identity = np.zeros_like(product)
     identity[:, :, 0] = np.eye(4)
@@ -115,25 +115,23 @@ def test_filter_matrix_gallery_types_are_paraunitary():
 
     np.random.seed(0)
     n = 4
-    types = pyFDN.filter_matrix_gallery()
-    assert types == ["random_dense", "velvet", "from_elementals"]
+    types = pyFDN.FILTER_MATRIX_TYPES
+    assert types == ("random_dense", "velvet", "from_elementals")
     for mtype in types:
         mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2)
         assert mat.ndim == 3 and mat.shape[:2] == (n, n)
-        is_pu, _, _ = pyFDN.is_paraunitary(mat.transpose(2, 0, 1))
+        is_pu, _, _ = pyFDN.is_paraunitary(mat)
         assert is_pu, mtype
 
     # stage_matrix_type is honored for the cascaded types
     mat_rnd = pyFDN.filter_matrix_gallery(
         n, "velvet", num_stages=2, stage_matrix_type="random"
     )
-    is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd.transpose(2, 0, 1))
+    is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd)
     assert is_pu
 
     with pytest.raises(ValueError, match="Unknown matrix_type"):
         pyFDN.filter_matrix_gallery(n, "nope")
-    with pytest.raises(ValueError, match="N must be provided"):
-        pyFDN.filter_matrix_gallery(matrix_type="Velvet")
 
 
 def test_is_almost_zero_true_and_false():
@@ -246,11 +244,10 @@ def test_degree_one_lossless_z1_is_rank1():
 # ---------------------------------------------------------------------------
 
 
-def test_fdn_matrix_gallery_returns_type_list():
-    types = fdn_matrix_gallery()
-    assert isinstance(types, list)
-    assert "hadamard" in types
-    assert "orthogonal" in types
+def test_feedback_matrix_types_are_listed():
+    assert isinstance(FEEDBACK_MATRIX_TYPES, tuple)
+    assert "hadamard" in FEEDBACK_MATRIX_TYPES
+    assert "orthogonal" in FEEDBACK_MATRIX_TYPES
 
 
 @pytest.mark.parametrize("matrix_type", ["orthogonal", "householder", "circulant"])
@@ -264,12 +261,6 @@ def test_fdn_matrix_gallery_hadamard():
     A = fdn_matrix_gallery(8, "hadamard")
     assert isinstance(A, np.ndarray)
     np.testing.assert_allclose(A @ A.T, np.eye(8), atol=1e-10)
-
-
-def test_fdn_matrix_gallery_accepts_legacy_type_names():
-    hadamard = fdn_matrix_gallery(8, "Hadamard")
-    assert isinstance(hadamard, np.ndarray)
-    np.testing.assert_allclose(hadamard @ hadamard.T, np.eye(8), atol=1e-10)
 
 
 def test_fdn_matrix_gallery_parallel():
@@ -542,19 +533,10 @@ def test_rotation_matrix_from_angles_block_structure():
     assert rotation[-1, -1] == 1.0
 
 
-def test_galleries_accept_historical_spellings():
+def test_galleries_list_their_types_as_tuples():
     import pyFDN
 
-    np.random.seed(3)
-    new = pyFDN.filter_matrix_gallery(4, "velvet", num_stages=2)
-    np.random.seed(3)
-    old = pyFDN.filter_matrix_gallery(4, "Velvet", num_stages=2)
-    np.testing.assert_array_equal(new, old)
-
-    assert "allpass_in_fdn" in pyFDN.fdn_system_gallery()
-    np.random.seed(3)
-    new_sys = pyFDN.fdn_system_gallery(4, "nested_allpass")
-    np.random.seed(3)
-    old_sys = pyFDN.fdn_system_gallery(4, "nestedAllpass")
-    assert isinstance(new_sys, pyFDN.FDNSystem) and isinstance(old_sys, pyFDN.FDNSystem)
-    np.testing.assert_array_equal(new_sys.A, old_sys.A)
+    assert "allpass_in_fdn" in pyFDN.SYSTEM_TYPES
+    assert "velvet" in pyFDN.FILTER_MATRIX_TYPES
+    A, B, C, D = pyFDN.fdn_system_gallery(4, "nested_allpass")
+    assert A.shape[0] == A.shape[1] == B.shape[0] == C.shape[1]

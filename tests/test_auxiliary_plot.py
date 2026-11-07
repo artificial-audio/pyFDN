@@ -134,9 +134,9 @@ def test_plot_fdn_parameter_labels_quantities_on_y_axes():
     fig = plot_fdn_parameter(
         delays=[11, 13],
         A=np.eye(2),
-        b=np.ones((2, 1)),
-        c=np.ones((1, 2)),
-        d=np.zeros((1, 1)),
+        B=np.ones((2, 1)),
+        C=np.ones((1, 2)),
+        D=np.zeros((1, 1)),
         post_delay=per_line_sos,
         post_matrix=per_line_sos,
         post_output=identity_sos[:, :, 0],
@@ -162,9 +162,9 @@ def test_plot_fdn_parameter_omits_the_rows_for_hooks_that_are_absent():
     base = {
         "delays": [11, 13],
         "A": np.eye(2),
-        "b": np.ones((2, 1)),
-        "c": np.ones((1, 2)),
-        "d": np.zeros((1, 1)),
+        "B": np.ones((2, 1)),
+        "C": np.ones((1, 2)),
+        "D": np.zeros((1, 1)),
         "fs": 48000.0,
     }
     bare = plot_fdn_parameter(**base)

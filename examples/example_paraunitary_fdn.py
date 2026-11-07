@@ -104,7 +104,7 @@ def _(mo):
 
 @app.cell
 def _(feedback_matrix, pyFDN):
-    is_pu, _, max_off = pyFDN.is_paraunitary(feedback_matrix.transpose(2, 0, 1))
+    is_pu, _, max_off = pyFDN.is_paraunitary(feedback_matrix)
     print(
         f"Feedback matrix is paraunitary: {bool(is_pu)} (max off-diagonal {max_off:.2e})"
     )
@@ -183,7 +183,7 @@ def _(
     max_deviation = np.max(np.abs(difference))
     print(f"Number of poles: {poles.size}")
     print(f"Max |IR_time - IR_modal| = {max_deviation:.3e}")
-    assert pyFDN.is_almost_zero(difference, tol=1e-3)
+    assert np.allclose(difference, 0, atol=1e-3)
     return difference, ir_modal, ir_time, poles, residues
 
 
@@ -249,7 +249,7 @@ def _(mo):
 def _(np, poles, pyFDN):
     max_pole_deviation = np.max(np.abs(np.abs(poles) - 1.0))
     print(f"Max | |pole| - 1 | = {max_pole_deviation:.3e}")
-    assert pyFDN.is_almost_zero(np.abs(poles) - 1.0)
+    assert max_pole_deviation < 1e-12
     return
 
 

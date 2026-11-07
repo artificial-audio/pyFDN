@@ -10,10 +10,10 @@ from pyFDN.auxiliary.flamo import (
     gain_module,
     wrap_fdn_shell,
 )
-from pyFDN.auxiliary.flamo_graph import extract_dss
 from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_impz import dss_to_impz
+from pyFDN.translate.flamo_to_dss import flamo_to_dss
 
 
 class _TimeResponseModel:
@@ -21,29 +21,29 @@ class _TimeResponseModel:
         self.response = response
         self.call = None
 
-    def get_time_response(self, *, fs, identity):
-        self.call = (fs, identity)
+    def get_time_response(self, *, identity):
+        self.call = identity
         return self.response
 
 
-def test_flamo_time_response_returns_numpy_and_forwards_options():
-    response = torch.arange(12, dtype=torch.float64).reshape(1, 4, 3)
+def test_flamo_time_response_is_one_response_per_input():
+    # FLAMO's identity response: (batch, n, out, in)
+    response = torch.arange(24, dtype=torch.float64).reshape(1, 4, 3, 2)
     model = _TimeResponseModel(response)
 
-    result = flamo_time_response(model, fs=96000, identity=True)
+    result = flamo_time_response(model)
 
     assert isinstance(result, np.ndarray)
-    assert result.shape == (1, 4, 3)
     assert result.dtype == np.float64
-    np.testing.assert_array_equal(result, response.numpy())
-    assert model.call == (96000, True)
+    np.testing.assert_array_equal(result, response.numpy()[0])  # (n, out, in)
+    assert model.call is True
 
 
-def test_flamo_time_response_accepts_existing_numpy_output():
-    response = np.arange(6, dtype=np.float32)
+def test_flamo_time_response_gives_a_single_input_its_own_axis():
+    # with one input FLAMO drops the input axis: (batch, n, out)
+    response = np.arange(12, dtype=np.float32).reshape(1, 4, 3)
     result = flamo_time_response(_TimeResponseModel(response))
-
-    assert result is response
+    assert result.shape == (4, 3, 1)
 
 
 # ============================================================================
@@ -73,7 +73,7 @@ def test_dss_to_flamo_render_matches_impz():
     _, a, b, c, d, m = _small_fdn()
     nfft = 2**13
     model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=nfft, device="cpu")
-    ir = np.asarray(flamo_time_response(model, fs=48000)).reshape(-1)
+    ir = np.asarray(flamo_time_response(model)).reshape(-1)
     ref = dss_to_impz(m, a, b, c, d, 200).reshape(-1)
     np.testing.assert_allclose(ir[:120], ref[:120], atol=1e-4)
 
@@ -83,7 +83,7 @@ def test_dss_to_flamo_roundtrips_through_extractor():
     # C, D and the delays from the named graph dss_to_flamo builds.
     n, a, b, c, d, m = _small_fdn()
     model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=2**12, device="cpu")
-    params, _ = extract_dss(model)
+    params, _ = flamo_to_dss(model)
     np.testing.assert_allclose(params.A, a, atol=1e-5)
     np.testing.assert_allclose(params.B.reshape(n, 1), b, atol=1e-5)
     np.testing.assert_allclose(params.C.reshape(1, n), c, atol=1e-5)

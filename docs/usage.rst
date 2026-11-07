@@ -32,7 +32,7 @@ alongside, as plain keyword arguments::
     model = pyFDN.dss_to_flamo(*dss, 48_000.0, **filters)
 
 ``filters`` maps the three hooks ``post_delay``, ``post_matrix`` and
-``post_output`` to SOS banks (or ``None``). :func:`pyFDN.extract_dss` returns
+``post_output`` to SOS banks (or ``None``). :func:`pyFDN.flamo_to_dss` returns
 the same pair from a FLAMO model, and :func:`pyFDN.trainable_from_dss` takes
 it back: ``trainable_from_dss(*dss, fs, **filters)``. The matrix-only
 functions -- ``dss_to_impz``, ``process_dss``, ``dss_to_tf``, ``dss_to_ss``,

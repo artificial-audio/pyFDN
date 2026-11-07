@@ -24,7 +24,7 @@ def _(mo, pyFDN):
 
     1. `pyFDN.build_fdn` -- a standard FDN skeleton with random orthogonal feedback matrix.
     2. `pyFDN.train_fdn(model, loss)` -- optimize the feedback matrix and gains toward an objective we write out in full, in place.
-    3. `pyFDN.extract_dss` -- read both the initial and optimized FDNs back out.
+    3. `pyFDN.flamo_to_dss` -- read both the initial and optimized FDNs back out.
 
     Delays stay fixed. We then add homogeneous decay so the result is audible.
 
@@ -75,7 +75,7 @@ def _(pyFDN):
         16, (200, 600), distribution="geometric", coprime=True, sort=True, rng=2
     )
     model = pyFDN.build_fdn(delays=delays, rt=None, nfft=nfft, device="cpu", rng=2)
-    init_dss, _ = pyFDN.extract_dss(model)  # random init, before training
+    init_dss, _ = pyFDN.flamo_to_dss(model)  # random init, before training
 
     # |H| exactly as the loss sees it: the rfft of the model's impulse response.
     mag_init = pyFDN.model_response(model).magnitude.detach().numpy().squeeze()
@@ -95,7 +95,7 @@ def _(pyFDN):
         device="cpu",
         rng=1,
     )
-    opt_dss, _ = pyFDN.extract_dss(model)
+    opt_dss, _ = pyFDN.flamo_to_dss(model)
     mag_opt = pyFDN.model_response(model).magnitude.detach().numpy().squeeze()
 
     # 4. report the loss itself -- the total, then each term unweighted.

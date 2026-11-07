@@ -295,16 +295,6 @@ def _count_loop_filter_poles(recursion_module: Any) -> int:
     return total
 
 
-def flamo_extract_pr_decomposition(model: Any) -> dict[str, Any]:
-    """
-    Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
-
-    Returns a dict with keys ``"P"``, ``"F"`` (feedforward), ``"B"`` (input
-    path), ``"C"``, ``"D"``. For poles/residues use :func:`flamo_to_pr`.
-    """
-    return _decomposition_to_public_dict(flamo_decompose_for_pr(model))
-
-
 # ───────────────────────────────────────────────────────────────────────────
 # FDN loop (P(z), dP/dz, Newton step) — used by EAI and SVD refinement
 # ───────────────────────────────────────────────────────────────────────────

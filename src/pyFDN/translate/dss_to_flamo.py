@@ -22,9 +22,9 @@ def dss_to_flamo(
     C: ArrayLike,
     D: ArrayLike,
     fs: float,
+    *,
     nfft: int = 2**16,
     device: Any = None,
-    *,
     shell: bool = True,
     dtype: Any = None,
     post_delay: Any = None,
@@ -160,7 +160,7 @@ def fdn_core(
         )
     }
     # One assembler for render and training, so the topology (and the leaf
-    # names extract_dss reads back) cannot drift apart.
+    # names flamo_to_dss reads back) cannot drift apart.
     return assemble_fdn_core(
         input_gain=gains(B, "input_gain"),
         feedback=feedback,

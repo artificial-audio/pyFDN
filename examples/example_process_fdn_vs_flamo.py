@@ -151,7 +151,7 @@ def _(
     difference = ir_td - ir_flamo
     max_deviation = np.max(np.abs(difference))
     print(f"Max |IR_process - IR_flamo| = {max_deviation:.3e}")
-    assert pyFDN.is_almost_zero(difference, tol=1e-9)
+    assert np.allclose(difference, 0, atol=1e-9)
     return difference, ir_flamo, ir_td
 
 

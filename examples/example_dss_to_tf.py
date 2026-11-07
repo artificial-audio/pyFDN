@@ -130,8 +130,8 @@ def _(mo):
 
 
 @app.cell
-def _(ir_dss, ir_tf, pyFDN):
-    assert pyFDN.is_almost_zero(ir_dss - ir_tf, tol=1e-10), (
+def _(ir_dss, ir_tf, np):
+    assert np.allclose(ir_dss, ir_tf, rtol=0, atol=1e-10), (
         "IR from TF and DSS should match"
     )
     return

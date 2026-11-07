@@ -162,9 +162,9 @@ def nested_allpass(
 def schroeder_reverberator(
     allpass_gain: ArrayLike,
     comb_gain: ArrayLike,
-    b: ArrayLike,
-    c: ArrayLike,
-    d: float,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Create combs and allpass filters as a single FDN.
 
@@ -178,11 +178,11 @@ def schroeder_reverberator(
         Feedforward/back gains for the series allpass stages.
     comb_gain : array-like, shape (Nc,)
         Feedback gains for the parallel comb filters.
-    b : array-like, shape (Nc,) or (Nc, 1)
+    B : array-like, shape (Nc,) or (Nc, 1)
         Input gains of the comb filters.
-    c : array-like, shape (Nc,) or (1, Nc)
+    C : array-like, shape (Nc,) or (1, Nc)
         Output gains of the comb filters.
-    d : float
+    D : float
         Direct gain.
 
     Returns
@@ -207,9 +207,9 @@ def schroeder_reverberator(
     """
     allpass_gain = np.asarray(allpass_gain, dtype=float).ravel()
     comb_gain = np.asarray(comb_gain, dtype=float).ravel()
-    b = np.asarray(b, dtype=float).reshape(-1, 1)  # (Nc, 1)
-    c = np.asarray(c, dtype=float).reshape(1, -1)  # (1, Nc)
-    d = float(d)
+    B = np.asarray(B, dtype=float).reshape(-1, 1)  # (Nc, 1)
+    C = np.asarray(C, dtype=float).reshape(1, -1)  # (1, Nc)
+    D = float(D)
 
     N_c = len(comb_gain)
     N_a = len(allpass_gain)
@@ -217,7 +217,7 @@ def schroeder_reverberator(
     AP_A, AP_B, AP_C, AP_D = series_allpass(allpass_gain)
 
     P = np.diag(comb_gain)  # (Nc, Nc)
-    S = AP_B @ c  # (Na, 1) @ (1, Nc) → (Na, Nc)
+    S = AP_B @ C  # (Na, 1) @ (1, Nc) → (Na, Nc)
 
     A = np.block(
         [
@@ -225,9 +225,9 @@ def schroeder_reverberator(
             [S, AP_A],
         ]
     )
-    B = np.vstack([b, np.zeros((N_a, 1))])  # (Nc+Na, 1)
-    C = np.hstack([AP_D * c, AP_C])  # (1, Nc+Na)
-    D_out = np.array([[d]]) * AP_D  # (1, 1)
+    B = np.vstack([B, np.zeros((N_a, 1))])  # (Nc+Na, 1)
+    C = np.hstack([AP_D * C, AP_C])  # (1, Nc+Na)
+    D_out = np.array([[D]]) * AP_D  # (1, 1)
 
     return A, B, C, D_out
 
@@ -235,9 +235,9 @@ def schroeder_reverberator(
 def allpass_in_fdn(
     g: ArrayLike,
     A: ArrayLike,
-    b: ArrayLike,
-    c: ArrayLike,
-    d: float,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Create an allpass structure embedded in an FDN of size [2N, 2N].
 
@@ -250,11 +250,11 @@ def allpass_in_fdn(
         Per-channel feedforward/back allpass gains.
     A : array-like, shape (N, N)
         Inner FDN feedback matrix.
-    b : array-like, shape (N,) or (N, 1)
+    B : array-like, shape (N,) or (N, 1)
         Input gains of the inner FDN.
-    c : array-like, shape (N,) or (1, N)
+    C : array-like, shape (N,) or (1, N)
         Output gains of the inner FDN.
-    d : float
+    D : float
         Direct gain.
 
     Returns
@@ -280,8 +280,8 @@ def allpass_in_fdn(
     """
     g = np.asarray(g, dtype=float).ravel()  # (N,)
     A = np.asarray(A, dtype=float)  # (N, N)
-    b = np.asarray(b, dtype=float).reshape(-1, 1)  # (N, 1)
-    c = np.asarray(c, dtype=float).reshape(1, -1)  # (1, N)
+    B = np.asarray(B, dtype=float).reshape(-1, 1)  # (N, 1)
+    C = np.asarray(C, dtype=float).reshape(1, -1)  # (1, N)
 
     N = len(g)
     G = np.diag(g)  # (N, N)
@@ -293,8 +293,8 @@ def allpass_in_fdn(
             [I - G @ G, G],
         ]
     )
-    B_out = np.vstack([b, np.zeros((N, 1))])  # (2N, 1)
-    C_out = np.hstack([g.reshape(1, -1), c])  # (1, 2N)
-    D_out = np.array([[d]])  # (1, 1)
+    B_out = np.vstack([B, np.zeros((N, 1))])  # (2N, 1)
+    C_out = np.hstack([g.reshape(1, -1), C])  # (1, 2N)
+    D_out = np.array([[D]])  # (1, 1)
 
     return A_out, B_out, C_out, D_out

@@ -179,7 +179,7 @@ def test_pole_boundaries_basic():
     feedback_matrix = np.ones((2, 2, 4))
     fs = 48000
     MinCurve, MaxCurve, f = pole_boundaries(
-        delays, absorption, feedback_matrix, fs, nfft=8
+        delays, feedback_matrix, fs, post_delay=absorption, nfft=8
     )
     assert MinCurve.shape == (8,)
     assert MaxCurve.shape == (8,)

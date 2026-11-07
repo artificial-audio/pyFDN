@@ -134,7 +134,7 @@ def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
     matrix, v = pyFDN.construct_paraunitary_from_elementals(n, degree)
     assert matrix.shape == (n, n, degree)
     assert v.shape == (n, degree - 1)
-    is_p, _, _ = pyFDN.is_paraunitary(matrix.transpose(2, 0, 1))
+    is_p, _, _ = pyFDN.is_paraunitary(matrix)
     assert is_p
 
 
@@ -282,6 +282,39 @@ def test_dss_to_td_fir_feedback_mimo_and_direct_path() -> None:
     )
 
 
+def test_a_lossless_fir_fdn_renders_through_flamo_with_alias_decay() -> None:
+    """A FIR matrix module carries the model's alias decay, like every hook."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("flamo")
+    fir, _ = pyFDN.construct_cascaded_paraunitary_matrix(4, 2, matrix_type="random")
+    dss = DSS(
+        np.array([19, 31, 42, 57]),
+        np.eye(4),
+        np.eye(4, 1),
+        np.eye(1, 4),
+        np.zeros((1, 1)),
+    )
+    nfft, alias = 2**12, 60.0
+    model = pyFDN.trainable_from_dss(
+        *dss,
+        48_000.0,
+        matrix="random",
+        nfft=nfft,
+        alias_decay_db=alias,
+        dtype=torch.float64,
+        device="cpu",
+        post_matrix=pyFDN.fir_matrix_module(
+            fir, nfft, alias_decay_db=alias, dtype=torch.float64, device="cpu"
+        ),
+    )
+    reference = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(fir)).impulse_response(
+        nfft
+    )
+    error = np.linalg.norm(pyFDN.flamo_time_response(model) - reference)
+    # the residual is the alias decay, by construction
+    assert 20 * np.log10(error / np.linalg.norm(reference)) < -alias + 2
+
+
 def test_dss_to_td_process_block_matches_process_signal() -> None:
     dss = _siso_dss()
     signal = np.zeros(2048)
@@ -345,7 +378,7 @@ def test_all_three_hooks_render_alike_and_extract_back() -> None:
     model = pyFDN.dss_to_flamo(
         *dss, FS, nfft=2**14, device="cpu", post_matrix=post_matrix
     )
-    flamo_ir = np.asarray(pyFDN.flamo_time_response(model, fs=FS)).reshape(-1)
+    flamo_ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
     np.testing.assert_allclose(numpy_ir, flamo_ir[:ir_len], atol=1e-4)
 
     # and it is not a no-op: halving the feedback path shortens the decay
@@ -353,7 +386,7 @@ def test_all_three_hooks_render_alike_and_extract_back() -> None:
     assert not np.allclose(numpy_ir, plain, atol=1e-3)
 
     # the graph round-trips it back into the same hook
-    _, filters = pyFDN.extract_dss(model)
+    _, filters = pyFDN.flamo_to_dss(model)
     np.testing.assert_allclose(filters["post_matrix"], post_matrix, atol=1e-6)
 
 

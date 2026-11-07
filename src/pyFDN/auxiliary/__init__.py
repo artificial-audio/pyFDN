@@ -14,7 +14,6 @@ from .flamo import (
     core_alias_decay_db,
     delay_module,
     fir_matrix_module,
-    flamo_freq_response,
     flamo_process,
     flamo_time_response,
     gain_module,
@@ -23,7 +22,6 @@ from .flamo import (
     wrap_fdn_shell,
 )
 from .flamo_graph import (
-    extract_dss,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -42,7 +40,6 @@ __all__ = [
     "wrap_fdn_shell",
     "core_alias_decay_db",
     "flamo_time_response",
-    "flamo_freq_response",
     "flamo_process",
     "load_audio",
     "poletti_allpass",
@@ -52,7 +49,6 @@ __all__ = [
     "is_allpass",
     "is_paraunitary",
     "flamo_model_to_nodes",
-    "extract_dss",
     "flamo_nodes_flat",
     "plot_flamo_graph",
     "reduce_conjugate_pairs",

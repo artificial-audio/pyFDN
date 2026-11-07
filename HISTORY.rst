@@ -31,7 +31,8 @@ Unreleased
   ``post_matrix=td.MatrixFIR(fir)`` or
   ``post_matrix=pyFDN.fir_matrix_module(fir, nfft)``.
   ``plot_fdn_parameter``'s ``post_*_sos`` keywords are now ``post_*``.
-  Renamed: ``extract_build`` -> ``extract_dss`` (returns ``(dss, filters)``),
+  Renamed: ``extract_build`` -> ``flamo_to_dss`` (returns ``(dss, filters)``,
+  now in ``pyFDN.translate`` next to ``dss_to_flamo``),
   ``trainable_from_build`` -> ``trainable_from_dss(*dss, fs, ...)``,
   ``fdn_build_gallery`` -> ``fdn_dss_gallery`` (returns ``(dss, filters)``).
 * **Breaking: one save for everything.** ``save_fdn`` / ``load_fdn`` /
@@ -44,6 +45,31 @@ Unreleased
   designers' ``return_design`` option are removed. ``get_fdn_preset`` returns a
   ``DSS``; the packaged presets are DSS JSON files. New dependency:
   ``cloudpickle>=3``.
+* **Breaking: one convention per concept.**
+
+  * ``flamo_time_response(model)`` returns ``(nfft, out, in)``, one response
+    per input like ``dss_to_impz``; its ``fs`` and ``identity`` arguments are
+    gone. ``pr_to_impz``'s ``impulse_response_length`` is ``ir_len``.
+  * ``is_paraunitary`` takes an FIR matrix in pyFDN's ``(out, in, taps)``
+    layout; pass an impulse response as ``ir.transpose(1, 2, 0)``.
+  * ``fir_matrix_module`` takes ``alias_decay_db`` like the other module
+    builders, so an FIR feedback matrix works in a model with alias decay.
+  * ``dss_to_flamo``'s ``nfft`` and ``device`` are keyword-only; every FLAMO
+    builder defaults to ``nfft=2**16``.
+  * Gains are ``B, C, D`` everywhere: ``plot_system_matrix``,
+    ``plot_fdn_parameter``, ``allpass_in_fdn``, ``schroeder_reverberator``.
+  * ``pole_boundaries(delays, A, fs, *, post_delay, nfft)``.
+  * Galleries return a matrix and nothing else; ``FEEDBACK_MATRIX_TYPES``,
+    ``FILTER_MATRIX_TYPES`` and ``SYSTEM_TYPES`` list their names. The old
+    fdnToolbox spellings (``"Hadamard"``, ``"nestedAllpass"``, ...) are no
+    longer accepted. ``FDNSystem`` is removed; ``fdn_system_gallery`` returns
+    ``(A, B, C, D)`` like the structure builders.
+  * ``pyFDN`` no longer exports the allpass-completion internals,
+    ``is_almost_zero``, ``ensure_3d``, ``polydiag``, ``negpolyder``, or the
+    ``pyFDN.allpass`` / ``pyFDN.allpass_completion`` aliases; they stay in
+    their modules. Removed as unused: ``flamo_freq_response``,
+    ``flamo_extract_pr_decomposition``, ``matrix_polyder``, ``matrix_sqrt``,
+    ``mulaw_decode``, ``db_to_lin``, ``db_to_sq``.
 * ``DCBlocker`` drops its ``env_tau_s`` / ``gain_tau_s`` arguments and
   ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
   are now fixed at 50 ms, 20 ms and 3 samples.

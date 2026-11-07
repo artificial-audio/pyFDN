@@ -273,7 +273,7 @@ def _(model, pyFDN):
 @app.cell
 def _(fs, direct, is_pair, model, np, poles, pyFDN, residues):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
-    ir_flamo = pyFDN.flamo_time_response(model, fs=int(fs)).squeeze()
+    ir_flamo = pyFDN.flamo_time_response(model).squeeze()
     if ir_flamo.ndim > 1:
         ir_flamo = ir_flamo[:, 0, 0]
     ir_flamo = np.asarray(ir_flamo, dtype=np.float64)

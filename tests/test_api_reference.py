@@ -37,25 +37,11 @@ REMOVED_EQ_API = {
 }
 
 # Exported from ``pyFDN`` but intentionally NOT in the API reference.
-#   - low-level linear-algebra / completion helpers (advanced / plumbing)
-#   - submodule aliases exposed for namespaced access (e.g. ``pyFDN.allpass.*``)
+#   - plumbing that examples use but the headline docs do not need
+#   - the ``td`` subpackage
 # To promote any of these to the headline docs, move it into a category in
 # ``docs/api_reference.rst`` and delete it from this set.
 INTENTIONALLY_UNDOCUMENTED = {
-    # generate.allpass_FDN completion plumbing
-    "apply_diagonal_similarity",
-    "block_matrix",
-    "check_completion",
-    "diag_inv_sqrt",
-    "diag_sqrt",
-    "diagonal_similarity_from_abs2_lyapunov",
-    "eig_sqrt_psd",
-    "hermitize",
-    "map_back_from_similarity",
-    "orth_error",
-    "sqrtm_psd",
-    # misc internal helper
-    "is_almost_zero",
     # loss taxonomy base classes (subclass to write a loss; not used directly)
     "ResponseLoss",
     "ParameterLoss",
@@ -64,9 +50,7 @@ INTENTIONALLY_UNDOCUMENTED = {
     # low-level FLAMO graph/recursion manipulation (advanced / plumbing)
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
-    # submodule aliases (namespaced access, not standalone functions)
-    "allpass",
-    "allpass_completion",
+    # the time-domain operator subpackage
     "td",
 }
 

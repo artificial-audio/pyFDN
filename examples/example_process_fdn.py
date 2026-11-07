@@ -124,7 +124,7 @@ def _(mo):
 @app.cell
 def _(N, np, pyFDN):
     print(f"  {'matrix type':32s}{'orthogonal':12s}lossless")
-    for _name in pyFDN.fdn_matrix_gallery():
+    for _name in pyFDN.FEEDBACK_MATRIX_TYPES:
         _matrix = pyFDN.fdn_matrix_gallery(N, _name)
         # Orthogonality is the usual sufficient condition; the weaker one is
         # "diagonally similar to orthogonal", which is lossless just the same.

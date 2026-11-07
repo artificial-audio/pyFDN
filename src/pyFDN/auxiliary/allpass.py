@@ -153,19 +153,21 @@ def is_allpass(
 
 
 def is_paraunitary(
-    ir: ArrayLike,
+    matrix: ArrayLike,
     tol: float = 1e-9,
 ) -> tuple[bool, np.ndarray, float]:
     """
-    Test whether a MIMO impulse response is paraunitary (lossless).
+    Test whether an FIR matrix is paraunitary (lossless).
 
-    For real IR matrix H(t), checks that sum_t H(t) H(t)' = I (output correlation)
-    and sum_t H(t)' H(t) = I (input correlation).
+    For a real FIR matrix H(t), checks that sum_t H(t) H(t)' = I (output
+    correlation) and sum_t H(t)' H(t) = I (input correlation).
 
     Parameters
     ----------
-    ir : ndarray, shape (ir_len, n_out, n_in)
-        Impulse response [time, output, input].
+    matrix : ndarray, shape (n_out, n_in, taps)
+        FIR matrix in the z^{-1} convention, the layout of every filter matrix
+        in pyFDN. An impulse response from :func:`pyFDN.dss_to_impz` is
+        ``(ir_len, n_out, n_in)``; pass ``ir.transpose(1, 2, 0)``.
     tol : float
         Tolerance for identity check.
 
@@ -178,13 +180,11 @@ def is_paraunitary(
     max_off_diagonal : float
         Max absolute off-diagonal value in test_matrix.
     """
-    ir = np.asarray(ir, dtype=float)
-    # ir: (T, n_out, n_in)
-    n_out = ir.shape[1]
-    n_in = ir.shape[2]
-    # R_out = sum_t ir[t] @ ir[t].T  (n_out, n_out)
-    R_out = np.einsum("tij,tkj->ik", ir, ir)
-    R_in = np.einsum("tji,tjk->ik", ir, ir)
+    h = np.asarray(matrix, dtype=float)
+    n_out, n_in = h.shape[:2]
+    # R_out = sum_t h[:, :, t] @ h[:, :, t].T  (n_out, n_out)
+    R_out = np.einsum("ijt,kjt->ik", h, h)
+    R_in = np.einsum("jit,jkt->ik", h, h)
     I_out = np.eye(n_out)
     I_in = np.eye(n_in)
     off_out = R_out - np.diag(np.diag(R_out))

@@ -141,7 +141,7 @@ def construct_cascaded_paraunitary_matrix(
     k: int,
     *,
     sparsity: float = 1.0,
-    matrix_type: str = "Hadamard",
+    matrix_type: str = "hadamard",
     gain_per_sample: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Construct a paraunitary matrix and its reverse response."""
@@ -188,7 +188,7 @@ def construct_velvet_feedback_matrix(
     """Wrapper for ``construct_cascaded_paraunitary_matrix`` using Hadamard stages."""
 
     return construct_cascaded_paraunitary_matrix(
-        n, stages, sparsity=sparsity, matrix_type="Hadamard"
+        n, stages, sparsity=sparsity, matrix_type="hadamard"
     )
 
 

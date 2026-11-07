@@ -109,7 +109,7 @@ def _(
     torch,
 ):
     min_curve, max_curve, f_bounds = pyFDN.pole_boundaries(
-        delays, absorption, feedback_matrix, fs
+        delays, feedback_matrix, fs, post_delay=absorption
     )
 
     model = pyFDN.dss_to_flamo(

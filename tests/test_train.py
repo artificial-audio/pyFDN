@@ -122,14 +122,14 @@ def test_build_fdn_default_is_so_n_without_warning():
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # default draw must already be in SO(N)
         model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
-    b = pyFDN.extract_dss(model)[0]
+    b = pyFDN.flamo_to_dss(model)[0]
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(b.A) > 0
 
 
 def test_extract_roundtrip_with_direct_always_present():
     model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=3)
-    b, filters = pyFDN.extract_dss(model)
+    b, filters = pyFDN.flamo_to_dss(model)
     assert isinstance(b, DSS)
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
     assert b.B.shape == (4, 1) and b.C.shape == (1, 4)
@@ -141,17 +141,17 @@ def test_extract_roundtrip_with_direct_always_present():
 
 def test_build_rt_sets_absorption_and_renders():
     model = build_fdn(N=6, rt=2.0, nfft=2**12, device="cpu", rng=1)
-    ir = np.asarray(pyFDN.flamo_time_response(model, fs=48000)).reshape(-1)
+    ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
     assert np.all(np.isfinite(ir))
-    _, filters = pyFDN.extract_dss(model)
+    _, filters = pyFDN.flamo_to_dss(model)
     assert filters["post_delay"] is not None and filters["post_delay"].shape[1] == 6
 
 
 def test_extracted_dss_renders_through_dss_to_flamo():
     model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=5)
-    b, filters = pyFDN.extract_dss(model)
+    b, filters = pyFDN.flamo_to_dss(model)
     ir = pyFDN.flamo_time_response(
-        pyFDN.dss_to_flamo(*b, FS, nfft=2**12, device="cpu", **filters), fs=48000
+        pyFDN.dss_to_flamo(*b, FS, nfft=2**12, device="cpu", **filters)
     )
     assert np.all(np.isfinite(np.asarray(ir)))
 
@@ -178,7 +178,7 @@ def test_det_negative_orthogonal_warns_and_projects():
         dss.A[:, -1] *= -1.0  # force det = -1 (not in SO(N))
     with pytest.warns(UserWarning, match="SO"):
         model = trainable_from_dss(*dss, FS, nfft=2**10, device="cpu")
-    out = pyFDN.extract_dss(model)[0]
+    out = pyFDN.flamo_to_dss(model)[0]
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(out.A) > 0
 
@@ -297,7 +297,7 @@ def test_a_trained_rt_still_decays():
     rt = param(model, "post_delay").raw().detach().numpy()
     assert np.all(np.isfinite(rt))
     assert rt.min() < 0.0, "the run never crossed zero, so it tested nothing"
-    out, filters = pyFDN.extract_dss(model)
+    out, filters = pyFDN.flamo_to_dss(model)
     assert filters["post_delay"] is not None
     assert np.all(np.isfinite(filters["post_delay"]))
     ir = pyFDN.dss_to_td(*out, **filters).impulse_response(2**15).squeeze()
@@ -313,7 +313,7 @@ def test_a_trained_rt_still_decays():
 
 def test_colorless_improves_and_preserves_structure():
     model = build_fdn(N=6, rt=None, nfft=2**11, device="cpu", rng=0)
-    init_dss = pyFDN.extract_dss(model)[0]
+    init_dss = pyFDN.flamo_to_dss(model)[0]
     init = _decayed_flatness(init_dss)
     delays0 = init_dss.delays
 
@@ -322,8 +322,8 @@ def test_colorless_improves_and_preserves_structure():
 
     assert log.train_loss[-1] < log.train_loss[0]
     # the fit must flatten the FDN itself, not just the bins it was scored on
-    assert _decayed_flatness(pyFDN.extract_dss(model)[0]) > init + 0.1
-    out = pyFDN.extract_dss(model)[0]
+    assert _decayed_flatness(pyFDN.flamo_to_dss(model)[0]) > init + 0.1
+    out = pyFDN.flamo_to_dss(model)[0]
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(6), atol=1e-4)
     np.testing.assert_array_equal(out.delays, delays0)  # delays frozen
     assert "FlatMagnitude" in log.loss_log and "Sparsity[fB]" in log.loss_log
@@ -349,7 +349,7 @@ def test_lossless_build_defaults_to_alias_decay():
     assert float(feedback_matrix_module(opted_out).gamma) == 1.0
 
     # gamma enters get_freq_response, not the parameter map -> dss is unchanged
-    damped, undamped = pyFDN.extract_dss(lossless)[0], pyFDN.extract_dss(opted_out)[0]
+    damped, undamped = pyFDN.flamo_to_dss(lossless)[0], pyFDN.flamo_to_dss(opted_out)[0]
     np.testing.assert_allclose(damped.A, undamped.A, atol=1e-6)
     np.testing.assert_allclose(damped.B, undamped.B, atol=1e-6)
     np.testing.assert_allclose(damped.C, undamped.C, atol=1e-6)
@@ -389,7 +389,7 @@ def test_train_is_reproducible():
 def test_match_spectrogram_runs_and_renders():
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
     fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
 
     log = train_fdn(
@@ -403,9 +403,8 @@ def test_match_spectrogram_runs_and_renders():
     out_ir = np.asarray(
         pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
-                *pyFDN.extract_dss(fresh)[0], FS, nfft=nfft, device="cpu"
-            ),
-            fs=48000,
+                *pyFDN.flamo_to_dss(fresh)[0], FS, nfft=nfft, device="cpu"
+            )
         )
     ).reshape(-1)
     # the trained model extracts and renders to a finite IR
@@ -483,14 +482,15 @@ def test_mimo_target_wrong_shape_raises():
 
 
 def test_a_first_order_shelf_decay_realizes_rt():
-    dss = pyFDN.extract_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[0]
+    dss = pyFDN.flamo_to_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[
+        0
+    ]
     sos = pyFDN.decay_to_first_order_shelf(0.3, 0.3, None, dss.delays, FS)
     assert sos.shape == (1, 6, 6)
 
     ir = np.asarray(
         pyFDN.flamo_time_response(
-            pyFDN.dss_to_flamo(*dss, FS, nfft=2**16, device="cpu", post_delay=sos),
-            fs=48000,
+            pyFDN.dss_to_flamo(*dss, FS, nfft=2**16, device="cpu", post_delay=sos)
         )
     ).reshape(-1)
     rt, _ = pyFDN.estimate_rt_bands(ir, 48000.0)
@@ -520,7 +520,7 @@ def test_response_is_the_true_ir_matrix():
     # the alias envelope is removed again, so h matches the exact (non-aliasing)
     # block simulation. Compared in RMS, not pointwise: in float32 the
     # reconstruction envelope amplifies round-off at the end of the buffer.
-    exact = pyFDN.dss_to_impz(*pyFDN.extract_dss(model)[0], nfft)
+    exact = pyFDN.dss_to_impz(*pyFDN.flamo_to_dss(model)[0], nfft)
     assert exact.shape == r.h.shape
     error = r.h.detach().numpy() - exact
     error_db = 20 * np.log10(np.sqrt(np.mean(error**2)) / np.sqrt(np.mean(exact**2)))
@@ -543,7 +543,7 @@ def test_alias_decay_db_is_the_response_accuracy_in_db():
             rng=2,
         )
         h = model_response(model).h.detach().numpy().squeeze()
-        exact = pyFDN.dss_to_impz(*pyFDN.extract_dss(model)[0], nfft).squeeze()
+        exact = pyFDN.dss_to_impz(*pyFDN.flamo_to_dss(model)[0], nfft).squeeze()
         error_db = 20 * np.log10(
             np.sqrt(np.mean((h - exact) ** 2)) / np.sqrt(np.mean(exact**2))
         )
@@ -580,7 +580,7 @@ def test_param_resolves_alias_and_returns_mapped_value():
     assert value.requires_grad
     np.testing.assert_allclose((value.T @ value).detach().numpy(), np.eye(4), atol=1e-5)
     np.testing.assert_allclose(
-        value.detach().numpy(), pyFDN.extract_dss(model)[0].A, atol=1e-5
+        value.detach().numpy(), pyFDN.flamo_to_dss(model)[0].A, atol=1e-5
     )
 
 
@@ -629,12 +629,12 @@ def test_one_objective_can_hold_two_different_references():
     nfft = 2**11
     ref_a = np.asarray(
         pyFDN.flamo_time_response(
-            build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7), fs=48000
+            build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
         )
     ).reshape(-1)
     ref_b = np.asarray(
         pyFDN.flamo_time_response(
-            build_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8), fs=48000
+            build_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8)
         )
     ).reshape(-1)
 
@@ -667,7 +667,9 @@ def test_flat_spectrogram_resolution_comes_from_its_own_windows():
     spectrum of a rectangularly truncated, non-decaying IR, which grows steeply
     with the truncation length. That is the sensitivity FlatSpectrogram removes.
     """
-    dss = pyFDN.extract_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[0]
+    dss = pyFDN.flamo_to_dss(build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3))[
+        0
+    ]
 
     def spread(loss):
         values = [
@@ -697,7 +699,7 @@ def test_flat_spectrogram_rejects_a_window_longer_than_the_response():
 def test_flat_spectrogram_flattens_and_densifies():
     """It reaches FlatMagnitude's flatness, and unlike it also improves density."""
     model = build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=0)
-    init = _decayed_flatness(pyFDN.extract_dss(model)[0])
+    init = _decayed_flatness(pyFDN.flamo_to_dss(model)[0])
 
     log = train_fdn(
         model,
@@ -710,7 +712,7 @@ def test_flat_spectrogram_flattens_and_densifies():
         rng=0,
     )
 
-    assert _decayed_flatness(pyFDN.extract_dss(model)[0]) > init + 0.1
+    assert _decayed_flatness(pyFDN.flamo_to_dss(model)[0]) > init + 0.1
     sparsity = log.loss_log["Sparsity[fB]"]
     assert sparsity[-1] < sparsity[0]  # the feedback matrix got denser
 
@@ -816,7 +818,7 @@ def test_peak_power_lowers_the_tallest_mode():
             device="cpu",
             rng=1,
         )
-        return _decayed_db(pyFDN.extract_dss(model)[0])
+        return _decayed_db(pyFDN.flamo_to_dss(model)[0])
 
     # measured: 18.5 dB above the median at p=2, 16.5 dB at p=4
     assert train(4.0).max() < train(2.0).max() - 1.0
@@ -950,7 +952,7 @@ def test_match_phase_runs_and_improves():
     """MatchPhase should integrate into training loop."""
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
     fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
 
     log = train_fdn(
@@ -971,7 +973,7 @@ def test_match_phase_spectrogram_runs():
     """MatchPhaseSpectrogram should compute loss across multiple STFT scales."""
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
     fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
 
     log = train_fdn(
@@ -1033,7 +1035,7 @@ def test_match_mel_magnitude_runs():
     """MatchMelMagnitude should compute loss on mel-scaled bins."""
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
     fresh = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
 
     log = train_fdn(
@@ -1368,7 +1370,7 @@ def test_post_eq_trains_and_survives_extraction():
     after = gains.raw().detach().numpy()
     assert not np.allclose(before, after)
 
-    post_output = pyFDN.extract_dss(model)[1]["post_output"]
+    post_output = pyFDN.flamo_to_dss(model)[1]["post_output"]
     assert post_output is not None
     assert post_output.shape == (11, 6, 1)
     assert np.all(np.isfinite(post_output))
@@ -1434,7 +1436,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     expected = pyFDN.decay_to_first_order_shelf(rt[0], rt[1], None, dss.delays, fs)
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
 
-    post_delay = pyFDN.extract_dss(model)[1]["post_delay"]
+    post_delay = pyFDN.flamo_to_dss(model)[1]["post_delay"]
     assert post_delay is not None and post_delay.shape == (1, 6, len(dss.delays))
     np.testing.assert_allclose(post_delay, expected, atol=1e-8)
 

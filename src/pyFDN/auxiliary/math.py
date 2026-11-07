@@ -13,7 +13,7 @@ from scipy.linalg import expm, logm
 from pyFDN.auxiliary.utils import ensure_3d, is_almost_zero, lin_to_db
 
 if TYPE_CHECKING:
-    import torch
+    pass
 
 
 def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray:
@@ -184,40 +184,6 @@ def negpolyder(
         p = pp
 
     return q, p
-
-
-def matrix_polyder(B: np.ndarray, A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Derivative of rational filter matrices in the z^{-1} convention.
-
-    Coefficients are ordered as [z^0, z^{-1}, z^{-2}, ...] along axis 0.
-
-    Args:
-        B: Numerator coefficients, shape (order, N, M).
-        A: Denominator coefficients, shape (order, N, M).
-
-    Returns:
-        Q: Numerator of the derivative, shape (order, N, M).
-        P: Denominator of the derivative, shape (order, N, M).
-    """
-    order_B = B.shape[0]
-    order_A = A.shape[0]
-    Q = np.zeros((order_B, B.shape[1], B.shape[2]), dtype=complex)
-    P = np.zeros((order_A, A.shape[1], A.shape[2]), dtype=complex)
-
-    for it1 in range(B.shape[1]):
-        for it2 in range(B.shape[2]):
-            q, p = negpolyder(B[:, it1, it2], A[:, it1, it2])
-            Q_len = min(len(q), order_B)
-            P_len = min(len(p), order_A)
-            Q[:Q_len, it1, it2] = q[:Q_len]
-            P[:P_len, it1, it2] = p[:P_len]
-
-    if np.allclose(Q.imag, 0.0):
-        Q = Q.real.astype(float)
-    if np.allclose(P.imag, 0.0):
-        P = P.real.astype(float)
-
-    return Q, P
 
 
 def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
@@ -538,26 +504,3 @@ def outer_sum_approximation(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     u = np.log(np.abs(eu)) * max_val
     v = np.log(np.abs(ev)) * max_val
     return u, v
-
-
-def matrix_sqrt(A: torch.Tensor) -> torch.Tensor:
-    """Matrix square root via eigenvalue decomposition.
-
-    sqrtm(A) = V @ sqrt(D) @ V^(-1) where A = V @ D @ V^(-1).
-
-    Parameters
-    ----------
-    A : torch.Tensor
-        Square real matrix.
-
-    Returns
-    -------
-    torch.Tensor
-        Real matrix square root of A, in A's dtype (float64 in, float64 out).
-    """
-    import torch
-
-    complex_dtype = torch.complex128 if A.dtype == torch.float64 else torch.complex64
-    eigenvals, eigenvecs = torch.linalg.eig(A.to(complex_dtype))
-    root = eigenvecs @ torch.diag(torch.sqrt(eigenvals)) @ torch.linalg.inv(eigenvecs)
-    return torch.real(root).to(A.dtype)

@@ -26,7 +26,6 @@ __all__ = [
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     "flamo_time_response",
-    "flamo_freq_response",
     "flamo_process",
     # building a FLAMO FDN graph from numpy values
     "assemble_fdn_core",
@@ -63,9 +62,10 @@ __all__ = [
     "fdn_system_gallery",
     "filter_matrix_gallery",
     "DSS",
-    "FDNSystem",
+    "FEEDBACK_MATRIX_TYPES",
+    "FILTER_MATRIX_TYPES",
+    "SYSTEM_TYPES",
     "householder_matrix",
-    "is_almost_zero",
     "kronecker_angles",
     "kronecker_matrix",
     "kronecker_transform",
@@ -110,18 +110,11 @@ __all__ = [
     "is_unilossless",
     "loop_tf",
     "matrix_convolution",
-    "matrix_polyder",
     "matrix_polyval",
-    "matrix_sqrt",
-    "negpolyder",
     "outer_sum_approximation",
     "poly_degree",
     "polyder_rational",
-    "polydiag",
     # general utilities
-    "db_to_lin",
-    "db_to_sq",
-    "ensure_3d",
     "fade_out",
     "hertz_to_unit",
     "hertz_to_rad",
@@ -131,18 +124,17 @@ __all__ = [
     "lin_to_db",
     "max_corr",
     "sq_to_db",
-    "mulaw_decode",
     "mulaw_encode",
     "peak_normalize",
     "pole_boundaries",
     "skew",
     # state-space translators
     "dss_to_flamo",
+    "flamo_to_dss",
     "dss_to_impz",
     "dss_to_pr",
     "flamo_to_pr",
     "flamo_decompose_for_pr",
-    "flamo_extract_pr_decomposition",
     "FlamoDecompositionForPR",
     "dss_to_ss",
     "dss_to_td",
@@ -212,30 +204,16 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
-    "extract_dss",
     # time-domain graph engine
     "td",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
-    "allpass",
-    "allpass_completion",
-    "apply_diagonal_similarity",
-    "block_matrix",
-    "check_completion",
     "complete_fdn",
     "complete_full_mimo_halmos",
     "complete_general_mimo_svd",
-    "diagonal_similarity_from_abs2_lyapunov",
-    "diag_inv_sqrt",
-    "diag_sqrt",
-    "eig_sqrt_psd",
-    "hermitize",
     "homogeneous_allpass_fdn",
-    "map_back_from_similarity",
     "rand_admissible_homogeneous_allpass",
-    "orth_error",
-    "sqrtm_psd",
     "poletti_allpass",
     "series_allpass",
     "nested_allpass",
@@ -245,6 +223,8 @@ __all__ = [
 ]
 
 # acoustics and absorption
+# Time-domain graph engine (pyFDN.td operators and connectors).
+from . import td  # noqa: E402
 from .auxiliary.acoustics import (
     echo_density,
     edc,
@@ -277,7 +257,6 @@ from .auxiliary.flamo import (
     assemble_fdn_core,
     delay_module,
     fir_matrix_module,
-    flamo_freq_response,
     flamo_process,
     flamo_time_response,
     gain_module,
@@ -287,7 +266,6 @@ from .auxiliary.flamo import (
     wrap_fdn_shell,
 )
 from .auxiliary.flamo_graph import (
-    extract_dss,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -306,14 +284,10 @@ from .auxiliary.math import (
     is_unilossless,
     loop_tf,
     matrix_convolution,
-    matrix_polyder,
     matrix_polyval,
-    matrix_sqrt,
-    negpolyder,
     outer_sum_approximation,
     poly_degree,
     polyder_rational,
-    polydiag,
 )
 
 # plotting
@@ -333,18 +307,13 @@ from .auxiliary.plot import (
 
 # general utilities
 from .auxiliary.utils import (
-    db_to_lin,
-    db_to_sq,
-    ensure_3d,
     fade_out,
     hertz_to_rad,
     hertz_to_unit,
-    is_almost_zero,
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
     max_corr,
-    mulaw_decode,
     mulaw_encode,
     peak_normalize,
     pole_boundaries,
@@ -372,22 +341,10 @@ from .eq import (
     peaking_biquad,
     probe_sos,
 )
-from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
-    apply_diagonal_similarity,
-    block_matrix,
-    check_completion,
     complete_fdn,
     complete_full_mimo_halmos,
     complete_general_mimo_svd,
-    diag_inv_sqrt,
-    diag_sqrt,
-    diagonal_similarity_from_abs2_lyapunov,
-    eig_sqrt_psd,
-    hermitize,
-    map_back_from_similarity,
-    orth_error,
-    sqrtm_psd,
 )
 from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
@@ -395,7 +352,9 @@ from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
 )
 from .generate.fdn_dss_gallery import fdn_dss_gallery
 from .generate.fdn_matrix_gallery import (
-    FDNSystem,
+    FEEDBACK_MATRIX_TYPES,
+    FILTER_MATRIX_TYPES,
+    SYSTEM_TYPES,
     fdn_matrix_gallery,
     fdn_system_gallery,
     filter_matrix_gallery,
@@ -456,15 +415,10 @@ from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_td import dss_to_td
 from .translate.dss_to_tf import dss_to_tf
+from .translate.flamo_to_dss import flamo_to_dss
 from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
-
-# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
-allpass = import_module(".auxiliary.allpass", __name__)
-
-# Time-domain graph engine (pyFDN.td operators and connectors).
-from . import td  # noqa: E402
 
 # The training API and the FLAMO pole finder need torch and flamo. They are
 # imported on first access, so ``import pyFDN`` stays light for NumPy users.
@@ -514,7 +468,6 @@ if TYPE_CHECKING:
     from .translate.flamo_to_pr import (
         FlamoDecompositionForPR,
         flamo_decompose_for_pr,
-        flamo_extract_pr_decomposition,
         flamo_to_pr,
     )
 
@@ -561,7 +514,6 @@ _LAZY_MODULES = {
     "trainable_from_dss": ".train",
     "FlamoDecompositionForPR": ".translate.flamo_to_pr",
     "flamo_decompose_for_pr": ".translate.flamo_to_pr",
-    "flamo_extract_pr_decomposition": ".translate.flamo_to_pr",
     "flamo_to_pr": ".translate.flamo_to_pr",
 }
 

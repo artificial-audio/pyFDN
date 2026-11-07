@@ -215,12 +215,12 @@ def _(device, fs, init_dss, np, pyFDN, rir, rir_len, torch):
 
     # Match energy on the validation window; output gain scales the entire IR
     # because the initial direct path is zero.
-    ir_init = pyFDN.flamo_time_response(model, fs=fs).squeeze().astype(float)[:rir_len]
+    ir_init = pyFDN.flamo_time_response(model).squeeze().astype(float)[:rir_len]
     energy_gain = np.linalg.norm(rir[:render_nfft]) / np.linalg.norm(ir_init)
     with torch.no_grad():
         pyFDN.param(model, "output_gain").raw().mul_(energy_gain)
     ir_init *= energy_gain
-    initial_fdn = deepcopy(pyFDN.extract_dss(model))  # (dss, filters)
+    initial_fdn = deepcopy(pyFDN.flamo_to_dss(model))  # (dss, filters)
 
     for _p in pyFDN.params(model):
         print(_p)
@@ -277,7 +277,7 @@ def _(device, fs, loss, model, pyFDN, render_nfft, rir_len, train_nfft):
         rng=0,
     )
     model.set_nfft(render_nfft)
-    ir_trained = pyFDN.flamo_time_response(model, fs=fs).squeeze()[:rir_len]
+    ir_trained = pyFDN.flamo_time_response(model).squeeze()[:rir_len]
     print(
         f"{log.steps_run} steps: loss "
         f"{log.train_loss[0]:.4g} -> {log.train_loss[-1]:.4g}"
@@ -302,7 +302,7 @@ def _(mo):
     mo.md(r"""
     ## Step 6 — export and inspect the fitted FDN
 
-    `extract_dss` returns the NumPy `DSS` system and its filters, with absorption
+    `flamo_to_dss` returns the NumPy `DSS` system and its filters, with absorption
     and output EQ stored as SOS banks. Use them with `dss_to_impz`, `dss_to_flamo`,
     or `process_dss`, or keep them with `save_fdn`.
     `param(...).raw()` gives the trained RT values in seconds and EQ gains in dB.
@@ -317,7 +317,7 @@ def _(mo):
 def _(ir_trained, model, np, pyFDN):
     # Depend on the trained response so marimo extracts after training.
     assert np.all(np.isfinite(ir_trained)), "trained FDN did not render"
-    trained_fdn = pyFDN.extract_dss(model)  # (dss, filters)
+    trained_fdn = pyFDN.flamo_to_dss(model)  # (dss, filters)
     for _name, _unit in (("post_delay", "s"), ("post_output", "dB")):
         _parameter = pyFDN.param(model, _name)
         print(

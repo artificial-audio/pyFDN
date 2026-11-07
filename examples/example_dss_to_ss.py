@@ -93,7 +93,7 @@ def _(A, b, c, d, delays, dimpulse, dlti, impulse_response_length, np, pyFDN):
     )
     ir_delay_state_space = np.asarray(ir_delay_state_space).squeeze()
 
-    assert pyFDN.is_almost_zero(ir_state_space - ir_delay_state_space, tol=0.001)
+    assert np.allclose(ir_state_space, ir_delay_state_space, rtol=0, atol=0.001)
 
     pyFDN.plot_impulse_response(
         ir_state_space,

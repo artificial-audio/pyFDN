@@ -47,10 +47,12 @@ Matrix Generators
    pyFDN.kronecker_transform
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
+   pyFDN.FEEDBACK_MATRIX_TYPES
+   pyFDN.FILTER_MATRIX_TYPES
+   pyFDN.SYSTEM_TYPES
    pyFDN.filter_matrix_gallery
    pyFDN.fdn_dss_gallery
    pyFDN.sample_delay_lengths
-   pyFDN.FDNSystem
    pyFDN.DSS
 
 Allpass FDN
@@ -175,7 +177,6 @@ Delay Utilities
    pyFDN.mgrpdelay
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
-   pyFDN.flamo_freq_response
 
 Building a FLAMO Graph
 ----------------------
@@ -218,14 +219,10 @@ Polynomial & Matrix Maths
    pyFDN.is_unilossless
    pyFDN.loop_tf
    pyFDN.matrix_convolution
-   pyFDN.matrix_polyder
    pyFDN.matrix_polyval
-   pyFDN.matrix_sqrt
-   pyFDN.negpolyder
    pyFDN.outer_sum_approximation
    pyFDN.poly_degree
    pyFDN.polyder_rational
-   pyFDN.polydiag
 
 General Utilities
 -----------------
@@ -234,11 +231,8 @@ General Utilities
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.db_to_lin
-   pyFDN.db_to_sq
    pyFDN.lin_to_db
    pyFDN.sq_to_db
-   pyFDN.ensure_3d
    pyFDN.fade_out
    pyFDN.hertz_to_unit
    pyFDN.hertz_to_rad
@@ -246,7 +240,6 @@ General Utilities
    pyFDN.is_bounding_curve
    pyFDN.last_nonzero_indices
    pyFDN.max_corr
-   pyFDN.mulaw_decode
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
    pyFDN.pole_boundaries
@@ -293,9 +286,9 @@ straight into each of them, with its filters alongside:
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
+   pyFDN.flamo_to_dss
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
-   pyFDN.flamo_extract_pr_decomposition
    pyFDN.FlamoDecompositionForPR
    pyFDN.impz_to_res
    pyFDN.mtf_to_impz
@@ -435,4 +428,3 @@ FLAMO Graph
    pyFDN.plot_flamo_graph
    pyFDN.flamo_model_to_nodes
    pyFDN.flamo_nodes_flat
-   pyFDN.extract_dss

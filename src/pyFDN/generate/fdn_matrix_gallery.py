@@ -6,21 +6,12 @@ Translation of fdnMatrixGallery.m from fdnToolbox.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Literal, NamedTuple, NoReturn, get_args, overload
+from typing import Literal, get_args
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from .orthogonal import householder_matrix, random_orthogonal
-
-
-class FDNSystem(NamedTuple):
-    """Full FDN system matrices returned by :func:`fdn_system_gallery`."""
-
-    A: np.ndarray
-    B: np.ndarray
-    C: np.ndarray
-    D: np.ndarray
 
 
 def _circulant(v: np.ndarray, direction: int = 1) -> np.ndarray:
@@ -47,127 +38,54 @@ FeedbackMatrixType = Literal[
     "parallel",
 ]
 FEEDBACK_MATRIX_TYPES = get_args(FeedbackMatrixType)
-IOMatrixType = Literal["ones", "normalised", "identity"]
-IO_MATRIX_TYPES = get_args(IOMatrixType)
 
-# Historical fdnToolbox spellings remain accepted when loading old examples.
-_SYSTEM_TYPE_ALIASES = {
-    "series": "series_allpass",
-    "nestedAllpass": "nested_allpass",
-    "polettiAllpass": "poletti_allpass",
-    "homogeneousAllpass": "homogeneous_allpass",
-    "SchroederReverberator": "schroeder_reverberator",
-    "allpassInFDN": "allpass_in_fdn",
-}
-_FILTER_MATRIX_TYPE_ALIASES = {
-    "RandomDense": "random_dense",
-    "Velvet": "velvet",
-    "FromElementals": "from_elementals",
-}
-_MATRIX_TYPE_ALIASES = {
-    "Hadamard": "hadamard",
-    "Householder": "householder",
-    "diagonallySimilarToOrthogonal": "diagonally_similar_to_orthogonal",
-    "tinyRotation": "tiny_rotation",
-    "Anderson": "anderson",
-}
-
-# Full-system types (return FDNSystem).
-_SYSTEM_TYPES = [
+SYSTEM_TYPES = (
     "series_allpass",
     "nested_allpass",
     "poletti_allpass",
     "homogeneous_allpass",
     "schroeder_reverberator",
     "allpass_in_fdn",
-]
+)
+"""The ``system_type`` names :func:`fdn_system_gallery` accepts."""
 
-# Filter (FIR paraunitary) matrix types (return (N, N, L) np.ndarray).
-_FILTER_MATRIX_TYPES = [
-    "random_dense",
-    "velvet",
-    "from_elementals",
-]
+FILTER_MATRIX_TYPES = ("random_dense", "velvet", "from_elementals")
+"""The ``matrix_type`` names :func:`filter_matrix_gallery` accepts (FIR, paraunitary)."""
 
 
-@overload
 def filter_matrix_gallery(
     N: int,
     matrix_type: str,
     *,
-    num_stages: int = ...,
-    sparsity: float = ...,
-    stage_matrix_type: str = ...,
-) -> np.ndarray: ...
-
-
-@overload
-def filter_matrix_gallery(
-    N: int | None = ...,
-    matrix_type: None = ...,
-    *,
-    num_stages: int = ...,
-    sparsity: float = ...,
-    stage_matrix_type: str = ...,
-) -> list[str]: ...
-
-
-@overload
-def filter_matrix_gallery(
-    N: None = ...,
-    matrix_type: str = ...,
-    *,
-    num_stages: int = ...,
-    sparsity: float = ...,
-    stage_matrix_type: str = ...,
-) -> NoReturn: ...
-
-
-def filter_matrix_gallery(
-    N: int | None = None,
-    matrix_type: str | None = None,
-    *,
     num_stages: int = 3,
     sparsity: float = 3.0,
-    stage_matrix_type: str = "Hadamard",
-) -> np.ndarray | list[str]:
-    """Return an FIR (filter) feedback matrix of the requested type, or list all type names.
+    stage_matrix_type: str = "hadamard",
+) -> np.ndarray:
+    """Return an FIR (filter) feedback matrix of the requested type.
 
     All types are paraunitary (lossless): ``A^T(z^{-1}) A(z) = I``. Used as
     scattering feedback matrices in an FDN (Schlecht & Habets 2020).
 
     Args:
-        N: Matrix size.  Ignored when ``matrix_type`` is ``None``.
-        matrix_type: One of ``"random_dense"`` (dense cascaded paraunitary
+        N: Matrix size.
+        matrix_type: One of :data:`FILTER_MATRIX_TYPES`: ``"random_dense"`` (dense cascaded paraunitary
             matrix), ``"velvet"`` (sparse velvet-noise feedback matrix), or
             ``"from_elementals"`` (cascade of degree-one lossless factors,
-            polynomial degree ``N * num_stages``); the historical
-            fdnToolbox spellings (``"Velvet"``, ...) are accepted.  Pass ``None`` (or call
-            with no arguments) to get the list of all type names.
+            polynomial degree ``N * num_stages``).
         num_stages: Number of cascade stages (or degree factor for
             ``"from_elementals"``).
         sparsity: Sparsity of the ``"velvet"`` type (ignored otherwise).
         stage_matrix_type: Stage matrix for ``"random_dense"`` and ``"velvet"``:
-            ``"Hadamard"`` or ``"random"`` (random orthogonal; avoids the
+            ``"hadamard"`` or ``"random"`` (random orthogonal; avoids the
             structural double poles at z = ±1 of Hadamard stages).
 
     Returns:
-        Feedback matrix of shape ``(N, N, L)`` in z^{-1} convention, or a list
-        of type-name strings.
+        Feedback matrix of shape ``(N, N, L)`` in z^{-1} convention.
 
     Example::
 
-        filter_matrix_gallery()              # → list of type strings
         filter_matrix_gallery(4, "velvet", num_stages=3, sparsity=3)
     """
-    if matrix_type is None:
-        return list(_FILTER_MATRIX_TYPES)
-
-    if N is None:
-        raise ValueError("N must be provided when matrix_type is specified")
-
-    matrix_type = _FILTER_MATRIX_TYPE_ALIASES.get(matrix_type, matrix_type)
-
     if matrix_type == "random_dense":
         from .paraunitary import (
             construct_cascaded_paraunitary_matrix,
@@ -194,23 +112,22 @@ def filter_matrix_gallery(
         return construct_paraunitary_from_elementals(N, N * num_stages)[0]
 
     raise ValueError(
-        f"Unknown matrix_type {matrix_type!r}. Supported: {_FILTER_MATRIX_TYPES}"
+        f"Unknown matrix_type {matrix_type!r}. Supported: {FILTER_MATRIX_TYPES}"
     )
 
 
 def fdn_matrix_gallery(
-    N: int | None = None,
-    matrix_type: str | None = None,
+    N: int,
+    matrix_type: str,
     *,
     angles: ArrayLike | None = None,
     kernel_type: str | Sequence[str] = "rotation",
-) -> np.ndarray | list[str]:
-    """Return a feedback matrix of the requested type, or list all type names.
+) -> np.ndarray:
+    """Return a feedback matrix of the requested type.
 
     Args:
-        N: Matrix size.  Ignored when ``matrix_type`` is ``None``.
-        matrix_type: One of the supported type strings.  Pass ``None`` (or call
-                     with no arguments) to get the list of all type names.
+        N: Matrix size.
+        matrix_type: One of :data:`FEEDBACK_MATRIX_TYPES`.
         angles: Kernel angles for the ``"kronecker"`` type, innermost first
             (see :func:`pyFDN.kronecker_matrix`).  Defaults to ``pi / 4`` on
             every kernel, the equal-mixing setting.  Ignored otherwise.
@@ -219,23 +136,14 @@ def fdn_matrix_gallery(
             one per kernel.  Ignored otherwise.
 
     Returns:
-        Feedback matrix of shape ``(N, N)``, or a list of type-name strings.
+        Feedback matrix of shape ``(N, N)``.
 
     Example::
 
-        fdn_matrix_gallery()             # → list of type strings
         fdn_matrix_gallery(4, "orthogonal")
         fdn_matrix_gallery(8, "hadamard")
         fdn_matrix_gallery(8, "kronecker", angles=[0.0, np.pi / 4, np.pi / 8])
     """
-    if matrix_type is None:
-        return list(FEEDBACK_MATRIX_TYPES)
-
-    if N is None:
-        raise ValueError("N must be provided when matrix_type is specified")
-
-    matrix_type = _MATRIX_TYPE_ALIASES.get(matrix_type, matrix_type)
-
     if matrix_type == "orthogonal":
         return random_orthogonal(N)
 
@@ -281,62 +189,45 @@ def fdn_matrix_gallery(
 
         return anderson_matrix(N)
 
-    if matrix_type in _SYSTEM_TYPES or matrix_type in _SYSTEM_TYPE_ALIASES:
-        raise ValueError(
-            f"'{matrix_type}' returns a full FDN system; use fdn_system_gallery() instead."
-        )
-
     raise ValueError(
         f"Unknown matrix_type {matrix_type!r}. Supported: {FEEDBACK_MATRIX_TYPES}"
     )
 
 
 def fdn_system_gallery(
-    N: int | None = None,
-    system_type: str | None = None,
-) -> FDNSystem | list[str]:
-    """Return a full FDN system (A, B, C, D) of the requested type, or list all type names.
+    N: int,
+    system_type: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return a full FDN system ``(A, B, C, D)`` of the requested type.
 
     Args:
-        N: System order.  Ignored when ``system_type`` is ``None``.
-        system_type: One of the supported type strings.  Pass ``None`` (or call
-                     with no arguments) to get the list of all type names.
+        N: System order.
+        system_type: One of :data:`SYSTEM_TYPES`.
 
     Returns:
-        :class:`FDNSystem` named tuple ``(A, B, C, D)``, or a list of type-name strings.
+        The system matrices ``(A, B, C, D)``, as the structure builders in
+        :mod:`pyFDN.generate.structures` return them.
 
     Example::
 
-        fdn_system_gallery()                         # → list of type strings
-        fdn_system_gallery(8, "allpass_in_fdn")
+        A, B, C, D = fdn_system_gallery(8, "allpass_in_fdn")
     """
-    if system_type is None:
-        return list(_SYSTEM_TYPES)
-
-    if N is None:
-        raise ValueError("N must be provided when system_type is specified")
-
-    system_type = _SYSTEM_TYPE_ALIASES.get(system_type, system_type)
-
     if system_type == "series_allpass":
         from .structures import series_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
-        A, B, C, D = series_allpass(g)
-        return FDNSystem(A, B, C, D)
+        return series_allpass(g)
 
     if system_type == "nested_allpass":
         from .structures import nested_allpass
 
         g = np.random.rand(N) * 0.6 + 0.2
-        A, B, C, D = nested_allpass(g)
-        return FDNSystem(A, B, C, D)
+        return nested_allpass(g)
 
     if system_type == "poletti_allpass":
         from .structures import poletti_allpass
 
-        A, B, C, D = poletti_allpass(0.7, random_orthogonal(N))
-        return FDNSystem(A, B, C, D)
+        return poletti_allpass(0.7, random_orthogonal(N))
 
     if system_type == "homogeneous_allpass":
         from .allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
@@ -346,8 +237,7 @@ def fdn_system_gallery(
 
         G = np.diag(np.random.uniform(0.9, 0.99, N))
         X = rand_admissible_homogeneous_allpass(G, (0.8, 0.99))
-        A, B, C, D, _ = homogeneous_allpass_fdn(G, X)
-        return FDNSystem(A, B, C, D)
+        return homogeneous_allpass_fdn(G, X)[:4]
 
     if system_type == "schroeder_reverberator":
         from .structures import schroeder_reverberator
@@ -356,11 +246,9 @@ def fdn_system_gallery(
         N_a = N - N_c
         comb_gain = np.random.uniform(0.5, 0.9, N_c) * np.random.choice([-1, 1], N_c)
         allpass_gain = np.random.uniform(0.2, 0.7, N_a)
-        b = np.random.randn(N_c, 1) / np.sqrt(N_c)
-        c = np.random.randn(1, N_c) / np.sqrt(N_c)
-        d = 0.0
-        A, B, C, D = schroeder_reverberator(allpass_gain, comb_gain, b, c, d)
-        return FDNSystem(A, B, C, D)
+        B = np.random.randn(N_c, 1) / np.sqrt(N_c)
+        C = np.random.randn(1, N_c) / np.sqrt(N_c)
+        return schroeder_reverberator(allpass_gain, comb_gain, B, C, 0.0)
 
     if system_type == "allpass_in_fdn":
         from .structures import allpass_in_fdn
@@ -369,7 +257,6 @@ def fdn_system_gallery(
         A_inner = random_orthogonal(N // 2)
         b_inner = np.random.randn(N // 2, 1) / np.sqrt(N // 2)
         c_inner = np.random.randn(1, N // 2) / np.sqrt(N // 2)
-        A, B, C, D = allpass_in_fdn(g, A_inner, b_inner, c_inner, 0.0)
-        return FDNSystem(A, B, C, D)
+        return allpass_in_fdn(g, A_inner, b_inner, c_inner, 0.0)
 
-    raise ValueError(f"Unknown system_type {system_type!r}. Supported: {_SYSTEM_TYPES}")
+    raise ValueError(f"Unknown system_type {system_type!r}. Supported: {SYSTEM_TYPES}")

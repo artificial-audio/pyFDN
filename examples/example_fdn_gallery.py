@@ -46,7 +46,7 @@ def _(mo):
     mo.md(r"""
     ## Retrieve all matrix types
 
-    Query `fdn_matrix_gallery()` with no arguments to get the list of available types.
+    `pyFDN.FEEDBACK_MATRIX_TYPES` lists the available types.
     """)
     return
 
@@ -54,7 +54,7 @@ def _(mo):
 @app.cell
 def _(pyFDN):
     N = 8
-    matrix_types = pyFDN.fdn_matrix_gallery()
+    matrix_types = pyFDN.FEEDBACK_MATRIX_TYPES
     print(f"Available types ({len(matrix_types)}):")
     for t in matrix_types:
         print(f"  {t}")
@@ -139,7 +139,7 @@ def _(mo, pyFDN):
 
 @app.cell
 def _(pyFDN):
-    filter_types = pyFDN.filter_matrix_gallery()
+    filter_types = pyFDN.FILTER_MATRIX_TYPES
     print(f"Available filter matrix types ({len(filter_types)}):")
     for _t in filter_types:
         print(f"  {_t}")
@@ -162,7 +162,7 @@ def _(filter_types, mo, np, pyFDN):
     _figures = []
     for _t in filter_types:
         _mat = pyFDN.filter_matrix_gallery(N_filter, _t, num_stages=2)
-        _is_pu, _, _ = pyFDN.is_paraunitary(_mat.transpose(2, 0, 1))
+        _is_pu, _, _ = pyFDN.is_paraunitary(_mat)
         _fig, _, _ = pyFDN.plot_impulse_response_matrix(
             np.arange(_mat.shape[2]),
             _mat.transpose(2, 0, 1),
@@ -258,7 +258,7 @@ def _(mo):
 
 @app.cell
 def _(pyFDN):
-    system_types = pyFDN.fdn_system_gallery()
+    system_types = pyFDN.SYSTEM_TYPES
     print(f"Available system types ({len(system_types)}):")
     for _t in system_types:
         print(f"  {_t}")
@@ -271,7 +271,7 @@ def _(N, mo, pyFDN, system_types):
     for stype in system_types:
         try:
             s = pyFDN.fdn_system_gallery(N, stype)
-            is_ua, _ = pyFDN.is_uniallpass(s.A, s.B, s.C, s.D)
+            is_ua, _ = pyFDN.is_uniallpass(*s)
             sys_results[stype] = {"system": s, "uniallpass": is_ua}
         except NotImplementedError:
             sys_results[stype] = None

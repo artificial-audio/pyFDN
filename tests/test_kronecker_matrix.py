@@ -192,7 +192,7 @@ def test_kernels_are_the_paper_definitions() -> None:
 
 
 def test_gallery_lists_and_builds_the_kronecker_type() -> None:
-    assert "kronecker" in pyFDN.fdn_matrix_gallery()
+    assert "kronecker" in pyFDN.FEEDBACK_MATRIX_TYPES
 
     A = pyFDN.fdn_matrix_gallery(8, "kronecker")
     assert isinstance(A, np.ndarray)  # the gallery returns a name list when N is None

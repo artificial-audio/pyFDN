@@ -338,31 +338,31 @@ def plot_matrix_grid(
 
 def _system_matrix_blocks(
     A: ArrayLike,
-    b: ArrayLike,
-    c: ArrayLike,
-    d: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Normalize the system matrix blocks to 2-D arrays and validate shapes."""
     A = np.asarray(A, dtype=float)
-    b = np.asarray(b, dtype=float)
-    c = np.asarray(c, dtype=float)
-    d = np.asarray(d, dtype=float)
+    B = np.asarray(B, dtype=float)
+    C = np.asarray(C, dtype=float)
+    D = np.asarray(D, dtype=float)
 
     # Normalise to 2-D so every block is drawn as a matrix.
-    if b.ndim == 1:
-        b = b.reshape(-1, 1)
-    if c.ndim == 1:
-        c = c.reshape(1, -1)
-    if d.ndim == 0:
-        d = d.reshape(1, 1)
-    elif d.ndim == 1:
-        d = d.reshape(1, -1)
+    if B.ndim == 1:
+        B = B.reshape(-1, 1)
+    if C.ndim == 1:
+        C = C.reshape(1, -1)
+    if D.ndim == 0:
+        D = D.reshape(1, 1)
+    elif D.ndim == 1:
+        D = D.reshape(1, -1)
 
-    if b.shape[0] != A.shape[0]:
-        raise ValueError("b must have same number of rows as A")
-    if c.shape[1] != A.shape[1]:
-        raise ValueError("c must have same number of columns as A")
-    return A, b, c, d
+    if B.shape[0] != A.shape[0]:
+        raise ValueError("B must have same number of rows as A")
+    if C.shape[1] != A.shape[1]:
+        raise ValueError("C must have same number of columns as A")
+    return A, B, C, D
 
 
 def _shared_color_limits(zmin: float | None, zmax: float | None) -> tuple[float, float]:
@@ -384,7 +384,7 @@ def _draw_system_matrix(
     zmin: float,
     zmax: float,
 ) -> list[Any]:
-    """Draw the A, b, c, d blocks into four gridspec cells; return the axes."""
+    """Draw the A, B, C, D blocks into four gridspec cells; return the axes."""
     axes = []
     for cell, blk, name in zip(cells, blocks, "Abcd", strict=True):
         ax = fig.add_subplot(cell)
@@ -397,21 +397,21 @@ def _draw_system_matrix(
 
 def plot_system_matrix(
     A: ArrayLike,
-    b: ArrayLike,
-    c: ArrayLike,
-    d: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
     zmin: float | None = None,
     zmax: float | None = None,
     title: str | None = None,
 ) -> Figure:
-    """Plot system matrix [A b; c d] as 2x2 heatmaps, shared RdBu color scale.
+    """Plot system matrix [A B; C D] as 2x2 heatmaps, shared RdBu color scale.
 
     Subplot sizes are proportional to block dimensions so that each matrix element
     (pixel) has the same physical size across all four plots.
 
     Parameters
     ----------
-    A, b, c, d : array-like
+    A, B, C, D : array-like
         Feedback matrix, input gain, output gain, direct gain.
     zmin, zmax : float, optional
         Shared color limits. If both None, uses (-1, 1).
@@ -422,14 +422,14 @@ def plot_system_matrix(
     -------
     matplotlib.figure.Figure
     """
-    A, b, c, d = _system_matrix_blocks(A, b, c, d)
+    A, B, C, D = _system_matrix_blocks(A, B, C, D)
     zmin, zmax = _shared_color_limits(zmin, zmax)
 
-    # Layout: [A (m×n)  b (m×p);  c (q×n)  d (q×p)], sized so one cell has the
+    # Layout: [A (m×n)  B (m×p);  C (q×n)  D (q×p)], sized so one cell has the
     # same physical size in all four subplots.
     m, n = A.shape
-    p = b.shape[1]
-    q = c.shape[0]
+    p = B.shape[1]
+    q = C.shape[0]
     cell_px = 400.0 / max(m + q, n + p)
     fig = _new_figure(
         cell_px * (n + p) + 100, cell_px * (m + q) + (90 if title else 60)
@@ -437,7 +437,7 @@ def plot_system_matrix(
     fig.set_layout_engine("constrained")
     gs = fig.add_gridspec(2, 2, width_ratios=[n, p], height_ratios=[m, q])
     axes = _draw_system_matrix(
-        fig, [gs[0, 0], gs[0, 1], gs[1, 0], gs[1, 1]], [A, b, c, d], zmin, zmax
+        fig, [gs[0, 0], gs[0, 1], gs[1, 0], gs[1, 1]], [A, B, C, D], zmin, zmax
     )
     fig.colorbar(axes[-1].images[0], ax=axes, shrink=0.8)
     if title:
@@ -553,9 +553,9 @@ def plot_db_per_sample(
 def plot_fdn_parameter(
     delays: ArrayLike,
     A: ArrayLike,
-    b: ArrayLike,
-    c: ArrayLike,
-    d: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
     *,
     post_delay: ArrayLike | None = None,
     post_matrix: ArrayLike | None = None,
@@ -573,7 +573,7 @@ def plot_fdn_parameter(
     them, so a system and its filters unpack straight in:
     ``plot_fdn_parameter(*dss, **filters, fs=fs)``:
 
-    - the system matrix blocks ``A``, ``b``, ``c``, ``d`` as heatmaps with a
+    - the system matrix blocks ``A``, ``B``, ``C``, ``D`` as heatmaps with a
       shared RdBu color scale;
     - the delays as a bar plot whose bars are aligned with the columns of the
       feedback matrix ``A`` (one bar per delay line);
@@ -590,7 +590,7 @@ def plot_fdn_parameter(
     ----------
     delays : array-like
         Delay lengths in samples, shape (N,).
-    A, b, c, d : array-like
+    A, B, C, D : array-like
         Feedback matrix, input gains, output gains, direct gains.
     post_delay, post_matrix : array-like, optional
         Per-delay-line SOS banks for the two in-loop hooks, same layout as
@@ -615,7 +615,7 @@ def plot_fdn_parameter(
     """
     from scipy.signal import sosfreqz
 
-    A, b, c, d = _system_matrix_blocks(A, b, c, d)
+    A, B, C, D = _system_matrix_blocks(A, B, C, D)
     zmin, zmax = _shared_color_limits(zmin, zmax)
     delays_arr = np.asarray(delays, dtype=float).ravel()
 
@@ -627,7 +627,7 @@ def plot_fdn_parameter(
     # Color encodes the delay length, shared between bars and in-loop curves.
     colors = _delay_colors(delays_arr)
 
-    # Row layout: delays | A b | c d | [post_delay] | [post_matrix] | [post_output]
+    # Row layout: delays | A B | C D | [post_delay] | [post_matrix] | [post_output]
     in_loop = [
         (sos, label)
         for sos, label in (
@@ -640,8 +640,8 @@ def plot_fdn_parameter(
     matrix_px = 440.0
     row_px = [
         110.0,
-        matrix_px * m / (m + c.shape[0]),
-        matrix_px * c.shape[0] / (m + c.shape[0]),
+        matrix_px * m / (m + C.shape[0]),
+        matrix_px * C.shape[0] / (m + C.shape[0]),
     ]
     row_px += [190.0] * (len(in_loop) + int(has_post_output))
     total_px = float(sum(row_px))
@@ -649,12 +649,12 @@ def plot_fdn_parameter(
     fig = _new_figure(560, total_px + 120 + (40 if title else 0))
     fig.set_layout_engine("constrained")
     gs = fig.add_gridspec(
-        len(row_px), 2, height_ratios=row_px, width_ratios=[n, b.shape[1]]
+        len(row_px), 2, height_ratios=row_px, width_ratios=[n, B.shape[1]]
     )
 
-    # The A, b, c, d heatmaps, as in plot_system_matrix.
+    # The A, B, C, D heatmaps, as in plot_system_matrix.
     ax_A, *_ = _draw_system_matrix(
-        fig, [gs[1, 0], gs[1, 1], gs[2, 0], gs[2, 1]], [A, b, c, d], zmin, zmax
+        fig, [gs[1, 0], gs[1, 1], gs[2, 0], gs[2, 1]], [A, B, C, D], zmin, zmax
     )
 
     # Delays as bars aligned with the columns of A.

@@ -11,7 +11,7 @@
    (:class:`~pyFDN.train.losses.base.ResponseLoss`) and those that put a cost on
    one of its parameters (:class:`~pyFDN.train.losses.base.ParameterLoss`).
 3. **extract** the :class:`~pyFDN.DSS` and baked filters back out
-   (:func:`pyFDN.extract_dss`), plus a :class:`TrainLog`.
+   (:func:`pyFDN.flamo_to_dss`), plus a :class:`TrainLog`.
 """
 
 from __future__ import annotations

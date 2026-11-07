@@ -115,7 +115,7 @@ def _(pyFDN, torch):
     )
     model = pyFDN.dss_to_flamo(*dss, fs, nfft=2**18, device="cpu", **filters)
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
-    ir_flamo = pyFDN.flamo_time_response(model)[0]
+    ir_flamo = pyFDN.flamo_time_response(model)[:, :, 0]  # (n, outputs)
     print(f"{n} delay lines: {dss.delays.astype(int)} samples")
     print(f"{dss.B.shape[1]} in, {dss.C.shape[0]} out -> {ir_flamo.shape}")
     return fs, ir_flamo, model
