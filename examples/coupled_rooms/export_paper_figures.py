@@ -82,7 +82,7 @@ def initialise_room_noise(state, delays, lines, source, seed):
     state.set_lines(contents)
 
 
-def render(model, source=0, lossy=False, varying=True, initialization="noise", seed=200, duration=5.):
+def render(model, source=0, lossy=False, varying=True, initialization="noise", seed=200, duration=5., include_outputs=False):
     delays, k = model["delays"], model["lines"]
     rooms, channels = len(model["volumes"]), len(delays)
     feedback = model["feedback"]
@@ -112,13 +112,17 @@ def render(model, source=0, lossy=False, varying=True, initialization="noise", s
     late = slice(int(.85*len(energy)), len(energy))
     endpoint_mean = (outputs[late]**2).mean(axis=0)
     microphones = np.stack([outputs[:FS//2, r*k:(r+1)*k].sum(axis=1)/np.sqrt(k) for r in range(rooms)], axis=1)
-    return dict(energy=energy, reference=reference, endpoint_mean=endpoint_mean, microphones=microphones)
+    result = dict(energy=energy, reference=reference, endpoint_mean=endpoint_mean, microphones=microphones)
+    if include_outputs:
+        result["outputs"] = outputs
+    return result
 
 
-def energy_errors(energy, reference):
+def energy_errors(energy, reference, window_reference=None):
     # Bound lossy error averages by the useful reference dynamic range;
     # arbitrarily long zero tails must not improve the reported accuracy.
-    valid = np.flatnonzero(reference.sum(axis=1) >= reference[0].sum()*1e-6)
+    window = reference if window_reference is None else window_reference
+    valid = np.flatnonzero(window.sum(axis=1) >= window[0].sum()*1e-6)
     stop = int(valid[-1])+1
     energy, reference = energy[:stop], reference[:stop]
     error = np.abs(energy-reference)
