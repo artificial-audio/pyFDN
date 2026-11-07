@@ -1,0 +1,13 @@
+{"missing_pole": [0.9999561598013686, 0.009363678515542765], "frequency_hz": 71.53427998312529, "nearest_pole": [0.9999568809462676, 0.009286347406293563], "separation": 7.733447166482214e-05, "frequency_gap_hz": 0.5907918451163382}
+{"attempt": 0, "phase": "grid", "nfft": 8192, "fft_bin_hz": 5.859375, "distance_to_missing": 0.0005979738642674873, "closest_sample": [0.9993814661498448, 0.00919845155271534], "count": 676}
+{"attempt": 0, "phase": "polished", "nfft": 8192, "fft_bin_hz": 5.859375, "distance_to_missing": 7.733447099940976e-05, "closest_sample": [0.9999568809462953, 0.009286347406959264], "count": 676}
+{"attempt": 0, "phase": "unique", "nfft": 8192, "fft_bin_hz": 5.859375, "distance_to_missing": 7.733447099940976e-05, "closest_sample": [0.9999568809462953, 0.009286347406959264], "count": 676}
+{"attempt": 1, "phase": "grid", "nfft": 16384, "fft_bin_hz": 2.9296875, "distance_to_missing": 0.0003295402487109638, "closest_sample": [0.9996695138394924, 0.009201102785310541], "count": 686}
+{"attempt": 1, "phase": "polished", "nfft": 16384, "fft_bin_hz": 2.9296875, "distance_to_missing": 7.733447100131629e-05, "closest_sample": [0.9999568809462994, 0.009286347406957395], "count": 686}
+{"attempt": 1, "phase": "unique", "nfft": 16384, "fft_bin_hz": 2.9296875, "distance_to_missing": 7.733447100131629e-05, "closest_sample": [0.9999568809462994, 0.009286347406957395], "count": 686}
+{"attempt": 2, "phase": "grid", "nfft": 32768, "fft_bin_hz": 1.46484375, "distance_to_missing": 0.00021525263258230387, "closest_sample": [0.9998135688163797, 0.009202428688152155], "count": 688}
+{"attempt": 2, "phase": "polished", "nfft": 32768, "fft_bin_hz": 1.46484375, "distance_to_missing": 7.733447100747804e-05, "closest_sample": [0.9999568809463076, 0.00928634740695131], "count": 688}
+{"attempt": 2, "phase": "unique", "nfft": 32768, "fft_bin_hz": 1.46484375, "distance_to_missing": 7.733447100747804e-05, "closest_sample": [0.9999568809463076, 0.00928634740695131], "count": 688}
+{"attempt": 3, "phase": "grid", "nfft": 65536, "fft_bin_hz": 0.732421875, "distance_to_missing": 9.640150082822842e-05, "closest_sample": [0.999884717158415, 0.00929895450044999], "count": 692}
+{"attempt": 3, "phase": "polished", "nfft": 65536, "fft_bin_hz": 0.732421875, "distance_to_missing": 7.733447100687261e-05, "closest_sample": [0.9999568809463013, 0.009286347406951856], "count": 692}
+{"attempt": 3, "phase": "unique", "nfft": 65536, "fft_bin_hz": 0.732421875, "distance_to_missing": 7.733447100687261e-05, "closest_sample": [0.9999568809463013, 0.009286347406951856], "count": 692}

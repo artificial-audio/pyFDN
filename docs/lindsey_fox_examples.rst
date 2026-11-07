@@ -363,3 +363,78 @@ Raw data:
 * ``docs/benchmarks/lindsey_fox_absorption_approximation_all_ports.jsonl``
 * ``docs/benchmarks/lindsey_fox_absorption_conservative.jsonl``
 * ``docs/benchmarks/lindsey_fox_problematic_partial_modes.jsonl``
+
+Why the Kronecker search misses modes
+------------------------------------------------------------
+
+The missing modes are close but resolvable unit-circle neighbors, not the
+effectively coincident small-radius absorption cluster. In the static
+configuration, the missing positive-frequency pole is at ``71.53428 Hz`` and
+its nearest neighbor is at ``70.94349 Hz``: a gap of ``0.59079 Hz`` at 48 kHz.
+The four successive search FFT lengths are 8192, 16384, 32768, and 65536;
+even the last has a frequency spacing of ``0.73242 Hz``.
+
+Tracing that case shows 676, 686, 688, and 692 candidates as the grid is
+refined. The nearby candidate consistently polishes to the neighboring pole,
+leaving the other pole and its conjugate unresolved. Across all ten failing
+configurations, missing-root nearest-neighbor gaps range from ``0.095`` to
+``1.319 Hz``, at most about two samples of the finest angular grid. A 3-point
+angular minimum test does not necessarily seed both roots in such a pair.
+
+This is a coverage limitation of the prototype's grid initialization and
+four-restart cap, not a need for arbitrary precision in these examples.
+The prototype also omits the original LF method's quotient-deflation
+completion stage. Local grid refinement or completion of the few missing
+roots are distinct from accepting an incomplete result; omission is rejected
+by the measured response errors above. The production algorithm was not
+modified during this diagnosis.
+
+Why the FLAMO decompositions take more than one second
+------------------------------------------------------------
+
+System sizes differ: the initial small-matrix benchmark had three delay
+lines and 1116 poles, the paraunitary FLAMO case has four lines and 1003 poles,
+and the absorption approximations retain 1578 poles on eight lines or 1958
+poles on four lines. More importantly, the FLAMO adapter includes general
+per-pole model derivatives and SVD refinement before residue extraction.
+The static NumPy route has a cheaper residue path and no such pole-refinement
+pass.
+
+One warmed profiling repetition gave this breakdown in seconds (these are
+individual profiling repetitions, not the earlier median timing table):
+
+.. list-table:: Timed decomposition stages; response validation is excluded
+   :header-rows: 1
+
+   * - Stage
+     - Two-tap FIR
+     - First-order IIR
+   * - FLAMO determinant sampling and coefficient recovery
+     - 0.074
+     - 0.067
+   * - Lindsey–Fox root search and polishing
+     - 0.326
+     - 0.331
+   * - Per-pole SVD refinement against the original model
+     - 0.699
+     - 0.558
+   * - FLAMO residue extraction
+     - 0.271
+     - 0.311
+   * - Pairing and other overhead
+     - 0.024
+     - 0.035
+   * - Total
+     - 1.394
+     - 1.303
+
+The root search remains sub-second. Refinement and residue extraction
+dominate: they evaluate derivatives and perform SVDs in separate passes,
+and refinement currently visits both members of each conjugate pair.
+This identifies a postprocessing optimization opportunity without changing
+the LF root finder. No such optimization is claimed by this profile.
+
+Diagnostic data are saved as
+``docs/benchmarks/lindsey_fox_kronecker_grid_diagnostic.jsonl``,
+``docs/benchmarks/lindsey_fox_kronecker_neighbor_gaps.jsonl``, and
+``docs/benchmarks/lindsey_fox_flamo_stage_profile.jsonl``.
