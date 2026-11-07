@@ -401,3 +401,83 @@ def test_build_to_impz_applies_the_post_output_hook() -> None:
     np.testing.assert_allclose(
         build_to_impz(quiet, 256), 0.5 * build_to_impz(plain, 256), atol=1e-12
     )
+
+
+def test_delay_lines_can_be_filled_and_reset_to_zero() -> None:
+    rng = np.random.default_rng(0)
+    delays = np.array([7, 11, 13])
+    N = delays.size
+    lines = [rng.standard_normal(m) for m in delays]
+    B, C, D = np.ones((N, 1)), np.eye(N), np.zeros((N, 1))
+
+    # No feedback: each line plays its content out once, in output order,
+    # also when filled mid-stream.
+    graph = pyFDN.dss_to_td(delays, np.zeros((N, N)), B, C, D, block_size=5)
+    graph.process_signal(np.zeros(3))
+    state = graph.ops[0].ops[1].state
+    state.set_lines(lines)
+    y = graph.process_signal(np.zeros(20))
+    for i, m in enumerate(delays):
+        np.testing.assert_array_equal(y[:m, i], lines[i])
+        np.testing.assert_array_equal(y[m:, i], 0.0)
+
+    graph.reset()
+    np.testing.assert_array_equal(graph.process_signal(np.zeros(20)), 0.0)
+    state.fill_noise(0.5, rng)
+    assert np.all(graph.process_signal(np.zeros(7)) != 0.0)
+
+    with pytest.raises(ValueError, match="lines"):
+        state.set_lines([s[:-1] for s in lines])
+
+
+@pytest.mark.parametrize(
+    "bad_line", [np.zeros(2), [0.0, np.nan, 0.0], [0.0, np.inf, 0.0]]
+)
+def test_set_lines_rejects_invalid_later_line_without_changing_state(bad_line) -> None:
+    state = td.RecursionState([2, 3], max_block_size=1)
+    state.set_lines([[1.0, 2.0], [3.0, 4.0, 5.0]])
+    state.advance(1)
+    before = state.buffer.copy()
+    pointers = state.pointers.copy()
+    with pytest.raises(ValueError, match=r"lines\[1\]"):
+        state.set_lines([[8.0, 9.0], bad_line])
+    np.testing.assert_array_equal(state.buffer, before)
+    np.testing.assert_array_equal(state.pointers, pointers)
+    with pytest.raises(ValueError, match="one array per delay line"):
+        state.set_lines([[8.0, 9.0]])
+    np.testing.assert_array_equal(state.buffer, before)
+
+
+@pytest.mark.parametrize("variance", [-1.0, np.nan, np.inf, -np.inf])
+def test_fill_noise_rejects_invalid_variance_without_changing_state(variance) -> None:
+    state = td.RecursionState([2, 3], max_block_size=1)
+    state.set_lines([[1.0, 2.0], [3.0, 4.0, 5.0]])
+    before = state.buffer.copy()
+    with pytest.raises(ValueError, match="variance"):
+        state.fill_noise(variance)
+    np.testing.assert_array_equal(state.buffer, before)
+
+
+def test_fill_noise_is_reproducible_and_preserves_read_positions() -> None:
+    state = td.RecursionState([2, 3], max_block_size=1)
+    state.advance(1)
+    pointers = state.pointers.copy()
+    state.fill_noise(0.5, np.random.default_rng(42))
+    rng = np.random.default_rng(42)
+    expected = [rng.normal(0.0, np.sqrt(0.5), m) for m in state.delays]
+    for i, m in enumerate(state.delays):
+        indices = (state.pointers[i] + np.arange(m)) % m
+        np.testing.assert_array_equal(state.buffer[i, indices], expected[i])
+    np.testing.assert_array_equal(state.pointers, pointers)
+    state.fill_noise(0.0)
+    np.testing.assert_array_equal(state.buffer, 0.0)
+    np.testing.assert_array_equal(state.pointers, pointers)
+
+
+def test_initialized_delay_line_decays_with_feedback_and_input() -> None:
+    graph = pyFDN.dss_to_td([3], [[0.5]], [[1.0]], [[1.0]], [[0.0]], block_size=2)
+    graph.ops[0].ops[1].state.set_lines([[1.0, 2.0, 3.0]])
+    x = np.zeros(9)
+    x[0] = 4.0
+    expected = np.array([1.0, 2.0, 3.0, 4.5, 1.0, 1.5, 2.25, 0.5, 0.75])
+    np.testing.assert_array_equal(graph.process_signal(x).reshape(-1), expected)

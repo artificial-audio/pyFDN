@@ -76,7 +76,7 @@ class _DelayLoop(TimeOperator):
         block_size: int,
     ) -> None:
         self.in_channels = self.out_channels = delays.size
-        self._state = RecursionState(delays, block_size)
+        self.state = RecursionState(delays, block_size)
         self._block_size = block_size
         self._feedback = feedback
         self._post_delay = post_delay
@@ -87,18 +87,18 @@ class _DelayLoop(TimeOperator):
         start = 0
         while start < x.shape[0]:
             n = min(self._block_size, x.shape[0] - start)
-            delayed = self._state.get_values(n)
+            delayed = self.state.get_values(n)
             if self._post_delay is not None:
                 delayed = self._post_delay.process_block(delayed)
             feedback = self._feedback.process_block(delayed)
-            self._state.set_values(x[start : start + n] + feedback)
-            self._state.advance(n)
+            self.state.set_values(x[start : start + n] + feedback)
+            self.state.advance(n)
             out[start : start + n] = delayed
             start += n
         return out
 
     def reset(self) -> None:
-        self._state.reset()
+        self.state.reset()
         self._feedback.reset()
         if self._post_delay is not None:
             self._post_delay.reset()
@@ -150,6 +150,13 @@ def dss_to_td(
     -------
     TimeOperator
         A stateful graph from FDN inputs to outputs.
+
+    The delay lines are the :class:`~pyFDN.td.RecursionState` at
+    ``graph.ops[0].ops[1].state``; e.g. free decay from noise in every line::
+
+        graph = dss_to_td(delays, A, B, C, D)
+        graph.ops[0].ops[1].state.fill_noise()
+        y = graph.process_signal(np.zeros(fs))
     """
     delays_arr = np.asarray(delays, dtype=int).reshape(-1)
     n_lines = delays_arr.size

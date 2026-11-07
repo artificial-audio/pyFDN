@@ -5,6 +5,9 @@ History
 Unreleased
 ----------
 
+* ``RecursionState.set_lines`` and ``fill_noise(variance)`` overwrite the delay-line
+  content, e.g. noise for a diffuse-field start. In a ``dss_to_td`` graph the
+  state is at ``graph.ops[0].ops[1].state``.
 * New ``gain_to_two_stage`` / ``decay_to_two_stage`` design the two-stage
   attenuation filter of Välimäki, Prawda and Schlecht (IEEE SPL, 2024): a
   first-order shelf sets the gain towards DC and Nyquist, and the ten-band
