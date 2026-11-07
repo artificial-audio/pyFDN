@@ -14,20 +14,20 @@ DSS ``eig`` and FLAMO ``eai`` defaults are unchanged::
        model, mode="lindsey_fox", num_poles=known_order)
 
 The static DSS path requires finite real matrices, nonsingular ``A``, and
-positive integer delays. It remains NumPy/SciPy-only when LF succeeds.
+positive integer delays. It remains NumPy/SciPy-only, including on failure.
 FLAMO requires a real float64 canonical FDN. Static, FIR matrix, and parallel
 SOS feedback loops are supported; give ``num_poles`` explicitly for FIR loops.
 Filter dynamics are included in the detected order of SOS loops.
 
 ``lf_max_seconds=3.0`` limits root search between numerical operations. One
 operation may overrun the budget. Coefficient construction, matrix refinement,
-residue extraction, response validation, and EAI fallback are outside it.
+residue extraction, and response validation are outside it.
 This is an experimental solver for simple, sufficiently separated roots;
 repeated roots and tightly clustered filter-zero modes can prevent completion.
 A speedup is not guaranteed.
 
-Acceptance and fallback
------------------------
+Acceptance and failure
+----------------------
 
 The scalar search must return the full unique root count, normalized backward
 residuals at most ``1e-10``, and normalized coefficient reconstruction error
@@ -44,10 +44,12 @@ guarantee on the unit circle.
 
 Both relative L2 error and peak error normalized by the reference peak must be
 below ``response_tolerance=1e-8``. Search, pairing, completeness, residue, or
-response failures trigger a warned EAI fallback. EAI must pass the same count
-and response checks. If both methods fail, the public call raises.
+response failures raise directly. LF never calls EAI or another root solver,
+and a budget or completeness failure does not return a partial decomposition.
+Shared SVD refinement, residue extraction, and response validation do not run
+Ehrlich-Aberth iteration.
 
-Inspect ``meta['solver']``, ``requestedSolver``, ``fallbackReason``,
+Inspect ``meta['solver']``, ``requestedSolver``,
 ``expectedPoles``, ``returnedPoles``, ``complete``, ``approximate``, and
 ``responseValidation``. The latter reports ``relativeL2``, ``normalizedPeak``,
 ``points``, ``radius``, and ``referenceProbes``. For static DSS,
@@ -55,13 +57,14 @@ Inspect ``meta['solver']``, ``requestedSolver``, ``fallbackReason``,
 errors. Other cases use direct response evaluation. FLAMO additionally reports
 ``externalResponseValidation``.
 
-Incomplete decompositions are rejected by default. Two-tap and IIR absorption
-can create unresolved groups near filter zeros. For that case, explicitly pass
-``allow_approximate=True`` to ``flamo_to_pr``. An incomplete EAI result, requested directly or used as LF fallback, is
-accepted only when both internal and external response checks pass; a warning
-and ``complete=False``, ``approximate=True``, and ``omittedPoleCount`` report
-the approximation. This does not establish where the omitted poles lie or
-make their count a measure of response error.
+LF requires a complete decomposition. Two-tap and IIR absorption can create
+unresolved groups near filter zeros, which LF may fail to resolve within its
+budget. Callers can choose ``mode="eai"`` explicitly as a separate solve.
+For EAI only, ``allow_approximate=True`` permits a nonempty incomplete result
+if both internal and external response checks pass. A warning and metadata
+``complete=False``, ``approximate=True``, and ``omittedPoleCount`` report that
+approximation. This does not establish where the omitted poles lie or make
+their count a measure of response error. The flag does not change LF's contract.
 
 Algorithm and numerical limits
 -------------------------------
@@ -156,16 +159,15 @@ From an editable checkout with the example dependencies installed, run::
    PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_lindsey_fox.py
 
 This exercises all 30 repository modal configurations through the public
-APIs and compares independent 48000-sample impulse responses. The runner asserts
-accuracy and completeness policy, with no timing assertions. It runs notebook
-setup cells only; plotting and audio cells are excluded. Static, Kronecker,
-paraunitary FIR, and SOS cases are included. The two absorption cases explicitly
-opt into approximation.
+APIs and compares independent 48000-sample impulse responses for successful
+solves. The runner asserts accuracy and completeness, with no timing assertions.
+It runs notebook setup cells only; plotting and audio cells are excluded.
+Static, Kronecker, paraunitary FIR, and SOS cases are included. The two absorption
+cases may report an expected search failure; they never run EAI.
 
 The recorded local run in ``benchmarks/lindsey_fox_examples.jsonl`` has 28
-complete LF decompositions and two validated approximate EAI absorption
-results. The latter retain 1578/1586 and 1958/1962 poles. These results are
-sampled numerical evidence for these configurations, not a guarantee for
-arbitrary models. To compare polynomial construction with principal minors::
+complete LF decompositions and two explicitly reported absorption search
+failures. These results are sampled numerical evidence for these configurations,
+not a guarantee for arbitrary models. To compare polynomial construction with principal minors::
 
    PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_general_char_poly.py --lines 4 8 12 16 --repeat 3

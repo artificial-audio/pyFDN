@@ -4,8 +4,9 @@ Run from the checkout root with BLAS threads limited to one::
 
     python tests/benchmark_lindsey_fox.py
 
-The two absorption examples explicitly opt into approximation. All other
-examples require complete pole counts. Assertions check accuracy, not timings.
+All successful examples require complete LF pole counts. The two absorption
+examples may report search failure; no other solver is run. Assertions check
+accuracy and known failure cases, not timings.
 """
 
 import contextlib
@@ -25,29 +26,25 @@ def main():
     failures = []
     for case in cases:
         start = perf_counter()
+        absorption = "model" in case and case["build"].post_delay is not None
         try:
             if "model" in case:
-                approximate = case["build"].post_delay is not None
                 result = pyFDN.flamo_to_pr(
                     case["model"],
                     mode="lindsey_fox",
                     num_poles=case["degree"],
-                    allow_approximate=approximate,
-                    maximum_iterations=80,
                 )
                 reference = pyFDN.build_to_impz(case["build"], 48000)
             else:
                 args = [case[k] for k in ("delays", "A", "B", "C", "D")]
-                result = pyFDN.dss_to_pr(
-                    *args, mode="lindsey_fox", maximum_iterations=80
-                )
+                result = pyFDN.dss_to_pr(*args, mode="lindsey_fox")
                 reference = pyFDN.dss_to_impz(*args, 48000)
             elapsed = perf_counter() - start
             ir = pyFDN.pr_to_impz(*result[:4], 48000, mode="lowMemory")
             error = float(np.linalg.norm(ir - reference) / np.linalg.norm(reference))
             meta = result[4]
             assert error < 1e-8, error
-            assert meta["complete"] or ("model" in case and approximate)
+            assert meta["complete"] and meta["solver"] == "lindsey_fox"
             print(
                 json.dumps(
                     {
@@ -66,18 +63,26 @@ def main():
                                 "responseValidation",
                             )
                         },
-                        "fallbackReason": meta.get("fallbackReason"),
                     }
                 ),
                 flush=True,
             )
         except Exception as error:
-            failures.append(case["name"])
+            expected_failure = (
+                absorption
+                and isinstance(error, RuntimeError)
+                and ("Lindsey-Fox search" in str(error))
+            )
+            if not expected_failure:
+                failures.append(case["name"])
             print(
                 json.dumps(
                     {
                         "example": case["name"],
-                        "status": type(error).__name__,
+                        "status": "expected_failure"
+                        if expected_failure
+                        else type(error).__name__,
+                        "decomposition_seconds": perf_counter() - start,
                         "error": str(error),
                     }
                 ),

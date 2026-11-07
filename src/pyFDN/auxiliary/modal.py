@@ -17,10 +17,12 @@ def modal_result_metadata(
     """Apply the same completeness policy to every modal backend."""
     count = int(np.sum(1 + pairs))
     if count > order or count == 0 or (count != order and not allow_approximate):
-        raise RuntimeError(
-            f"{solver} returned {count}/{order} poles; incomplete results require "
-            "allow_approximate=True and response validation"
+        policy = (
+            "incomplete results require allow_approximate=True and response validation"
+            if solver == "eai"
+            else "a complete pole set is required"
         )
+        raise RuntimeError(f"{solver} returned {count}/{order} poles; {policy}")
     return {
         "solver": solver,
         "requestedSolver": solver,

@@ -1,5 +1,6 @@
 """Acceptance and failure-path tests for validated modal decomposition."""
 
+from functools import partial
 from importlib import import_module
 
 import numpy as np
@@ -11,7 +12,7 @@ from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
 from pyFDN.auxiliary.modal import validate_modal_response
 
 
-def test_kronecker_close_pairs_complete_without_fallback():
+def test_kronecker_close_pairs_complete():
     delays = np.array([53, 61, 71, 79, 89, 101, 113, 127])
     a = pyFDN.kronecker_matrix(np.full(3, np.pi / 4))
     result = pyFDN.dss_to_pr(
@@ -33,20 +34,55 @@ def test_kronecker_close_pairs_complete_without_fallback():
     )
 
 
-def test_failed_search_uses_eai_and_reports_reason(monkeypatch):
-    def fail(*args, **kwargs):
-        raise RuntimeError("forced grid budget exhaustion")
+@pytest.mark.parametrize("flamo", [False, True])
+@pytest.mark.parametrize("failure", [None, "budget", "incomplete"])
+def test_lf_never_calls_eai(monkeypatch, flamo, failure):
+    module = import_module("pyFDN.translate.flamo_to_pr")
 
-    monkeypatch.setattr("pyFDN.auxiliary.lindsey_fox.lindsey_fox_roots", fail)
-    a = np.array([[0.4, 0.1], [-0.1, 0.3]])
-    with pytest.warns(RuntimeWarning, match="falling back to EAI"):
-        result = pyFDN.dss_to_pr(
-            [3, 5], a, np.eye(2), np.eye(2), np.zeros((2, 2)), mode="lindsey_fox"
+    def forbidden_eai(*args, **kwargs):
+        raise AssertionError("LF must never run EAI")
+
+    monkeypatch.setattr(module, "_refine_pole_positions_w", forbidden_eai)
+    if failure:
+
+        def fail(*args, **kwargs):
+            if failure == "incomplete":
+                return np.array([0.7])
+            raise RuntimeError("forced grid budget exhaustion")
+
+        monkeypatch.setattr("pyFDN.auxiliary.lindsey_fox.lindsey_fox_roots", fail)
+        monkeypatch.setattr(
+            "pyFDN.translate._lindsey_fox_flamo.lindsey_fox_roots", fail
         )
-    meta = result[4]
-    assert meta["solver"] == "eai" and meta["complete"]
-    assert "grid budget" in meta["fallbackReason"]
-    assert meta["responseValidation"]["relativeL2"] < 1e-8
+    args = ([3, 5], [[0.4, 0.1], [-0.1, 0.3]], np.eye(2), np.eye(2), np.zeros((2, 2)))
+    if flamo:
+        model = pyFDN.dss_to_flamo(
+            delays=args[0],
+            A=args[1],
+            B=args[2],
+            C=args[3],
+            D=args[4],
+            fs=48000,
+            dtype=torch.float64,
+            shell=False,
+        )
+        solve = partial(
+            pyFDN.flamo_to_pr, model, mode="lindsey_fox", maximum_iterations=0
+        )
+    else:
+        solve = partial(
+            pyFDN.dss_to_pr, *args, mode="lindsey_fox", maximum_iterations=0
+        )
+    if failure:
+        message = (
+            "grid budget" if failure == "budget" else "1/8 poles.*complete pole set"
+        )
+        with pytest.raises(RuntimeError, match=message):
+            solve()
+    else:
+        meta = solve()[4]
+        assert meta["solver"] == "lindsey_fox" and meta["complete"]
+        assert "fallbackReason" not in meta
 
 
 def test_all_port_check_rejects_hidden_missing_mode():
@@ -64,21 +100,17 @@ def test_all_port_check_rejects_hidden_missing_mode():
         )
 
 
-def test_bad_residues_trigger_fallback(monkeypatch):
+def test_bad_lf_residues_raise(monkeypatch):
     module = import_module("pyFDN.translate.dss_to_pr")
     original = module._dss_to_res
-    calls = []
 
-    def corrupt_first(*args, **kwargs):
+    def corrupt(*args, **kwargs):
         result = original(*args, **kwargs)
-        calls.append(1)
-        if len(calls) == 1:
-            return (2 * result[0], *result[1:])
-        return result
+        return (2 * result[0], *result[1:])
 
-    monkeypatch.setattr(module, "_dss_to_res", corrupt_first)
-    with pytest.warns(RuntimeWarning, match="falling back to EAI"):
-        result = pyFDN.dss_to_pr(
+    monkeypatch.setattr(module, "_dss_to_res", corrupt)
+    with pytest.raises(RuntimeError, match="residues disagree"):
+        pyFDN.dss_to_pr(
             [3, 5],
             [[0.4, 0.1], [-0.1, 0.3]],
             np.eye(2),
@@ -86,8 +118,6 @@ def test_bad_residues_trigger_fallback(monkeypatch):
             np.zeros((2, 2)),
             mode="lindsey_fox",
         )
-    assert result[4]["solver"] == "eai"
-    assert "residues disagree" in result[4]["fallbackReason"]
 
 
 def test_kernel_budget_and_fft_limits():
@@ -97,31 +127,6 @@ def test_kernel_budget_and_fft_limits():
         lindsey_fox_roots(coefficients, 0.99, 1.0, max_seconds=1e-12)
     with pytest.raises(RuntimeError, match="completeness/reconstruction"):
         lindsey_fox_roots(coefficients, 0.99, 1.0, max_fft_size=8)
-
-
-def test_invalid_eai_fallback_is_rejected(monkeypatch):
-    module = import_module("pyFDN.translate.dss_to_pr")
-    original = module.dss_to_pr
-
-    def fail(*args, **kwargs):
-        raise RuntimeError("forced failure")
-
-    def corrupted_eai(*args, **kwargs):
-        result = original(*args, **kwargs)
-        return (2 * result[0], *result[1:])
-
-    monkeypatch.setattr("pyFDN.auxiliary.lindsey_fox.lindsey_fox_roots", fail)
-    monkeypatch.setattr(module, "dss_to_pr", corrupted_eai)
-    with pytest.warns(RuntimeWarning, match="falling back to EAI"):
-        with pytest.raises(RuntimeError, match="residues disagree"):
-            original(
-                [3, 5],
-                [[0.4, 0.1], [-0.1, 0.3]],
-                np.eye(2),
-                np.eye(2),
-                np.zeros((2, 2)),
-                mode="lindsey_fox",
-            )
 
 
 def _absorption_model():
@@ -141,25 +146,16 @@ def _absorption_model():
     return build, pyFDN.build_to_flamo(build, dtype=torch.float64, device="cpu")
 
 
-def test_absorption_approximation_requires_opt_in_and_response_check():
-    build, model = _absorption_model()
-    with pytest.warns(RuntimeWarning, match="falling back to EAI"):
-        with pytest.raises(RuntimeError, match="allow_approximate=True"):
-            pyFDN.flamo_to_pr(model, mode="lindsey_fox", lf_max_seconds=1e-12)
-    with pytest.warns(RuntimeWarning) as captured:
-        result = pyFDN.flamo_to_pr(
-            model, mode="lindsey_fox", lf_max_seconds=1e-12, allow_approximate=True
+@pytest.mark.parametrize("allow_approximate", [False, True])
+def test_lf_budget_failure_raises_even_with_approximation(allow_approximate):
+    _, model = _absorption_model()
+    with pytest.raises(RuntimeError, match="time budget"):
+        pyFDN.flamo_to_pr(
+            model,
+            mode="lindsey_fox",
+            lf_max_seconds=1e-12,
+            allow_approximate=allow_approximate,
         )
-    assert len(captured) >= 2
-    meta = result[4]
-    assert meta["approximate"] and not meta["complete"]
-    assert meta["omittedPoleCount"] == 2
-    np.testing.assert_allclose(
-        pyFDN.pr_to_impz(*result[:4], 512),
-        pyFDN.build_to_impz(build, 512),
-        atol=1e-9,
-        rtol=1e-9,
-    )
 
 
 def test_flamo_lf_static_and_sos_complete():
@@ -188,25 +184,18 @@ def test_flamo_lf_static_and_sos_complete():
         )
 
 
-def test_approximation_flag_does_not_allow_missing_outer_modes(monkeypatch):
+def test_eai_approximation_still_checks_external_residues(monkeypatch):
     _, model = _absorption_model()
-    module = import_module("pyFDN.translate._lindsey_fox_flamo")
-    original = module.flamo_to_pr
+    module = import_module("pyFDN.translate.flamo_to_pr")
+    original = module._dss_to_res_flamo
 
-    def omit_mode(*args, **kwargs):
-        r, p, d, pairs, meta = original(*args, **kwargs)
-        meta["eigenvectors"] = {
-            key: value[:, 1:] for key, value in meta["eigenvectors"].items()
-        }
-        meta["undrivenResidues"] = meta["undrivenResidues"][1:]
-        return r[1:], p[1:], d, pairs[1:], meta
+    def corrupt(*args, **kwargs):
+        r, d, undriven, vectors = original(*args, **kwargs)
+        return 2 * r, d, undriven, vectors
 
-    monkeypatch.setattr(module, "flamo_to_pr", omit_mode)
-    with pytest.warns(RuntimeWarning, match="falling back to EAI"):
-        with pytest.raises(RuntimeError, match="All-port"):
-            pyFDN.flamo_to_pr(
-                model, mode="lindsey_fox", lf_max_seconds=1e-12, allow_approximate=True
-            )
+    monkeypatch.setattr(module, "_dss_to_res_flamo", corrupt)
+    with pytest.raises(RuntimeError, match="All-port"):
+        pyFDN.flamo_to_pr(model, allow_approximate=True)
 
 
 def test_eai_absorption_approximation_uses_the_same_acceptance_policy():

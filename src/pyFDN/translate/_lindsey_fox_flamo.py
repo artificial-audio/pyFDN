@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
@@ -21,7 +20,6 @@ from pyFDN.translate.flamo_to_pr import (
     _iter_leaf_modules,
     _refine_pole_via_svd,
     _validate_flamo_result,
-    flamo_to_pr,
 )
 
 
@@ -74,65 +72,36 @@ def lindsey_fox_flamo(
     *,
     max_seconds: float,
     response_tolerance: float,
-    allow_approximate: bool,
-    eai_options: dict[str, Any],
 ) -> ModalResult:
     loop = _FDNLoopFlamo(decomposition.recursion_module)
 
-    try:
-        coefficients = _model_polynomial(decomposition, order)
-        if coefficients[0] == 0 or coefficients[-1] == 0:
-            raise RuntimeError("Scalar polynomial has a zero end coefficient")
-        lower = 1 / _upper_bound(coefficients)
-        upper = _upper_bound(coefficients[::-1])
-        poles = lindsey_fox_roots(
-            coefficients[::-1], lower, upper, max_seconds=max_seconds
-        )
-        poles, pairs, unpaired = reduce_conjugate_pairs(poles, strict=True)
-        poles = np.array([_refine_pole_via_svd(complex(z), loop) for z in poles])
-        residues, direct, undriven, vectors = _dss_to_res_flamo(
-            poles, loop, decomposition
-        )
-        result: ModalResult = (
-            residues,
-            poles,
-            direct,
-            pairs,
-            {
-                "solver": "lindsey_fox",
-                "nonPairedPoles": unpaired,
-                "undrivenResidues": undriven,
-                "eigenvectors": vectors,
-                "decomposition": _decomposition_to_public_dict(decomposition),
-                "loop": loop,
-            },
-        )
-        return _validate_flamo_result(
-            result,
-            decomposition,
-            order,
-            response_tolerance,
-            allow_approximate,
-            "lindsey_fox",
-        )
-    except (RuntimeError, ValueError, np.linalg.LinAlgError) as error:
-        reason = str(error)
-    warnings.warn(
-        f"Lindsey-Fox falling back to EAI: {reason}", RuntimeWarning, stacklevel=3
-    )
-    result = flamo_to_pr(
-        decomposition=decomposition,
-        num_poles=order,
-        allow_approximate=allow_approximate,
-        response_tolerance=response_tolerance,
-        **eai_options,
+    coefficients = _model_polynomial(decomposition, order)
+    if coefficients[0] == 0 or coefficients[-1] == 0:
+        raise RuntimeError("Scalar polynomial has a zero end coefficient")
+    lower = 1 / _upper_bound(coefficients)
+    upper = _upper_bound(coefficients[::-1])
+    poles = lindsey_fox_roots(coefficients[::-1], lower, upper, max_seconds=max_seconds)
+    poles, pairs, unpaired = reduce_conjugate_pairs(poles, strict=True)
+    poles = np.array([_refine_pole_via_svd(complex(z), loop) for z in poles])
+    residues, direct, undriven, vectors = _dss_to_res_flamo(poles, loop, decomposition)
+    result: ModalResult = (
+        residues,
+        poles,
+        direct,
+        pairs,
+        {
+            "solver": "lindsey_fox",
+            "nonPairedPoles": unpaired,
+            "undrivenResidues": undriven,
+            "eigenvectors": vectors,
+            "decomposition": _decomposition_to_public_dict(decomposition),
+            "loop": loop,
+        },
     )
     return _validate_flamo_result(
         result,
         decomposition,
         order,
         response_tolerance,
-        allow_approximate,
-        "lindsey_fox",
-        reason,
+        False,
     )

@@ -312,9 +312,10 @@ Experimental Lindsey–Fox modal decomposition
 Pass ``mode="lindsey_fox"`` to :func:`pyFDN.dss_to_pr` or
 :func:`pyFDN.flamo_to_pr` for FFT grid search with Laguerre refinement.
 The existing defaults remain ``"eig"`` for static DSS and ``"eai"`` for FLAMO.
-The opt-in route checks completeness and the all-port response, with a warned,
-validated EAI fallback if LF fails. Incomplete EAI results (including LF fallback) require
-explicit ``allow_approximate=True`` and must pass response checks.
+The opt-in route checks completeness and the all-port response. Failed search,
+completion, or response validation raises without switching to EAI. Direct EAI
+calls may accept incomplete results with explicit ``allow_approximate=True``
+and successful response checks; this option does not relax LF acceptance.
 
 :func:`pyFDN.general_char_poly_fft` recovers the static characteristic
 coefficients once from determinant samples and reuses them on every search

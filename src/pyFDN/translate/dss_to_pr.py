@@ -2,20 +2,19 @@
 
 H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k/(z − p_k) + D
 
-The static algorithms are NumPy-only. EAI (including fallback) lazily imports torch + FLAMO, so
-callers using only ``"eig"``/``"roots"`` never pay that import cost.
+The static algorithms are NumPy-only. EAI lazily imports torch + FLAMO, so
+callers using ``"eig"``, ``"roots"``, or ``"lindsey_fox"`` never pay that import cost.
 """
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.math import general_char_poly_fft
-from pyFDN.auxiliary.modal import ModalResult, modal_result_metadata
+from pyFDN.auxiliary.modal import modal_result_metadata
 from pyFDN.auxiliary.poles import (
     assemble_residues,
     reduce_conjugate_pairs,
@@ -33,7 +32,6 @@ def _validated_lindsey_fox(
     bounds: np.ndarray,
     max_seconds: float,
     response_tolerance: float,
-    eai_options: dict[str, Any],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
     from pyFDN.auxiliary.modal import (
@@ -45,79 +43,47 @@ def _validated_lindsey_fox(
     order = int(delays.sum())
     identity = np.eye(delays.size)
 
-    def validate(
-        result: ModalResult, solver: str, reason: str | None = None
-    ) -> ModalResult:
-        residues, poles, direct, pairs, meta = result
-        meta.update(modal_result_metadata(pairs, order, solver))
-        # Validate all internal ports, even when B/C hide missing modes.
-        vectors = meta["eigenvectors"]
-        output_vectors = vectors["right"].T
-        input_rows = vectors["left"].conj().T
-        if solver == "eai":
-            # EAI uses P=I-diag(z**-m)A; include its feedforward factor.
-            input_rows = input_rows * poles[:, None] ** (-delays)
-        internal = RankOneResidues(output_vectors, input_rows, meta["undrivenResidues"])
-        expected_residues = np.einsum(
-            "ko,ki,k->koi", output_vectors @ c.T, input_rows @ b, internal.weights
-        )
-        if not np.allclose(
-            residues,
-            expected_residues,
-            rtol=response_tolerance,
-            atol=response_tolerance
-            * max(float(np.max(np.abs(expected_residues))), np.finfo(float).tiny),
-        ):
-            raise RuntimeError(
-                "Modal residues disagree with the all-port decomposition"
-            )
-        check = validate_modal_response(
-            poles,
-            internal,
-            pairs,
-            lambda z: np.linalg.solve(np.diag(z**delays) - a, identity),
-            order,
-            response_tolerance,
-            static_matrix=a,
-            delays=delays,
-        )
-        meta.update(
-            solver=solver,
-            requestedSolver="lindsey_fox",
-            responseValidation=check,
-        )
-        if reason is not None:
-            meta["fallbackReason"] = reason
-        return residues, poles, direct, pairs, meta
-
-    try:
-        p = general_char_poly_fft(delays, a)
-        poles = lindsey_fox_roots(
-            p[::-1], float(bounds.min()), float(bounds.max()), max_seconds=max_seconds
-        )
-        poles, pairs, unpaired = reduce_conjugate_pairs(poles, strict=True)
-        # Real coefficients make the omitted conjugate refinements redundant.
-        poles = refine_dss_poles(poles, delays, a)
-        residues, direct, undriven, vectors = _dss_to_res(poles, delays, a, b, c, d)
-        result: ModalResult = (
-            residues,
-            poles,
-            direct,
-            pairs,
-            {
-                "nonPairedPoles": unpaired,
-                "undrivenResidues": undriven,
-                "eigenvectors": vectors,
-            },
-        )
-        return validate(result, "lindsey_fox")
-    except (RuntimeError, np.linalg.LinAlgError, ValueError) as error:
-        reason = str(error)
-    warnings.warn(
-        f"Lindsey-Fox falling back to EAI: {reason}", RuntimeWarning, stacklevel=3
+    p = general_char_poly_fft(delays, a)
+    poles = lindsey_fox_roots(
+        p[::-1], float(bounds.min()), float(bounds.max()), max_seconds=max_seconds
     )
-    result = dss_to_pr(delays, a, b, c, d, mode="eai", **eai_options)
-    return validate(result, "eai", reason)
+    poles, pairs, unpaired = reduce_conjugate_pairs(poles, strict=True)
+    # Real coefficients make the omitted conjugate refinements redundant.
+    poles = refine_dss_poles(poles, delays, a)
+    residues, direct, undriven, vectors = _dss_to_res(poles, delays, a, b, c, d)
+    meta = {
+        **modal_result_metadata(pairs, order, "lindsey_fox"),
+        "nonPairedPoles": unpaired,
+        "undrivenResidues": undriven,
+        "eigenvectors": vectors,
+    }
+    # Validate all internal ports, even when B/C hide missing modes.
+    output_vectors = vectors["right"].T
+    input_rows = vectors["left"].conj().T
+    internal = RankOneResidues(output_vectors, input_rows, meta["undrivenResidues"])
+    expected_residues = np.einsum(
+        "ko,ki,k->koi", output_vectors @ c.T, input_rows @ b, internal.weights
+    )
+    if not np.allclose(
+        residues,
+        expected_residues,
+        rtol=response_tolerance,
+        atol=response_tolerance
+        * max(float(np.max(np.abs(expected_residues))), np.finfo(float).tiny),
+    ):
+        raise RuntimeError("Modal residues disagree with the all-port decomposition")
+    check = validate_modal_response(
+        poles,
+        internal,
+        pairs,
+        lambda z: np.linalg.solve(np.diag(z**delays) - a, identity),
+        order,
+        response_tolerance,
+        static_matrix=a,
+        delays=delays,
+    )
+    meta["responseValidation"] = check
+    return residues, poles, direct, pairs, meta
 
 
 def _dss_to_res(
@@ -201,17 +167,17 @@ def dss_to_pr(
         - ``"lindsey_fox"`` — experimental FFT grid search and Laguerre
           polishing of the same polynomial (real, nonsingular static A and
           positive integer delays). Refines against the original matrix and
-          checks the all-port response. Falls back to EAI on failed completion
-          or validation; raises if the fallback also fails validation. Does not change the
+          checks the all-port response. Failed completion or validation raises;
+          no other solver is called. Does not change the
           default or guarantee a speedup. See :mod:`pyFDN.auxiliary.lindsey_fox`.
         - ``"eai"``   — Ehrlich-Aberth iteration in w = 1/z via FLAMO
           (delegates to :func:`pyFDN.translate.flamo_to_pr.flamo_to_pr`).
     lf_max_seconds : float, default 3.0
         LF root-search budget checked between numerical operations. Coefficient
-        construction, mandatory matrix refinement, validation, and EAI fallback
-        are outside this budget. The EAI-specific options configure fallback.
+        construction, mandatory matrix refinement, and validation are outside
+        this budget. EAI-specific options are ignored by LF.
     response_tolerance : float, default 1e-8
-        LF and its fallback must pass relative L2 and normalized peak checks
+        LF must pass relative L2 and normalized peak checks
         against the original all-port transfer at deterministic off-grid points.
         Supported static loops can certify upper bounds on those same errors;
         otherwise the transfer is evaluated directly. Metadata ``errorBound``
@@ -233,7 +199,7 @@ def dss_to_pr(
         All modes report ``solver``, ``complete``, and expected/returned pole
         counts. ``responseValidation`` is None when no response check was run
         (complete eig/roots/EAI results). LF always validates its response;
-        ``fallbackReason`` explains when EAI was needed.
+        LF never switches to another solver.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -341,20 +307,6 @@ def dss_to_pr(
             bounds,
             lf_max_seconds,
             response_tolerance,
-            {
-                "deflation_type": deflation_type,
-                "quality_threshold": quality_threshold,
-                "maximum_iterations": maximum_iterations,
-                "refinement_tol": refinement_tol,
-                "reject_unstable_poles": reject_unstable_poles,
-                "svd_refine": svd_refine,
-                "symmetrize": symmetrize,
-                "verbose": verbose,
-                "fs": fs,
-                "nfft": nfft,
-                "dtype": dtype,
-                "device": device,
-            },
         )
     elif mode_l == "roots":
         # The w coefficients are the descending z coefficients, including zero poles.

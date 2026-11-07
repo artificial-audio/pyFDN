@@ -325,8 +325,6 @@ class _FDNLoopFlamo:
         if p0.ndim != 2 or p0.shape[0] != p0.shape[1]:
             raise ValueError(f"Recursion P(z) must be square 2-D, got {p0.shape}")
         self.n = p0.shape[0]
-        self._device = _infer_model_device(rec)
-        self._dtype = _infer_model_complex_dtype(rec)
         self._inverse_newton_step_w_fn = _make_log_det_derivative_w(rec)
         self._get_P_and_dP_dz = _make_P_and_dP_dz(rec)
 
@@ -696,8 +694,6 @@ def _validate_flamo_result(
     order: int,
     response_tolerance: float,
     allow_approximate: bool,
-    requested_solver: str,
-    reason: str | None = None,
 ) -> ModalResult:
     residues, poles, direct, pairs, meta = result
     solver = meta["solver"]
@@ -734,13 +730,10 @@ def _validate_flamo_result(
         poles, residues, pairs, external, order, response_tolerance
     )
     meta.update(
-        requestedSolver=requested_solver,
         responseValidation=check,
         externalResponseValidation=external_check,
     )
-    if reason is not None:
-        meta["fallbackReason"] = reason
-    if count != order and reason is None:
+    if count != order:
         warnings.warn(
             f"Returning validated approximate modal decomposition: {count}/{order} poles",
             RuntimeWarning,
@@ -796,17 +789,17 @@ def flamo_to_pr(
     mode : {"eai", "lindsey_fox"}, default "eai"
         The experimental Lindsey-Fox route constructs a real scalar polynomial,
         searches adaptive grids, refines against the original matrix, and checks
-        the sampled all-port and external responses. EAI is used, with a warning
-        and ``fallbackReason`` metadata, if search or validation fails. Requires
+        the sampled all-port and external responses. Failed search or validation
+        raises without calling EAI. Requires
         float64 models and an explicit ``num_poles`` for FIR feedback matrices.
     lf_max_seconds : float, default 3.0
         LF root-search budget, checked between numerical operations. Coefficient
-        construction, refinement, validation, and EAI fallback are outside it.
+        construction, refinement, and validation are outside it.
     response_tolerance : float, default 1e-8
         Maximum relative L2 and normalized peak errors on the validation contour.
         This sampled check is not a uniform frequency-response error bound.
     allow_approximate : bool, default False
-        Permit an incomplete EAI result or fallback only if both
+        For mode="eai" only: permit an incomplete EAI result only if both
         response checks pass. Metadata reports ``complete=False``, ``approximate``,
         and ``omittedPoleCount``; a warning is emitted. No poles are silently
         omitted and no approximation is allowed by default.
@@ -886,17 +879,6 @@ def flamo_to_pr(
             n_poles,
             max_seconds=lf_max_seconds,
             response_tolerance=response_tolerance,
-            allow_approximate=allow_approximate,
-            eai_options={
-                "deflation_type": deflation_type,
-                "reject_unstable_poles": reject_unstable_poles,
-                "quality_threshold": quality_threshold,
-                "maximum_iterations": maximum_iterations,
-                "refinement_tol": refinement_tol,
-                "svd_refine": svd_refine,
-                "symmetrize": symmetrize,
-                "verbose": verbose,
-            },
         )
 
     if (
@@ -989,6 +971,6 @@ def flamo_to_pr(
     result = residues, poles, direct, is_conjugate, meta_data
     if not meta_data["complete"]:
         return _validate_flamo_result(
-            result, decomposition, n_poles, response_tolerance, allow_approximate, "eai"
+            result, decomposition, n_poles, response_tolerance, allow_approximate
         )
     return result
