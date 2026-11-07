@@ -305,6 +305,71 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
    pyFDN.mtf_to_impz
    pyFDN.pr_to_impz
 
+Experimental Lindsey–Fox modal decomposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``dss_to_pr(delays, A, B, C, D, mode="lindsey_fox")`` tests an FFT
+grid-search alternative to the existing ``eig``, ``roots``, and ``eai``
+backends. It searches the generalized characteristic polynomial on concentric
+circles, polishes 3-by-3 modulus minima with Laguerre iterations, and checks
+both the root count and reconstructed coefficients before extracting residues.
+The annulus comes from the singular values of the static feedback matrix and
+the smallest/largest delays. The default remains ``mode="eig"``.
+
+This independent, restricted implementation follows Sitton, Burrus, Fox and
+Treitel, `Factoring very-high-degree polynomials (2003)
+<https://doi.org/10.1109/MSP.2003.1253552>`_, with Laguerre polishing as in
+the authors' `2006 description
+<https://www.ece.rice.edu/dsp/software/polyhelp/LindseyFox3Stages.htm>`_.
+It requires real, nonsingular static feedback, positive integer delays, and
+simple, sufficiently separated poles. It retries with finer grids but does
+not implement quotient deflation, repeated-root recovery, or the reference
+program's reciprocal search outside the unit circle. Failure raises
+``RuntimeError`` rather than silently falling back to another solver.
+The polynomial construction still enumerates principal minors (exponential
+in the number of delay lines); conjugate pairing and polishing also remain
+quadratic in the number of poles. This is an experiment for long-delay FDNs,
+not a general replacement for the existing methods.
+
+Run the reproducible acceptance benchmark from the checkout::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_lindsey_fox.py --scales 1 4 10 --repeat 3 --modes eig roots lindsey_fox eai
+
+The benchmark reports complete decomposition time (including residues), pole
+agreement with the first requested backend, and reconstructed impulse-response
+error against time-domain simulation. Imports are warmed up, but each timed
+EAI call includes its model construction. Timing assertions are intentionally
+excluded from CI. One local run on macOS arm64, Python 3.11.15, yielded these
+median times in seconds for a seeded three-line FDN with ``A = 0.95 Q``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Poles
+     - eig
+     - roots
+     - lindsey_fox
+     - eai
+   * - 117
+     - 0.018849
+     - 0.005977
+     - 0.003535
+     - 0.099446
+   * - 450
+     - 0.414117
+     - 0.106836
+     - 0.016221
+     - 0.385656
+   * - 1116
+     - 2.787983
+     - 0.889627
+     - 0.072990
+     - 1.072686
+
+Across this run, all non-reference pole errors were below ``4e-14`` and all
+impulse-response errors below ``1.3e-13``. These timings establish a promising
+case for this implementation on one FDN family, not a universal speedup.
+
 FDN Processing
 --------------
 

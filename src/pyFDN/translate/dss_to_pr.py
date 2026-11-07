@@ -98,11 +98,16 @@ def dss_to_pr(
     B : array-like ``(N, n_in)``
     C : array-like ``(n_out, N)``
     D : array-like ``(n_out, n_in)``
-    mode : ``{"eig", "roots", "eai"}``, default ``"eig"``
+    mode : ``{"eig", "roots", "eai", "lindsey_fox"}``, default ``"eig"``
         Pole-extraction algorithm.
 
         - ``"eig"``   — eigenvalues of the minimal state-space realization.
         - ``"roots"`` — roots of the generalized characteristic polynomial.
+        - ``"lindsey_fox"`` — experimental FFT grid search and Laguerre
+          polishing of the same polynomial (real, nonsingular static A and
+          positive integer delays). Requires simple, separated poles; raises
+          on failed completeness/reconstruction checks. Does not change the
+          default or guarantee a speedup. See :mod:`pyFDN.auxiliary.lindsey_fox`.
         - ``"eai"``   — Ehrlich-Aberth iteration in w = 1/z via FLAMO
           (delegates to :func:`pyFDN.translate.flamo_to_pr.flamo_to_pr`).
 
@@ -175,6 +180,23 @@ def dss_to_pr(
     if mode_l == "eig":
         aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
         poles = np.linalg.eigvals(aa)
+    elif mode_l == "lindsey_fox":
+        from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
+
+        raw_delays = np.asarray(delays)
+        if np.any(delays_arr <= 0) or not np.array_equal(raw_delays, delays_arr):
+            raise ValueError("lindsey_fox requires positive integer delays")
+        singular_values = np.linalg.svd(a_poly, compute_uv=False)
+        if singular_values[-1] <= np.finfo(float).eps * singular_values[0]:
+            raise ValueError("lindsey_fox requires nonsingular feedback A")
+        # At a pole, max_i |z|^m_i >= sigma_min(A) and
+        # min_i |z|^m_i <= sigma_max(A). Both delay extremes cover |z| > 1.
+        bounds = singular_values[[0, -1], None] ** (
+            1.0 / delays_arr[[np.argmin(delays_arr), np.argmax(delays_arr)]]
+        )
+        p = general_char_poly(delays_arr, a_poly)
+        # Reverse the GCP to solve directly in z, including strongly damped poles.
+        poles = lindsey_fox_roots(p[::-1], float(bounds.min()), float(bounds.max()))
     elif mode_l == "roots":
         # GCP p has p[k] = coef of z^{-k}; polynomial in w = z^{-1} is sum_k p[k] w^k
         p = general_char_poly(delays_arr, a_poly)
@@ -183,7 +205,7 @@ def dss_to_pr(
             [1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128
         )
     else:
-        raise ValueError("mode must be 'eig', 'roots', or 'eai'")
+        raise ValueError("mode must be 'eig', 'roots', 'eai', or 'lindsey_fox'")
 
     poles, is_conjugate_pair, non_paired = reduce_conjugate_pairs(poles)
     residues, direct, undriven, eigenvectors = _dss_to_res(
