@@ -193,3 +193,53 @@ are approximately ``[-0.13954, -0.16232, -0.15222, -0.10552]``. The exact
 matrix-model locations of the difficult modes were not established by a
 high-precision calculation in this benchmark. A complete pole count and an
 accurate rendered IR must therefore be reported separately.
+
+Pragmatic approximation for two-tap absorption
+------------------------------------------------------------
+
+For the common filter ``h(z) = 0.65 + 0.3 z^-1``, approximate the unresolved
+eight-root cluster by the known group factor ``(z - z0)^8``, where
+``z0 = -0.3/0.65``. Remove that factor using circle samples, run the unchanged
+LF kernel on the remaining degree-1578 polynomial, and compute its residues
+against the original FLAMO model. The eight cluster modes are omitted, not
+claimed as recovered. No high-precision arithmetic is used in this prototype.
+
+In the inverse variable, the group removal is just division of the sampled
+characteristic polynomial by ``(1 - z0*w)^8``, followed by inverse FFT.
+For this example, a matrix norm bound on the circle ``|z| = 0.9`` is
+``5.93e-6 < 1``; comparison with the group-factor matrix places exactly eight
+poles inside that circle. This provides an independent count for the omitted
+group and an inner bound for the retained-root search.
+
+Reproduce the self-checking prototype::
+
+   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/benchmark_two_tap_approximation.py
+
+The benchmark checks all 1578 retained poles, one second of time-domain IR,
+and 32769 frequency samples between DC and Nyquist. Error normalization uses
+the wet response, excluding the direct impulse, so the direct path cannot
+hide the error. It compares against the original FDN, without fitting the
+residues to the reference IR. The measured error is at the numerical-noise
+level for this SISO example; this is not a general bound for omitted modes
+in other models. Solver defaults and strict completeness checks are unchanged.
+
+On the same macOS arm64/Python 3.11.15 setup, three runs took a median
+``2.1281 s``, versus ``5.4110 s`` for EAI's 1578-mode result. The quotient's
+discarded coefficient tail was ``1.20e-14``. Measured response differences:
+
+.. list-table:: Approximate 1578-mode reconstruction versus the original FDN
+   :header-rows: 1
+
+   * - Metric
+     - Error
+   * - Maximum absolute IR error, 48000 samples
+     - ``9.15e-15``
+   * - Relative wet IR L2 error
+     - ``5.98e-14`` (about -264 dB)
+   * - Maximum absolute complex frequency-response error, 32769 points
+     - ``3.81e-13``
+   * - Maximum frequency-response error / peak wet response
+     - ``2.39e-13``
+
+Measurements are saved in
+``docs/benchmarks/lindsey_fox_two_tap_approximation.jsonl``.
