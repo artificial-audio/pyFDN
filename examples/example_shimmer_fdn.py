@@ -96,10 +96,8 @@ def _(np, pyFDN):
 
     absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
-    build = pyFDN.FDNBuild(
-        A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
-    )
-    ir = pyFDN.build_to_impz(build, int(ir_len_seconds * fs)).squeeze()
+    graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
+    ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
     return A, B, C, D, N, absorption, delays, fs, ir, target_rt
 
 
@@ -107,8 +105,8 @@ def _(np, pyFDN):
 def _(fs, ir, mo, pyFDN):
     mo.vstack(
         [
-            # pyFDN.plot_fdn_build(
-            #     build,
+            # pyFDN.plot_fdn_parameter(
+            #     delays, A, B, C, D, post_delay=absorption, fs=fs,
             #     title="The complete FDN"
             #     ),
             # pyFDN.plot_impulse_response(

@@ -134,14 +134,14 @@ def _(mo):
     mo.md(r"""
     ## 2. Vanilla FDN (SISO)
 
-    Let **fdn_build_gallery** assemble the whole thing -- random orthogonal feedback matrix, delays, B/C/D, and the per-delay-line absorption matching the requested reverberation time -- into a single **FDNBuild**. Render it with **build_to_flamo** and play.
+    Let **fdn_dss_gallery** assemble the whole thing -- random orthogonal feedback matrix, delays, B/C/D, and the per-delay-line absorption matching the requested reverberation time -- as a **DSS** system plus its filters. Render it with **dss_to_flamo** and play.
     """)
     return
 
 
 @app.cell
 def _(fs, N, nfft, pyFDN):
-    fdn_build = pyFDN.fdn_build_gallery(
+    fdn_dss, fdn_filters = pyFDN.fdn_dss_gallery(
         N,
         fs=fs,
         delay_range=(600, 3900),
@@ -150,9 +150,9 @@ def _(fs, N, nfft, pyFDN):
         rng=6,
     )
 
-    model_fdn = pyFDN.build_to_flamo(fdn_build, nfft=nfft, device="cpu")
+    model_fdn = pyFDN.dss_to_flamo(*fdn_dss, fs, nfft=nfft, device="cpu", **fdn_filters)
     ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
-    return fdn_build, ir_fdn
+    return fdn_dss, fdn_filters, ir_fdn
 
 
 @app.cell
@@ -172,7 +172,7 @@ def _(mo):
     mo.md(r"""
     ## 3. FDN with Schroeder allpass behind the delays
 
-    Reuse the two models above: take the **vanilla FDN** (the `fdn_build`) and the **MIMO Schroeder allpass** (A_schroeder, B_schroeder, C_schroeder, D_schroeder, delays_schroeder). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it in the **post_delay** hook of **build_to_flamo** -- extra hook modules are appended after whatever the build already carries, so the loop becomes delay -> absorption -> Schroeder.
+    Reuse the two models above: take the **vanilla FDN** (`fdn_dss` and its `fdn_filters`) and the **MIMO Schroeder allpass** (A_schroeder, B_schroeder, C_schroeder, D_schroeder, delays_schroeder). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it in the **post_delay** hook of **dss_to_flamo** after the absorption filter, so the loop becomes delay -> absorption -> Schroeder.
     """)
     return
 
@@ -185,7 +185,8 @@ def _(
     D_schroeder,
     fs,
     delays_schroeder,
-    fdn_build,
+    fdn_dss,
+    fdn_filters,
     nfft,
     pyFDN,
 ):
@@ -201,10 +202,13 @@ def _(
         shell=False,
         device="cpu",
     )
-    model_fdn_allpass = pyFDN.build_to_flamo(
-        fdn_build,
+    # the Schroeder core goes after the absorption in the post_delay hook
+    model_fdn_allpass = pyFDN.dss_to_flamo(
+        *fdn_dss,
+        fs,
         nfft=nfft,
-        post_delay=schroeder_core,
+        post_delay=[fdn_filters["post_delay"], schroeder_core],
+        post_output=fdn_filters["post_output"],
         device="cpu",
     )
     ir_fdn_allpass = pyFDN.flamo_time_response(model_fdn_allpass).squeeze()

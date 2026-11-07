@@ -5,7 +5,7 @@ import pytest
 
 from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.auxiliary.utils import is_almost_zero
-from pyFDN.generate.fdn_build_gallery import fdn_build_gallery
+from pyFDN.generate.fdn_dss_gallery import fdn_dss_gallery
 from pyFDN.generate.fdn_matrix_gallery import fdn_matrix_gallery
 from pyFDN.generate.orthogonal import (
     anderson_matrix,
@@ -267,11 +267,9 @@ def test_fdn_matrix_gallery_hadamard():
 
 
 def test_fdn_matrix_gallery_accepts_legacy_type_names():
-    np.testing.assert_allclose(
-        fdn_matrix_gallery(8, "Hadamard") @ fdn_matrix_gallery(8, "Hadamard").T,
-        np.eye(8),
-        atol=1e-10,
-    )
+    hadamard = fdn_matrix_gallery(8, "Hadamard")
+    assert isinstance(hadamard, np.ndarray)
+    np.testing.assert_allclose(hadamard @ hadamard.T, np.eye(8), atol=1e-10)
 
 
 def test_fdn_matrix_gallery_parallel():
@@ -284,17 +282,17 @@ def test_fdn_matrix_gallery_unknown_type_raises():
 
 
 # ---------------------------------------------------------------------------
-# fdn_build_gallery
+# fdn_dss_gallery
 # ---------------------------------------------------------------------------
 
 
-def test_fdn_build_gallery_has_its_own_module():
-    assert fdn_build_gallery.__module__ == "pyFDN.generate.fdn_build_gallery"
+def test_fdn_dss_gallery_has_its_own_module():
+    assert fdn_dss_gallery.__module__ == "pyFDN.generate.fdn_dss_gallery"
 
 
-def test_fdn_build_gallery_is_complete_and_reproducible():
-    first = fdn_build_gallery(4, rng=12)
-    second = fdn_build_gallery(4, rng=12)
+def test_fdn_dss_gallery_is_complete_and_reproducible():
+    first, _ = fdn_dss_gallery(4, rng=12)
+    second, _ = fdn_dss_gallery(4, rng=12)
 
     assert first.A.shape == (4, 4)
     assert first.B.shape == (4, 1)
@@ -305,9 +303,8 @@ def test_fdn_build_gallery_is_complete_and_reproducible():
     np.testing.assert_array_equal(first.delays, second.delays)
 
 
-def test_fdn_build_gallery_optionally_returns_its_design():
-    plain = fdn_build_gallery(4, rng=12)
-    build, design = fdn_build_gallery(
+def test_fdn_dss_gallery_samples_coprime_delays_and_both_filters():
+    dss, filters = fdn_dss_gallery(
         4,
         delay_range=(40, 120),
         delay_distribution="geometric",
@@ -319,68 +316,35 @@ def test_fdn_build_gallery_optionally_returns_its_design():
         output_gain_db_nyquist=-3.0,
         output_crossover=6_000.0,
         rng=12,
-        return_design=True,
     )
-
-    assert not isinstance(plain, tuple)
-    assert design["delays"] == {
-        "type": "geometric",
-        "range": [40, 120],
-        "coprime": True,
-        "sort": False,
-    }
-    assert design["feedback_matrix"] == {"type": "orthogonal"}
-    assert design["input_matrix"] == {"type": "normalised"}
-    assert design["output_matrix"] == {"type": "normalised"}
-    assert design["post_delay"] == {
-        "type": "first_order_shelf",
-        "rt": 1.5,
-        "rt_nyquist": 0.6,
-        "rt_crossover": 4_000.0,
-    }
-    assert design["post_output"] == {
-        "type": "first_order_shelf",
-        "gain_db": [0.0],
-        "gain_db_nyquist": [-3.0],
-        "crossover": 6_000.0,
-    }
-    assert build.post_delay is not None
-    assert build.post_output is not None
-    for i, delay in enumerate(build.delays):
-        for other in build.delays[i + 1 :]:
+    assert filters["post_delay"] is not None
+    assert filters["post_output"] is not None
+    assert filters["post_matrix"] is None
+    for i, delay in enumerate(dss.delays):
+        for other in dss.delays[i + 1 :]:
             assert np.gcd(delay, other) == 1
 
 
-def test_fdn_build_gallery_does_not_label_explicit_delays():
-    _, design = fdn_build_gallery(
-        delays=np.array([41, 53, 67]),
-        rt=None,
-        return_design=True,
-    )
-    assert "delays" not in design
+def test_fdn_dss_gallery_lossless_has_no_filters():
+    dss, filters = fdn_dss_gallery(4, rt=None, rng=12)
 
-
-def test_fdn_build_gallery_lossless_has_no_filters():
-    build = fdn_build_gallery(4, rt=None, rng=12)
-
-    assert build.post_delay is None
-    assert build.post_output is None
+    assert filters == {"post_delay": None, "post_matrix": None, "post_output": None}
     # The feedback matrix is orthogonal (lossless).
-    np.testing.assert_allclose(build.A @ build.A.T, np.eye(4), atol=1e-12)
+    np.testing.assert_allclose(dss.A @ dss.A.T, np.eye(4), atol=1e-12)
 
 
-def test_fdn_build_gallery_does_not_mutate_global_rng():
+def test_fdn_dss_gallery_does_not_mutate_global_rng():
     np.random.seed(123)
     expected = np.random.random(3)
     np.random.seed(123)
-    fdn_build_gallery(4, rng=12)
+    fdn_dss_gallery(4, rng=12)
     actual = np.random.random(3)
     np.testing.assert_allclose(actual, expected)
 
 
-def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
+def test_fdn_dss_gallery_supports_mimo_and_explicit_delays():
     delays = np.array([41, 53, 67, 79])
-    build = fdn_build_gallery(
+    dss, _ = fdn_dss_gallery(
         delays=delays,
         num_inputs=3,
         num_outputs=2,
@@ -390,52 +354,48 @@ def test_fdn_build_gallery_supports_mimo_and_explicit_delays():
         rng=4,
     )
 
-    np.testing.assert_array_equal(build.delays, delays)
-    assert build.B.shape == (4, 3)
-    assert build.C.shape == (2, 4)
-    np.testing.assert_equal(build.D, 1.0)
+    np.testing.assert_array_equal(dss.delays, delays)
+    assert dss.B.shape == (4, 3)
+    assert dss.C.shape == (2, 4)
+    np.testing.assert_equal(dss.D, 1.0)
 
 
-def test_fdn_build_gallery_first_order_absorption_keeps_A_lossless():
+def test_fdn_dss_gallery_first_order_absorption_keeps_A_lossless():
     delays = np.array([101, 149, 211])
-    build = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=0.5, rng=7)
+    dss, filters = fdn_dss_gallery(delays=delays, rt=2.0, rt_nyquist=0.5, rng=7)
 
-    assert build.post_delay is not None
-    assert build.post_delay.shape == (1, 6, 3)
-    np.testing.assert_allclose(build.A @ build.A.T, np.eye(3), atol=1e-12)
+    post_delay = filters["post_delay"]
+    assert post_delay is not None and post_delay.shape == (1, 6, 3)
+    np.testing.assert_allclose(dss.A @ dss.A.T, np.eye(3), atol=1e-12)
 
 
-def test_fdn_build_gallery_rt_nyquist_defaults_to_rt():
+def test_fdn_dss_gallery_rt_nyquist_defaults_to_rt():
     delays = np.array([101, 149, 211])
-    default_ny = fdn_build_gallery(delays=delays, rt=2.0, rng=7)
-    explicit_flat = fdn_build_gallery(delays=delays, rt=2.0, rt_nyquist=2.0, rng=7)
+    _, default_ny = fdn_dss_gallery(delays=delays, rt=2.0, rng=7)
+    _, explicit_flat = fdn_dss_gallery(delays=delays, rt=2.0, rt_nyquist=2.0, rng=7)
 
-    np.testing.assert_allclose(default_ny.post_delay, explicit_flat.post_delay)
+    np.testing.assert_allclose(default_ny["post_delay"], explicit_flat["post_delay"])
 
 
-def test_fdn_build_gallery_forwards_rt_crossover(monkeypatch):
+def test_fdn_dss_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_attenuation(
-        rt, rt_nyquist, rt_crossover, delays, fs, *, return_design=False
-    ):
+    def fake_attenuation(rt, rt_nyquist, rt_crossover, delays, fs):
         captured["crossover"] = rt_crossover
-        sos = np.ones((1, 6, len(delays)))
-        design = {"type": "first_order_shelf", "rt": rt, "rt_nyquist": rt_nyquist}
-        return (sos, design) if return_design else sos
+        return np.ones((1, 6, len(delays)))
 
     monkeypatch.setattr("pyFDN.eq.decay_to_first_order_shelf", fake_attenuation)
 
-    build = fdn_build_gallery(3, rt_crossover=750.0, rng=7)
+    _, filters = fdn_dss_gallery(3, rt_crossover=750.0, rng=7)
 
     assert captured["crossover"] == 750.0
-    assert build.post_delay is not None
+    assert filters["post_delay"] is not None
 
 
-def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
+def test_fdn_dss_gallery_post_eq_scalar_and_per_channel():
     from pyFDN.eq import gain_to_first_order_shelf
 
-    scalar = fdn_build_gallery(
+    _, scalar = fdn_dss_gallery(
         4,
         num_outputs=2,
         rt=None,
@@ -443,12 +403,12 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
         output_gain_db_nyquist=-6.0,
         rng=7,
     )
-    assert scalar.post_output is not None
-    assert scalar.post_output.shape == (1, 6, 2)
+    post_output = scalar["post_output"]
+    assert post_output is not None and post_output.shape == (1, 6, 2)
     # scalar dB values broadcast to identical per-output sections
-    np.testing.assert_allclose(scalar.post_output[:, :, 0], scalar.post_output[:, :, 1])
+    np.testing.assert_allclose(post_output[:, :, 0], post_output[:, :, 1])
 
-    per_channel = fdn_build_gallery(
+    _, per_channel = fdn_dss_gallery(
         4,
         num_outputs=3,
         rt=None,
@@ -456,21 +416,21 @@ def test_fdn_build_gallery_post_eq_scalar_and_per_channel():
         output_gain_db_nyquist=-6.0,
         rng=7,
     )
-    assert per_channel.post_output is not None
-    assert per_channel.post_output.shape == (1, 6, 3)
-    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, None, per_channel.fs)
-    np.testing.assert_allclose(per_channel.post_output, expected)
+    post_output = per_channel["post_output"]
+    assert post_output is not None and post_output.shape == (1, 6, 3)
+    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, None, 48_000.0)
+    np.testing.assert_allclose(post_output, expected)
 
 
-def test_fdn_build_gallery_rejects_invalid_configuration():
+def test_fdn_dss_gallery_rejects_invalid_configuration():
     with pytest.raises(ValueError, match="N must be provided"):
-        fdn_build_gallery()
+        fdn_dss_gallery()
     with pytest.raises(ValueError, match="rt must be positive"):
-        fdn_build_gallery(4, rt=-1.0)
+        fdn_dss_gallery(4, rt=-1.0)
     with pytest.raises(ValueError, match="delays must contain exactly N values"):
-        fdn_build_gallery(3, delays=np.array([1, 2]))
+        fdn_dss_gallery(3, delays=np.array([1, 2]))
     with pytest.raises(ValueError, match="scalar or length num_outputs"):
-        fdn_build_gallery(4, num_outputs=2, output_gain_db=[0.0, -3.0, -6.0])
+        fdn_dss_gallery(4, num_outputs=2, output_gain_db=[0.0, -3.0, -6.0])
 
 
 # ---------------------------------------------------------------------------
@@ -596,4 +556,5 @@ def test_galleries_accept_historical_spellings():
     new_sys = pyFDN.fdn_system_gallery(4, "nested_allpass")
     np.random.seed(3)
     old_sys = pyFDN.fdn_system_gallery(4, "nestedAllpass")
+    assert isinstance(new_sys, pyFDN.FDNSystem) and isinstance(old_sys, pyFDN.FDNSystem)
     np.testing.assert_array_equal(new_sys.A, old_sys.A)

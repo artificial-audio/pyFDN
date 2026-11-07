@@ -14,7 +14,33 @@ Unreleased
   graphic EQ fits the remainder per band. It follows steep high-frequency
   decays more closely than the graphic EQ alone.
 * ``EQDesign`` gains ``"two_stage"``, so ``AttenuationFilter`` and
-  ``OutputEQ`` can train it and preset design records accept it.
+  ``OutputEQ`` can train it.
+* **Breaking: ``FDNBuild`` is replaced by ``DSS``**, a named tuple of exactly
+  ``(delays, A, B, C, D)`` in the argument order of the ``dss_to_*`` functions,
+  so ``pyFDN.dss_to_td(*dss, **filters)`` works. Filters (``post_delay``,
+  ``post_matrix``, ``post_output``) and the sample rate are passed alongside.
+  ``build_to_td`` / ``build_to_impz`` / ``build_to_flamo`` / ``process_fdn``,
+  ``build_set_decay`` and ``plot_fdn_build`` (and ``plot_FDN_build``) are
+  removed. A system with filters renders through its ``td`` graph: the new
+  ``TimeOperator.impulse_response(ir_len)`` gives
+  ``dss_to_td(*dss, **filters).impulse_response(ir_len)``.
+  ``plot_fdn_parameter``'s ``post_*_sos`` keywords are now ``post_*``.
+  Renamed: ``extract_build`` -> ``extract_dss`` (returns ``(dss, filters)``),
+  ``trainable_from_build`` -> ``trainable_from_dss(dss, fs, ...)``,
+  ``fdn_build_gallery`` -> ``fdn_dss_gallery`` (returns ``(dss, filters)``).
+* **Breaking: one save for everything.** ``save_fdn`` / ``load_fdn`` /
+  ``resave_fdn`` write a ``DSS`` as readable JSON (``"format": "pyfdn-dss"``,
+  one matrix row per line) and pickle anything else -- a ``td`` graph, a FLAMO
+  model -- with ``cloudpickle``, plus the pyFDN and Python versions that wrote
+  it; ``pyFDN.save.RENAMED`` maps classes that moved since. The JSON build
+  format (``save_fdn_build`` / ``load_fdn_build`` / ``fdn_build_*_dict``),
+  ``FDNPreset`` with its design records, ``trainable_from_preset`` and the EQ
+  designers' ``return_design`` option are removed. ``get_fdn_preset`` returns a
+  ``DSS``; the packaged presets are DSS JSON files. New dependency:
+  ``cloudpickle>=3``.
+* ``DCBlocker`` drops its ``env_tau_s`` / ``gain_tau_s`` arguments and
+  ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
+  are now fixed at 50 ms, 20 ms and 3 samples.
 
 0.5.0 (2026-09-28)
 ------------------

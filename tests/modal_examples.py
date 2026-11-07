@@ -33,7 +33,7 @@ def setup_cell(filename: str, output: str) -> dict[str, Any]:
         if output not in names:
             continue
         node.decorator_list = []
-        namespace = {"np": np, "pyFDN": pyFDN, "torch": torch}
+        namespace: dict[str, Any] = {"np": np, "pyFDN": pyFDN, "torch": torch}
         exec(
             compile(ast.Module(body=[node], type_ignores=[]), filename, "exec"),
             namespace,
@@ -92,34 +92,36 @@ def cases() -> list[dict[str, Any]]:
         ("example_dss_to_pr_flamo.py", "model"),
     ]:
         setup = setup_cell(filename, output)
-        if "build" in setup:
-            build = setup["build"]
-            model = setup["model"]
+        dss: pyFDN.DSS
+        if "dss" in setup:
+            dss, filters, model = setup["dss"], setup["filters"], setup["model"]
         else:
-            build = pyFDN.FDNBuild(
+            dss = pyFDN.DSS(
+                delays=setup["delays"],
                 A=setup["feedback_matrix"],
                 B=setup["input_gain"],
                 C=setup["output_gain"],
                 D=setup["direct"],
-                delays=setup["delays"],
-                fs=setup["fs"],
-                post_delay=setup.get("absorption"),
             )
-            model = pyFDN.build_to_flamo(build, dtype=torch.float64, device="cpu")
+            filters = {"post_delay": setup.get("absorption")}
+            model = pyFDN.dss_to_flamo(
+                *dss, setup["fs"], dtype=torch.float64, device="cpu", **filters
+            )
         decomposition = pyFDN.flamo_decompose_for_pr(model)
-        lossless = build.A.ndim == 3
+        lossless = dss.A.ndim == 3
         if lossless:
-            gcp = pyFDN.general_char_poly(build.delays, build.A)
+            gcp = pyFDN.general_char_poly(dss.delays, dss.A)
             degree = int(np.flatnonzero(np.abs(gcp) > 1e-12 * np.max(np.abs(gcp)))[-1])
         else:
-            degree = int(build.delays.sum()) + _count_loop_filter_poles(
+            degree = int(dss.delays.sum()) + _count_loop_filter_poles(
                 decomposition.recursion_module
             )
         result.append(
             {
                 "name": filename,
                 "model": model,
-                "build": build,
+                "dss": dss,
+                "filters": filters,
                 "degree": degree,
                 "lossless": lossless,
             }

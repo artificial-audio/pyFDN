@@ -591,10 +591,10 @@ def assemble_fdn_core(
 
     Single source of truth for the FDN signal flow, shared by the render path
     (:func:`pyFDN.dss_to_flamo`) and the training builder
-    (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
+    (:func:`pyFDN.train.trainable_from_dss`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
-    :func:`pyFDN.extract_build` requires).
+    :func:`pyFDN.extract_dss` requires).
 
     Signal flow::
 
@@ -605,7 +605,7 @@ def assemble_fdn_core(
     with the direct path ``direct`` summed in parallel when provided.
 
     The three optional filter slots are the hooks :func:`pyFDN.process_dss`
-    takes and an :class:`~pyFDN.FDNBuild` stores: ``post_delay`` on the delay
+    takes and :func:`pyFDN.extract_dss` returns: ``post_delay`` on the delay
     output (shaping both the output and the feedback), ``post_matrix`` on the
     feedback path only, ``post_output`` on the wet signal only.
 
@@ -629,14 +629,14 @@ def assemble_fdn_core(
         In-loop filter after the delays (named ``post_delay``). Any module of
         input/output size N: a :class:`~pyFDN.AttenuationFilter` or a plain
         :func:`sos_filter_module` for attenuation, or a whole nested core such as
-        a Schroeder allpass. Only an SOS filter here is extractable into an
-        :class:`~pyFDN.FDNBuild`.
+        a Schroeder allpass. Only an SOS filter here is extractable with
+        :func:`pyFDN.extract_dss`.
     post_matrix : FLAMO module or None
         Filter on the feedback path after the feedback matrix (named
         ``post_matrix``); the position a time-varying mixing stage occupies.
         Adding it names the feedback branch ``mixing_matrix`` rather than
         leaving the matrix bare on ``fB``, which is where
-        :func:`pyFDN.extract_build` looks for it either way.
+        :func:`pyFDN.extract_dss` looks for it either way.
     post_output : FLAMO module or None
         Per-output filter after the output gain (named ``post_output``);
         typically an :class:`OutputEQ`.
@@ -710,7 +710,7 @@ def wrap_fdn_shell(
     The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
     its response carries a :math:`\gamma^n` envelope; the output layer removes
     it again. What comes out is the true impulse response, accurate to
-    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`). At
+    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_dss`). At
     ``alias_decay_db=0`` the layer is an ordinary inverse FFT.
 
     Parameters

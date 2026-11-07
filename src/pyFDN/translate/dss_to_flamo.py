@@ -7,15 +7,12 @@ Optionally place an allpass (or other) filter behind the delays in the loop.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.flamo import delay_module
-
-if TYPE_CHECKING:
-    from pyFDN.build import FDNBuild
 
 
 def dss_to_flamo(
@@ -167,7 +164,7 @@ def fdn_core(
         )
     }
     # One assembler for render and training, so the topology (and the leaf
-    # names extract_build reads back) cannot drift apart.
+    # names extract_dss reads back) cannot drift apart.
     return assemble_fdn_core(
         input_gain=gains(B, "input_gain"),
         feedback=feedback,
@@ -176,82 +173,3 @@ def fdn_core(
         direct=gains(D, "direct"),
         **hooks,
     )
-
-
-def build_to_flamo(
-    build: FDNBuild,
-    nfft: int = 2**16,
-    device: Any = None,
-    *,
-    shell: bool = True,
-    dtype: Any = None,
-    post_delay: Any = None,
-    post_matrix: Any = None,
-    post_output: Any = None,
-) -> Any:
-    """
-    Build a FLAMO model from a complete :class:`FDNBuild` config.
-
-    Thin wrapper over :func:`dss_to_flamo` that unpacks an
-    :class:`~pyFDN.FDNBuild` (as returned by
-    :func:`pyFDN.fdn_build_gallery`) into its state-space arguments. The build's
-    three filter hooks go straight through under the same names: ``post_delay``
-    for the in-loop absorption, ``post_matrix`` for the feedback path, and
-    ``post_output`` for the per-output EQ.
-
-    Parameters
-    ----------
-    build : FDNBuild
-        Complete FDN parameters (``A``, ``B``, ``C``, ``D``, ``delays``,
-        ``fs``, optional ``post_delay`` and ``post_output``), e.g. from
-        :func:`pyFDN.fdn_build_gallery`.
-    nfft : int
-        FFT size for FLAMO (default 2**16).
-    device : torch device or None
-        Device; default is cuda if available else cpu.
-    shell : bool
-        If True (default), wrap the core in a Shell with FFT/iFFT. Use
-        :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
-        If False, return only the core.
-    dtype : torch.dtype or None
-        Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
-        If None, wrapper defaults are used.
-    post_delay, post_matrix, post_output : array, FLAMO module, sequence, or None
-        Extra modules for the three filter hooks, appended *after* whatever the
-        build already carries in that position -- so ``post_delay=schroeder_core``
-        on a build with absorption gives ``delay -> absorption -> schroeder``.
-        See :func:`pyFDN.hook_module`.
-
-    Returns
-    -------
-    model : flamo.processor.system.Shell or core
-        If shell=True, a FLAMO Shell. Use :func:`pyFDN.flamo_time_response` for
-        a NumPy impulse response. If shell=False, the core module.
-    """
-    return dss_to_flamo(
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        build.fs,
-        nfft=nfft,
-        device=device,
-        shell=shell,
-        dtype=dtype,
-        post_delay=_appended(build.post_delay, post_delay),
-        post_matrix=_appended(build.post_matrix, post_matrix),
-        post_output=_appended(build.post_output, post_output),
-    )
-
-
-def _appended(baked: Any, extra: Any) -> Any:
-    """The build's own hook contents, then whatever the caller adds to it."""
-    parts = [] if baked is None else [baked]
-    if isinstance(extra, list | tuple):
-        parts.extend(extra)
-    elif extra is not None:
-        parts.append(extra)
-    if not parts:
-        return None
-    return parts[0] if len(parts) == 1 else parts

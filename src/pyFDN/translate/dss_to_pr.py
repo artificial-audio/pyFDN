@@ -146,9 +146,8 @@ def dss_to_pr(
 
     ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (z − p_k) + D``
 
-    No ``build_to_pr`` counterpart exists: pass ``build.delays`` and
-    ``build.A``/``B``/``C``/``D`` directly, plus ``fs=build.fs`` for
-    ``mode="eai"``.
+    A :class:`~pyFDN.DSS` unpacks straight in: ``dss_to_pr(*dss)``, plus
+    ``fs=`` for ``mode="eai"``.
 
     Parameters
     ----------

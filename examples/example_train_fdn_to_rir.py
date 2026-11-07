@@ -129,7 +129,7 @@ def _(mo):
 @app.cell
 def _(fs, np, pyFDN):
     # This seed gives a feedback matrix in SO(N).
-    init_build = pyFDN.fdn_build_gallery(
+    init_dss, init_filters = pyFDN.fdn_dss_gallery(
         N=16,
         fs=fs,
         delay_range=(700, 2500),
@@ -142,12 +142,12 @@ def _(fs, np, pyFDN):
         rt_nyquist=1.0,
         rng=2,
     )
-    assert np.linalg.det(init_build.A) > 0, "feedback matrix is not in SO(N)"
+    assert np.linalg.det(init_dss.A) > 0, "feedback matrix is not in SO(N)"
 
-    print(f"delays (samples): {init_build.delays}")
-    print(f"absorption:       {init_build.post_delay.shape} — flat 1 s")
+    print(f"delays (samples): {init_dss.delays}")
+    print(f"absorption:       {init_filters['post_delay'].shape} — flat 1 s")
 
-    return (init_build,)
+    return (init_dss,)
 
 
 @app.cell(hide_code=True)
@@ -155,7 +155,7 @@ def _(mo):
     mo.md(r"""
     ## Step 3 — make it trainable
 
-    `trainable_from_build` creates a FLAMO model with these parameters:
+    `trainable_from_dss` creates a FLAMO model with these parameters:
 
     | Component | Parameter |
     |---|---|
@@ -177,20 +177,21 @@ def _(mo):
 
 
 @app.cell
-def _(device, fs, init_build, np, pyFDN, rir, rir_len, torch):
+def _(device, fs, init_dss, np, pyFDN, rir, rir_len, torch):
     from copy import deepcopy
 
     train_nfft = 2**16  # 1.37 s training window
     render_nfft = 2**17  # 2.73 s validation window
 
-    model = pyFDN.trainable_from_build(
-        init_build,
+    model = pyFDN.trainable_from_dss(
+        init_dss,
+        fs,
         # every gain with a gradient: A, b, c and D
         trainable=pyFDN.Trainable(direct=True),
         # absorption parametrized by reverberation time
         post_delay=pyFDN.AttenuationFilter(
             1.0,
-            init_build.delays,
+            init_dss.delays,
             fs,
             design="first_order_shelf",
             nfft=render_nfft,
@@ -219,12 +220,12 @@ def _(device, fs, init_build, np, pyFDN, rir, rir_len, torch):
     with torch.no_grad():
         pyFDN.param(model, "output_gain").raw().mul_(energy_gain)
     ir_init *= energy_gain
-    initial_build = deepcopy(pyFDN.extract_build(model))
+    initial_fdn = deepcopy(pyFDN.extract_dss(model))  # (dss, filters)
 
     for _p in pyFDN.params(model):
         print(_p)
     print(f"\nenergy match: output gain x {energy_gain:.2f}")
-    return initial_build, ir_init, model, render_nfft, train_nfft
+    return initial_fdn, ir_init, model, render_nfft, train_nfft
 
 
 @app.cell(hide_code=True)
@@ -301,12 +302,13 @@ def _(mo):
     mo.md(r"""
     ## Step 6 — export and inspect the fitted FDN
 
-    `extract_build` returns a NumPy `FDNBuild` with absorption and output EQ stored
-    as SOS banks. Use it with `build_to_impz`, `build_to_flamo`, or `process_fdn`.
+    `extract_dss` returns the NumPy `DSS` system and its filters, with absorption
+    and output EQ stored as SOS banks. Use them with `dss_to_impz`, `dss_to_flamo`,
+    or `process_dss`, or keep them with `save_fdn`.
     `param(...).raw()` gives the trained RT values in seconds and EQ gains in dB.
 
-    `plot_fdn_build` shows the matrix, gains, delays, absorption in dB per sample,
-    and output EQ in dB. Compare the initial and trained builds below.
+    `plot_fdn_parameter` shows the matrix, gains, delays, absorption in dB per
+    sample, and output EQ in dB. Compare the initial and trained FDNs below.
     """)
     return
 
@@ -315,7 +317,7 @@ def _(mo):
 def _(ir_trained, model, np, pyFDN):
     # Depend on the trained response so marimo extracts after training.
     assert np.all(np.isfinite(ir_trained)), "trained FDN did not render"
-    trained_build = pyFDN.extract_build(model)
+    trained_fdn = pyFDN.extract_dss(model)  # (dss, filters)
     for _name, _unit in (("post_delay", "s"), ("post_output", "dB")):
         _parameter = pyFDN.param(model, _name)
         print(
@@ -323,19 +325,23 @@ def _(ir_trained, model, np, pyFDN):
             f"{_parameter.raw().detach().cpu().numpy().ravel().round(2)}"
         )
         np.testing.assert_allclose(
-            getattr(trained_build, _name),
+            trained_fdn[1][_name],
             _parameter.value().detach().cpu().numpy(),
             atol=1e-12,
         )
-    return (trained_build,)
+    return (trained_fdn,)
 
 
 @app.cell
-def _(initial_build, mo, pyFDN, trained_build):
+def _(fs, initial_fdn, mo, pyFDN, trained_fdn):
     mo.hstack(
         [
-            pyFDN.plot_fdn_build(initial_build, title="FDN, untrained"),
-            pyFDN.plot_fdn_build(trained_build, title="FDN, trained"),
+            pyFDN.plot_fdn_parameter(
+                *initial_fdn[0], **initial_fdn[1], fs=fs, title="FDN, untrained"
+            ),
+            pyFDN.plot_fdn_parameter(
+                *trained_fdn[0], **trained_fdn[1], fs=fs, title="FDN, trained"
+            ),
         ]
     )
     return
@@ -495,10 +501,10 @@ def _(mo):
 
 
 @app.cell
-def _(est_rt, np, pyFDN, rt_init, rt_trained, trained_build):
+def _(est_rt, np, pyFDN, rt_init, rt_trained, trained_fdn):
     assert np.all(np.isfinite(rt_trained)), "trained RT estimates are not finite"
     _, _gain = pyFDN.sos_gain_per_sample_curves(
-        trained_build.post_delay, trained_build.delays
+        trained_fdn[1]["post_delay"], trained_fdn[0].delays
     )
     assert np.all(np.isfinite(_gain)) and np.all((_gain > 0) & (_gain < 1)), (
         "the decay filters are not contractive at every sampled frequency"

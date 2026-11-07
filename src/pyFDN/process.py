@@ -1,4 +1,4 @@
-"""Compact DSS processing and convenience rendering of complete FDN builds."""
+"""One-shot processing of a delay state-space (DSS) system."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.build import FDNBuild
-from pyFDN.translate.dss_to_td import build_to_td, dss_to_td
+from pyFDN.translate.dss_to_td import dss_to_td
 
 
 def process_dss(
@@ -27,8 +26,8 @@ def process_dss(
 
     One-shot form of ``dss_to_td(...).process_signal(input_signal)``: a fresh
     :mod:`pyFDN.td` graph is built for every call. The three optional hooks are
-    runtime objects that implement ``process_block(block)`` (or SOS banks). To
-    process an :class:`pyFDN.FDNBuild`, use :func:`pyFDN.process_fdn`.
+    runtime objects that implement ``process_block(block)`` (or SOS banks). A
+    :class:`~pyFDN.DSS` unpacks straight in: ``process_dss(x, *dss, post_delay=sos)``.
 
     The recursion is
 
@@ -70,29 +69,3 @@ def process_dss(
         post_output=post_output,
     )
     return graph.process_signal(x, squeeze=True)
-
-
-def process_fdn(input_signal: ArrayLike, build: FDNBuild) -> np.ndarray:
-    """Process a signal through a fresh time-domain graph built from ``build``.
-
-    This is the one-shot convenience form of
-    ``build_to_td(build).process_signal(input_signal)``. A fresh graph is built
-    for every call, so delay and filter state cannot leak between independent
-    renders. Use :func:`pyFDN.build_to_td` directly to process a stream over
-    multiple calls to :meth:`pyFDN.td.TimeOperator.process_block` or to reset
-    and reuse the graph.
-
-    Parameters
-    ----------
-    input_signal
-        Input of shape ``(num_samples,)`` or ``(num_samples, num_inputs)``.
-    build
-        Complete baked FDN configuration.
-
-    Returns
-    -------
-    np.ndarray
-        Processed signal with singleton dimensions removed, matching the
-        historical ``process_fdn`` output convention.
-    """
-    return build_to_td(build).process_signal(input_signal, squeeze=True)

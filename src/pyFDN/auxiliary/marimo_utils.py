@@ -16,8 +16,8 @@ def _channel_major(signal: ArrayLike) -> np.ndarray:
     """Orient a 2-D audio array as ``(channels, samples)`` for ``mo.audio``.
 
     ``mo.audio`` reads a 2-D array as ``[NCHAN, NSAMPLES]``, while pyFDN renders
-    are time-major -- ``dss_to_impz`` / ``build_to_impz`` return
-    ``(ir_len, num_outputs, num_inputs)`` and ``process_fdn`` returns
+    are time-major -- ``dss_to_impz`` returns
+    ``(ir_len, num_outputs, num_inputs)`` and ``process_dss`` returns
     ``(num_samples, num_outputs)``. Handing a stereo ``(num_samples, 2)`` render
     straight to ``mo.audio`` therefore declares ``num_samples`` channels of two
     samples each, and the player plays garbage.

@@ -48,10 +48,10 @@ Matrix Generators
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
-   pyFDN.fdn_build_gallery
+   pyFDN.fdn_dss_gallery
    pyFDN.sample_delay_lengths
    pyFDN.FDNSystem
-   pyFDN.FDNBuild
+   pyFDN.DSS
 
 Allpass FDN
 -----------
@@ -108,8 +108,7 @@ filter design. The same functions run in NumPy or Torch; the trainable
 :class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, ``"one_pole"``, or ``"two_stage"``
-used by those modules. The target-to-EQ functions accept ``return_design=True`` when their
-JSON-compatible design record is also needed for an ``FDNPreset``.
+used by those modules.
 
 .. autosummary::
    :toctree: generated/
@@ -253,8 +252,13 @@ General Utilities
    pyFDN.pole_boundaries
    pyFDN.skew
 
-Build Files, Packaged Examples & References
---------------------------------------------
+Saving, Packaged Examples & References
+--------------------------------------
+
+:func:`pyFDN.save_fdn` writes a :class:`~pyFDN.DSS` as readable JSON and
+pickles anything else -- a ``td`` graph, a FLAMO model -- with the pyFDN and
+Python versions that wrote it. Loading a pickle runs code from the file, so
+only load pickles you trust. The packaged presets are DSS JSON files.
 
 .. autosummary::
    :toctree: generated/
@@ -265,15 +269,9 @@ Build Files, Packaged Examples & References
    pyFDN.load_audio
    pyFDN.available_fdn_presets
    pyFDN.get_fdn_preset
-   pyFDN.FDNPreset
-   pyFDN.fdn_preset_to_dict
-   pyFDN.fdn_preset_from_dict
-   pyFDN.save_fdn_preset
-   pyFDN.load_fdn_preset
-   pyFDN.fdn_build_to_dict
-   pyFDN.fdn_build_from_dict
-   pyFDN.save_fdn_build
-   pyFDN.load_fdn_build
+   pyFDN.save_fdn
+   pyFDN.load_fdn
+   pyFDN.resave_fdn
    pyFDN.paper_reference
    pyFDN.paper_link
 
@@ -281,9 +279,9 @@ State-Space Translators
 -----------------------
 
 Convert a delay state-space (DSS) system -- ``A``, ``B``, ``C``, ``D``,
-``delays`` -- to another representation. Each ``build_to_*`` function is a
-thin wrapper over its ``dss_to_*`` counterpart that unpacks an
-:class:`~pyFDN.FDNBuild` instead.
+``delays`` -- to another representation. A :class:`~pyFDN.DSS` unpacks
+straight into each of them, with its filters alongside:
+``pyFDN.dss_to_td(*dss, **filters)``.
 
 .. autosummary::
    :toctree: generated/
@@ -291,13 +289,10 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
 
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
-   pyFDN.build_to_impz
    pyFDN.dss_to_td
-   pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
-   pyFDN.build_to_flamo
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
    pyFDN.flamo_extract_pr_decomposition
@@ -345,7 +340,6 @@ FDN Processing
    :nosignatures:
 
    pyFDN.process_dss
-   pyFDN.process_fdn
    pyFDN.flamo_process
 
 Training
@@ -356,9 +350,7 @@ Training
    :nosignatures:
 
    pyFDN.build_fdn
-   pyFDN.trainable_from_build
-   pyFDN.trainable_from_preset
-   pyFDN.build_set_decay
+   pyFDN.trainable_from_dss
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
@@ -416,7 +408,6 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
-   pyFDN.plot_fdn_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
@@ -444,4 +435,4 @@ FLAMO Graph
    pyFDN.plot_flamo_graph
    pyFDN.flamo_model_to_nodes
    pyFDN.flamo_nodes_flat
-   pyFDN.extract_build
+   pyFDN.extract_dss

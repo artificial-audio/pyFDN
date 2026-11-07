@@ -107,17 +107,17 @@ def test_delay() -> None:
     max_block_size = 256
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    delay_ref = td.RecursionState(delays=fdnbuild.delays, max_block_size=max_block_size)
+    delay_ref = td.RecursionState(delays=dss.delays, max_block_size=max_block_size)
 
     # input signal
     n_samples = 4000
     in_sig = _noise(rng=rng, length=n_samples, channels=N)
 
     # td engine
-    delay_td = td.Delay(fdnbuild.delays)
+    delay_td = td.Delay(dss.delays)
 
     # filter signal
     out_sig_ref = np.zeros_like(in_sig, dtype=float)
@@ -151,10 +151,10 @@ def test_sosbank() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    sos = _absorption_sos(fdnbuild.delays, fs)
+    sos = _absorption_sos(dss.delays, fs)
 
     # input signal
     n_samples = 4000
@@ -190,10 +190,10 @@ def test_sosbank_block_consistency_and_reset() -> None:
     block = 128
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    sos = _absorption_sos(fdnbuild.delays, fs)
+    sos = _absorption_sos(dss.delays, fs)
 
     # input signal
     n_samples = 1024

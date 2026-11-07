@@ -10,7 +10,7 @@ from pyFDN.auxiliary.flamo import (
     gain_module,
     wrap_fdn_shell,
 )
-from pyFDN.auxiliary.flamo_graph import extract_build
+from pyFDN.auxiliary.flamo_graph import extract_dss
 from pyFDN.generate.orthogonal import random_orthogonal
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_impz import dss_to_impz
@@ -83,7 +83,7 @@ def test_dss_to_flamo_roundtrips_through_extractor():
     # C, D and the delays from the named graph dss_to_flamo builds.
     n, a, b, c, d, m = _small_fdn()
     model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=2**12, device="cpu")
-    params = extract_build(model)
+    params, _ = extract_dss(model)
     np.testing.assert_allclose(params.A, a, atol=1e-5)
     np.testing.assert_allclose(params.B.reshape(n, 1), b, atol=1e-5)
     np.testing.assert_allclose(params.C.reshape(1, n), c, atol=1e-5)

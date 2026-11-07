@@ -2,7 +2,7 @@
 
 :func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` to a loss built from
 :mod:`pyFDN.train.losses`, in place, and returns a :class:`TrainLog`. Read the
-result back with :func:`pyFDN.extract_build`.
+result back with :func:`pyFDN.extract_dss`.
 
 The engine knows nothing about any particular objective. Its whole job is: run
 the model on an impulse, hand the resulting :class:`~pyFDN.train.response.Response`
@@ -59,12 +59,12 @@ def train_fdn(
 ) -> TrainLog:
     """Train ``model`` on ``loss`` in place and return a :class:`TrainLog`.
 
-    Read the trained result back with :func:`pyFDN.extract_build`.
+    Read the trained result back with :func:`pyFDN.extract_dss`.
 
     Parameters
     ----------
     model : flamo Shell
-        A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_build``.
+        A trainable model from :func:`pyFDN.build_fdn` / ``trainable_from_dss``.
         It must return its impulse response -- every loss is a function of it --
         which every pyFDN shell does by construction.
     loss : Loss

@@ -557,9 +557,9 @@ def plot_fdn_parameter(
     c: ArrayLike,
     d: ArrayLike,
     *,
-    post_delay_sos: ArrayLike | None = None,
-    post_matrix_sos: ArrayLike | None = None,
-    post_output_sos: ArrayLike | None = None,
+    post_delay: ArrayLike | None = None,
+    post_matrix: ArrayLike | None = None,
+    post_output: ArrayLike | None = None,
     fs: float | None = None,
     nfft: int = 512,
     zmin: float | None = None,
@@ -569,8 +569,9 @@ def plot_fdn_parameter(
     """Plot all FDN parameters in one figure.
 
     Extends :func:`plot_system_matrix` with the delay lengths and, optionally,
-    any of the three filter hooks, named as :func:`pyFDN.process_dss` and
-    :class:`pyFDN.FDNBuild` name them:
+    any of the three filter hooks, named as :func:`pyFDN.process_dss` names
+    them, so a system and its filters unpack straight in:
+    ``plot_fdn_parameter(*dss, **filters, fs=fs)``:
 
     - the system matrix blocks ``A``, ``b``, ``c``, ``d`` as heatmaps with a
       shared RdBu color scale;
@@ -591,10 +592,10 @@ def plot_fdn_parameter(
         Delay lengths in samples, shape (N,).
     A, b, c, d : array-like
         Feedback matrix, input gains, output gains, direct gains.
-    post_delay_sos, post_matrix_sos : array-like, optional
+    post_delay, post_matrix : array-like, optional
         Per-delay-line SOS banks for the two in-loop hooks, same layout as
         :class:`pyFDN.td.SOSBank`: ``(n_sections, 6, N)``.
-    post_output_sos : array-like, optional
+    post_output : array-like, optional
         Output EQ as an SOS cascade in scipy format, shape ``(n_sections, 6)``
         (or ``(6,)`` for one section) for a single output, or
         ``(n_sections, 6, K)`` to draw one magnitude curve per output channel.
@@ -630,12 +631,12 @@ def plot_fdn_parameter(
     in_loop = [
         (sos, label)
         for sos, label in (
-            (post_delay_sos, "post_delay [dB/sample]"),
-            (post_matrix_sos, "post_matrix [dB/sample]"),
+            (post_delay, "post_delay [dB/sample]"),
+            (post_matrix, "post_matrix [dB/sample]"),
         )
         if sos is not None
     ]
-    has_post_output = post_output_sos is not None
+    has_post_output = post_output is not None
     matrix_px = 440.0
     row_px = [
         110.0,
@@ -671,14 +672,14 @@ def plot_fdn_parameter(
         next_row += 1
 
     if has_post_output:
-        sos_eq = np.asarray(post_output_sos, dtype=float)
+        sos_eq = np.asarray(post_output, dtype=float)
         if sos_eq.ndim == 1:
             sos_eq = sos_eq.reshape(1, 6, 1)
         elif sos_eq.ndim == 2:
             sos_eq = sos_eq[:, :, None]
         if sos_eq.ndim != 3 or sos_eq.shape[1] != 6:
             raise ValueError(
-                "post_output_sos must have shape (n_sections, 6) or (n_sections, 6, K)"
+                "post_output must have shape (n_sections, 6) or (n_sections, 6, K)"
             )
         n_out = sos_eq.shape[2]
         if n_out == 1:
@@ -709,42 +710,6 @@ def plot_fdn_parameter(
     if title:
         fig.suptitle(title)
     return fig
-
-
-def plot_fdn_build(
-    build: Any,
-    *,
-    nfft: int = 512,
-    zmin: float | None = None,
-    zmax: float | None = None,
-    title: str | None = None,
-) -> Figure:
-    """Plot the parameters stored in an :class:`pyFDN.FDNBuild`.
-
-    This is a convenience wrapper around :func:`plot_fdn_parameter`. A
-    multichannel ``build.post_output`` is rendered as one curve per output
-    channel. Each of the build's three filter hooks becomes its own row, and
-    only the ones it carries.
-    """
-    return plot_fdn_parameter(
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        post_delay_sos=build.post_delay,
-        post_matrix_sos=build.post_matrix,
-        post_output_sos=build.post_output,
-        fs=build.fs,
-        nfft=nfft,
-        zmin=zmin,
-        zmax=zmax,
-        title=title,
-    )
-
-
-# Historical spelling, kept as an alias.
-plot_FDN_build = plot_fdn_build  # noqa: N816
 
 
 def _time_axis(n_samples: int, fs: float | None) -> np.ndarray:

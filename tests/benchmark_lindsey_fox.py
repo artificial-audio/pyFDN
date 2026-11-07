@@ -26,7 +26,7 @@ def main():
     failures = []
     for case in cases:
         start = perf_counter()
-        absorption = "model" in case and case["build"].post_delay is not None
+        absorption = "model" in case and case["filters"].get("post_delay") is not None
         try:
             if "model" in case:
                 result = pyFDN.flamo_to_pr(
@@ -34,9 +34,11 @@ def main():
                     mode="lindsey_fox",
                     num_poles=case["degree"],
                 )
-                reference = pyFDN.build_to_impz(case["build"], 48000)
+                dss: pyFDN.DSS = case["dss"]
+                graph = pyFDN.dss_to_td(*dss, **case["filters"])
+                reference = graph.impulse_response(48000)
             else:
-                args = [case[k] for k in ("delays", "A", "B", "C", "D")]
+                args = pyFDN.DSS(*(case[k] for k in ("delays", "A", "B", "C", "D")))
                 result = pyFDN.dss_to_pr(*args, mode="lindsey_fox")
                 reference = pyFDN.dss_to_impz(*args, 48000)
             elapsed = perf_counter() - start

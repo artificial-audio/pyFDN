@@ -24,10 +24,10 @@ class Response:
     ----------
     h : torch.Tensor
         Impulse response of shape ``(n_samples, n_out, n_in)`` -- the same
-        convention as :func:`pyFDN.build_to_impz`. This is the response itself:
+        convention as :func:`pyFDN.dss_to_impz`. This is the response itself:
         any anti-aliasing envelope the model was built with has already been
         removed by the shell's output layer, so ``h`` is accurate to
-        ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`) and needs no
+        ``alias_decay_db`` (see :func:`pyFDN.trainable_from_dss`) and needs no
         further correction. Differentiable during training.
     fs : float
         Sample rate in Hz.

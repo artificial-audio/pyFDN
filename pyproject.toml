@@ -35,6 +35,7 @@ dependencies = [
   "soundfile",
   "scipy",
   "flamo>=0.2.20",  # canonical module devices (string "cpu"/"cuda" mix with .to())
+  "cloudpickle>=3",  # save_fdn: FLAMO models hold lambdas
 ]
 
 [project.optional-dependencies]

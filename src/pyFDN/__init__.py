@@ -42,20 +42,14 @@ __all__ = [
     "audio_metadata",
     "available_audio",
     "load_audio",
-    # packaged references and presets
+    # packaged references and presets, saving
     "paper_link",
     "paper_reference",
     "available_fdn_presets",
     "get_fdn_preset",
-    "load_fdn_preset",
-    "FDNPreset",
-    "fdn_preset_from_dict",
-    "fdn_preset_to_dict",
-    "save_fdn_preset",
-    "fdn_build_from_dict",
-    "fdn_build_to_dict",
-    "load_fdn_build",
-    "save_fdn_build",
+    "save_fdn",
+    "load_fdn",
+    "resave_fdn",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -65,10 +59,10 @@ __all__ = [
     "construct_velvet_feedback_matrix",
     "degree_one_lossless",
     "fdn_matrix_gallery",
-    "fdn_build_gallery",
+    "fdn_dss_gallery",
     "fdn_system_gallery",
     "filter_matrix_gallery",
-    "FDNBuild",
+    "DSS",
     "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
@@ -143,9 +137,6 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
-    "build_to_td",
-    "build_to_impz",
-    "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
     "dss_to_pr",
@@ -161,13 +152,10 @@ __all__ = [
     "pr_to_impz",
     # fdn processing
     "process_dss",
-    "process_fdn",
     # training
     "build_fdn",
-    "trainable_from_build",
-    "trainable_from_preset",
+    "trainable_from_dss",
     "LOSSLESS_ALIAS_DECAY_DB",
-    "build_set_decay",
     "Trainable",
     "train_fdn",
     "TrainLog",
@@ -211,8 +199,6 @@ __all__ = [
     "plot_db_per_sample",
     "plot_edc",
     "plot_fdn_parameter",
-    "plot_fdn_build",
-    "plot_FDN_build",
     "plot_impulse_response",
     "plot_impulse_response_matrix",
     "plot_matrix",
@@ -226,7 +212,7 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
-    "extract_build",
+    "extract_dss",
     # time-domain graph engine
     "td",
     # SDN (scattering delay network)
@@ -301,7 +287,7 @@ from .auxiliary.flamo import (
     wrap_fdn_shell,
 )
 from .auxiliary.flamo_graph import (
-    extract_build,
+    extract_dss,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -336,8 +322,6 @@ from .auxiliary.plot import (
     downsample_minmax,
     plot_db_per_sample,
     plot_edc,
-    plot_FDN_build,
-    plot_fdn_build,
     plot_fdn_parameter,
     plot_impulse_response,
     plot_impulse_response_matrix,
@@ -368,13 +352,7 @@ from .auxiliary.utils import (
     skew,
     sq_to_db,
 )
-from .build import (
-    FDNBuild,
-    fdn_build_from_dict,
-    fdn_build_to_dict,
-    load_fdn_build,
-    save_fdn_build,
-)
+from .dss import DSS
 from .eq import (
     EQDesign,
     decay_to_first_order_shelf,
@@ -415,7 +393,7 @@ from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fd
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
     rand_admissible_homogeneous_allpass,
 )
-from .generate.fdn_build_gallery import fdn_build_gallery
+from .generate.fdn_dss_gallery import fdn_dss_gallery
 from .generate.fdn_matrix_gallery import (
     FDNSystem,
     fdn_matrix_gallery,
@@ -459,26 +437,24 @@ from .generate.structures import (
     schroeder_reverberator,
     series_allpass,
 )
-from .preset import (
-    FDNPreset,
-    available_fdn_presets,
-    fdn_preset_from_dict,
-    fdn_preset_to_dict,
-    get_fdn_preset,
-    load_fdn_preset,
-    save_fdn_preset,
-)
 
 # fdn processing
-from .process import process_dss, process_fdn
+from .process import process_dss
 from .references import paper_link, paper_reference
+from .save import (
+    available_fdn_presets,
+    get_fdn_preset,
+    load_fdn,
+    resave_fdn,
+    save_fdn,
+)
 
 # state-space translators
-from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
-from .translate.dss_to_impz import build_to_impz, dss_to_impz
+from .translate.dss_to_flamo import dss_to_flamo
+from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss
-from .translate.dss_to_td import build_to_td, dss_to_td
+from .translate.dss_to_td import dss_to_td
 from .translate.dss_to_tf import dss_to_tf
 from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
@@ -526,7 +502,6 @@ if TYPE_CHECKING:
         Trainable,
         TrainLog,
         build_fdn,
-        build_set_decay,
         energy_decay_curve,
         impulse_excitation,
         mimo_rir_eigenvalues_per_frequency,
@@ -534,8 +509,7 @@ if TYPE_CHECKING:
         param,
         params,
         train_fdn,
-        trainable_from_build,
-        trainable_from_preset,
+        trainable_from_dss,
     )
     from .translate.flamo_to_pr import (
         FlamoDecompositionForPR,
@@ -577,7 +551,6 @@ _LAZY_MODULES = {
     "Trainable": ".train",
     "TrainLog": ".train",
     "build_fdn": ".train",
-    "build_set_decay": ".train",
     "energy_decay_curve": ".train",
     "impulse_excitation": ".train",
     "mimo_rir_eigenvalues_per_frequency": ".train",
@@ -585,8 +558,7 @@ _LAZY_MODULES = {
     "param": ".train",
     "params": ".train",
     "train_fdn": ".train",
-    "trainable_from_build": ".train",
-    "trainable_from_preset": ".train",
+    "trainable_from_dss": ".train",
     "FlamoDecompositionForPR": ".translate.flamo_to_pr",
     "flamo_decompose_for_pr": ".translate.flamo_to_pr",
     "flamo_extract_pr_decomposition": ".translate.flamo_to_pr",

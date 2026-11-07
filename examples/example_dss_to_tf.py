@@ -46,7 +46,7 @@ def _():
     fs = 48000
     impulse_response_length = fs // 100
 
-    build = pyFDN.fdn_build_gallery(
+    _dss, _ = pyFDN.fdn_dss_gallery(
         4,
         fs=fs,
         delay_range=(50, 101),
@@ -58,11 +58,11 @@ def _():
         rng=5,
     )
     A, B, C, D, delays = (
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        build.delays,
+        _dss.A,
+        _dss.B,
+        _dss.C,
+        _dss.D,
+        _dss.delays,
     )
     return A, B, C, D, delays, impulse_response_length, pyFDN
 

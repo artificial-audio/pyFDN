@@ -1,7 +1,6 @@
 """Tests for plotting helpers."""
 
 import functools
-from typing import Any
 
 import numpy as np
 import pytest
@@ -10,7 +9,6 @@ from pyFDN.auxiliary.plot import (
     animate,
     downsample_minmax,
     plot_edc,
-    plot_fdn_build,
     plot_fdn_parameter,
     plot_matrix,
     plot_matrix_grid,
@@ -106,50 +104,10 @@ def test_plot_edc_rejects_mismatched_labels():
         plot_edc(np.zeros(10), labels=["a", "b"])
 
 
-def test_plot_fdn_build_forwards_build_parameters(monkeypatch):
-    from pyFDN.build import FDNBuild
-
-    build = FDNBuild(
-        A=np.eye(2),
-        B=np.ones((2, 1)),
-        C=np.ones((1, 2)),
-        D=np.zeros((1, 1)),
-        delays=np.array([11, 13]),
-        fs=48000.0,
-        post_delay=np.ones((1, 6, 2)),
-        post_output=np.ones((1, 6, 1)),
-    )
-    captured: dict[str, Any] = {}
-
-    def fake_plot(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        return "figure"
-
-    monkeypatch.setattr("pyFDN.auxiliary.plot.plot_fdn_parameter", fake_plot)
-
-    result = plot_fdn_build(build, nfft=1024, title="FDN")
-
-    assert result == "figure"
-    forwarded = captured["args"]
-    assert forwarded[0] is build.delays
-    assert forwarded[1] is build.A
-    assert forwarded[2] is build.B
-    assert forwarded[3] is build.C
-    assert forwarded[4] is build.D
-    assert captured["kwargs"]["post_delay_sos"] is build.post_delay
-    assert build.post_output is not None
-    # The full (possibly multichannel) post EQ bank is forwarded unchanged.
-    assert captured["kwargs"]["post_output_sos"] is build.post_output
-    assert captured["kwargs"]["fs"] == build.fs
-    assert captured["kwargs"]["nfft"] == 1024
-    assert captured["kwargs"]["title"] == "FDN"
-
-
-def test_plot_fdn_build_renders_multichannel_post_eq():
+def test_plot_fdn_parameter_renders_multichannel_post_eq():
     import pyFDN
 
-    build = pyFDN.fdn_build_gallery(
+    dss, filters = pyFDN.fdn_dss_gallery(
         4,
         num_outputs=3,
         rt=2.0,
@@ -158,7 +116,7 @@ def test_plot_fdn_build_renders_multichannel_post_eq():
         output_gain_db_nyquist=-6.0,
         rng=0,
     )
-    fig = pyFDN.plot_fdn_build(build)
+    fig = pyFDN.plot_fdn_parameter(*dss, **filters, fs=48_000.0)
 
     eq_lines = [
         line
@@ -179,9 +137,9 @@ def test_plot_fdn_parameter_labels_quantities_on_y_axes():
         b=np.ones((2, 1)),
         c=np.ones((1, 2)),
         d=np.zeros((1, 1)),
-        post_delay_sos=per_line_sos,
-        post_matrix_sos=per_line_sos,
-        post_output_sos=identity_sos[:, :, 0],
+        post_delay=per_line_sos,
+        post_matrix=per_line_sos,
+        post_output=identity_sos[:, :, 0],
         fs=48000.0,
     )
 
@@ -210,7 +168,7 @@ def test_plot_fdn_parameter_omits_the_rows_for_hooks_that_are_absent():
         "fs": 48000.0,
     }
     bare = plot_fdn_parameter(**base)
-    one = plot_fdn_parameter(**base, post_matrix_sos=np.repeat(identity_sos, 2, axis=2))
+    one = plot_fdn_parameter(**base, post_matrix=np.repeat(identity_sos, 2, axis=2))
     assert len(one.axes) == len(bare.axes) + 1
     assert "post_matrix [dB/sample]" in [ax.get_ylabel() for ax in one.axes]
     assert "post_delay [dB/sample]" not in [ax.get_ylabel() for ax in bare.axes]
@@ -275,9 +233,3 @@ def test_animate_works_with_arbitrary_plot_fn():
 def test_animate_rejects_empty_frames():
     with pytest.raises(ValueError, match="at least one frame"):
         animate(plot_matrix, [])
-
-
-def test_plot_FDN_build_alias():
-    import pyFDN
-
-    assert pyFDN.plot_FDN_build is pyFDN.plot_fdn_build

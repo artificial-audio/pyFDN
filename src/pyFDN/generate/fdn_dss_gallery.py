@@ -1,19 +1,14 @@
-"""Generate complete vanilla FDN builds and optionally record their design."""
+"""Generate a random vanilla FDN as a DSS system plus its baked filters."""
 
 from __future__ import annotations
-
-from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from ..auxiliary.utils import as_generator
-from ..build import FDNBuild
-from .fdn_matrix_gallery import IO_MATRIX_TYPES
+from ..dss import DSS
 from .orthogonal import random_orthogonal
 from .sample_delay_lengths import DelayDistribution, sample_delay_lengths
-
-FDNDesign = dict[str, dict[str, Any]]
 
 
 def _build_io_matrices(
@@ -25,7 +20,7 @@ def _build_io_matrices(
     output_scale: float,
     direct_gain: float | None,
     rng: np.random.Generator,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if min(num_inputs, num_outputs) < 1:
         raise ValueError("num_inputs and num_outputs must be positive")
 
@@ -53,7 +48,7 @@ def _build_io_matrices(
         D = rng.standard_normal((num_outputs, num_inputs))
     else:
         D = np.full((num_outputs, num_inputs), direct_gain, dtype=float)
-    return B, C, D, io_type
+    return B, C, D
 
 
 def _build_post_output(
@@ -62,15 +57,15 @@ def _build_post_output(
     gain_db: ArrayLike | None,
     gain_db_nyquist: ArrayLike | None,
     crossover: float | None,
-) -> tuple[np.ndarray | None, dict[str, Any] | None]:
-    """Design a per-output first-order shelf and its provenance."""
+) -> np.ndarray | None:
+    """Design a per-output first-order shelf."""
     if gain_db is None and gain_db_nyquist is None:
         if crossover is not None:
             raise ValueError(
                 "output_gain_db or output_gain_db_nyquist must be set to "
                 "configure the post_output hook"
             )
-        return None, None
+        return None
     if gain_db is None:
         gain_db = gain_db_nyquist
     if gain_db_nyquist is None:
@@ -92,11 +87,10 @@ def _build_post_output(
         _per_output(gain_db_nyquist, "output_gain_db_nyquist"),
         crossover,
         fs,
-        return_design=True,
     )
 
 
-def fdn_build_gallery(
+def fdn_dss_gallery(
     N: int | None = None,
     *,
     fs: float = 48_000.0,
@@ -118,18 +112,15 @@ def fdn_build_gallery(
     output_gain_db_nyquist: ArrayLike | None = None,
     output_crossover: float | None = None,
     rng: np.random.Generator | int | None = None,
-    return_design: bool = False,
-) -> FDNBuild | tuple[FDNBuild, FDNDesign]:
-    """Build a complete FDN and optionally return its non-inferable design.
+) -> tuple[DSS, dict[str, np.ndarray | None]]:
+    """Generate a random FDN: ``(dss, filters)``.
 
     The feedback matrix is random orthogonal. Sampled delays support the same
     distributions and coprimality option as :func:`sample_delay_lengths`.
-    Explicit delays remain purely numerical and therefore produce no delay
-    design record.
 
-    In-loop attenuation and optional output EQ are first-order shelves. Set
-    ``return_design=True`` to return ``(build, design)`` for direct use in an
-    :class:`pyFDN.FDNPreset`; the default remains the plain :class:`FDNBuild`.
+    In-loop attenuation (``filters["post_delay"]``) and the optional output EQ
+    (``filters["post_output"]``) are first-order shelf SOS banks designed at
+    ``fs``, ready for ``pyFDN.dss_to_td(*dss, **filters)``.
     """
     if fs <= 0:
         raise ValueError("fs must be positive")
@@ -139,7 +130,6 @@ def fdn_build_gallery(
         raise ValueError("rt_nyquist must be positive")
 
     local_rng = as_generator(0 if rng is None else rng)
-    delay_design: dict[str, Any] | None = None
     if delays is not None:
         if delay_distribution != "uniform" or coprime:
             raise ValueError(
@@ -163,12 +153,6 @@ def fdn_build_gallery(
             sort=sort_delays,
             rng=local_rng,
         )
-        delay_design = {
-            "type": delay_distribution,
-            "range": list(delay_range),
-            "coprime": coprime,
-            "sort": sort_delays,
-        }
 
     if N < 1:
         raise ValueError("N must be positive")
@@ -176,7 +160,7 @@ def fdn_build_gallery(
         raise ValueError("all delays must be positive")
 
     A = random_orthogonal(N, local_rng)
-    B, C, D, normalized_io_type = _build_io_matrices(
+    B, C, D = _build_io_matrices(
         N,
         num_inputs,
         num_outputs,
@@ -188,51 +172,31 @@ def fdn_build_gallery(
     )
 
     post_delay: np.ndarray | None = None
-    attenuation_design: dict[str, Any] | None = None
     if rt is not None:
         from ..eq import decay_to_first_order_shelf
 
         rt_nyquist = rt if rt_nyquist is None else rt_nyquist
-        post_delay, attenuation_design = decay_to_first_order_shelf(
+        post_delay = decay_to_first_order_shelf(
             rt,
             rt_nyquist,
             rt_crossover,
             delays_array,
             float(fs),
-            return_design=True,
         )
 
-    post_output, output_design = _build_post_output(
+    post_output = _build_post_output(
         num_outputs,
         float(fs),
         output_gain_db,
         output_gain_db_nyquist,
         output_crossover,
     )
-    build = FDNBuild(
-        A,
-        B,
-        C,
-        D,
-        delays_array,
-        float(fs),
-        post_delay=post_delay,
-        post_output=post_output,
-    )
-    if not return_design:
-        return build
-
-    design: FDNDesign = {"feedback_matrix": {"type": "orthogonal"}}
-    if delay_design is not None:
-        design["delays"] = delay_design
-    if normalized_io_type in IO_MATRIX_TYPES:
-        design["input_matrix"] = {"type": normalized_io_type}
-        design["output_matrix"] = {"type": normalized_io_type}
-    if attenuation_design is not None:
-        design["post_delay"] = attenuation_design
-    if output_design is not None:
-        design["post_output"] = output_design
-    return build, design
+    filters = {
+        "post_delay": post_delay,
+        "post_matrix": None,
+        "post_output": post_output,
+    }
+    return DSS(delays_array, A, B, C, D), filters
 
 
-__all__ = ["FDNDesign", "fdn_build_gallery"]
+__all__ = ["fdn_dss_gallery"]

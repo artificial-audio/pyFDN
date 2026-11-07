@@ -25,9 +25,8 @@ def dss_to_tf(
     """
     From a delay state-space (DSS) system to a transfer function matrix.
 
-    No ``build_to_tf`` counterpart exists: the result does not depend on
-    ``fs`` or an :class:`~pyFDN.FDNBuild`'s filter hooks, so pass
-    ``build.delays`` and ``build.A``/``B``/``C``/``D`` directly.
+    The result does not depend on ``fs`` or filter hooks; a
+    :class:`~pyFDN.DSS` unpacks straight in: ``dss_to_tf(*dss)``.
 
     Parameters
     ----------

@@ -24,7 +24,7 @@ def _(mo):
 
     ## Goals
 
-    1. Build a delay state-space model with a **first-order absorption shelf in the loop** via `fdn_build_gallery(..., rt=..., rt_nyquist=...)` and `build_to_flamo`.
+    1. Build a delay state-space model with a **first-order absorption shelf in the loop** via `fdn_dss_gallery(..., rt=..., rt_nyquist=...)` and `dss_to_flamo`.
     2. Extract poles/residues via `pyFDN.flamo_to_pr`.
     3. Explain the key math fix: why we evaluate Newton/Ehrlich–Aberth in **w-plane** (`w = z^{-1}`) while FLAMO probing naturally gives derivatives in **z-plane**.
     4. Verify numerically that the derivative identities are consistent.
@@ -233,10 +233,10 @@ def _():
 def _(pyFDN, torch):
     # Build a small stable FDN in DSS form with an SOS (first-order absorption)
     # in the loop. The gallery designs the per-delay-line first-order absorption
-    # from the two reverberation times and bakes it into the build's post_delay
-    # hook as a canonical (1, 6, N) SOS bank.
+    # from the two reverberation times and returns it as the post_delay filter,
+    # a canonical (1, 6, N) SOS bank.
     fs = 48000.0
-    build = pyFDN.fdn_build_gallery(
+    dss, filters = pyFDN.fdn_dss_gallery(
         fs=fs,
         N=4,
         delay_range=[300, 600],
@@ -247,10 +247,10 @@ def _(pyFDN, torch):
         rng=7,
     )
 
-    # Build -> FLAMO: state-space and the in-loop filter in one call
+    # DSS -> FLAMO: state-space and the in-loop filter in one call
     # (delay -> post_delay -> A).
-    model = pyFDN.build_to_flamo(build, nfft=2**16, dtype=torch.float64)
-    return fs, build, model
+    model = pyFDN.dss_to_flamo(*dss, fs, nfft=2**16, dtype=torch.float64, **filters)
+    return dss, filters, fs, model
 
 
 @app.cell
@@ -305,10 +305,10 @@ def _(mo):
 
 
 @app.cell
-def _(fs, build, np, poles, pyFDN):
+def _(dss, filters, fs, np, poles, pyFDN):
     _fig_decay = pyFDN.plot_db_per_sample(
-        build.post_delay,
-        build.delays,
+        filters["post_delay"],
+        dss.delays,
         fs=fs,
         nfft=2**12,
         title="Absorption gain per sample and extracted poles",

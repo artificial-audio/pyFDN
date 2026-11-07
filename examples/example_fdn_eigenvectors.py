@@ -61,7 +61,7 @@ def _(mo):
 def _(np, pyFDN):
     np.random.seed(1)
     delays = np.array([13, 19, 23])
-    build = pyFDN.fdn_build_gallery(
+    _dss, _ = pyFDN.fdn_dss_gallery(
         delays=delays,
         io_type="ones",
         direct_gain=0.0,
@@ -69,9 +69,9 @@ def _(np, pyFDN):
         rng=1,
     )
     # Bake delay-proportional broadband decay into the lossless feedback matrix.
-    delays = build.delays
-    A = np.diag(0.98**delays) @ build.A
-    b, c, d = build.B, build.C, build.D
+    delays = _dss.delays
+    A = np.diag(0.98**delays) @ _dss.A
+    b, c, d = _dss.B, _dss.C, _dss.D
     num_delays = delays.size
     return A, b, c, d, delays, num_delays
 

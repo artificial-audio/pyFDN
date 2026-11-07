@@ -31,15 +31,13 @@ def _(mo):
     mo.md(r"""
     ## A three-delay FDN
 
-    Three short delays with a random orthogonal feedback matrix and random input/output vectors. The per-line attenuation that `fdn_build_gallery` returns as a separate `post_delay` gain is folded into the feedback matrix, so the whole loop is the single matrix `A` that `dss_to_ss` expects.
+    Three short delays with a random orthogonal feedback matrix and random input/output vectors. The per-line attenuation that `fdn_dss_gallery` returns as a separate `post_delay` gain is folded into the feedback matrix, so the whole loop is the single matrix `A` that `dss_to_ss` expects.
     """)
     return
 
 
 @app.cell
 def _():
-    import dataclasses
-
     import numpy as np
     from scipy.signal import dimpulse, dlti
 
@@ -49,19 +47,18 @@ def _():
     impulse_response_length = 1000
 
     delays = np.array([13, 19, 23])
-    build = pyFDN.fdn_build_gallery(
+    dss, filters = pyFDN.fdn_dss_gallery(
         delays=delays,
         io_type="random",
         direct_gain=None,
         rt=0.02,
         rng=1,
     )
-    build = dataclasses.replace(build, A=np.diag(build.post_delay[0, 0, :]) @ build.A)
-    A, b, c, d = build.A, build.B, build.C, build.D
+    A = np.diag(filters["post_delay"][0, 0, :]) @ dss.A
+    b, c, d = dss.B, dss.C, dss.D
     return (
         A,
         b,
-        build,
         c,
         d,
         delays,
@@ -117,8 +114,8 @@ def _(mo):
 
 
 @app.cell
-def _(build, pyFDN):
-    pyFDN.plot_fdn_build(build, title="FDN parameters")
+def _(A, b, c, d, delays, pyFDN):
+    pyFDN.plot_fdn_parameter(delays, A, b, c, d, title="FDN parameters")
     return
 
 

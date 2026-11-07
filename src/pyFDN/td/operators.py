@@ -80,6 +80,27 @@ class TimeOperator(ABC):
         out = self.process_block(_as_2d(signal))
         return out.squeeze() if squeeze else out
 
+    def impulse_response(self, ir_len: int) -> np.ndarray:
+        """Impulse response from zero state, one Dirac per input channel.
+
+        The operator is :meth:`reset` before each channel, so it does not
+        matter what it processed before; it is left in the state the last
+        channel ends in. This is how a system with filters is rendered, e.g.
+        ``pyFDN.dss_to_td(*dss, **filters).impulse_response(ir_len)``.
+
+        Returns
+        -------
+        np.ndarray
+            Shape ``(ir_len, out_channels, in_channels)``.
+        """
+        responses = []
+        for j in range(self.in_channels):
+            impulse = np.zeros((ir_len, self.in_channels))
+            impulse[0, j] = 1.0
+            self.reset()
+            responses.append(self.process_signal(impulse))
+        return np.stack(responses, axis=-1)
+
 
 class Identity(TimeOperator):
     """Stateless pass-through.
@@ -157,12 +178,8 @@ class DCBlocker(TimeOperator):
     correct_loss : bool
         If ``True``, apply the energy-compensation gain described above.
     fs : float
-        Sampling rate in Hz, used to convert the time constants below into
-        per-sample smoothing coefficients.
-    env_tau_s : float
-        Time constant of the power envelope followers, in seconds.
-    gain_tau_s : float
-        Time constant of the gain smoothing, in seconds.
+        Sampling rate in Hz. The power envelopes follow with a 50 ms time
+        constant and the gain is smoothed over 20 ms.
     max_gain : float
         Ceiling on the compensation gain. A signal the blocker removes almost
         entirely -- anything close to pure DC -- has an output power near zero,
@@ -176,8 +193,6 @@ class DCBlocker(TimeOperator):
         R: float = 0.995,
         correct_loss: bool = False,
         fs: float = 48000.0,
-        env_tau_s: float = 0.05,  # RMS tracking time constant (50 ms)
-        gain_tau_s: float = 0.02,  # gain smoothing time constant (20 ms)
         max_gain: float = 4.0,  # +12 dB
     ) -> None:
         self.in_channels = self.out_channels = int(channels)
@@ -194,8 +209,8 @@ class DCBlocker(TimeOperator):
         self.out_pow = np.full(self.in_channels, 1e-12)
         self.gain = np.ones(self.in_channels)
 
-        self.alpha_env = float(np.exp(-1.0 / (fs * env_tau_s)))
-        self.alpha_gain = float(np.exp(-1.0 / (fs * gain_tau_s)))
+        self.alpha_env = float(np.exp(-1.0 / (fs * 0.05)))  # 50 ms power envelope
+        self.alpha_gain = float(np.exp(-1.0 / (fs * 0.02)))  # 20 ms gain smoothing
 
     def _one_pole(
         self, signal: np.ndarray, alpha: float, state: np.ndarray
@@ -424,17 +439,16 @@ class PitchShift(TimeOperator):
         transpose_cents: float,
         fs: float,
         active_channels: ArrayLike,
+    ) -> None:
         # 3 is the smallest delay that keeps the cubic interpolator, which
         # reaches two samples forward, off the sample just written.
-        min_delay_samps: int = 3,
-    ) -> None:
-        if max_delay_samps <= window_size + min_delay_samps:
-            raise ValueError("max_delay_samps must be > window_size + min_delay_samps")
+        self.min_delay = 3
+        if max_delay_samps <= window_size + self.min_delay:
+            raise ValueError("max_delay_samps must be > window_size + 3")
 
         self.in_channels = self.out_channels = int(channels)
         self.max_delay = int(max_delay_samps)
         self.window_size = int(window_size)
-        self.min_delay = int(min_delay_samps)
         self.fs = float(fs)
         self._mask = np.zeros(self.in_channels, dtype=bool)
         self._mask[np.asarray(active_channels)] = True
@@ -714,8 +728,8 @@ class SOSBank(TimeOperator):
     -----
     Pass an instance as ``post_delay`` to :func:`pyFDN.process_dss` to apply
     frequency-dependent absorption inside the feedback loop.
-    :func:`pyFDN.build_to_td` constructs this class for every populated SOS hook
-    in an :class:`pyFDN.FDNBuild`.
+    :func:`pyFDN.dss_to_td` constructs this class for every SOS bank passed as
+    a filter hook.
     """
 
     def __init__(self, sos: ArrayLike) -> None:

@@ -109,7 +109,7 @@ def _(mo):
 def _(est_rt, fs, np, pyFDN):
     np.random.seed(5)
     num_delays = 16
-    build = pyFDN.fdn_build_gallery(
+    _dss, _ = pyFDN.fdn_dss_gallery(
         num_delays,
         fs=fs,
         delay_range=(500, 3500),
@@ -118,9 +118,9 @@ def _(est_rt, fs, np, pyFDN):
         rt=None,
         rng=5,
     )
-    delays = build.delays
-    feedback_matrix = build.A
-    input_gain, output_gain, direct_gain = build.B, build.C, build.D
+    delays = _dss.delays
+    feedback_matrix = _dss.A
+    input_gain, output_gain, direct_gain = _dss.B, _dss.C, _dss.D
 
     target_rt = np.concatenate(([est_rt[0]], est_rt, [est_rt[-1]]))
     target_rt = target_rt * np.array([0.9, 1, 1, 1, 1, 1, 1, 1, 0.9, 0.5])
@@ -263,8 +263,8 @@ def _(
         input_gain,
         output_gain,
         direct_gain,
-        post_delay_sos=sos_absorption,
-        post_output_sos=equalization_sos,
+        post_delay=sos_absorption,
+        post_output=equalization_sos,
         fs=fs,
     )
     return

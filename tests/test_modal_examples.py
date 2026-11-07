@@ -39,17 +39,11 @@ def test_model_polynomial_clears_sos_denominators():
         )
     result = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=10)
     assert np.sum(1 + result[3]) == 10
-    build = pyFDN.FDNBuild(
-        A=a,
-        B=np.ones((2, 1)),
-        C=np.ones((1, 2)),
-        D=np.zeros((1, 1)),
-        delays=delays,
-        fs=48000,
-        post_delay=sos,
-    )
+    dss = pyFDN.DSS(delays, a, np.ones((2, 1)), np.ones((1, 2)), np.zeros((1, 1)))
     np.testing.assert_allclose(
-        pyFDN.pr_to_impz(*result[:4], 256), pyFDN.build_to_impz(build, 256), atol=1e-10
+        pyFDN.pr_to_impz(*result[:4], 256),
+        pyFDN.dss_to_td(*dss, post_delay=sos).impulse_response(256),
+        atol=1e-10,
     )
 
 

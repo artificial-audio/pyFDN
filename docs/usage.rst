@@ -18,15 +18,23 @@ Or import specific functions::
 
     feedback = random_orthogonal(4)
 
-DSS and builds
----------------
+DSS systems and filters
+-----------------------
 
-A delay state-space (DSS) system is an FDN's feedback matrix ``A``, gains
-``B``/``C``/``D``, and per-line ``delays``. An :class:`~pyFDN.FDNBuild` wraps a
-DSS system with a sample rate and optional baked filter hooks, ready to render.
-Functions named ``dss_to_*`` take the raw DSS arrays; ``build_to_*`` functions
-take an :class:`~pyFDN.FDNBuild` and are thin wrappers around the matching
-``dss_to_*`` call. Use whichever form fits the arguments you already have.
+A delay state-space (DSS) system is an FDN's per-line ``delays``, feedback
+matrix ``A`` and gains ``B``/``C``/``D`` -- nothing else. :class:`~pyFDN.DSS`
+holds exactly these, in the argument order of the ``dss_to_*`` functions, so a
+system unpacks straight into them. Filters and the sample rate travel
+alongside, as plain keyword arguments::
+
+    dss, filters = pyFDN.fdn_dss_gallery(8, rt=1.2, rt_nyquist=0.8)
+    ir = pyFDN.dss_to_td(*dss, **filters).impulse_response(48_000)
+    model = pyFDN.dss_to_flamo(*dss, 48_000.0, **filters)
+
+``filters`` maps the three hooks ``post_delay``, ``post_matrix`` and
+``post_output`` to SOS banks (or ``None``). :func:`pyFDN.extract_dss` returns
+the same pair from a FLAMO model, and :func:`pyFDN.trainable_from_dss` takes
+it back: ``trainable_from_dss(dss, fs, **filters)``.
 
 Packaged tutorial resources
 ---------------------------
@@ -36,77 +44,36 @@ public API, independent of the current working directory::
 
     dry, fs = pyFDN.load_audio("synth_dry")
 
-    preset = pyFDN.get_fdn_preset("colorless_N8_d1")
-    reverberator = pyFDN.build_set_decay(preset.build, 1.5)
+    dss = pyFDN.get_fdn_preset("colorless_N8_d1")
+    decay = pyFDN.decay_to_first_order_shelf(1.5, 1.5, None, dss.delays, fs)
+    wet = pyFDN.process_dss(dry, *dss, post_delay=decay)
 
     citation = pyFDN.paper_link("Allpass_Feedback_Delay_Networks")
 
 Use ``pyFDN.available_audio()`` and ``pyFDN.available_fdn_presets()`` to list
 the bundled choices. Attribution and license information for audio is returned
-by ``pyFDN.audio_metadata(name)``.
+by ``pyFDN.audio_metadata(name)``; the presets are credited in
+``pyFDN/resources/ATTRIBUTION.md``.
 
-FDN builds can also be exchanged as readable, versioned JSON files::
+Saving
+------
 
-    pyFDN.save_fdn_build("reverberator.json", reverberator)
-    restored = pyFDN.load_fdn_build("reverberator.json")
+:func:`pyFDN.save_fdn` writes a :class:`~pyFDN.DSS` as readable JSON -- the
+five fields as nested lists, one matrix row per line, plus the pyFDN version
+that wrote it. The packaged presets are such files::
 
-Preset documents
-----------------
+    pyFDN.save_fdn(dss, "reverberator.json")
+    dss = pyFDN.load_fdn("reverberator.json")
 
-An ``FDNPreset`` keeps a baked ``FDNBuild`` together with catalog metadata and
-the design choices that cannot be recovered reliably from its numbers. Unknown
-design choices are left out rather than guessed. Generators and EQ design
-functions return only their numerical result by default; opt into their design
-record when preparing a preset::
+Anything else -- a ``td`` graph, a trained FLAMO model, a ``(dss, filters)``
+pair -- is pickled, together with the pyFDN and Python versions that wrote it::
 
-    build, design = pyFDN.fdn_build_gallery(
-        N=8,
-        fs=48_000,
-        delay_distribution="geometric",
-        coprime=True,
-        rt=1.2,
-        rt_nyquist=0.8,
-        return_design=True,
-    )
+    pyFDN.save_fdn(model, "trained.pkl")
+    model = pyFDN.load_fdn("trained.pkl")
 
-A separately designed filter can return the same kind of record. The caller
-only has to say which FDN hook receives it::
-
-    import dataclasses
-
-    post_matrix, post_matrix_design = pyFDN.gain_to_one_pole(
-        gain_db=[0.0] * 8,
-        gain_db_nyquist=[-3.0] * 8,
-        return_design=True,
-    )
-    build = dataclasses.replace(build, post_matrix=post_matrix)
-    design["post_matrix"] = post_matrix_design
-
-Once all numerical and design parts are assembled, freeze that particular
-realization as the preset::
-
-    preset = pyFDN.FDNPreset(
-        build=build,
-        metadata={
-            "name": "small-room",
-            "description": "A short, neutral room",
-            "authors": ["A. Author"],
-            "license": "CC0-1.0",
-            "tags": ["room", "short"],
-        },
-        design=design,
-    )
-    pyFDN.save_fdn_preset("small-room.json", preset)
-    restored = pyFDN.load_fdn_preset("small-room.json")
-
-Metadata is an open dictionary because it is descriptive rather than part of
-the sound. By convention, ``tags`` is a list of strings, so selecting presets
-does not require a metadata class::
-
-    requested = {"room", "short"}
-    matches = requested <= set(restored.metadata.get("tags", []))
-
-The numerical build, including its sample rate, is authoritative. Filter design
-records may additionally carry RT or gain targets. In that case
-``pyFDN.trainable_from_preset`` restores the meaningful FLAMO parameters and
-checks that they reproduce the baked SOS coefficients before building a model.
+There is no format to maintain for pickles. When a refactor breaks one, the
+load error names both versions: map a moved class in ``pyFDN.save.RENAMED`` (or
+rebuild the object by hand) and rewrite the file with
+:func:`pyFDN.resave_fdn`. Loading a pickle runs code from the file, so only
+load pickles you or pyFDN wrote. A FLAMO model holds lambdas, which are stored
+as Python bytecode, so its file loads only on the same Python minor version.

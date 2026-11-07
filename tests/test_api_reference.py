@@ -56,8 +56,6 @@ INTENTIONALLY_UNDOCUMENTED = {
     "sqrtm_psd",
     # misc internal helper
     "is_almost_zero",
-    # historical spelling of plot_fdn_build
-    "plot_FDN_build",
     # loss taxonomy base classes (subclass to write a loss; not used directly)
     "ResponseLoss",
     "ParameterLoss",

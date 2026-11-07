@@ -183,19 +183,19 @@ def _(mo):
 
     # Complete FDN Build Gallery
 
-    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback, input/output/direct matrices, delays, sample rate, and optional loop filters.
+    `fdn_dss_gallery` provides ready-to-render FDN parameters: a DSS system (feedback, input/output/direct matrices and delays) plus its optional loop and output filters.
     """)
     return
 
 
 @app.cell
 def _(pyFDN):
-    builds = {
-        "lossless": pyFDN.fdn_build_gallery(8, rt=None, rng=0),
-        "first-order absorption": pyFDN.fdn_build_gallery(
+    systems = {
+        "lossless": pyFDN.fdn_dss_gallery(8, rt=None, rng=0),
+        "first-order absorption": pyFDN.fdn_dss_gallery(
             8, rt=2.0, rt_nyquist=0.5, rng=0
         ),
-        "with post EQ": pyFDN.fdn_build_gallery(
+        "with post EQ": pyFDN.fdn_dss_gallery(
             8,
             rt=2.0,
             rt_nyquist=0.5,
@@ -203,7 +203,7 @@ def _(pyFDN):
             output_gain_db_nyquist=-6.0,
             rng=0,
         ),
-        "multichannel post EQ": pyFDN.fdn_build_gallery(
+        "multichannel post EQ": pyFDN.fdn_dss_gallery(
             8,
             num_outputs=3,
             rt=2.0,
@@ -213,32 +213,33 @@ def _(pyFDN):
             rng=0,
         ),
     }
-    return (builds,)
+    return (systems,)
 
 
 @app.cell
-def _(builds, mo):
+def _(mo, systems):
     mo.ui.table(
         [
             {
-                "Build": _name,
-                "Delay lines": _b.delays.size,
-                "Delay range": f"{_b.delays.min()}–{_b.delays.max()}",
-                "Filters": "yes" if _b.post_delay is not None else "no",
+                "System": _name,
+                "Delay lines": _dss.delays.size,
+                "Delay range": f"{_dss.delays.min()}–{_dss.delays.max()}",
+                "Filters": "yes" if _f["post_delay"] is not None else "no",
                 "Post EQ outputs": 0
-                if _b.post_output is None
-                else _b.post_output.shape[2],
+                if _f["post_output"] is None
+                else _f["post_output"].shape[2],
             }
-            for _name, _b in builds.items()
+            for _name, (_dss, _f) in systems.items()
         ]
     )
     return
 
 
 @app.cell
-def _(builds, pyFDN):
-    pyFDN.plot_fdn_build(
-        builds["multichannel post EQ"], title="FDN build with per-output post EQ"
+def _(pyFDN, systems):
+    _dss, _filters = systems["multichannel post EQ"]
+    pyFDN.plot_fdn_parameter(
+        *_dss, **_filters, fs=48_000.0, title="FDN with per-output post EQ"
     )
     return
 

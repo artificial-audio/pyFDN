@@ -14,10 +14,9 @@ def dss_to_ss(
     Convert a delay state-space (DSS) system to standard state-space.
 
     Gives every delay-line sample its own state, so the ``N x N`` DSS system
-    becomes a ``sum(delays) x sum(delays)`` standard state-space system. No
-    ``build_to_ss`` counterpart exists: the result does not depend on ``fs``
-    or an :class:`~pyFDN.FDNBuild`'s filter hooks, so pass ``build.delays`` and
-    ``build.A``/``B``/``C``/``D`` directly.
+    becomes a ``sum(delays) x sum(delays)`` standard state-space system. The
+    result does not depend on ``fs`` or filter hooks; a :class:`~pyFDN.DSS`
+    unpacks straight in: ``dss_to_ss(*dss)``.
 
     Parameters
     ----------

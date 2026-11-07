@@ -34,15 +34,15 @@ def test_series_reject_io_mismatch() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
 
     # td engine
-    A_td = td.Gain(fdnbuild.A)  # N x N
-    B_td = td.Gain(fdnbuild.B)  # N x n_in
-    C_td = td.Gain(fdnbuild.C)  # n_out x N
-    D_td = td.Gain(fdnbuild.D)  # n_out x n_in
+    A_td = td.Gain(dss.A)  # N x N
+    B_td = td.Gain(dss.B)  # N x n_in
+    C_td = td.Gain(dss.C)  # n_out x N
+    D_td = td.Gain(dss.D)  # n_out x n_in
 
     # Test
     with pytest.raises(
@@ -61,15 +61,15 @@ def test_series_flatten_ops() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
 
     # td engine
-    A1_td = td.Gain(fdnbuild.A)
-    A2_td = td.Gain(fdnbuild.A)
-    A3_td = td.Gain(fdnbuild.A)
-    A4_td = td.Gain(fdnbuild.A)
+    A1_td = td.Gain(dss.A)
+    A2_td = td.Gain(dss.A)
+    A3_td = td.Gain(dss.A)
+    A4_td = td.Gain(dss.A)
     series_nested = td.Series([A1_td, td.Series([td.Series([A2_td, A3_td]), A4_td])])
 
     # Test
@@ -97,13 +97,13 @@ def test_parallel_reject_input_mismatch() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
 
     # td engine
-    A_td = td.Gain(fdnbuild.A)  # N x N
-    B_td = td.Gain(fdnbuild.B)  # N x n_in
+    A_td = td.Gain(dss.A)  # N x N
+    B_td = td.Gain(dss.B)  # N x n_in
 
     # Test
     with pytest.raises(
@@ -121,13 +121,13 @@ def test_parallel_reject_output_mismatch() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
 
     # td engine
-    B_td = td.Gain(fdnbuild.B)  # N x n_in
-    D_td = td.Gain(fdnbuild.D)  # n_out x n_in
+    B_td = td.Gain(dss.B)  # N x n_in
+    D_td = td.Gain(dss.D)  # n_out x n_in
 
     # Test
     with pytest.raises(
@@ -145,15 +145,15 @@ def test_parallel_flatten_ops() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
 
     # td engine
-    A1_td = td.Gain(fdnbuild.A)
-    A2_td = td.Gain(fdnbuild.A)
-    A3_td = td.Gain(fdnbuild.A)
-    A4_td = td.Gain(fdnbuild.A)
+    A1_td = td.Gain(dss.A)
+    A2_td = td.Gain(dss.A)
+    A3_td = td.Gain(dss.A)
+    A4_td = td.Gain(dss.A)
     parallel_nested = td.Parallel(
         [A1_td, td.Parallel([td.Parallel([A2_td, A3_td]), A4_td])]
     )

@@ -8,15 +8,12 @@ with the feedback path drawn so the loop is visible (e.g. fB below fF).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 
 from pyFDN.auxiliary.flamo import to_numpy
-
-if TYPE_CHECKING:
-    from pyFDN.build import FDNBuild
-
+from pyFDN.dss import DSS
 
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
 
@@ -291,29 +288,30 @@ def feedback_matrix_module(model: Any) -> Any:
     with a direct path). The module returned is the one on the recursion's
     feedback branch; apply ``module.map(module.param)`` to read the realized
     matrix **in-graph** -- e.g. inside a training loss, where the detaching
-    extraction path :func:`extract_build` would break gradients.
+    extraction path :func:`extract_dss` would break gradients.
     """
     root = flamo_model_to_nodes(model)
     leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
     return _feedback_leaf_module(leaves)
 
 
-def extract_build(model: Any) -> FDNBuild:
-    """Extract a complete :class:`~pyFDN.FDNBuild` from a named FLAMO model graph.
+def extract_dss(model: Any) -> tuple[DSS, dict[str, np.ndarray | None]]:
+    """Extract the :class:`~pyFDN.DSS` and baked filters from a named FLAMO model.
+
+    Returns ``(dss, filters)``, where ``filters`` maps ``post_delay``,
+    ``post_matrix`` and ``post_output`` to an SOS bank or ``None``, ready for
+    ``pyFDN.dss_to_td(*dss, **filters)``.
 
     The graph must be one :func:`pyFDN.assemble_fdn_core` would build: leaves
     named ``input_gain`` and ``output_gain``, plus either ``mixing_matrix`` or
     the standard recursion feedback leaf ``fB``. The delay can be named
-    ``delay`` or be the graph's only delay module. The sample rate is read from
-    the delay module and is required: a graph that does not expose ``fs`` is
-    malformed and raises :class:`ValueError`.
+    ``delay`` or be the graph's only delay module.
 
-    All three filter hooks -- ``post_delay``, ``post_matrix``, ``post_output``
-    -- are read when present. Because a build is *baked*, a hook must hold
-    something that bakes: a per-channel gain or an SOS bank. A hook holding
-    anything else -- a nested allpass core, a cascade of several modules -- is
-    refused rather than dropped, since a build missing it would render
-    differently from the model it came from.
+    A hook must hold something that bakes: a per-channel gain or an SOS bank. A
+    hook holding anything else -- a nested allpass core, a cascade of several
+    modules -- is refused rather than dropped, since the extracted system would
+    render differently from the model it came from. Save such a model whole
+    with :func:`pyFDN.save_fdn` instead.
     """
     root = flamo_model_to_nodes(model)
     nodes = flamo_nodes_flat(root)
@@ -360,8 +358,8 @@ def extract_build(model: Any) -> FDNBuild:
         if len(matches) > 1 or node["name"] != name or node["type"] != "Leaf":
             raise ValueError(
                 f"the {name!r} hook holds {len(matches)} module(s) that do not "
-                "bake down to one SOS bank, so an FDNBuild cannot carry it and "
-                "would render differently from this model; render the model "
+                "bake down to one SOS bank, so extracting it would render "
+                "differently from this model; render or save the model "
                 "directly, or take the hook apart yourself"
             )
         value = _module_value(node["module"])
@@ -371,8 +369,8 @@ def extract_build(model: Any) -> FDNBuild:
             return np.asarray(value, dtype=float)
         raise ValueError(
             f"the {name!r} hook holds a module whose value has shape "
-            f"{tuple(value.shape)}; an FDNBuild can carry a per-channel gain or "
-            "an (n_sections, 6, n_channels) SOS bank"
+            f"{tuple(value.shape)}; only a per-channel gain or an "
+            "(n_sections, 6, n_channels) SOS bank can be extracted"
         )
 
     delay_matches = _named("delay")
@@ -407,27 +405,10 @@ def extract_build(model: Any) -> FDNBuild:
         else np.zeros((C.shape[0], B.shape[1]))
     )
 
-    post_delay_sos = _hook_sos("post_delay")
-    post_matrix_sos = _hook_sos("post_matrix")
-    post_output_sos = _hook_sos("post_output")
-
-    fs_value = getattr(delay_module, "fs", None)
-    if fs_value is None:
-        raise ValueError("FLAMO delay module exposes no sample rate; cannot extract fs")
-
-    from pyFDN.build import FDNBuild
-
-    return FDNBuild(
-        A=A,
-        B=B,
-        C=C,
-        D=D,
-        delays=delays,
-        fs=float(fs_value),
-        post_delay=post_delay_sos,
-        post_matrix=post_matrix_sos,
-        post_output=post_output_sos,
-    )
+    filters = {
+        name: _hook_sos(name) for name in ("post_delay", "post_matrix", "post_output")
+    }
+    return DSS(delays, A, B, C, D), filters
 
 
 # ---------------------------------------------------------------------------

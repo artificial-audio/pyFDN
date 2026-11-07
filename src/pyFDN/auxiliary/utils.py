@@ -294,8 +294,8 @@ def pole_boundaries(
     Args:
         delays: Delays in samples, shape ``(N,)``.
         absorption: Per-line absorption as an SOS bank of shape
-            ``(sections, 6, N)``, the format of an :class:`~pyFDN.FDNBuild`'s
-            ``post_delay``.
+            ``(sections, 6, N)``, the format of the ``post_delay``
+            filter hook.
         feedback_matrix: ``(N, N)`` or FIR ``(N, N, L)`` in the z^{-1}
             convention.
         fs: Sampling frequency in Hz.
