@@ -389,6 +389,52 @@ roots are distinct from accepting an incomplete result; omission is rejected
 by the measured response errors above. The production algorithm was not
 modified during this diagnosis.
 
+Higher-resolution Kronecker follow-up
+------------------------------------------------------------
+
+The previously reported roughly 5% all-port relative L2 errors describe
+waveform norms, not energy fractions. A 5% norm error corresponds to 0.25%
+error-signal energy relative to reference energy. For equally energetic,
+orthogonal modes, dropping two of 694 predicts ``sqrt(2/694) = 5.37%``
+norm error. Actual errors depend on residues and the finite observation
+window. These unit-circle modes persist, unlike the fast absorption modes.
+
+``tests/benchmark_kronecker_resolution.py`` copies the LF function and changes
+only its grid-attempt cap from four to ten, guarded by an AST assertion.
+All ten formerly failing configurations then return all 694 poles in
+complex128. No reference roots seed either search or refinement.
+
+Nine cases need FFT lengths 131072--524288 and take 0.12--0.26 seconds for
+root search in single repetitions. The closest case, snapshot 05, needs
+2097152 samples (0.02289 Hz spacing) and 2.15 seconds. These timings exclude
+coefficient construction, matrix refinement, residues, and validation.
+Before matrix refinement, one-second SISO relative IR errors range from
+``3.4e-11`` to ``2.6e-7``. Applying the existing SVD null-vector Newton
+refinement against the original FDN, then using the static residue helper,
+reduces all ten errors to ``4.9e-12``--``5.9e-12`` in double precision.
+This refinement is independent per pole; it is not an EAI iteration.
+Production solver defaults remain unchanged.
+
+The rotation tensor product has feedback eigenvalues
+``exp(i*(+/-theta1 +/-theta2 +/-theta3))``. At three equal pi/4 angles,
+the phases +pi/4 and -pi/4 each occur three times. Equal delays would turn
+these repetitions into exact modal multiplicities; unequal delays change
+the spectrum, so this observation alone does not establish the cause of
+each close pair in the example.
+
+A fixed-delay control in ``tests/benchmark_kronecker_spacing.py`` provides
+additional evidence: the default Kronecker matrix has a minimum positive-
+frequency gap of 0.59079 Hz; 20 seeded random SO(8) matrices have minimum
+gaps of 4.00--14.69 Hz. Twenty small independent angle perturbations
+(+/-0.05 radians) give 0.367--5.002 Hz. Thus this structured parameter
+family is more prone to close pairs in these controls, and small angle
+changes do not reliably eliminate them. This is not a general guarantee
+about either matrix family.
+
+Raw results are in
+``docs/benchmarks/lindsey_fox_kronecker_higher_resolution.jsonl`` and
+``docs/benchmarks/lindsey_fox_kronecker_spacing_controls.jsonl``.
+
 Why the FLAMO decompositions take more than one second
 ------------------------------------------------------------
 
