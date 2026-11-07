@@ -44,23 +44,23 @@ def pr_to_impz(
         (impulse_response_length, num_outputs, num_inputs), dtype=np.float64
     )
 
-    t = np.arange(-1, impulse_response_length - 1, dtype=np.float64).reshape(-1, 1)
+    t = np.arange(impulse_response_length - 1, dtype=np.float64).reshape(-1, 1)
     angle = np.angle(poles).reshape(1, -1)
     mag = np.abs(poles).reshape(1, -1)
 
     if mode == "fast":
         c = factor.reshape(1, -1) * np.exp(1j * t * angle)
-        e = np.exp(np.log(mag) * t)
+        e = mag**t
         ce = c * e
         for in_idx in range(num_inputs):
-            response[:, :, in_idx] = np.real(ce @ residues[:, :, in_idx])
+            response[1:, :, in_idx] = np.real(ce @ residues[:, :, in_idx])
     elif mode == "lowMemory":
         for pole_idx in range(num_poles):
             c = factor[pole_idx] * np.exp(1j * t[:, 0] * np.angle(poles[pole_idx]))
-            e = np.exp(np.log(np.abs(poles[pole_idx])) * t[:, 0])
+            e = np.abs(poles[pole_idx]) ** t[:, 0]
             ce = c * e
             for in_idx in range(num_inputs):
-                response[:, :, in_idx] += np.real(
+                response[1:, :, in_idx] += np.real(
                     ce.reshape(-1, 1) @ residues[pole_idx, :, in_idx].reshape(1, -1)
                 )
     else:

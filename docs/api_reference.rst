@@ -213,6 +213,7 @@ Polynomial & Matrix Maths
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
+   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
@@ -304,6 +305,37 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
    pyFDN.impz_to_res
    pyFDN.mtf_to_impz
    pyFDN.pr_to_impz
+
+Experimental Lindsey–Fox modal decomposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass ``mode="lindsey_fox"`` to :func:`pyFDN.dss_to_pr` or
+:func:`pyFDN.flamo_to_pr` for FFT grid search with Laguerre refinement.
+The existing defaults remain ``"eig"`` for static DSS and ``"eai"`` for FLAMO.
+The opt-in route checks completeness and the all-port response. Failed search,
+completion, or response validation raises without switching to EAI. Direct EAI
+calls may accept incomplete results with explicit ``allow_approximate=True``
+and successful response checks; this option does not relax LF acceptance.
+
+:func:`pyFDN.general_char_poly_fft` recovers the static characteristic
+coefficients once from determinant samples and reuses them on every search
+circle. The static ``"roots"`` backend uses these FFT coefficients too.
+:func:`pyFDN.general_char_poly` retains the principal-minor implementation as
+a reference and for polynomial feedback matrices.
+
+All modal backends report solver and pole-count metadata. Complete eig, roots,
+and direct EAI results have ``responseValidation=None``; LF always checks the
+response. Unsupported multiple poles raise instead of producing zero residues.
+Residues follow ``H(z) = D + sum_k R_k / (z - p_k)``; a simple pole at zero
+contributes a unit delay.
+
+Usage, supported models, numerical acceptance criteria, and a reproducible
+benchmark on the modal examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   lindsey_fox_examples
 
 FDN Processing
 --------------

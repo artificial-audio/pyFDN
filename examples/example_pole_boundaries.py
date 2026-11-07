@@ -126,6 +126,8 @@ def _(
     )
     _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(
         model,
+        # Unresolved absorption modes are accepted only after response validation.
+        allow_approximate=True,
         quality_threshold=1e-10,
         refinement_tol=1e-10,
         maximum_iterations=80,
