@@ -6,6 +6,7 @@ polished via SVD null-vector Newton, then converted to z.
 
 from __future__ import annotations
 
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -16,10 +17,16 @@ import torch
 
 from pyFDN.auxiliary.flamo import to_numpy
 from pyFDN.auxiliary.flamo_graph import _delay_samples
+from pyFDN.auxiliary.modal import (
+    ModalResult,
+    RankOneResidues,
+    modal_result_metadata,
+    validate_modal_response,
+)
 from pyFDN.auxiliary.poles import (
+    assemble_residues,
     reduce_conjugate_pairs,
     residue_at_pole,
-    residues_from_terms,
 )
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -673,20 +680,73 @@ def _dss_to_res_flamo(
             )
         )
 
-    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
-    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
-        poles.size, n_out, n_in
-    )
-    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
-    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
-    residues, undriven = residues_from_terms(numerators, denominators)
+    residues, undriven, vectors = assemble_residues(terms, n, n_out, n_in)
     direct_term = to_numpy(decomposition.direct_subgraph.probe(1.0 + 0j))
-    return residues, direct_term, undriven, {"right": right, "left": left}
+    return residues, direct_term, undriven, vectors
 
 
 # ───────────────────────────────────────────────────────────────────────────
 # Public API
 # ───────────────────────────────────────────────────────────────────────────
+
+
+def _validate_flamo_result(
+    result: ModalResult,
+    decomposition: Any,
+    order: int,
+    response_tolerance: float,
+    allow_approximate: bool,
+    requested_solver: str,
+    reason: str | None = None,
+) -> ModalResult:
+    residues, poles, direct, pairs, meta = result
+    solver = meta["solver"]
+    meta.update(modal_result_metadata(pairs, order, solver, allow_approximate))
+    count = meta["returnedPoles"]
+    vectors = meta["eigenvectors"]
+    input_rows = []
+    for index, pole in enumerate(poles):
+        forward = to_numpy(decomposition.f_subgraph.probe(complex(pole)))
+        input_rows.append(vectors["left"][:, index].conj() @ forward)
+    internal = RankOneResidues(
+        vectors["right"].T, np.asarray(input_rows), meta["undrivenResidues"]
+    )
+
+    def probe(z: complex) -> np.ndarray:
+        with torch.no_grad():
+            p = to_numpy(decomposition.recursion_module.probe_recursion(z))
+            f = to_numpy(decomposition.f_subgraph.probe(z))
+        return np.linalg.solve(p, f)
+
+    check = validate_modal_response(
+        poles, internal, pairs, probe, order, response_tolerance
+    )
+
+    def external(z: complex) -> np.ndarray:
+        with torch.no_grad():
+            b = to_numpy(decomposition.in_subgraph.probe(z))
+            c = to_numpy(decomposition.out_subgraph.probe(z))
+            d = to_numpy(decomposition.direct_subgraph.probe(z))
+        return c @ probe(z) @ b + d - direct
+
+    # Also reject unrepresented dynamics outside the recursion.
+    external_check = validate_modal_response(
+        poles, residues, pairs, external, order, response_tolerance
+    )
+    meta.update(
+        requestedSolver=requested_solver,
+        responseValidation=check,
+        externalResponseValidation=external_check,
+    )
+    if reason is not None:
+        meta["fallbackReason"] = reason
+    if count != order and reason is None:
+        warnings.warn(
+            f"Returning validated approximate modal decomposition: {count}/{order} poles",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return residues, poles, direct, pairs, meta
 
 
 def flamo_to_pr(
@@ -746,7 +806,7 @@ def flamo_to_pr(
         Maximum relative L2 and normalized peak errors on the validation contour.
         This sampled check is not a uniform frequency-response error bound.
     allow_approximate : bool, default False
-        Only for ``mode="lindsey_fox"``: permit an incomplete EAI fallback if both
+        Permit an incomplete EAI result or fallback only if both
         response checks pass. Metadata reports ``complete=False``, ``approximate``,
         and ``omittedPoleCount``; a warning is emitted. No poles are silently
         omitted and no approximation is allowed by default.
@@ -761,6 +821,14 @@ def flamo_to_pr(
     symmetrize : bool, default True
         Enforce exact conjugate-pair symmetry on the refined pole set before
         :func:`reduce_conjugate_pairs`.
+
+    Notes
+    -----
+    Complete results report ``complete=True`` and expected/returned pole counts.
+    Direct EAI checks the count but does not run response validation for complete
+    results (``responseValidation=None``). LF and all incomplete results require
+    response validation. Unsupported multiple poles raise.
+
     """
     if decomposition is None:
         if model is None:
@@ -772,7 +840,6 @@ def flamo_to_pr(
     delays_arr = decomposition.delays
 
     rec = decomposition.recursion_module
-    loop = _FDNLoopFlamo(recursion=rec)
     device = _infer_model_device(rec)
     dtype = _infer_model_complex_dtype(rec)
 
@@ -831,6 +898,16 @@ def flamo_to_pr(
                 "verbose": verbose,
             },
         )
+
+    if (
+        not np.isfinite(maximum_iterations)
+        or maximum_iterations <= 0
+        or int(maximum_iterations) != maximum_iterations
+    ):
+        raise ValueError("maximum_iterations must be a positive integer")
+    if not np.isfinite(response_tolerance) or response_tolerance <= 0:
+        raise ValueError("response_tolerance must be positive and finite")
+    loop = _FDNLoopFlamo(recursion=rec)
 
     # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
     # in the loop the poles spread inward (off the unit circle) and plain
@@ -897,6 +974,10 @@ def flamo_to_pr(
     poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
     meta_data["nonPairedPoles"] = non_paired
 
+    meta_data.update(
+        modal_result_metadata(is_conjugate, n_poles, "eai", allow_approximate)
+    )
+
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
         poles, loop, decomposition
     )
@@ -905,4 +986,9 @@ def flamo_to_pr(
     meta_data["decomposition"] = _decomposition_to_public_dict(decomposition)
     meta_data["loop"] = loop
 
-    return residues, poles, direct, is_conjugate, meta_data
+    result = residues, poles, direct, is_conjugate, meta_data
+    if not meta_data["complete"]:
+        return _validate_flamo_result(
+            result, decomposition, n_poles, response_tolerance, allow_approximate, "eai"
+        )
+    return result

@@ -207,3 +207,21 @@ def test_approximation_flag_does_not_allow_missing_outer_modes(monkeypatch):
             pyFDN.flamo_to_pr(
                 model, mode="lindsey_fox", lf_max_seconds=1e-12, allow_approximate=True
             )
+
+
+def test_eai_absorption_approximation_uses_the_same_acceptance_policy():
+    build, model = _absorption_model()
+    with pytest.raises(RuntimeError, match="allow_approximate=True"):
+        pyFDN.flamo_to_pr(model)
+    with pytest.warns(RuntimeWarning, match="validated approximate"):
+        result = pyFDN.flamo_to_pr(model, allow_approximate=True)
+    meta = result[4]
+    assert meta["solver"] == meta["requestedSolver"] == "eai"
+    assert meta["omittedPoleCount"] == 2 and not meta["complete"]
+    assert meta["responseValidation"]["relativeL2"] < 1e-8
+    assert meta["externalResponseValidation"]["relativeL2"] < 1e-8
+    np.testing.assert_allclose(
+        pyFDN.pr_to_impz(*result[:4], 512),
+        pyFDN.build_to_impz(build, 512),
+        atol=1e-9,
+    )

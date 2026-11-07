@@ -313,13 +313,20 @@ Pass ``mode="lindsey_fox"`` to :func:`pyFDN.dss_to_pr` or
 :func:`pyFDN.flamo_to_pr` for FFT grid search with Laguerre refinement.
 The existing defaults remain ``"eig"`` for static DSS and ``"eai"`` for FLAMO.
 The opt-in route checks completeness and the all-port response, with a warned,
-validated EAI fallback if LF fails. Incomplete FLAMO fallback results require
+validated EAI fallback if LF fails. Incomplete EAI results (including LF fallback) require
 explicit ``allow_approximate=True`` and must pass response checks.
 
 :func:`pyFDN.general_char_poly_fft` recovers the static characteristic
 coefficients once from determinant samples and reuses them on every search
-circle. :func:`pyFDN.general_char_poly` and the existing ``"roots"`` backend
-retain their principal-minor implementation.
+circle. The static ``"roots"`` backend uses these FFT coefficients too.
+:func:`pyFDN.general_char_poly` retains the principal-minor implementation as
+a reference and for polynomial feedback matrices.
+
+All modal backends report solver and pole-count metadata. Complete eig, roots,
+and direct EAI results have ``responseValidation=None``; LF always checks the
+response. Unsupported multiple poles raise instead of producing zero residues.
+Residues follow ``H(z) = D + sum_k R_k / (z - p_k)``; a simple pole at zero
+contributes a unit delay.
 
 Usage, supported models, numerical acceptance criteria, and a reproducible
 benchmark on the modal examples:

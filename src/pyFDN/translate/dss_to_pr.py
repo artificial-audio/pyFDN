@@ -1,6 +1,6 @@
 """Modal decomposition for delay state-space (DSS) FDNs.
 
-H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k/(1 − p_k z^{-1}) + D
+H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k/(z − p_k) + D
 
 The static algorithms are NumPy-only. EAI (including fallback) lazily imports torch + FLAMO, so
 callers using only ``"eig"``/``"roots"`` never pay that import cost.
@@ -14,12 +14,12 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.math import general_char_poly, general_char_poly_fft
-from pyFDN.auxiliary.modal import ModalResult
+from pyFDN.auxiliary.math import general_char_poly_fft
+from pyFDN.auxiliary.modal import ModalResult, modal_result_metadata
 from pyFDN.auxiliary.poles import (
+    assemble_residues,
     reduce_conjugate_pairs,
     residue_at_pole,
-    residues_from_terms,
 )
 from pyFDN.translate.dss_to_ss import dss_to_ss
 
@@ -49,10 +49,7 @@ def _validated_lindsey_fox(
         result: ModalResult, solver: str, reason: str | None = None
     ) -> ModalResult:
         residues, poles, direct, pairs, meta = result
-        if int(np.sum(1 + pairs)) != order:
-            raise RuntimeError(
-                f"{solver} returned an incomplete decomposition; expected {order} poles"
-            )
+        meta.update(modal_result_metadata(pairs, order, solver))
         # Validate all internal ports, even when B/C hide missing modes.
         vectors = meta["eigenvectors"]
         output_vectors = vectors["right"].T
@@ -87,10 +84,6 @@ def _validated_lindsey_fox(
         meta.update(
             solver=solver,
             requestedSolver="lindsey_fox",
-            complete=True,
-            expectedPoles=order,
-            returnedPoles=order,
-            approximate=False,
             responseValidation=check,
         )
         if reason is not None:
@@ -153,14 +146,8 @@ def _dss_to_res(
         for pole in poles
     ]
     n = delays.size
-    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
-    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
-        poles.size, C.shape[0], B.shape[1]
-    )
-    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
-    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
-    residues, undriven = residues_from_terms(numerators, denominators)
-    return residues, D, undriven, {"right": right, "left": left}
+    residues, undriven, vectors = assemble_residues(terms, n, C.shape[0], B.shape[1])
+    return residues, D, undriven, vectors
 
 
 def dss_to_pr(
@@ -173,6 +160,7 @@ def dss_to_pr(
     mode: str = "eig",
     lf_max_seconds: float = 3.0,
     response_tolerance: float = 1e-8,
+    allow_approximate: bool = False,
     # ─── EAI-only knobs (ignored for mode in {"eig","roots"}) ─────────────
     deflation_type: str = "fullDeflation",
     quality_threshold: float = 1e-10,
@@ -190,7 +178,7 @@ def dss_to_pr(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """Modal decomposition of a delay state-space (DSS) system.
 
-    ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (1 − p_k z^{-1}) + D``
+    ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (z − p_k) + D``
 
     No ``build_to_pr`` counterpart exists: pass ``build.delays`` and
     ``build.A``/``B``/``C``/``D`` directly, plus ``fs=build.fs`` for
@@ -230,6 +218,11 @@ def dss_to_pr(
         distinguishes bounds from measured errors. The sampled acceptance
         criterion is not a uniform response error guarantee.
 
+    allow_approximate : bool, default False
+        For direct EAI only: allow an incomplete result if internal and external
+        response checks pass. Static LF always requires a complete result.
+        Empty results and unsupported multiple poles always raise.
+
     Returns
     -------
     residues : ndarray ``(n_poles_reduced, n_out, n_in)``, complex
@@ -237,8 +230,10 @@ def dss_to_pr(
     direct : ndarray ``(n_out, n_in)``, complex
     is_conjugate : ndarray of bool ``(n_poles_reduced,)``
     meta : dict
-        Lindsey-Fox reports ``solver``, ``complete``, ``responseValidation``, and
-        ``fallbackReason`` when EAI was needed.
+        All modes report ``solver``, ``complete``, and expected/returned pole
+        counts. ``responseValidation`` is None when no response check was run
+        (complete eig/roots/EAI results). LF always validates its response;
+        ``fallbackReason`` explains when EAI was needed.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -288,6 +283,8 @@ def dss_to_pr(
             svd_refine=svd_refine,
             symmetrize=symmetrize,
             verbose=verbose,
+            allow_approximate=allow_approximate,
+            response_tolerance=response_tolerance,
         )
 
     if mode_l == "lindsey_fox":
@@ -360,12 +357,10 @@ def dss_to_pr(
             },
         )
     elif mode_l == "roots":
-        # GCP p has p[k] = coef of z^{-k}; polynomial in w = z^{-1} is sum_k p[k] w^k
-        p = general_char_poly(delays_arr, a_poly)
-        w_roots = np.roots(p[::-1])  # np.roots expects high-to-low coefficient order
-        poles = np.array(
-            [1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128
-        )
+        # The w coefficients are the descending z coefficients, including zero poles.
+        p = general_char_poly_fft(delays_arr, a_poly)
+        poles = np.roots(p)
+
     else:
         raise ValueError("mode must be 'eig', 'roots', 'eai', or 'lindsey_fox'")
 
@@ -375,6 +370,7 @@ def dss_to_pr(
     )
 
     meta_data: dict[str, Any] = {
+        **modal_result_metadata(is_conjugate_pair, int(delays_arr.sum()), mode_l),
         "nonPairedPoles": non_paired,
         "undrivenResidues": undriven,
         "eigenvectors": eigenvectors,

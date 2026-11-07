@@ -11,6 +11,28 @@ import numpy as np
 ModalResult = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]
 
 
+def modal_result_metadata(
+    pairs: np.ndarray, order: int, solver: str, allow_approximate: bool = False
+) -> dict[str, Any]:
+    """Apply the same completeness policy to every modal backend."""
+    count = int(np.sum(1 + pairs))
+    if count > order or count == 0 or (count != order and not allow_approximate):
+        raise RuntimeError(
+            f"{solver} returned {count}/{order} poles; incomplete results require "
+            "allow_approximate=True and response validation"
+        )
+    return {
+        "solver": solver,
+        "requestedSolver": solver,
+        "expectedPoles": order,
+        "returnedPoles": count,
+        "complete": count == order,
+        "approximate": count != order,
+        "omittedPoleCount": order - count,
+        "responseValidation": None,
+    }
+
+
 @dataclass
 class RankOneResidues:
     """Internal residues R[k] = weights[k] * outer(output_vectors[k], input_rows[k])."""

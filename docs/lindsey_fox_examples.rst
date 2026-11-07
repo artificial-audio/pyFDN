@@ -57,7 +57,7 @@ errors. Other cases use direct response evaluation. FLAMO additionally reports
 
 Incomplete decompositions are rejected by default. Two-tap and IIR absorption
 can create unresolved groups near filter zeros. For that case, explicitly pass
-``allow_approximate=True`` to ``flamo_to_pr``. An incomplete EAI fallback is
+``allow_approximate=True`` to ``flamo_to_pr``. An incomplete EAI result, requested directly or used as LF fallback, is
 accepted only when both internal and external response checks pass; a warning
 and ``complete=False``, ``approximate=True``, and ``omittedPoleCount`` report
 the approximation. This does not establish where the omitted poles lie or

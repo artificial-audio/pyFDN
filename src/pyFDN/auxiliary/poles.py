@@ -164,7 +164,13 @@ def residue_at_pole(
     scale = np.max(np.abs(P))
     if scale > 0 and np.isfinite(scale):
         P = P / scale
-    u, _, vh = np.linalg.svd(P)
+    u, singular_values, vh = np.linalg.svd(P)
+    if P.shape[0] > 1 and singular_values[-2] * scale <= (
+        np.finfo(float).eps * P.shape[0] * max(scale, float(np.max(np.abs(dP))))
+    ):
+        raise ValueError(
+            "Multiple null vectors cannot be represented by simple residues"
+        )
     # These vectors are retained for every mode; views would keep full SVD matrices.
     right = vh.conj().T[:, -1].copy()
     left = u[:, -1].copy()
@@ -176,17 +182,32 @@ def residue_at_pole(
 def residues_from_terms(
     numerators: np.ndarray, denominators: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Residues ``numerator / denominator``, zero (with a warning) for multipoles.
+    """Residues ``numerator / denominator``; reject unsupported multiple poles.
 
     Returns ``(residues, undriven)`` where ``undriven = 1 / denominator``.
     """
     with np.errstate(divide="ignore", invalid="ignore"):
         undriven = 1.0 / denominators
         residues = numerators / denominators[:, None, None]
-    if np.any(~np.isfinite(undriven)):
-        warnings.warn(
-            "There are multipoles. The residues are set to zero.", stacklevel=3
+    if np.any(~np.isfinite(undriven)) or np.any(~np.isfinite(residues)):
+        raise ValueError(
+            "Multiple or nonfinite poles cannot be represented by simple residues"
         )
-    undriven = np.where(np.isfinite(undriven), undriven, 0.0)
-    residues = np.where(np.isfinite(residues), residues, 0.0)
     return residues, undriven
+
+
+def assemble_residues(
+    terms: list[tuple[complex, np.ndarray, np.ndarray, np.ndarray]],
+    n: int,
+    n_out: int,
+    n_in: int,
+) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """Assemble shared SVD residue terms for static and FLAMO loops."""
+    denominators = np.array([t[0] for t in terms], dtype=np.complex128)
+    numerators = np.array([t[1] for t in terms], dtype=np.complex128).reshape(
+        len(terms), n_out, n_in
+    )
+    right = np.array([t[2] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    left = np.array([t[3] for t in terms], dtype=np.complex128).reshape(-1, n).T
+    residues, undriven = residues_from_terms(numerators, denominators)
+    return residues, undriven, {"right": right, "left": left}

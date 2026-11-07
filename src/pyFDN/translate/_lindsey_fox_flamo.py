@@ -12,7 +12,7 @@ from scipy.special import logsumexp
 
 from pyFDN.auxiliary.flamo import to_numpy
 from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
-from pyFDN.auxiliary.modal import ModalResult, RankOneResidues, validate_modal_response
+from pyFDN.auxiliary.modal import ModalResult
 from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 from pyFDN.translate.flamo_to_pr import (
     _decomposition_to_public_dict,
@@ -20,6 +20,7 @@ from pyFDN.translate.flamo_to_pr import (
     _FDNLoopFlamo,
     _iter_leaf_modules,
     _refine_pole_via_svd,
+    _validate_flamo_result,
     flamo_to_pr,
 )
 
@@ -78,66 +79,6 @@ def lindsey_fox_flamo(
 ) -> ModalResult:
     loop = _FDNLoopFlamo(decomposition.recursion_module)
 
-    def validate(
-        result: ModalResult, solver: str, reason: str | None = None
-    ) -> ModalResult:
-        residues, poles, direct, pairs, meta = result
-        count = int(np.sum(1 + pairs))
-        if count > order or count == 0 or (count != order and not allow_approximate):
-            raise RuntimeError(
-                f"{solver} returned {count}/{order} poles; incomplete results require allow_approximate=True and response validation"
-            )
-        vectors = meta["eigenvectors"]
-        input_rows = []
-        for index, pole in enumerate(poles):
-            forward = to_numpy(decomposition.f_subgraph.probe(complex(pole)))
-            input_rows.append(vectors["left"][:, index].conj() @ forward)
-        internal = RankOneResidues(
-            vectors["right"].T, np.asarray(input_rows), meta["undrivenResidues"]
-        )
-
-        def probe(z: complex) -> np.ndarray:
-            with torch.no_grad():
-                p = to_numpy(decomposition.recursion_module.probe_recursion(z))
-                f = to_numpy(decomposition.f_subgraph.probe(z))
-            return np.linalg.solve(p, f)
-
-        check = validate_modal_response(
-            poles, internal, pairs, probe, order, response_tolerance
-        )
-
-        def external(z: complex) -> np.ndarray:
-            with torch.no_grad():
-                b = to_numpy(decomposition.in_subgraph.probe(z))
-                c = to_numpy(decomposition.out_subgraph.probe(z))
-                d = to_numpy(decomposition.direct_subgraph.probe(z))
-            return c @ probe(z) @ b + d - direct
-
-        # Also reject unrepresented dynamics outside the recursion.
-        external_check = validate_modal_response(
-            poles, residues, pairs, external, order, response_tolerance
-        )
-        meta.update(
-            solver=solver,
-            requestedSolver="lindsey_fox",
-            expectedPoles=order,
-            returnedPoles=count,
-            complete=count == order,
-            approximate=count != order,
-            omittedPoleCount=order - count,
-            responseValidation=check,
-            externalResponseValidation=external_check,
-        )
-        if reason is not None:
-            meta["fallbackReason"] = reason
-        if count != order:
-            warnings.warn(
-                f"Returning validated approximate modal decomposition: {count}/{order} poles",
-                RuntimeWarning,
-                stacklevel=3,
-            )
-        return residues, poles, direct, pairs, meta
-
     try:
         coefficients = _model_polynomial(decomposition, order)
         if coefficients[0] == 0 or coefficients[-1] == 0:
@@ -158,6 +99,7 @@ def lindsey_fox_flamo(
             direct,
             pairs,
             {
+                "solver": "lindsey_fox",
                 "nonPairedPoles": unpaired,
                 "undrivenResidues": undriven,
                 "eigenvectors": vectors,
@@ -165,11 +107,32 @@ def lindsey_fox_flamo(
                 "loop": loop,
             },
         )
-        return validate(result, "lindsey_fox")
+        return _validate_flamo_result(
+            result,
+            decomposition,
+            order,
+            response_tolerance,
+            allow_approximate,
+            "lindsey_fox",
+        )
     except (RuntimeError, ValueError, np.linalg.LinAlgError) as error:
         reason = str(error)
     warnings.warn(
         f"Lindsey-Fox falling back to EAI: {reason}", RuntimeWarning, stacklevel=3
     )
-    result = flamo_to_pr(decomposition=decomposition, num_poles=order, **eai_options)
-    return validate(result, "eai", reason)
+    result = flamo_to_pr(
+        decomposition=decomposition,
+        num_poles=order,
+        allow_approximate=allow_approximate,
+        response_tolerance=response_tolerance,
+        **eai_options,
+    )
+    return _validate_flamo_result(
+        result,
+        decomposition,
+        order,
+        response_tolerance,
+        allow_approximate,
+        "lindsey_fox",
+        reason,
+    )

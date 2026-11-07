@@ -41,7 +41,7 @@ def impz_to_res(
     mag = np.abs(poles).reshape(1, -1)
 
     c = factor.reshape(1, -1) * np.exp(1j * t * angle)
-    e = np.exp(np.log(mag) * t)
+    e = mag**t
     ce = np.real(c * e)
 
     u = np.concatenate([ce[:-1, :], ce[1:, :]], axis=1)
