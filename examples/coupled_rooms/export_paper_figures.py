@@ -223,11 +223,12 @@ def main():
         actual=h*model['phi']**2;np.fill_diagonal(actual,0)
         target=343*model['apertures']/4;residual=np.abs(actual-target)/target.max()
         manifest['models'][name]['conductance_max_normalized_error']=float(residual.max())
-        for col,(matrix,title) in enumerate([(actual,'GFDN conductance'),(target,'SA conductance'),(100*residual,'Mismatch / largest aperture (%)')]):
+        for col,(matrix,title) in enumerate([(actual,'GFDN conductance'),(target,'SA conductance'),(100*residual,'Mismatch / max SA (%)')]):
             ax=axes[row,col];im=ax.imshow(matrix,cmap='Blues',vmin=0,vmax=12 if col==2 else 190)
             for i in range(3):
                 for j in range(3):ax.text(j,i,f'{matrix[i,j]:.1f}',ha='center',va='center',fontsize=8,color='white' if matrix[i,j]>(6 if col==2 else 95) else 'black')
-            ax.set(title=f'{name.title()}: {title}',xlabel='Sending room',ylabel='Receiving room',xticks=range(3),yticks=range(3))
+            ax.set(title=f'{name.title()}\n{title}',xlabel='Sending room',ylabel='Receiving room',xticks=range(3),yticks=range(3))
+            ax.title.set_fontsize(8)
             ax.set_xticklabels(['R1','R2','R3']);ax.set_yticklabels(['R1','R2','R3'])
     coupling_figure.savefig(args.output/'joint-coupling-residuals.pdf');plt.close(coupling_figure)
     distribution_figure,axes=plt.subplots(3,3,figsize=(7.2,6.4),layout='constrained')
@@ -242,7 +243,8 @@ def main():
         divergence=float(np.sum(p[positive]*np.log(p[positive]*len(p))))
         ax.bar(np.arange(len(means)),means,color=COLORS[0],width=.8)
         ax.axhline(1/model['delays'].sum(),color='black',ls='--',lw=.7)
-        ax.set(title=f"K={lines}, setting={setting/FS*1000:.1f} ms; {'TV' if varying else 'fixed'}\nKL={divergence:.2e}",xlabel='Delay-line index',ylabel='Mean endpoint energy')
+        ax.set(title=f"K={lines}; {'modulated' if varying else 'fixed'}\nR1 setting={setting/FS*1000:.1f} ms\nKL={divergence:.2e}",xlabel='Delay-line index',ylabel='Mean endpoint energy')
+        ax.title.set_fontsize(8)
         manifest['mixing_panels'].append(dict(lines=lines,setting_samples=setting,modulated=varying,KL=divergence,
                                               delays=model['delays'].tolist(),initialization='impulse',late_fraction=.15))
     distribution_figure.savefig(args.output/'joint-energy-distributions.pdf');plt.close(distribution_figure)
