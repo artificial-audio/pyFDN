@@ -117,7 +117,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse response and modal decomposition
 
-    The FIR feedback matrix runs directly in the time-domain recursion. For the modal decomposition the FIR matrix is placed as a FLAMO Filter module in the loop (`dss_to_flamo`) and `flamo_to_pr` refines the poles with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the delay count, so the number of root seeds is set to the degree of the generalized characteristic polynomial.
+    The FIR feedback matrix is a graph operator on the feedback path (`post_matrix`, with `A` the identity): a `td.MatrixFIR` in the time-domain recursion, and a FLAMO Filter module (`fir_matrix_module`) in the loop of the FLAMO model (`dss_to_flamo`) and `flamo_to_pr` refines the poles with Ehrlich–Aberth iteration. The FIR feedback adds poles beyond the delay count, so the number of root seeds is set to the degree of the generalized characteristic polynomial.
     """)
     return
 
@@ -135,21 +135,33 @@ def _(
     pyFDN,
     torch,
 ):
-    ir_time = pyFDN.dss_to_impz(
-        delays, feedback_matrix, input_gain, output_gain, direct, ir_len
-    )[:, 0, 0]
+    identity = np.eye(len(delays))
+    graph = pyFDN.dss_to_td(
+        delays,
+        identity,
+        input_gain,
+        output_gain,
+        direct,
+        post_matrix=pyFDN.td.MatrixFIR(feedback_matrix),
+    )
+    ir_time = graph.impulse_response(ir_len)[:, 0, 0]
 
     # pole count = degree of the generalized characteristic polynomial in w = z^{-1}
     gcp = pyFDN.general_char_poly(delays, feedback_matrix)
     num_poles = int(np.nonzero(np.abs(gcp) > 1e-12 * np.max(np.abs(gcp)))[0][-1])
 
+    nfft = 2**16
     model = pyFDN.dss_to_flamo(
-        A=feedback_matrix,
-        B=input_gain,
-        C=output_gain,
-        D=direct,
-        delays=delays,
-        fs=fs,
+        delays,
+        identity,
+        input_gain,
+        output_gain,
+        direct,
+        fs,
+        nfft=nfft,
+        post_matrix=pyFDN.fir_matrix_module(
+            feedback_matrix, nfft, dtype=torch.float64, device="cpu"
+        ),
         shell=False,
         dtype=torch.float64,
         device="cpu",

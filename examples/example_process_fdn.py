@@ -451,7 +451,9 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_dss(x, delays, A, B, C, D, post_delay=absorption)
+    wet = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption).process_signal(
+        x, squeeze=True
+    )
 
     mo.hstack(
         [
@@ -488,8 +490,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
     np.random.seed(11)  # TimeVaryingMatrix draws its phases from the global stream
-    wet_moving = pyFDN.process_dss(
-        x,
+    wet_moving = pyFDN.dss_to_td(
         delays,
         A,
         B,
@@ -497,7 +498,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
         D,
         post_delay=td.SOSBank(absorption),
         post_matrix=td.TimeVaryingMatrix(len(delays), 10.0, 1.1, fs, 0.7),
-    )
+    ).process_signal(x, squeeze=True)
 
     # Try this:
     #   post_matrix=td.AbsoluteValue(len(delays))

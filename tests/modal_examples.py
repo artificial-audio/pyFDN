@@ -94,23 +94,43 @@ def cases() -> list[dict[str, Any]]:
         setup = setup_cell(filename, output)
         dss: pyFDN.DSS
         if "dss" in setup:
-            dss, filters, model = setup["dss"], setup["filters"], setup["model"]
+            dss, model = setup["dss"], setup["model"]
+            post_delay, fir = setup["filters"]["post_delay"], None
         else:
+            matrix = np.asarray(setup["feedback_matrix"])
+            # a filter (FIR) feedback matrix is a graph operator on the feedback
+            # path, with the identity as the DSS feedback matrix
+            fir = matrix if matrix.ndim == 3 else None
+            n = matrix.shape[0]
             dss = pyFDN.DSS(
-                delays=setup["delays"],
-                A=setup["feedback_matrix"],
-                B=setup["input_gain"],
-                C=setup["output_gain"],
-                D=setup["direct"],
+                setup["delays"],
+                np.eye(n) if fir is not None else matrix,
+                setup["input_gain"],
+                setup["output_gain"],
+                setup["direct"],
             )
-            filters = {"post_delay": setup.get("absorption")}
+            post_delay = setup.get("absorption")
             model = pyFDN.dss_to_flamo(
-                *dss, setup["fs"], dtype=torch.float64, device="cpu", **filters
+                *dss,
+                setup["fs"],
+                dtype=torch.float64,
+                device="cpu",
+                post_delay=post_delay,
+                post_matrix=None
+                if fir is None
+                else pyFDN.fir_matrix_module(
+                    fir, 2**16, dtype=torch.float64, device="cpu"
+                ),
             )
+        graph = pyFDN.dss_to_td(
+            *dss,
+            post_delay=post_delay,
+            post_matrix=None if fir is None else pyFDN.td.MatrixFIR(fir),
+        )
         decomposition = pyFDN.flamo_decompose_for_pr(model)
-        lossless = dss.A.ndim == 3
-        if lossless:
-            gcp = pyFDN.general_char_poly(dss.delays, dss.A)
+        lossless = fir is not None
+        if fir is not None:
+            gcp = pyFDN.general_char_poly(dss.delays, fir)
             degree = int(np.flatnonzero(np.abs(gcp) > 1e-12 * np.max(np.abs(gcp)))[-1])
         else:
             degree = int(dss.delays.sum()) + _count_loop_filter_poles(
@@ -120,8 +140,8 @@ def cases() -> list[dict[str, Any]]:
             {
                 "name": filename,
                 "model": model,
-                "dss": dss,
-                "filters": filters,
+                "td": graph,
+                "absorption": post_delay is not None,
                 "degree": degree,
                 "lossless": lossless,
             }

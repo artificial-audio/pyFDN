@@ -41,9 +41,10 @@ def dss_to_flamo(
     ----------
     delays : array-like, (N,)
         Delay lengths in samples (one per delay line).
-    A : array-like, (N, N) or (N, N, L)
-        Feedback matrix. A 3-D array is a polynomial (FIR) matrix in z^{-1}
-        convention (e.g. paraunitary) and is placed as a FLAMO Filter module.
+    A : array-like, (N, N)
+        Feedback matrix. A filter (FIR) feedback matrix goes on the feedback
+        path instead: ``A=np.eye(N), post_matrix=pyFDN.fir_matrix_module(fir,
+        nfft)``.
     B : array-like, (N, num_in)
         Input gain.
     C : array-like, (num_out, N)
@@ -131,7 +132,6 @@ def fdn_core(
     from pyFDN.auxiliary.flamo import (
         assemble_fdn_core,
         default_device,
-        fir_matrix_module,
         gain_module,
         hook_module,
     )
@@ -150,11 +150,7 @@ def fdn_core(
         )
 
     if feedback is None:
-        feedback = (
-            fir_matrix_module(A, nfft, device=device, dtype=dtype)
-            if A.ndim == 3
-            else gain_module(A, nfft, **common)
-        )
+        feedback = gain_module(A, nfft, **common)
     hooks = {
         name: hook_module(value, nfft, name=name, **common)
         for name, value in (

@@ -22,7 +22,7 @@ def _(mo, pyFDN):
 
     The same FDN with frequency-dependent absorption is rendered by two independent implementations and the impulse responses are compared:
 
-    1. **`pyFDN.process_dss`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR`, both with persistent state.
+    1. **`pyFDN.dss_to_td`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR` on the feedback path, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
     The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the attenuation is a 10-band graphic EQ (`decay_to_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
@@ -94,7 +94,7 @@ def _(mo):
     mo.md(r"""
     ## Render with both implementations
 
-    `pyFDN.process_dss` processes the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix in the time-domain recursion (`td.MatrixFIR`); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
+    `pyFDN.dss_to_td` processes the delay outputs block by block (`td.SOSBank`) and runs the FIR feedback matrix on the feedback path of the time-domain recursion (`post_matrix=td.MatrixFIR(...)`, with `A` the identity); the FLAMO model places the same cascades as a `parallelSOSFilter` behind the delays and the FIR matrix as a `Filter` feedback module. FLAMO renders circularly with period `nfft`, so `nfft` is chosen long enough for the tail to decay below numerical precision.
     """)
     return
 
@@ -116,25 +116,32 @@ def _(
 ):
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_dss(
-        impulse,
+    # the FIR feedback matrix is a graph operator on the feedback path
+    identity = np.eye(len(delays))
+    graph = pyFDN.dss_to_td(
         delays,
-        feedback_matrix,
+        identity,
         input_gain,
         output_gain,
         direct,
-        post_delay=td.SOSBank(sos_absorption),
+        post_delay=sos_absorption,
+        post_matrix=td.MatrixFIR(feedback_matrix),
     )
+    ir_td = graph.impulse_response(ir_len).squeeze()
 
+    nfft = 2**17
     model = pyFDN.dss_to_flamo(
         delays,
-        feedback_matrix,
+        identity,
         input_gain,
         output_gain,
         direct,
         fs,
-        nfft=2**17,
+        nfft=nfft,
         post_delay=sos_absorption,  # canonical (n_sections, 6, N) bank
+        post_matrix=pyFDN.fir_matrix_module(
+            feedback_matrix, nfft, dtype=torch.float64, device="cpu"
+        ),
         shell=True,
         dtype=torch.float64,
         device="cpu",

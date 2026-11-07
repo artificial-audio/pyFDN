@@ -50,24 +50,38 @@ def test_model_polynomial_clears_sos_denominators():
 def test_model_adapter_reconstructs_static_and_fir_models():
     delays = np.array([3, 5])
     a_static = np.array([[0.4, 0.1], [-0.15, 0.3]])
-    for a in [a_static, np.stack([a_static, 0.05 * np.eye(2)], axis=2)]:
+    fir = np.stack([a_static, 0.05 * np.eye(2)], axis=2)
+    b, c, d = np.ones((2, 1)), np.ones((1, 2)), np.zeros((1, 1))
+    # the FIR matrix sits on the feedback path, with the identity as A
+    for a, post_matrix, degree in [(a_static, None, 8), (np.eye(2), fir, 10)]:
         model = pyFDN.dss_to_flamo(
-            delays=delays,
-            A=a,
-            B=np.ones((2, 1)),
-            C=np.ones((1, 2)),
-            D=[[0]],
-            fs=48000,
+            delays,
+            a,
+            b,
+            c,
+            d,
+            48000,
             dtype=torch.float64,
+            device="cpu",
             shell=False,
+            post_matrix=None
+            if post_matrix is None
+            else pyFDN.fir_matrix_module(
+                post_matrix, 2**16, dtype=torch.float64, device="cpu"
+            ),
         )
-        degree = 8 if a.ndim == 2 else 10
+        graph = pyFDN.dss_to_td(
+            delays,
+            a,
+            b,
+            c,
+            d,
+            post_matrix=None if post_matrix is None else pyFDN.td.MatrixFIR(fir),
+        )
         result = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=degree)
         assert np.sum(1 + result[3]) == degree
         np.testing.assert_allclose(
-            pyFDN.pr_to_impz(*result[:4], 256),
-            pyFDN.dss_to_impz(delays, a, np.ones((2, 1)), np.ones((1, 2)), [[0]], 256),
-            atol=1e-10,
+            pyFDN.pr_to_impz(*result[:4], 256), graph.impulse_response(256), atol=1e-10
         )
 
 

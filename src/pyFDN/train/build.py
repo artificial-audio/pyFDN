@@ -15,12 +15,10 @@ handed to whichever hook it belongs in.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from pyFDN.dss import DSS
+from numpy.typing import ArrayLike
 
 # Feedback-matrix parametrization: "orthogonal" keeps the matrix on SO(N) during
 # training (the colorless choice); "random" trains it unconstrained.
@@ -118,7 +116,6 @@ def build_fdn(
     flamo.processor.system.Shell
     """
     from pyFDN.auxiliary.utils import as_generator
-    from pyFDN.dss import DSS
     from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
 
     trainable = trainable or Trainable()
@@ -179,7 +176,11 @@ def build_fdn(
         )
 
     return trainable_from_dss(
-        DSS(delays_arr, a, b, c, d),
+        delays_arr,
+        a,
+        b,
+        c,
+        d,
         fs,
         trainable=trainable,
         matrix=matrix,
@@ -192,7 +193,11 @@ def build_fdn(
 
 
 def trainable_from_dss(
-    dss: DSS,
+    delays: ArrayLike,
+    A: ArrayLike,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
     fs: float,
     *,
     trainable: Trainable | None = None,
@@ -207,13 +212,13 @@ def trainable_from_dss(
 ) -> Any:
     """Build a trainable flamo ``Shell`` initialized from a :class:`~pyFDN.DSS`.
 
-    The gains and the feedback matrix come from ``dss``. Each filter hook is
+    The gains and the feedback matrix come from the system. Each filter hook is
     either a baked SOS bank, wired in frozen, or a module -- which is how a
     *designed*, trainable filter gets in, since baked values do not remember
     the reverberation time or the EQ curve they were designed from::
 
         model = pyFDN.trainable_from_dss(
-            dss, fs,
+            *dss, fs,
             post_delay=pyFDN.AttenuationFilter(
                 1.0, dss.delays, fs, rt_nyquist=1.0,
                 design="first_order_shelf", nfft=nfft),
@@ -223,14 +228,15 @@ def trainable_from_dss(
         )
 
     Baked filters from :func:`pyFDN.extract_dss` go straight back in:
-    ``trainable_from_dss(dss, fs, **filters)``.
+    ``trainable_from_dss(*dss, fs, **filters)``.
 
     Both modules default to ``requires_grad=True``.
 
     Parameters
     ----------
-    dss : DSS
-        Initial delay state-space system.
+    delays, A, B, C, D : array-like
+        Initial delay state-space system; a :class:`~pyFDN.DSS` unpacks
+        straight in, as for every ``dss_*`` function.
     fs : float
         Sampling rate in Hz.
     trainable : Trainable, optional
@@ -289,7 +295,7 @@ def trainable_from_dss(
     # evaluation radius for the whole system, not a per-module gain.
     alias = float(alias_decay_db)
     feedback = matrix_module(
-        dss.A,
+        np.asarray(A, dtype=float),
         nfft,
         matrix_type=matrix,
         device=device,
@@ -303,11 +309,11 @@ def trainable_from_dss(
     # The direct path is always wired (zero by default), so the core is a
     # Parallel and the same model serves any objective.
     core = fdn_core(
-        dss.delays,
-        dss.A,
-        dss.B,
-        dss.C,
-        dss.D,
+        np.asarray(delays),
+        np.asarray(A, dtype=float),
+        np.asarray(B, dtype=float),
+        np.asarray(C, dtype=float),
+        np.asarray(D, dtype=float),
         float(fs),
         nfft,
         device=device,

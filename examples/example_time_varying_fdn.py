@@ -44,12 +44,10 @@ def _():
     import pyFDN
     from pyFDN import td
     from pyFDN.generate.orthogonal import random_orthogonal
-    from pyFDN.process import process_dss
 
     return (
         la,
         np,
-        process_dss,
         pyFDN,
         random_orthogonal,
         td,
@@ -178,7 +176,7 @@ def _(
     fs,
     input_gain,
     output_gain,
-    process_dss,
+    pyFDN,
     synth,
     td,
 ):
@@ -206,8 +204,7 @@ def _(
             N, modulation_frequency, modulation_amplitude, fs, spread
         )
 
-        reverbed_synth[matrix_type] = process_dss(
-            synth,
+        reverbed_synth[matrix_type] = pyFDN.dss_to_td(
             delays,
             feedback_matrix,
             input_gain,
@@ -215,7 +212,7 @@ def _(
             direct,
             post_delay=absorption,
             post_matrix=tv_matrix,
-        )
+        ).process_signal(synth, squeeze=True)
     return matrix_types, reverbed_synth
 
 

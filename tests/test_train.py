@@ -1,5 +1,7 @@
 """Tests for the three-step pyFDN.train API (require torch + flamo)."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -70,10 +72,10 @@ def _magnitude(model):
     return np.asarray(model_response(model).magnitude.detach()).sum(axis=(1, 2))
 
 
-def _decayed(dss, rt, nfft):
+def _decayed(dss: DSS, rt: float, nfft: int) -> Any:
     """A trainable model of ``dss`` with a homogeneous first-order-shelf decay."""
     sos = pyFDN.decay_to_first_order_shelf(rt, rt, None, dss.delays, FS)
-    return trainable_from_dss(dss, FS, post_delay=sos, nfft=nfft, device="cpu")
+    return trainable_from_dss(*dss, FS, post_delay=sos, nfft=nfft, device="cpu")
 
 
 def _decayed_flatness(dss, rt=1.0, nfft=2**14):
@@ -159,7 +161,7 @@ def test_trainable_from_dss_threads_requires_grad():
 
     dss, _ = pyFDN.fdn_dss_gallery(N=4, rt=None, rng=0)
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         trainable=Trainable(input_gain=True, output_gain=False),
         nfft=2**10,
@@ -175,7 +177,7 @@ def test_det_negative_orthogonal_warns_and_projects():
     if np.linalg.det(dss.A) > 0:
         dss.A[:, -1] *= -1.0  # force det = -1 (not in SO(N))
     with pytest.warns(UserWarning, match="SO"):
-        model = trainable_from_dss(dss, FS, nfft=2**10, device="cpu")
+        model = trainable_from_dss(*dss, FS, nfft=2**10, device="cpu")
     out = pyFDN.extract_dss(model)[0]
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(out.A) > 0
@@ -196,7 +198,7 @@ def test_an_attenuation_filter_reproduces_the_designed_absorption_filters():
         delays=delays,
     )
     model = trainable_from_dss(
-        dss, FS, post_delay=_decay(dss, rt), nfft=2**12, device="cpu"
+        *dss, FS, post_delay=_decay(dss, rt), nfft=2**12, device="cpu"
     )
     designed = pyFDN.decay_to_geq(rt, delays, fs)
     trained = param(model, "post_delay").value().detach().numpy().astype(float)
@@ -220,7 +222,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
         delays=delays,
     )
     frozen = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, rt, requires_grad=False),
         nfft=2**12,
@@ -229,7 +231,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
     assert param(frozen, "post_delay").trainable is False
 
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, rt),
         nfft=2**12,
@@ -248,7 +250,7 @@ def test_the_decay_parameter_is_the_rt_and_trains():
     import torch
 
     float64 = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, rt, dtype=torch.float64),
         nfft=2**12,
@@ -276,7 +278,7 @@ def test_a_trained_rt_still_decays():
         delays=delays,
     )
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, np.full(10, 1.0), nfft=2**13),
         nfft=2**13,
@@ -358,14 +360,14 @@ def test_lossless_build_defaults_to_alias_decay():
     assert (
         _magnitude(
             trainable_from_dss(
-                undamped,
+                *undamped,
                 FS,
                 nfft=2**10,
                 alias_decay_db=LOSSLESS_ALIAS_DECAY_DB,
                 device="cpu",
             )
         ).max()
-        < _magnitude(trainable_from_dss(undamped, FS, nfft=2**10, device="cpu")).max()
+        < _magnitude(trainable_from_dss(*undamped, FS, nfft=2**10, device="cpu")).max()
     )
 
 
@@ -673,7 +675,7 @@ def test_flat_spectrogram_resolution_comes_from_its_own_windows():
                 loss(
                     model_response(
                         trainable_from_dss(
-                            dss, FS, nfft=n, alias_decay_db=LOSSLESS_ALIAS_DECAY_DB
+                            *dss, FS, nfft=n, alias_decay_db=LOSSLESS_ALIAS_DECAY_DB
                         )
                     )
                 ).detach()
@@ -1260,7 +1262,7 @@ def _out_eq(dss, gain_db, *, design="graphic_eq", nfft=2**12, **kw):
     )
 
 
-def _plain_dss(n=4):
+def _plain_dss(n: int = 4) -> DSS:
     delays = np.array([809, 1153, 1583, 2069])[:n]
     return DSS(
         A=pyFDN.fdn_dss_gallery(N=n, rt=None, rng=0)[0].A,
@@ -1275,7 +1277,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     fs = 48000.0
     dss = _plain_dss()
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_output=_out_eq(dss, 0.0),
         nfft=2**12,
@@ -1290,7 +1292,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
 
     # a 6 dB parameter is 6 dB of filter
     lifted = trainable_from_dss(
-        _plain_dss(),
+        *_plain_dss(),
         FS,
         post_output=_out_eq(_plain_dss(), 6.0),
         nfft=2**12,
@@ -1302,7 +1304,7 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
     tilt = np.zeros(10)
     tilt[4] = 12.0  # the 500 Hz band (index 0 is DC, then 63, 125, 250, 500 …)
     tilted = trainable_from_dss(
-        _plain_dss(),
+        *_plain_dss(),
         FS,
         post_output=_out_eq(_plain_dss(), tilt),
         nfft=2**12,
@@ -1319,14 +1321,14 @@ def test_a_baked_post_eq_is_frozen_and_training_it_is_a_module_you_build():
     baked = pyFDN.gain_to_geq(np.linspace(-6, 6, 10), fs=48000.0)[:, :, np.newaxis]
     dss = _plain_dss()
 
-    frozen = trainable_from_dss(dss, FS, post_output=baked, nfft=2**12, device="cpu")
+    frozen = trainable_from_dss(*dss, FS, post_output=baked, nfft=2**12, device="cpu")
     assert param(frozen, "post_output").trainable is False
     # given as coefficients, it stays coefficients -- (n_sections, 6, n_out)
     assert param(frozen, "post_output").shape == baked.shape
 
     # raw coefficients train only if the caller builds the module that says so
     thawed = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_output=pyFDN.sos_filter_module(
             baked, 2**12, device="cpu", requires_grad=True
@@ -1341,12 +1343,12 @@ def test_a_baked_post_eq_is_frozen_and_training_it_is_a_module_you_build():
 
 
 def _plain_model():
-    return trainable_from_dss(_plain_dss(), FS, nfft=2**12, device="cpu")
+    return trainable_from_dss(*_plain_dss(), FS, nfft=2**12, device="cpu")
 
 
 def test_post_eq_trains_and_survives_extraction():
     model = trainable_from_dss(
-        _plain_dss(),
+        *_plain_dss(),
         FS,
         post_delay=_decay(_plain_dss(), np.full(10, 0.5), nfft=2**13),
         post_output=_out_eq(_plain_dss(), 0.0, nfft=2**13),
@@ -1416,7 +1418,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     dss = _plain_dss()
     rt = (2.5, 0.8)
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, rt, design="first_order_shelf", dtype=torch.float64),
         nfft=2**12,
@@ -1444,7 +1446,7 @@ def test_shelf_post_eq_is_the_numpy_design():
     fs = 48000.0
     gains = (3.0, -6.0)
     model = trainable_from_dss(
-        _plain_dss(),
+        *_plain_dss(),
         FS,
         post_output=_out_eq(
             _plain_dss(),
@@ -1477,7 +1479,7 @@ def test_shelf_crossover_moves_the_transition():
     def shelved(crossover):
         dss = _plain_dss()
         return trainable_from_dss(
-            dss,
+            *dss,
             FS,
             post_output=_out_eq(
                 dss,
@@ -1533,7 +1535,7 @@ def test_endpoint_targets_are_separate_and_validate_the_channel_axis():
 def test_shelf_decay_trains_and_stays_contractive():
     """The RT floor holds even when the fit is pushed hard at both endpoints."""
     model = trainable_from_dss(
-        _plain_dss(),
+        *_plain_dss(),
         FS,
         post_delay=_decay(
             _plain_dss(),
@@ -1619,7 +1621,7 @@ def test_the_geq_keeps_its_ten_bands_through_both_roles():
     """Ten numbers in, ten trained numbers out -- in both hooks at once."""
     dss = _plain_dss()
     model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, np.full(10, 1.0)),
         post_output=_out_eq(dss, 0.0),
@@ -1645,7 +1647,7 @@ def test_per_line_rt_gives_every_delay_line_its_own_decay():
     # line 0 decays fast, line 3 slowly -- a decay no shared RT can produce
     rt = np.tile(np.linspace(0.4, 3.0, 4), (10, 1))
     model = trainable_from_dss(
-        dss, FS, post_delay=_decay(dss, rt), nfft=2**12, device="cpu"
+        *dss, FS, post_delay=_decay(dss, rt), nfft=2**12, device="cpu"
     )
 
     absorption = param(model, "post_delay")
@@ -1690,14 +1692,14 @@ def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
     """Both take two endpoints, so the EQDesign name distinguishes them."""
     dss = _plain_dss()
     shelf_model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, (1.5, 0.6), design="first_order_shelf"),
         nfft=2**12,
         device="cpu",
     )
     one_pole_model = trainable_from_dss(
-        dss,
+        *dss,
         FS,
         post_delay=_decay(dss, (1.5, 0.6), design="one_pole"),
         nfft=2**12,

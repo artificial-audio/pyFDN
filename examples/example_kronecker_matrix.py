@@ -741,15 +741,14 @@ def _(
     pyFDN,
 ):
     modulated_wet = {
-        name: pyFDN.process_dss(
-            dry_chords,
+        name: pyFDN.dss_to_td(
             delays_mod,
             absorption_mod,  # A carries the absorption only ...
             input_mod,
             output_mod,
             direct_mod,
             post_matrix=modulated_matrix(rate, depth),  # ... the operator is the matrix
-        )
+        ).process_signal(dry_chords, squeeze=True)
         for name, (rate, depth) in modulation_settings.items()
     }
     return (modulated_wet,)

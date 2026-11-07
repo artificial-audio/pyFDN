@@ -184,7 +184,7 @@ def _(device, fs, init_dss, np, pyFDN, rir, rir_len, torch):
     render_nfft = 2**17  # 2.73 s validation window
 
     model = pyFDN.trainable_from_dss(
-        init_dss,
+        *init_dss,
         fs,
         # every gain with a gradient: A, b, c and D
         trainable=pyFDN.Trainable(direct=True),

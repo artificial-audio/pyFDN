@@ -36,19 +36,6 @@ def test_a_dss_is_saved_as_readable_json_and_round_trips(tmp_path) -> None:
         np.testing.assert_array_equal(got, want)  # floats round-trip exactly
 
 
-def test_a_fir_feedback_matrix_saves_too(tmp_path) -> None:
-    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(4, 2, matrix_type="random")
-    dss = pyFDN.DSS(
-        np.array([19, 31, 42, 57]),
-        A,
-        np.ones((4, 1)),
-        np.ones((1, 4)),
-        np.zeros((1, 1)),
-    )
-    pyFDN.save_fdn(dss, tmp_path / "fir.json")
-    np.testing.assert_array_equal(pyFDN.load_fdn(tmp_path / "fir.json").A, A)
-
-
 def test_a_json_file_that_is_not_a_dss_is_refused(tmp_path) -> None:
     (tmp_path / "other.json").write_text('{"format": "something-else"}')
     with pytest.raises(ValueError, match="not a pyfdn-dss file"):
@@ -83,7 +70,7 @@ def test_a_flamo_model_round_trips(tmp_path) -> None:
     torch = pytest.importorskip("torch")
     pytest.importorskip("flamo")
     dss, filters = pyFDN.fdn_dss_gallery(4, rt=0.5, rng=3)
-    model = pyFDN.trainable_from_dss(dss, 48_000.0, **filters, nfft=2**10)
+    model = pyFDN.trainable_from_dss(*dss, 48_000.0, **filters, nfft=2**10)
     pyFDN.save_fdn(model, tmp_path / "model.pkl")
 
     restored = pyFDN.load_fdn(tmp_path / "model.pkl")

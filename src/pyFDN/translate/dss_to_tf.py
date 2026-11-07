@@ -33,7 +33,7 @@ def dss_to_tf(
     delays : array-like
         Delays in samples, shape (N,).
     A : array-like
-        Feedback matrix, shape (N, N) or (N, N, order) for polynomial matrix.
+        Feedback matrix, shape (N, N).
     B : array-like
         Input gains, shape (N, num_input).
     C : array-like

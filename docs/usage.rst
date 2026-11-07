@@ -34,7 +34,19 @@ alongside, as plain keyword arguments::
 ``filters`` maps the three hooks ``post_delay``, ``post_matrix`` and
 ``post_output`` to SOS banks (or ``None``). :func:`pyFDN.extract_dss` returns
 the same pair from a FLAMO model, and :func:`pyFDN.trainable_from_dss` takes
-it back: ``trainable_from_dss(dss, fs, **filters)``.
+it back: ``trainable_from_dss(*dss, fs, **filters)``. The matrix-only
+functions -- ``dss_to_impz``, ``process_dss``, ``dss_to_tf``, ``dss_to_ss``,
+``dss_to_pr`` -- take ``*dss`` alone; with filters, build the graph.
+
+A filter (FIR) feedback matrix, such as a paraunitary scattering matrix, is
+an operator on the feedback path rather than a DSS matrix. Keep ``A`` the
+identity and put it in the ``post_matrix`` hook of either graph::
+
+    I = np.eye(len(delays))
+    graph = pyFDN.dss_to_td(delays, I, B, C, D, post_matrix=pyFDN.td.MatrixFIR(fir))
+    model = pyFDN.dss_to_flamo(
+        delays, I, B, C, D, fs, post_matrix=pyFDN.fir_matrix_module(fir, 2**16)
+    )
 
 Packaged tutorial resources
 ---------------------------
@@ -46,7 +58,7 @@ public API, independent of the current working directory::
 
     dss = pyFDN.get_fdn_preset("colorless_N8_d1")
     decay = pyFDN.decay_to_first_order_shelf(1.5, 1.5, None, dss.delays, fs)
-    wet = pyFDN.process_dss(dry, *dss, post_delay=decay)
+    wet = pyFDN.dss_to_td(*dss, post_delay=decay).process_signal(dry, squeeze=True)
 
     citation = pyFDN.paper_link("Allpass_Feedback_Delay_Networks")
 

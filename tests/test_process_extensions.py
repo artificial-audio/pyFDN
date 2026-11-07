@@ -48,14 +48,15 @@ def test_general_char_poly_polynomial_matches_det(
         assert det_p == pytest.approx(gcp_val, rel=1e-8)
 
 
-def test_process_dss_fir_matrix_matches_frequency_inversion(
+def test_fir_feedback_on_the_td_graph_matches_frequency_inversion(
     paraunitary_fdn: FDNFixture,
 ) -> None:
     A = paraunitary_fdn["A"]
     delays = paraunitary_fdn["delays"]
     B, C, D = paraunitary_fdn["B"], paraunitary_fdn["C"], paraunitary_fdn["D"]
     ir_len = 1024
-    ir_time = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)[:, 0, 0]
+    graph = pyFDN.dss_to_td(delays, np.eye(4), B, C, D, post_matrix=td.MatrixFIR(A))
+    ir_time = graph.impulse_response(ir_len)[:, 0, 0]
 
     # inverse z-transform on circle |z| = r > 1 (lossless system: unit-circle poles)
     nfft = 2**14
@@ -158,7 +159,9 @@ def test_process_dss_absorption_matches_flamo() -> None:
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_dss(impulse, delays, A, B, C, D, post_delay=absorption)
+    ir_td = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption).process_signal(
+        impulse, squeeze=True
+    )
 
     model = pyFDN.dss_to_flamo(
         delays,
@@ -242,7 +245,7 @@ def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
     return sos
 
 
-def test_dss_to_td_sos_hooks_match_sosbank_objects() -> None:
+def test_dss_to_td_sos_arrays_match_sosbank_objects() -> None:
     """SOS arrays given as hooks become the same SOSBank nodes."""
     dss = _siso_dss()
     filters = {
@@ -254,27 +257,29 @@ def test_dss_to_td_sos_hooks_match_sosbank_objects() -> None:
     signal[0] = 1.0
 
     got = pyFDN.dss_to_td(*dss, **filters).process_signal(signal, squeeze=True)
-    expected = pyFDN.process_dss(
-        signal, *dss, **{k: td.SOSBank(v) for k, v in filters.items()}
-    )
+    sosbanks = {k: td.SOSBank(v) for k, v in filters.items()}
+    expected = pyFDN.dss_to_td(*dss, **sosbanks).process_signal(signal, squeeze=True)
     np.testing.assert_allclose(got, expected)
 
 
 def test_dss_to_td_fir_feedback_mimo_and_direct_path() -> None:
     rng = np.random.default_rng(17)
     n, num_inputs, num_outputs = 4, 2, 3
-    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(n, 2, matrix_type="random")
+    fir, _ = pyFDN.construct_cascaded_paraunitary_matrix(n, 2, matrix_type="random")
     dss = DSS(
         delays=np.array([19, 31, 42, 57]),
-        A=0.8 * A,
+        A=np.eye(n),
         B=rng.standard_normal((n, num_inputs)),
         C=rng.standard_normal((num_outputs, n)),
         D=rng.standard_normal((num_outputs, num_inputs)),
     )
     signal = rng.standard_normal((512, num_inputs))
 
-    got = pyFDN.dss_to_td(*dss, block_size=16).process_signal(signal)
-    np.testing.assert_allclose(got, pyFDN.process_dss(signal, *dss), atol=1e-12)
+    small = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(0.8 * fir), block_size=16)
+    default = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(0.8 * fir))
+    np.testing.assert_allclose(
+        small.process_signal(signal), default.process_signal(signal), atol=1e-12
+    )
 
 
 def test_dss_to_td_process_block_matches_process_signal() -> None:

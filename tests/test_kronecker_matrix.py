@@ -376,8 +376,12 @@ def test_time_varying_kronecker_matrix_drives_process_dss() -> None:
         np.ones((1, N)) / np.sqrt(N),
         np.zeros((1, 1)),
     )
-    moving = pyFDN.process_dss(impulse, *common, post_matrix=modulated)
-    fixed = pyFDN.process_dss(impulse, *common, post_matrix=static)
+    moving = pyFDN.dss_to_td(*common, post_matrix=modulated).process_signal(
+        impulse, squeeze=True
+    )
+    fixed = pyFDN.dss_to_td(*common, post_matrix=static).process_signal(
+        impulse, squeeze=True
+    )
 
     assert np.isfinite(moving).all()
     assert not np.allclose(moving, fixed)
