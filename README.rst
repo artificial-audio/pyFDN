@@ -91,6 +91,12 @@ Alternatively, import specific functions directly::
     absorption = decay_to_one_pole(1.2, 0.9, [100, 150, 200, 250], 48_000)
 
 
+Citing pyFDN
+------------
+
+If you use pyFDN in research, please cite Sebastian J. Schlecht, Facundo Franchino, and Jeremy B. Bai (2026), *pyFDN: A Python Toolbox for Feedback Delay Network Design, Analysis, and Optimization*, `arXiv:2610.27217 <https://arxiv.org/abs/2610.27217>`_ (technical report; not peer reviewed). BibTeX is available in the `documentation <https://artificial-audio.github.io/pyFDN/#citing-pyfdn>`_.
+
+
 Development
 -----------
 

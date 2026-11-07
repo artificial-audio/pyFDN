@@ -36,12 +36,12 @@ def _filter_target(
 ) -> np.ndarray:
     """A design target as ``(n_parameters,)`` or ``(n_parameters, n_channels)``.
 
-    ``graphic_eq`` takes one array of band values; the endpoint designs take a
+    ``graphic_eq`` and ``two_stage`` take one array of band values; the endpoint designs take a
     DC value and a Nyquist value (defaulting to the DC one, i.e. flat).
     """
-    if design == "graphic_eq":
+    if design in ("graphic_eq", "two_stage"):
         if value_nyquist is not None:
-            raise ValueError("graphic_eq uses one target array, not a Nyquist target")
+            raise ValueError(f"{design} uses one target array, not a Nyquist target")
         n_parameters = _design_parameter_count(design)
         target = np.asarray(value, dtype=np.float64)
         if target.ndim == 0:
@@ -135,7 +135,7 @@ class _DesignedSOS(dsp.parallelSOSFilter):  # type: ignore[misc]
 class AttenuationFilter(_DesignedSOS):
     """Parallel in-loop SOS bank parametrized by reverberation time.
 
-    For ``graphic_eq``, ``rt`` is the ten-band target on
+    For ``graphic_eq`` and ``two_stage``, ``rt`` is the ten-band target on
     :data:`~pyFDN.eq.COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
     First-order shelves and one-pole filters use ``rt`` at DC and the
     separately named ``rt_nyquist`` target; omitting the latter creates a
@@ -215,7 +215,7 @@ class AttenuationFilter(_DesignedSOS):
 class OutputEQ(_DesignedSOS):
     """Parallel SOS bank parametrized by gain in dB.
 
-    For ``graphic_eq``, ``gain_db`` is the ten-band target on
+    For ``graphic_eq`` and ``two_stage``, ``gain_db`` is the ten-band target on
     :data:`~pyFDN.eq.COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
     First-order shelves and one-pole filters use ``gain_db`` at DC and the
     separately named ``gain_db_nyquist`` target; omitting it creates a

@@ -8,6 +8,7 @@ from pyFDN.auxiliary.math import (
     adjugate,
     det_polynomial,
     general_char_poly,
+    general_char_poly_fft,
     loop_tf,
     matrix_convolution,
     matrix_polyval,
@@ -283,3 +284,84 @@ def test_adj_poly_zm1_pointwise_identity():
 def test_adj_poly_rejects_unknown_convention():
     with pytest.raises(ValueError):
         adj_poly(np.zeros((2, 2, 3)), "z^2")
+
+
+@pytest.mark.parametrize("delays", [[1], [1, 1, 1], [2, 3, 5, 7], [31, 37, 43]])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_general_char_poly_fft_matches_principal_minors(delays, dtype):
+    rng = np.random.default_rng(71)
+    n = len(delays)
+    a = (rng.normal(size=(n, n)) / np.sqrt(n)).astype(dtype)
+    actual = general_char_poly_fft(delays, a)
+    assert actual.size == sum(delays) + 1
+    np.testing.assert_allclose(
+        actual, general_char_poly(delays, a), atol=1e-13, rtol=1e-13
+    )
+
+
+def test_general_char_poly_fft_long_delays_and_singular_feedback():
+    delays = np.array([601, 701, 809])
+    diagonal = np.array([0.2, -0.8, 0.0])
+    expected = np.ones(1)
+    for delay, gain in zip(delays, diagonal, strict=True):
+        factor = np.zeros(delay + 1)
+        factor[[0, -1]] = [1, -gain]
+        expected = np.convolve(expected, factor)
+    actual = general_char_poly_fft(delays, np.diag(diagonal))
+    np.testing.assert_allclose(actual, expected, atol=1e-13, rtol=1e-13)
+    assert actual[-1] == 0
+
+
+@pytest.mark.parametrize("n,order", [(4, 100000), (128, 1024)])
+def test_general_char_poly_fft_large_cycle_has_exact_sparse_polynomial(n, order):
+    # A single directed cycle has det(I - D(w) A) = 1 - gain**n * w**sum(m).
+    # This provides an independent oracle without enumerating minors or roots.
+    delays = np.full(n, order // n)
+    delays[: order % n] += 1
+    a = 0.9 * np.roll(np.eye(n), 1, axis=1)
+    expected = np.zeros(order + 1)
+    expected[[0, -1]] = [1, -(0.9**n)]
+    actual = general_char_poly_fft(delays, a)
+    # Forming high-delay sample phases accumulates roundoff with the order.
+    np.testing.assert_allclose(
+        actual, expected, atol=order * np.finfo(float).eps, rtol=1e-12
+    )
+    assert actual.size == order + 1
+
+
+def test_general_char_poly_fft_many_lines_matches_direct_determinants(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("FFT construction must not enumerate principal minors")
+
+    monkeypatch.setattr("pyFDN.auxiliary.math.combinations", forbidden)
+    rng = np.random.default_rng(73)
+    n = 32
+    q, _ = np.linalg.qr(rng.normal(size=(n, n)))
+    a = 0.9 * q
+    delays = 3 + np.arange(n)
+    coefficients = general_char_poly_fft(delays, a)
+    # Off-grid points independently check sign, coefficient order, and aliasing.
+    w = np.exp(2j * np.pi * rng.random(17))
+    expected = np.array(
+        [np.linalg.det(np.eye(n) - point ** delays[:, None] * a) for point in w]
+    )
+    np.testing.assert_allclose(
+        np.polynomial.polynomial.polyval(w, coefficients),
+        expected,
+        atol=1e-10,
+        rtol=1e-10,
+    )
+
+
+@pytest.mark.parametrize("delays", [[], [0, 2], [-1, 2], [1.5, 2], [[1, 2]], [np.nan]])
+def test_general_char_poly_fft_invalid_delays(delays):
+    with pytest.raises(ValueError, match="positive integers"):
+        general_char_poly_fft(delays, np.eye(2))
+
+
+@pytest.mark.parametrize(
+    "a", [np.eye(3), np.eye(2, dtype=complex), [[np.nan, 0], [0, 1]]]
+)
+def test_general_char_poly_fft_invalid_feedback(a):
+    with pytest.raises(ValueError, match="finite real static"):
+        general_char_poly_fft([1, 2], a)

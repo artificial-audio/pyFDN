@@ -50,6 +50,30 @@ feedback matrices, designing loop filters, and inspecting pole locations.
       Explore different audio examples.
 
 
+Citing pyFDN
+------------
+
+If you use pyFDN in research, please cite the following technical report (not peer reviewed):
+
+Sebastian J. Schlecht, Facundo Franchino, and Jeremy B. Bai (2026).
+*pyFDN: A Python Toolbox for Feedback Delay Network Design, Analysis, and Optimization*.
+`arXiv:2610.27217 <https://arxiv.org/abs/2610.27217>`_.
+DOI: `10.48550/arXiv.2610.27217 <https://doi.org/10.48550/arXiv.2610.27217>`_.
+
+.. code-block:: bibtex
+
+   @techreport{pyFDN2026,
+     author = {Schlecht, Sebastian J. and Franchino, Facundo and Bai, Jeremy B.},
+     title = {{pyFDN}: A Python Toolbox for Feedback Delay Network Design, Analysis, and Optimization},
+     institution = {arXiv},
+     number = {arXiv:2610.27217},
+     year = {2026},
+     doi = {10.48550/arXiv.2610.27217},
+     url = {https://arxiv.org/abs/2610.27217},
+     note = {Technical report; not peer reviewed}
+   }
+
+
 .. toctree::
    :hidden:
 
