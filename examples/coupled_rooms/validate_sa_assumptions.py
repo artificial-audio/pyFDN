@@ -189,26 +189,26 @@ def write_assets(output, cases, provenance):
     from matplotlib.lines import Line2D
     plt.rcParams.update({'font.size': 8, 'axes.labelsize': 8, 'axes.titlesize': 9, 'legend.fontsize': 7, 'pdf.fonttype': 42})
     figure, axes = plt.subplots(3, 2, figsize=(7.2, 8.), layout='constrained')
-    for ax, topology in zip(axes[0], TOPOLOGIES):
+    for panel, (ax, topology) in enumerate(zip(axes[0], TOPOLOGIES)):
         for source in range(3):
             fixed = [c['metrics']['full_mae_pp'] for c in cases if c['spec']['topology']==topology and c['spec']['source']==source and not c['spec']['lossy'] and c['spec']['amplitude']==0]
             varied = [c['metrics']['full_mae_pp'] for c in cases if c['spec']['topology']==topology and c['spec']['source']==source and not c['spec']['lossy'] and c['spec']['amplitude']==3]
             for values, offset, color, marker in [(fixed, -.14, '#555555', 'o'), (varied, .14, '#1769aa', '^')]:
                 ax.scatter(source+offset+np.linspace(-.06,.06,len(values)), values, color=color, marker=marker, s=16)
-        ax.set(title=f'{topology.title()}: feedback/source robustness', ylabel='SA trajectory MAE (pp)', xticks=range(3), xticklabels=['R1', 'R2', 'R3'], xlabel='Initially excited room', yscale='log')
+        ax.set(title=f'({chr(97+panel)}) {topology.title()}: source/matrix robustness', ylabel='SA trajectory MAE (pp)', xticks=range(3), xticklabels=['R1', 'R2', 'R3'], xlabel='Initially excited room', yscale='log')
         ax.legend(handles=[Line2D([], [], color='#555555', marker='o', ls='', label='Fixed'), Line2D([], [], color='#1769aa', marker='^', ls='', label='Modulated')])
     for topology, color, marker in [('chain', '#1769aa', 'o'), ('complete', '#25805d', 's')]:
         groups = [[c['metrics']['full_mae_pp'] for c in cases if c['spec']['topology']==topology and c['spec']['source']==0 and not c['spec']['lossy'] and c['spec']['modulation_seed']==701 and c['spec']['amplitude']==a] for a in AMPLITUDES]
         medians = np.array([np.median(g) for g in groups])
         axes[1,0].errorbar(AMPLITUDES, medians, yerr=[medians-[min(g) for g in groups], [max(g) for g in groups]-medians], label=topology.title(), color=color, marker=marker, capsize=3)
-    axes[1,0].set(title='R1: modulation amplitude', xlabel='Nominal rotation amplitude (rad)', ylabel='SA trajectory MAE (pp)', xscale='symlog', yscale='log')
+    axes[1,0].set(title='(c) R1: modulation amplitude', xlabel='Nominal rotation amplitude (rad)', ylabel='SA trajectory MAE (pp)', xscale='symlog', yscale='log')
     axes[1,0].set_xscale('symlog', linthresh=.1, linscale=.5)
     axes[1,0].set_xticks(AMPLITUDES, ['0', '0.1', '0.3', '1', '3']); axes[1,0].legend()
     for amplitude, color, marker in [(0., '#555555', 'o'), (3., '#1769aa', '^')]:
         row = next(c for c in cases if c['convergence'] and c['spec']['amplitude']==amplitude)
         axes[1,1].plot([8,16,32], [row['convergence'][str(n)]['full_mae_pp'] for n in [8,16,32]], color=color, marker=marker, label='Fixed' if amplitude==0 else 'Modulated')
-    axes[1,1].set(title='Complete, R1: ensemble size', xlabel='Independent initializations', ylabel='SA trajectory MAE (pp)', xticks=[8,16,32], yscale='log'); axes[1,1].legend()
-    for ax, amplitude in zip(axes[2], [0., 3.]):
+    axes[1,1].set(title='(d) Complete, R1: ensemble size', xlabel='Independent initializations', ylabel='SA trajectory MAE (pp)', xticks=[8,16,32], yscale='log'); axes[1,1].legend()
+    for panel, (ax, amplitude) in enumerate(zip(axes[2], [0., 3.])):
         row = next(c for c in cases if c['spec']==dict(topology='complete', matrix_seed=101, source=0, lossy=False, amplitude=amplitude, modulation_seed=701))
         trace = {key: np.asarray(value) for key, value in row['trace'].items()}
         curves = [('Total', 100*(trace['energy'][:,0]-trace['sa'][:,0]), '#222222', '-'),
@@ -216,7 +216,7 @@ def write_assets(output, cases, provenance):
                   ('Port term', 100*trace['port'][:,0], '#d36b16', '-.'),
                   ('Cross term', 100*trace['cross'][:,0], '#25805d', ':')]
         for label, values, color, style in curves: ax.plot(trace['time_s'], values, label=label, color=color, ls=style)
-        ax.set(title=f"Complete, R1: {'fixed' if amplitude==0 else 'modulated'}", xlabel='Time (s)', ylabel='Signed R1 correction (pp)'); ax.legend(ncol=2)
+        ax.set(title=f"({chr(101+panel)}) Complete, R1: {'fixed' if amplitude==0 else 'modulated'}", xlabel='Time (s)', ylabel='Signed R1 correction (pp)'); ax.legend(ncol=2)
     for ax in axes.flat: ax.grid(alpha=.15)
     figure.savefig(output/'joint-energy-distributions.pdf'); plt.close(figure)
     table = [r'% BEGIN VALIDATION', r'\begin{table*}[t]', r'\centering', r'\caption{Robustness across five internal-matrix seeds, all source rooms and two modulation schedules. Each case averages eight unit-energy noise starts. Entries are median [minimum, maximum] SA-trajectory MAE in percentage points; ranges are observed variation, not confidence intervals. Modulated values use the nominal 3-rad setting. Lossy errors use the common SA reference window.}', r'\label{tab:validation-robustness}', r'\begin{tabular}{llrr}', r'\toprule', r'Case & Source room & Fixed feedback & Modulated feedback \\', r'\midrule']
@@ -226,7 +226,8 @@ def write_assets(output, cases, provenance):
                 values = [[c['metrics']['full_mae_pp'] for c in cases if c['spec']['topology']==topology and c['spec']['source']==source and c['spec']['lossy']==lossy and c['spec']['amplitude']==a] for a in [0.,3.]]
                 formatted = [f'{np.median(g):.3f} [{min(g):.3f}, {max(g):.3f}]' for g in values]
                 best = int(np.median(values[1]) < np.median(values[0]))
-                formatted[best] = r'\textbf{'+formatted[best]+'}'
+                if not lossy:
+                    formatted[best] = r'\textbf{'+formatted[best]+'}'
                 table.append(f"{topology.title()}, {'lossy' if lossy else 'lossless'} & R{source+1} & "+' & '.join(formatted)+r' \\')
     table += [r'\bottomrule', r'\end{tabular}', r'\end{table*}', r'% END VALIDATION']
     old = (output/'joint-evaluation.tex').read_text().split('% BEGIN VALIDATION')[0].rstrip()
