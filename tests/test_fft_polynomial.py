@@ -16,7 +16,7 @@ def test_fft_derivative_ratios_match_analytic_monomial():
     rng = np.random.default_rng(73)
     angles = rng.uniform(-np.pi, np.pi, 2048)
     points = np.exp((-0.1 + 0.05 * rng.uniform(-1, 1, 2048)) / n + 1j * angles)
-    engine = FFTPolynomial(coefficients, 1 << 20, np.inf)
+    engine = FFTPolynomial(coefficients, 1 << 16, np.inf)
     p, dp, ddp, _, _ = engine.evaluate(points)
     truth = points**n - 0.9
     expected_dp = n * points ** (n - 1)
