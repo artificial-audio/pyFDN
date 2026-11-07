@@ -213,6 +213,7 @@ Polynomial & Matrix Maths
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
+   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
@@ -304,6 +305,29 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
    pyFDN.impz_to_res
    pyFDN.mtf_to_impz
    pyFDN.pr_to_impz
+
+Experimental Lindsey–Fox modal decomposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass ``mode="lindsey_fox"`` to :func:`pyFDN.dss_to_pr` or
+:func:`pyFDN.flamo_to_pr` for FFT grid search with Laguerre refinement.
+The existing defaults remain ``"eig"`` for static DSS and ``"eai"`` for FLAMO.
+The opt-in route checks completeness and the all-port response, with a warned,
+validated EAI fallback if LF fails. Incomplete FLAMO fallback results require
+explicit ``allow_approximate=True`` and must pass response checks.
+
+:func:`pyFDN.general_char_poly_fft` recovers the static characteristic
+coefficients once from determinant samples and reuses them on every search
+circle. :func:`pyFDN.general_char_poly` and the existing ``"roots"`` backend
+retain their principal-minor implementation.
+
+Usage, supported models, numerical acceptance criteria, and a reproducible
+benchmark on the modal examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   lindsey_fox_examples
 
 FDN Processing
 --------------

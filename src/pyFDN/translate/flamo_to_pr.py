@@ -693,6 +693,10 @@ def flamo_to_pr(
     model: Any | None = None,
     *,
     decomposition: FlamoDecompositionForPR | None = None,
+    mode: str = "eai",
+    lf_max_seconds: float = 3.0,
+    response_tolerance: float = 1e-8,
+    allow_approximate: bool = False,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
     quality_threshold: float = 1e-10,
@@ -729,6 +733,23 @@ def flamo_to_pr(
 
     Parameters
     ----------
+    mode : {"eai", "lindsey_fox"}, default "eai"
+        The experimental Lindsey-Fox route constructs a real scalar polynomial,
+        searches adaptive grids, refines against the original matrix, and checks
+        the sampled all-port and external responses. EAI is used, with a warning
+        and ``fallbackReason`` metadata, if search or validation fails. Requires
+        float64 models and an explicit ``num_poles`` for FIR feedback matrices.
+    lf_max_seconds : float, default 3.0
+        LF root-search budget, checked between numerical operations. Coefficient
+        construction, refinement, validation, and EAI fallback are outside it.
+    response_tolerance : float, default 1e-8
+        Maximum relative L2 and normalized peak errors on the validation contour.
+        This sampled check is not a uniform frequency-response error bound.
+    allow_approximate : bool, default False
+        Only for ``mode="lindsey_fox"``: permit an incomplete EAI fallback if both
+        response checks pass. Metadata reports ``complete=False``, ``approximate``,
+        and ``omittedPoleCount``; a warning is emitted. No poles are silently
+        omitted and no approximation is allowed by default.
     num_poles : int or None, default None
         Override the auto-detected pole count (``sum(delays)`` plus IIR poles from
         loop filters). When given, this exact value sizes the Ehrlich-Aberth root
@@ -745,6 +766,9 @@ def flamo_to_pr(
         if model is None:
             raise ValueError("Provide model or decomposition.")
         decomposition = flamo_decompose_for_pr(model)
+    mode_l = str(mode).lower()
+    if mode_l not in ("eai", "lindsey_fox"):
+        raise ValueError("mode must be 'eai' or 'lindsey_fox'")
     delays_arr = decomposition.delays
 
     rec = decomposition.recursion_module
@@ -766,6 +790,47 @@ def flamo_to_pr(
         n_poles = int(num_poles)
         if verbose:
             print(f"Overriding detected pole count: num_poles={n_poles}")
+
+    if mode_l == "lindsey_fox":
+        from pyFDN.translate._lindsey_fox_flamo import lindsey_fox_flamo
+
+        if dtype != torch.complex128:
+            raise ValueError("lindsey_fox requires a float64 model")
+        if (
+            not np.isfinite(lf_max_seconds)
+            or lf_max_seconds <= 0
+            or not np.isfinite(response_tolerance)
+            or response_tolerance <= 0
+        ):
+            raise ValueError(
+                "lf_max_seconds and response_tolerance must be positive and finite"
+            )
+        if num_poles is None:
+            for branch in (rec.feedforward, rec.feedback):
+                for leaf in _iter_leaf_modules(branch):
+                    if type(leaf).__name__ in ("Filter", "parallelFilter"):
+                        raise ValueError(
+                            "lindsey_fox requires explicit num_poles for FIR loop filters"
+                        )
+        if num_poles is not None and num_poles != n_poles:
+            raise ValueError("num_poles must be a positive integer")
+        return lindsey_fox_flamo(
+            decomposition,
+            n_poles,
+            max_seconds=lf_max_seconds,
+            response_tolerance=response_tolerance,
+            allow_approximate=allow_approximate,
+            eai_options={
+                "deflation_type": deflation_type,
+                "reject_unstable_poles": reject_unstable_poles,
+                "quality_threshold": quality_threshold,
+                "maximum_iterations": maximum_iterations,
+                "refinement_tol": refinement_tol,
+                "svd_refine": svd_refine,
+                "symmetrize": symmetrize,
+                "verbose": verbose,
+            },
+        )
 
     # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
     # in the loop the poles spread inward (off the unit circle) and plain
