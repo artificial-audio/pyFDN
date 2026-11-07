@@ -8,6 +8,8 @@ verification described by Sitton et al., IEEE Signal Processing Magazine 20(6),
 
 from __future__ import annotations
 
+from time import monotonic
+
 import numpy as np
 
 
@@ -21,13 +23,21 @@ def _unfactor(roots: np.ndarray) -> np.ndarray:
 
 
 def lindsey_fox_roots(
-    coefficients: np.ndarray, radius_min: float, radius_max: float
+    coefficients: np.ndarray,
+    radius_min: float,
+    radius_max: float,
+    *,
+    max_attempts: int = 10,
+    max_seconds: float = 3.0,
+    max_fft_size: int = 2**21,
 ) -> np.ndarray:
     """Find all simple roots in an annulus; coefficients are ascending powers.
 
     Uses FFT evaluations on concentric circles, 3×3 modulus minima, vectorized
     Laguerre polishing against the original polynomial, and reconstruction.
-    Four progressively finer searches are attempted. A failed completeness or
+    Up to ten progressively finer searches are attempted, bounded by a time
+    budget and FFT size. The time budget is checked between numerical operations,
+    so one FFT or polishing step may overrun it. A failed completeness or
     reconstruction check raises ``RuntimeError``; no companion-matrix fallback
     hides a failure or contaminates a timing comparison.
 
@@ -45,6 +55,14 @@ def lindsey_fox_roots(
         raise ValueError("Expected finite polynomial coefficients with nonzero ends")
     if not 0 < radius_min <= radius_max < np.inf:
         raise ValueError("Expected 0 < radius_min <= radius_max < infinity")
+    if (
+        max_attempts < 1
+        or not np.isfinite(max_seconds)
+        or max_seconds <= 0
+        or max_fft_size < 1
+    ):
+        raise ValueError("Search limits must be positive and max_seconds finite")
+    deadline = monotonic() + max_seconds
     coefficients = coefficients / np.max(np.abs(coefficients))
     degree = coefficients.size - 1
     if degree == 1:
@@ -54,19 +72,32 @@ def lindsey_fox_roots(
     second = derivative[1:] * powers[1:-1]
     polyval = np.polynomial.polynomial.polyval
 
-    for attempt in range(4):
+    for attempt in range(max_attempts):
         nfft = 1 << int(np.ceil(np.log2(8 * degree)))
         nfft *= 2**attempt
+        if nfft > max_fft_size:
+            break
         spacing = 1.0 / (degree * 2**attempt)
         low = np.log(radius_min) - 2 * spacing
         high = np.log(radius_max) + 2 * spacing
-        radii = np.exp(np.linspace(low, high, max(5, int((high - low) / spacing) + 2)))
+        radial_count = max(5, int((high - low) / spacing) + 2)
+        # Stream even very broad annuli; the budget can stop the scan safely.
+        radii = (
+            np.exp(low + (high - low) * k / (radial_count - 1))
+            for k in range(radial_count)
+        )
         angles = np.exp(2j * np.pi * np.arange(nfft) / nfft)
         candidates = []
         previous = None
         center = None
-        for index, radius in enumerate(radii):
-            values = np.abs(np.fft.ifft(coefficients * radius**powers, n=nfft))
+        center_radius = 0.0
+        for radius in radii:
+            if monotonic() >= deadline:
+                raise RuntimeError("Lindsey-Fox search exceeded its time budget")
+            with np.errstate(over="ignore", invalid="ignore"):
+                values = np.abs(np.fft.ifft(coefficients * radius**powers, n=nfft))
+            if not np.all(np.isfinite(values)):
+                raise RuntimeError("Lindsey-Fox encountered nonfinite circle samples")
             if previous is not None and center is not None:
                 minimum = (center <= np.roll(center, 1)) & (
                     center < np.roll(center, -1)
@@ -74,16 +105,19 @@ def lindsey_fox_roots(
                 for neighbor in (previous, values):
                     for shift in (-1, 0, 1):
                         minimum &= center < np.roll(neighbor, shift)
-                candidates.extend(radii[index - 1] * angles[minimum])
+                candidates.extend(center_radius * angles[minimum])
             previous, center = center, values
+            center_radius = radius
         roots = np.asarray(candidates, dtype=complex)
         for _ in range(80):
+            if monotonic() >= deadline:
+                raise RuntimeError("Lindsey-Fox search exceeded its time budget")
             if roots.size == 0:
                 break
-            p = polyval(roots, coefficients)
-            dp = polyval(roots, derivative)
-            ddp = polyval(roots, second)
             with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+                p = polyval(roots, coefficients)
+                dp = polyval(roots, derivative)
+                ddp = polyval(roots, second)
                 g = dp / p
                 h = g * g - ddp / p
                 radical = np.sqrt((degree - 1) * (degree * h - g * g))

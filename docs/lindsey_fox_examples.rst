@@ -1,7 +1,64 @@
 Lindsey–Fox on the modal examples
 ========================================
 
-This experiment uses the unchanged Lindsey–Fox root finder from PR 266 on
+Current validated API
+------------------------------------------------------------
+
+PR 266 now provides adaptive Lindsey-Fox decomposition through both entry
+points. Existing eig/EAI defaults are unchanged::
+
+   residues, poles, direct, pairs, meta = pyFDN.dss_to_pr(
+       delays, A, B, C, D, mode="lindsey_fox")
+
+   residues, poles, direct, pairs, meta = pyFDN.flamo_to_pr(
+       model, mode="lindsey_fox", num_poles=known_order)
+
+The static route remains NumPy-only when LF succeeds. The FLAMO route requires
+a real float64 canonical FDN; give ``num_poles`` explicitly for FIR matrix
+loops. For parallel SOS loops, the detected order includes filter dynamics.
+The scalar polynomial is constructed once. LF doubles its grid up to ten
+attempts and at most 2097152 FFT samples. ``lf_max_seconds=3.0`` bounds root
+search between numerical operations; it is not a hard wall-clock timeout.
+Coefficient construction, matrix refinement, validation, and EAI fallback
+are outside that budget. Roots are refined independently against the original
+matrix before residues are extracted.
+
+Both routes require full pole counts and validate every internal input/output
+port. FLAMO also checks the external transfer, rejecting dynamics that the
+modal representation does not contain. Validation uses at least 256 off-grid
+points, increasing to ``2*order+1``, outside the unit circle and every returned
+pole. This corresponds to exponential windowing over at least 4096 samples;
+it does not establish a uniform error bound on the unit circle. Both relative
+L2 and normalized peak errors must be below ``response_tolerance=1e-8``.
+
+Search, count, pairing, residue, or response failures trigger EAI with a
+warning. The fallback must pass the same acceptance checks. Inspect
+``meta['solver']``, ``fallbackReason``, ``expectedPoles``, ``returnedPoles``,
+``complete``, ``approximate``, and ``responseValidation`` to distinguish the
+actual outcome. If neither solver passes, the call raises instead of returning
+an unchecked decomposition.
+
+Incomplete results are rejected by default. For an explicitly approximate
+FLAMO decomposition, pass ``allow_approximate=True``. This permits an incomplete
+EAI fallback only after both response checks pass, emits a warning, and reports
+``complete=False`` and ``omittedPoleCount``. Acceptance here is numerical and
+does not certify where every omitted pole lies. The separately benchmarked
+certified filter-zero group shortcut below is not used automatically.
+
+``tests/benchmark_validated_lindsey_fox.py`` checks all 30 example
+configurations through the public APIs and compares one-second impulse
+responses. All pass: 28 complete LF decompositions, including every Kronecker
+snapshot and the paraunitary FIR model, and two explicitly approximate EAI
+fallbacks for absorption. The latter retain 1578/1586 and 1958/1962 poles;
+their all-port relative errors are ``1.8e-13`` and ``2.2e-13``. Their single
+repetitions take about 8--9 seconds including reference rendering, so this
+conservative fallback is slower than the separate group-factor experiment.
+Raw results are in ``docs/benchmarks/lindsey_fox_validated_examples.jsonl``.
+
+Initial four-grid experiment
+------------------------------------------------------------
+
+The following historical experiment uses the original four-grid root finder on
 the actual numerical setups in eight example notebooks. It tests both speed
 and completeness; a small impulse-response error alone does not establish
 that every pole was recovered.
@@ -20,11 +77,12 @@ are not replaced by another solver or excluded from the coverage counts.
 Method and scope
 ----------------
 
-The existing public ``dss_to_pr(..., mode="lindsey_fox")`` accepts static
-feedback matrices. It does not accept an arbitrary FLAMO model. To test
+At this stage, ``dss_to_pr(..., mode="lindsey_fox")`` accepted static
+feedback matrices. To test
 the three filtered examples, the benchmark has a separate experimental
 adapter. No public FLAMO solver API or production root-finding algorithm
-was changed.
+was changed at that stage. The baseline benchmark retains the four-grid cap
+and disables fallback so its coverage and timing comparisons remain explicit.
 
 For these finite FIR / per-channel SOS loops, the adapter samples the full
 FLAMO characteristic matrix ``P(w) = I - F(w) B(w)``. It multiplies its
@@ -351,7 +409,7 @@ Since the lossless model has unit-circle poles, the frequency check uses
 error bound on the unit circle. Its relative frequency errors range from
 ``1.75e-4`` to ``0.130``, likewise rejecting the omission.
 
-The practical policy supported by these runs is: use the certified filter-zero
+The practical policy supported by these initial runs was: use the certified filter-zero
 group approximation for these absorption examples, and retain EAI as the
 fallback for the ten unresolved Kronecker configurations. Do not accept an
 incomplete modal decomposition merely because its current single-channel IR
@@ -400,7 +458,8 @@ norm error. Actual errors depend on residues and the finite observation
 window. These unit-circle modes persist, unlike the fast absorption modes.
 
 ``tests/benchmark_kronecker_resolution.py`` copies the LF function and changes
-only its grid-attempt cap from four to ten, guarded by an AST assertion.
+only its grid-attempt cap from four to ten (originally guarded by an AST
+assertion; the kernel now exposes that cap directly).
 All ten formerly failing configurations then return all 694 poles in
 complex128. No reference roots seed either search or refinement.
 

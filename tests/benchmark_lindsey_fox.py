@@ -38,7 +38,7 @@ def main() -> None:
     b = rng.normal(size=(3, 1))
     c = rng.normal(size=(1, 3))
     d = np.zeros((1, 1))
-    print("degree,mode,median_seconds,max_pole_error,max_ir_error")
+    print("degree,mode,actual_solver,median_seconds,max_pole_error,max_ir_error")
     for mode in args.modes:
         dss_to_pr([3, 4, 5], a, b, c, d, mode=mode)
     failed = False
@@ -48,10 +48,12 @@ def main() -> None:
         reference = None
         for mode in args.modes:
             elapsed = []
+            actual_solvers = set()
             try:
                 for _ in range(args.repeat):
                     start = perf_counter()
                     result = dss_to_pr(delays, a, b, c, d, mode=mode)
+                    actual_solvers.add(result[4].get("solver", mode))
                     elapsed.append(perf_counter() - start)
                 residues, poles, direct, pairs, meta = result
                 assert np.sum(1 + pairs) == delays.sum(), "missing poles"
@@ -64,7 +66,7 @@ def main() -> None:
                 ir_error = np.max(np.abs(ir - ir_time))
                 assert pole_error < 1e-8 and ir_error < 1e-7, "accuracy check failed"
                 print(
-                    f"{delays.sum()},{mode},{np.median(elapsed):.6f},"
+                    f"{delays.sum()},{mode},{'+'.join(sorted(actual_solvers))},{np.median(elapsed):.6f},"
                     f"{pole_error:.3e},{ir_error:.3e}",
                     flush=True,
                 )

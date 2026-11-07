@@ -1,17 +1,15 @@
-"""Diagnostic: extend only LF's four-grid cap to ten, keeping complex128.
+"""Diagnostic: run ten LF grid attempts, keeping complex128.
 
 Run from the checkout root with BLAS threads limited to one::
 
     python tests/benchmark_kronecker_resolution.py
 
-The AST assertion guards the single benchmark-only solver change. Reference
-roots are used only for validation; they never seed LF or matrix refinement.
+The production kernel now exposes the grid cap directly. Reference roots
+are used only for validation; they never seed LF or matrix refinement.
 SIGALRM limits root search to 60 seconds per case on Unix.
 """
 
-import ast
 import contextlib
-import inspect
 import json
 import signal
 import sys
@@ -26,22 +24,7 @@ from pyFDN.auxiliary.math import general_char_poly_fft
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_pr import _dss_to_res
 
-module = sys.modules[bench.lindsey_fox_roots.__module__]
-tree = ast.parse(inspect.getsource(bench.lindsey_fox_roots))
-changes = 0
-for node in ast.walk(tree):
-    if (
-        isinstance(node, ast.For)
-        and isinstance(node.target, ast.Name)
-        and node.target.id == "attempt"
-    ):
-        assert isinstance(node.iter, ast.Call) and node.iter.args[0].value == 4
-        node.iter.args[0].value = 10
-        changes += 1
-assert changes == 1
-namespace = dict(vars(module))
-exec(compile(tree, "<LF-resolution-experiment>", "exec"), namespace)
-solve = namespace["lindsey_fox_roots"]
+solve = bench.lindsey_fox_roots
 failed = {
     row["example"]
     for row in map(
@@ -78,7 +61,7 @@ for case in cases:
     start = perf_counter()
     sys.settrace(trace)
     try:
-        roots = solve(p[::-1], 1.0, 1.0)
+        roots = solve(p[::-1], 1.0, 1.0, max_attempts=10, max_seconds=60)
         elapsed = perf_counter() - start
         sys.settrace(None)
         signal.alarm(0)

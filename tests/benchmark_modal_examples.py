@@ -112,7 +112,9 @@ def model_lindsey_fox(model: Any, degree: int, lossless: bool) -> tuple:
         powers = np.arange(1, degree + 1)
         high = 1.0
         low = 1 / (2 * np.max(np.abs(ascending[1:] / ascending[0]) ** (1 / powers)))
-    poles = lindsey_fox_roots(coefficients[::-1], float(low), float(high))
+    poles = lindsey_fox_roots(
+        coefficients[::-1], float(low), float(high), max_attempts=4, max_seconds=60
+    )
     loop = _FDNLoopFlamo(decomposition.recursion_module)
     poles = np.array([_refine_pole_via_svd(complex(z), loop) for z in poles])
     poles = _conjugate_symmetrize(poles)
@@ -125,6 +127,26 @@ def model_lindsey_fox(model: Any, degree: int, lossless: bool) -> tuple:
             f"FLAMO residue extraction failed after LF found {expanded}/{degree} poles: {error}"
         ) from error
     return residues, poles, direct, paired, {"nonPairedPoles": unpaired}
+
+
+def static_lindsey_fox(delays, a, b, c, d):
+    """Original four-grid baseline, without fallback or matrix refinement."""
+    from pyFDN.auxiliary.math import general_char_poly_fft
+    from pyFDN.translate.dss_to_pr import _dss_to_res
+
+    singular = np.linalg.svd(a, compute_uv=False)
+    bounds = singular[[0, -1], None] ** (1 / np.array([min(delays), max(delays)]))
+    coefficients = general_char_poly_fft(delays, a)
+    poles = lindsey_fox_roots(
+        coefficients[::-1],
+        float(bounds.min()),
+        float(bounds.max()),
+        max_attempts=4,
+        max_seconds=60,
+    )
+    poles, pairs, unpaired = reduce_conjugate_pairs(poles, strict=True)
+    residues, direct, _, _ = _dss_to_res(poles, delays, a, b, c, d)
+    return residues, poles, direct, pairs, {"nonPairedPoles": unpaired}
 
 
 def cases() -> list[dict[str, Any]]:
@@ -236,7 +258,11 @@ def benchmark(case: dict[str, Any], repeat: int, seconds: int) -> None:
             return pyFDN.dss_to_impz(*args, length)
 
         solvers = {
-            mode: (lambda mode=mode: pyFDN.dss_to_pr(*args, mode=mode))
+            mode: (
+                lambda mode=mode: static_lindsey_fox(*args)
+                if mode == "lindsey_fox"
+                else pyFDN.dss_to_pr(*args, mode=mode)
+            )
             for mode in ("eig", "eai", "lindsey_fox")
         }
         if "kronecker" in case["name"]:

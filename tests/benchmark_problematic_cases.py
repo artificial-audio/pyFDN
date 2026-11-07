@@ -39,7 +39,9 @@ def partial_candidates(coefficients):
 
     sys.settrace(trace)
     try:
-        return bench.lindsey_fox_roots(coefficients[::-1], 1.0, 1.0)
+        return bench.lindsey_fox_roots(
+            coefficients[::-1], 1.0, 1.0, max_attempts=4, max_seconds=60
+        )
     except RuntimeError:
         return captured["roots"].copy()
     finally:

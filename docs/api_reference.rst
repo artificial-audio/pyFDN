@@ -333,7 +333,11 @@ It requires real, nonsingular static feedback, positive integer delays, and
 simple, sufficiently separated poles. It retries with finer grids but does
 not implement quotient deflation, repeated-root recovery, or the reference
 program's reciprocal search outside the unit circle. Failure raises
-``RuntimeError`` rather than silently falling back to another solver.
+``RuntimeError`` in the scalar root kernel. The public modal route instead
+refines against the original FDN matrix, checks the all-port response, and
+falls back to EAI with a warning and metadata if LF fails. The fallback must
+pass the same count and response checks. ``lf_max_seconds`` bounds only root
+search; default eig/EAI behavior is unchanged.
 Polynomial construction costs ``O(L N^3 + L log L)`` for ``N`` delay lines
 and an FFT length ``L > M``. Determinants are evaluated in batches to avoid
 storing all sampled matrices. Small coefficients can still be obscured by
@@ -342,6 +346,15 @@ constant/terminal coefficients are set directly to ``1`` and ``det(-A)``.
 Conjugate pairing and polishing remain quadratic in the number of poles.
 This is an experiment for long-delay FDNs, not a general replacement for
 the existing methods.
+
+``flamo_to_pr(model, mode="lindsey_fox", num_poles=known_order)`` provides
+the same policy for real float64 canonical FLAMO FDNs, clearing known SOS
+denominators before coefficient recovery. FIR loops require an explicit
+order. Incomplete EAI fallback results are rejected unless
+``allow_approximate=True`` and both all-port and external response checks
+pass. Metadata distinguishes complete decompositions from validated
+approximations. These sampled checks are not uniform response error bounds;
+see :doc:`lindsey_fox_examples` for acceptance criteria and the 30-case run.
 
 To compare one-time coefficient construction against principal minors::
 
