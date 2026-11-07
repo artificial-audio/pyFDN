@@ -4,18 +4,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import torch
+
 from .base import ResponseLoss
 
 if TYPE_CHECKING:
-    import torch
-
     from pyFDN.train.response import Response
 
-from .distances import CompressedEnergyDistance, MaskedSquaredError, SquaredError
+from .distances import (
+    CompressedEnergyDistance,
+    MaskedSquaredError,
+    RelativeError,
+    SquaredError,
+)
 from .features import (
     OCTAVE_EDGES,
     CumulativeEnergySurface,
+    EchoDensityProfile,
     EnergyDecayCurve,
+    MelEnergyDecayRelief,
+    PeakEnvelope,
     Waveform,
 )
 from .match import Match
@@ -234,3 +242,132 @@ class MatchCumulativeEnergy(Match):
                 f"{type(self).__name__} window ({self.window}) is longer than the "
                 f"model's nfft ({nfft}); there is no decay to read."
             )
+
+
+class MatchMelEnergyDecayRelief(ResponseLoss):
+    r"""Multi-resolution mel energy decay relief (EDR) distance to a reference.
+
+    At each STFT resolution, the mel power spectrogram of both signals is
+    backward-integrated over time and taken to dB (with an 80 dB floor), and
+    the normalized :math:`L^p` error
+    :math:`\overline{|E - \hat E|^p} / \overline{|\hat E|^p}` is averaged
+    over the resolutions. Decay and colour at once, like
+    :class:`MatchCumulativeEnergy`, but banded on the mel scale.
+
+    Contributed by Riccardo Giampiccolo. The defaults are his, tuned at 16 kHz;
+    at 48 kHz the same STFT sizes span a third of the time.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    fft_sizes, win_lengths, hop_lengths : sequence of int
+        One STFT resolution per entry; all three the same length.
+    n_mels : int
+        Number of mel bands.
+    p : float
+        Exponent of the error.
+    """
+
+    def __init__(
+        self,
+        target: Any,
+        *,
+        fft_sizes: tuple[int, ...] = (1024, 2048, 512),
+        win_lengths: tuple[int, ...] = (600, 1200, 240),
+        hop_lengths: tuple[int, ...] = (120, 240, 50),
+        n_mels: int = 64,
+        p: float = 1.0,
+    ) -> None:
+        if not len(fft_sizes) == len(win_lengths) == len(hop_lengths):
+            raise ValueError(
+                "fft_sizes, win_lengths and hop_lengths must have the same length"
+            )
+        self.resolutions = [
+            Match(
+                target,
+                feature=MelEnergyDecayRelief(n_fft, win, hop, n_mels),
+                distance=RelativeError(p),
+                reduction=Mean(),
+            )
+            for n_fft, win, hop in zip(fft_sizes, win_lengths, hop_lengths, strict=True)
+        ]
+
+    def __call__(self, response: Response) -> torch.Tensor:
+        return torch.stack([m(response) for m in self.resolutions]).mean()
+
+
+class MatchEchoDensity(Match):
+    """Mean squared error of the differentiable echo density profile.
+
+    Scores how fast the response builds up to a diffuse, Gaussian-like tail --
+    the one property of a reverberator that neither a spectrogram nor an energy
+    decay sees. See :class:`~pyFDN.train.losses.features.EchoDensityProfile`.
+
+    Contributed by Riccardo Giampiccolo.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    win_duration : float
+        Analysis window in seconds.
+    hop : int, optional
+        Samples between profile points; defaults to a quarter window. 1 is the
+        textbook profile, at a memory cost of ``nfft * window`` per channel.
+    kappa : float or (float, float)
+        Sigmoid slope, or its linear ramp from start to end of the response.
+    """
+
+    def __init__(
+        self,
+        target: Any,
+        *,
+        win_duration: float = 0.02,
+        hop: int | None = None,
+        kappa: float | tuple[float, float] = (1e2, 1e5),
+    ) -> None:
+        super().__init__(
+            target=target,
+            feature=EchoDensityProfile(win_duration=win_duration, hop=hop, kappa=kappa),
+            distance=SquaredError(),
+            reduction=Mean(),
+        )
+
+
+class MatchEnvelope(Match):
+    r"""Normalized :math:`L^p` error of the smoothed peak envelope.
+
+    :math:`\overline{|e - \hat e|^p} / \overline{|\hat e|^p}` between the
+    envelopes of prediction and reference, where the envelope is a fast peak
+    follower on :math:`h^2`, zero-phase low-passed. Sees the arrival and level
+    of individual reflections that an energy decay integrates away. See
+    :class:`~pyFDN.train.losses.features.PeakEnvelope`.
+
+    Contributed by Riccardo Giampiccolo.
+
+    Parameters
+    ----------
+    target : array_like
+        Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
+        ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
+        ``nfft``.
+    release_time : float
+        Release time of the peak follower in seconds.
+    p : float
+        Exponent of the error.
+    """
+
+    def __init__(
+        self, target: Any, *, release_time: float = 2.8e-4, p: float = 2.0
+    ) -> None:
+        super().__init__(
+            target=target,
+            feature=PeakEnvelope(release_time=release_time),
+            distance=RelativeError(p),
+            reduction=Mean(),
+        )

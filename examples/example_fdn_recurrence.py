@@ -19,9 +19,9 @@ def _(mo):
     mo.md(r"""
     # Can an FDN unmix itself?
 
-    A lossless FDN is an orthogonal map on its $M = \sum_i m_i$ delay-line samples: energy is never lost, only shuffled. Poincaré recurrence then says the state must come back arbitrarily close to where it started, infinitely often. If it does, the impulse response should briefly collapse from dense noise back into a few sparse echoes.
+    A lossless FDN is an orthogonal map on its $M = \sum_i m_i$ delay-line samples: energy is never lost, only shuffled. A finite-dimensional orthogonal map has recurrent trajectories: the state returns arbitrarily close to its starting point. If it does, the impulse response should briefly collapse from dense noise back into a few sparse echoes.
 
-    The catch is *how long* that takes. The state moves quasi-periodically on a torus spanned by the eigenphases of the $M \times M$ state-transition matrix, and the waiting time for all of them to line up again grows exponentially with the number of independent modes. Four delay lines with $M = 1000$ states are long enough to watch the mixing happen, and short enough to run for a minute of audio.
+    The catch is *how long* that takes. The state moves quasi-periodically on a torus spanned by the eigenphases of the $M \times M$ state-transition matrix, and aligning many independent phases can require very long waiting times. Four delay lines with $M = 1000$ states are long enough to watch the mixing happen, and short enough to run for a minute of audio.
     """)
     return
 
@@ -65,11 +65,14 @@ def _(np):
             stop = min(start + delays.min(), pad + horizon)
             heads = [s[start - m : stop - m, i] for i, m in enumerate(delays)]
             s[start:stop] = np.stack(heads, 1) @ A.T
-        sums = [np.cumsum(np.vstack([np.zeros(n), s**p]), 0) for p in (2, 4)]
         t = np.arange(pad, pad + horizon) + 1  # state after writing sample t - 1
-        e2, e4 = (
-            sum(c[t, i] - c[t - m, i] for i, m in enumerate(delays)) for c in sums
-        )
+        moments = []
+        power = s
+        for _ in range(2):  # second and fourth moments
+            power = np.square(power)
+            c = np.cumsum(np.vstack([np.zeros(n), power]), 0)
+            moments.append(sum(c[t, i] - c[t - m, i] for i, m in enumerate(delays)))
+        e2, e4 = moments
         return s[pad:], e2**2 / e4
 
     return (recurrence,)
@@ -98,6 +101,19 @@ def _(delays, hadamard, n, np, pyFDN, recurrence):
         5000,
     )[:, 0, 0]
     assert np.allclose(output(recurrence(delays, _A, 5000)[0]), _ref)
+
+    # Check the sliding-window state metric against the processing engine.
+    _delays = np.array([3, 5, 7, 11])
+    _graph = pyFDN.dss_to_td(
+        _delays, _A, np.ones((n, 1)) / np.sqrt(n), np.ones((1, n)), [[0.0]]
+    )
+    _expected_pr = recurrence(_delays, _A, 64)[1]
+    for _k in range(64):
+        _graph.process_signal(np.array([float(_k == 0)]))
+        _buffer = _graph.ops[0].ops[1].state.buffer
+        _energy = np.sum(_buffer**2)
+        assert np.isclose(_energy, 1.0)
+        assert np.isclose(_expected_pr[_k], _energy**2 / np.sum(_buffer**4))
     return (output,)
 
 
@@ -106,7 +122,7 @@ def _(mo):
     mo.md(r"""
     ## Hadamard against random orthogonal
 
-    The $4 \times 4$ Hadamard matrix against a batch of Haar-random orthogonal matrices, all on the same delays. The Householder reflection $\mathbf{I} - \tfrac{1}{2}\mathbf{1}\mathbf{1}^\top$ is a useful control: it equals the Hadamard matrix up to signs and a row permutation, so it has the same $\pm 1$ eigenvalues and the same entry magnitudes.
+    The $4 \times 4$ Hadamard matrix against a batch of Haar-random orthogonal matrices, all on the same delays. The Householder reflection $\mathbf{I} - \tfrac{1}{2}\mathbf{1}\mathbf{1}^\top$ is a useful control: it equals the Hadamard matrix up to signs and a row permutation, and has the same entry magnitudes. Both have eigenvalues $\pm 1$, but their multiplicities differ: Hadamard has two of each, while Householder has three $+1$ and one $-1$. This is not a comparison at a fixed spectrum.
     """)
     return
 
@@ -119,8 +135,13 @@ def _(delays, hadamard, horizon, n, np, pyFDN, recurrence):
         "Householder": np.eye(n) - 2 / n,
     }
     matrices |= {f"random {i}": pyFDN.random_orthogonal(n, rng) for i in range(12)}
-    results = {name: recurrence(delays, A, horizon) for name, A in matrices.items()}
-    return matrices, results
+    results = {}
+    for _name, _A in matrices.items():
+        _s, _pr = recurrence(delays, _A, horizon)
+        results[_name] = _pr
+        if _name == "Hadamard":
+            hadamard_signal = _s
+    return hadamard_signal, matrices, results
 
 
 @app.cell
@@ -136,7 +157,7 @@ def _(mo, np, results):
                 "late min": round(float(pr[_settle:].min()), 1),
                 "at sample": int(np.argmin(pr[_settle:]) + _settle),
             }
-            for name, (_s, pr) in results.items()
+            for name, pr in results.items()
         ],
         selection=None,
     )
@@ -150,7 +171,7 @@ def _(mo):
 
     Left: the first 50 000 samples at full resolution, as the participation ratio climbs from 4 towards the fully mixed plateau. Right: the minimum per block of 4000 samples over the whole run. It fluctuates below the plateau but never comes back down towards 4: over 42 seconds at 48 kHz, no matrix gets below 190 taps.
 
-    The Hadamard FDN behaves differently from the start. It reaches its plateau fastest, within about 5000 samples, but that plateau sits lower: its median of about 300 taps is below every random matrix, so it never mixes fully. The Householder FDN mixes almost as fast and then sits right at $M/3$.
+    The Hadamard FDN behaves differently from the start. It reaches its plateau fastest, within about 5000 samples, but that plateau sits lower: its median of about 300 taps is below every random matrix, so its participation ratio is lower in this run. The Householder FDN mixes almost as fast and then sits right at $M/3$.
     """)
     return
 
@@ -160,7 +181,7 @@ def _(horizon, n, np, plt, results):
     _highlight = {"Hadamard": "C3", "Householder": "C0"}
     _block = 4000
     _fig, (_early, _late) = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
-    for _name, (_s, _pr) in results.items():
+    for _name, _pr in results.items():
         _style = {"color": _highlight.get(_name, "0.6"), "lw": 0.5}
         if _name in _highlight:
             _style |= {"label": _name, "lw": 1.0, "zorder": 3}
@@ -194,9 +215,9 @@ def _(mo):
 
 
 @app.cell
-def _(np, output, plt, results):
-    _s, _pr = results["Hadamard"]
-    _y = output(_s)
+def _(hadamard_signal, np, output, plt, results):
+    _pr = results["Hadamard"]
+    _y = output(hadamard_signal)
     _k = int(np.argmin(_pr[100_000:]) + 100_000)
     _fig, _axes = plt.subplots(2, 1, figsize=(9, 4.5), sharex=True)
     _axes[0].plot(_y[:2000], lw=0.7)
@@ -257,11 +278,11 @@ def _(mo):
     mo.md(r"""
     ## What decides it
 
-    **Size.** With 26 states, the Hadamard FDN gets back to almost a single tap within a million samples (12% of $M/3$, about one tap). Every added state is another phase that has to line up, so the deepest dip climbs steadily towards the fully mixed value: by $M = 1000$, no matrix gets below about 58% of it. A practical FDN, with several thousand states, will not unmix in any realistic listening time. Losses make the point moot anyway: an RT of a second leaves the response hundreds of decibels down long before then.
+    **Size.** With 26 states, the Hadamard FDN gets back to almost a single tap within a million samples (12% of $M/3$, about one tap). Across these five delay sets, the deepest observed dip rises towards the Gaussian reference: by $M = 1000$, no matrix gets below about 58% of it. These finite runs do not establish a recurrence-time bound for larger networks. Absorption further reduces the absolute level of any late recurrence; audibility is not tested here.
 
-    **Matrix.** At every size the Hadamard FDN dips deepest. The Householder FDN, with identical eigenvalues and entry magnitudes, does no better than a typical random matrix and usually worse. So the eigenvalues of $\mathbf{A}$ are not the reason; its sign pattern is. Poles that are exact roots of unity are not the reason either: at $M = 1000$ the Hadamard FDN has only the trivial ones at $\pm 1$, like a random matrix.
+    **Matrix.** In these tested delay sets and random draws, the Hadamard FDN dips deepest. Householder has the same entry magnitudes but a different eigenvalue multiplicity, and usually dips less than the median random matrix. This experiment does not separate the effects of sign pattern, feedback spectrum, delay assignment, and the full state-transition spectrum.
 
-    A plausible mechanism, seen at $M = 26$: just before the sparsest moment, the energy sits in four nearly equal taps reaching the matrix together, and the Sylvester Hadamard matrix maps any of its $\pm 1$ columns onto a single line. The Householder matrix only flips the sign of $\mathbf{1}$, its own eigenvector, so that moment stays four echoes wide. The same focusing would explain why the large Hadamard FDN never quite mixes fully.
+    A plausible mechanism, seen at $M = 26$: just before the sparsest moment, the energy sits in four nearly equal taps reaching the matrix together, and the Sylvester Hadamard matrix maps any of its $\pm 1$ columns onto a single line. Householder maps $\mathbf{1}$ to $-\mathbf{1}$, preserving four equal taps for that particular input pattern. Focusing is a hypothesis here; it is not isolated by this comparison.
     """)
     return
 

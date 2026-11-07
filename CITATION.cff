@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use pyFDN in research, please cite the technical report below."
+title: pyFDN
+type: software
+authors:
+  - family-names: Schlecht
+    given-names: Sebastian J.
+  - family-names: Franchino
+    given-names: Facundo
+  - family-names: Bai
+    given-names: Jeremy B.
+repository-code: https://github.com/artificial-audio/pyFDN
+url: https://artificial-audio.github.io/pyFDN/
+preferred-citation:
+  type: report
+  title: "pyFDN: A Python Toolbox for Feedback Delay Network Design, Analysis, and Optimization"
+  authors:
+    - family-names: Schlecht
+      given-names: Sebastian J.
+    - family-names: Franchino
+      given-names: Facundo
+    - family-names: Bai
+      given-names: Jeremy B.
+  year: 2026
+  doi: 10.48550/arXiv.2610.27217
+  date-published: 2026-10-19
+  institution:
+    name: arXiv
+  number: "arXiv:2610.27217"
+  url: https://arxiv.org/abs/2610.27217
+  notes: "Technical report; not peer reviewed. Describes pyFDN version 0.5.0."

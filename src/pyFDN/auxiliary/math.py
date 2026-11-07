@@ -262,6 +262,56 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     return determinant
 
 
+def general_char_poly_fft(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
+    """Static FDN characteristic coefficients from one circle of determinants.
+
+    Samples ``det(I - diag(w**delays) @ A)`` at roots of unity and uses an
+    inverse FFT to recover coefficients in the same z^{-1} order as
+    :func:`general_char_poly`. For M = sum(delays), returns exactly M+1
+    coefficients, without trimming small terms. Real static A and positive
+    integer delays are required. Cost is O(L N^3 + L log L), with L the next
+    power of two above M; determinant samples are batched to limit memory.
+
+    Coefficient accuracy depends on determinant conditioning; small terms may
+    be obscured by roundoff. This avoids principal-minor enumeration, not the
+    conditioning limitations of a scalar coefficient representation.
+    """
+    raw_delays = np.asarray(delays)
+    if (
+        raw_delays.ndim != 1
+        or raw_delays.size == 0
+        or not np.all(np.isfinite(raw_delays))
+        or np.any(raw_delays <= 0)
+        or np.any(raw_delays != np.floor(raw_delays))
+    ):
+        raise ValueError("delays must be a non-empty vector of positive integers")
+    delays_arr = raw_delays.astype(int)
+    a_mat = np.asarray(A)
+    n = delays_arr.size
+    if (
+        a_mat.shape != (n, n)
+        or np.iscomplexobj(a_mat)
+        or not np.all(np.isfinite(a_mat))
+    ):
+        raise ValueError("A must be a finite real static matrix matching delays")
+    a_mat = np.asarray(a_mat, dtype=float)
+    degree = int(delays_arr.sum())
+    nfft = 1 << degree.bit_length()
+    samples = np.empty(nfft // 2 + 1, dtype=complex)
+    identity = np.eye(n)
+    for start in range(0, samples.size, 128):
+        stop = min(start + 128, samples.size)
+        angles = -2j * np.pi * np.arange(start, stop) / nfft
+        phases = np.exp(angles[:, None] * delays_arr)
+        matrices = identity - phases[:, :, None] * a_mat
+        samples[start:stop] = np.linalg.det(matrices)
+    coefficients = np.fft.irfft(samples, n=nfft)[: degree + 1]
+    # These two coefficients are known directly, including a singular A.
+    coefficients[0] = 1.0
+    coefficients[-1] = np.linalg.det(-a_mat)
+    return coefficients
+
+
 def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     """
     Generalized characteristic polynomial (GCP) for delay state-space.

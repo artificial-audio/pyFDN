@@ -107,8 +107,8 @@ Explicit functions map either decay targets or gain targets onto a named
 filter design. The same functions run in NumPy or Torch; the trainable
 :class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
-``"graphic_eq"``, ``"first_order_shelf"``, or ``"one_pole"`` used by those
-modules. The target-to-EQ functions accept ``return_design=True`` when their
+``"graphic_eq"``, ``"first_order_shelf"``, ``"one_pole"``, or ``"two_stage"``
+used by those modules. The target-to-EQ functions accept ``return_design=True`` when their
 JSON-compatible design record is also needed for an ``FDNPreset``.
 
 .. autosummary::
@@ -119,10 +119,12 @@ JSON-compatible design record is also needed for an ``FDNPreset``.
    pyFDN.decay_to_geq
    pyFDN.decay_to_first_order_shelf
    pyFDN.decay_to_one_pole
+   pyFDN.decay_to_two_stage
    pyFDN.gain_to_geq
    pyFDN.gain_to_bounded_geq
    pyFDN.gain_to_first_order_shelf
    pyFDN.gain_to_one_pole
+   pyFDN.gain_to_two_stage
    pyFDN.geq_design_matrix
    pyFDN.lowshelf_biquad
    pyFDN.highshelf_biquad
@@ -211,6 +213,7 @@ Polynomial & Matrix Maths
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
+   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
@@ -303,6 +306,37 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
    pyFDN.mtf_to_impz
    pyFDN.pr_to_impz
 
+Experimental Lindsey–Fox modal decomposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass ``mode="lindsey_fox"`` to :func:`pyFDN.dss_to_pr` or
+:func:`pyFDN.flamo_to_pr` for FFT grid search with Laguerre refinement.
+The existing defaults remain ``"eig"`` for static DSS and ``"eai"`` for FLAMO.
+The opt-in route checks completeness and the all-port response. Failed search,
+completion, or response validation raises without switching to EAI. Direct EAI
+calls may accept incomplete results with explicit ``allow_approximate=True``
+and successful response checks; this option does not relax LF acceptance.
+
+:func:`pyFDN.general_char_poly_fft` recovers the static characteristic
+coefficients once from determinant samples and reuses them on every search
+circle. The static ``"roots"`` backend uses these FFT coefficients too.
+:func:`pyFDN.general_char_poly` retains the principal-minor implementation as
+a reference and for polynomial feedback matrices.
+
+All modal backends report solver and pole-count metadata. Complete eig, roots,
+and direct EAI results have ``responseValidation=None``; LF always checks the
+response. Unsupported multiple poles raise instead of producing zero residues.
+Residues follow ``H(z) = D + sum_k R_k / (z - p_k)``; a simple pole at zero
+contributes a unit delay.
+
+Usage, supported models, numerical acceptance criteria, and a reproducible
+benchmark on the modal examples:
+
+.. toctree::
+   :maxdepth: 1
+
+   lindsey_fox_examples
+
 FDN Processing
 --------------
 
@@ -361,6 +395,9 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.MatchImpulseResponse
    pyFDN.MatchEnergyDecay
    pyFDN.MatchCumulativeEnergy
+   pyFDN.MatchMelEnergyDecayRelief
+   pyFDN.MatchEchoDensity
+   pyFDN.MatchEnvelope
    pyFDN.Energy
    pyFDN.Sparsity
    pyFDN.L1
