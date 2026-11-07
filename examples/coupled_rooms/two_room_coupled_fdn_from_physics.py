@@ -18,7 +18,7 @@ def _():
     from pyFDN.auxiliary.physics_based_coupling import (
         create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
         create_state_transition_matrix, trajectory, trajectory_with_delays,
-        get_coupling_angles, get_coupling_matrix, get_decay_matrix,
+        match_delay_totals_to_volumes, get_coupling_angles, get_coupling_matrix, get_decay_matrix,
         get_feedback_matrix, get_room_time_varying_matrix, gfdn_energy_ledger)
 
     return (
@@ -30,6 +30,7 @@ def _():
         create_lossless_coupling_matrix,
         create_state_transition_matrix,
         expm,
+        match_delay_totals_to_volumes,
         get_coupling_angles,
         get_coupling_matrix,
         get_decay_matrix,
@@ -51,6 +52,8 @@ def _(mo):
 
     Pipeline: physical dimensions $\to$ Cremer–Müller generator $\mathbf Q$ $\to$ pairwise angles
     $\mathbf A=\begin{bmatrix}\cos(\theta) I_{N1} & \sin(\theta) I_{N1} \\ -\sin(\theta)  I_{N2} & \cos(\theta)  I_{N2} \end{bmatrix}\operatorname{blkdiag}(\mathbf Q_1,\mathbf Q_2)$.
+    This notebook explores impulse-driven onset. The paper's noise-start SA verification and reproducible exports are in `export_paper_figures.py`.
+
     We then compare the GFDN's **exact** per-line energy ledger against $\mathbf e(t)=e^{t\mathbf Q}\mathbf e(0)$,
     the true physical energy trajectory — for both topologies, side by side.
     """)
@@ -153,42 +156,6 @@ def _(
     return Q, V, beta, gamma, num_rooms
 
 
-@app.cell
-def _(ArrayLike, np):
-    def match_delay_totals_to_volumes(base_delays: ArrayLike, lines_per_group:int, volumes:ArrayLike, target_total=None):
-        """Match integer volume ratios exactly, retaining each group's delay spread.
-
-        Start from independently sampled coprime delays, then apportion integer
-        lengths to exact group totals. No coprimality constraint is imposed on
-        the result. Its total number of cells stays close to the original total.
-        Supply target_total to choose the nearest feasible total to a requested
-        global mean instead of retaining the original sampled total.
-        """
-        volumes = np.asarray(volumes, dtype=float)
-        integer_volumes = np.rint(volumes).astype(np.int64)
-        if np.any(volumes <= 0) or not np.allclose(volumes, integer_volumes):
-            raise ValueError("Exact-ratio comparison requires positive integer volumes.")
-        weights = integer_volumes // np.gcd.reduce(integer_volumes)
-        base = np.asarray(base_delays, dtype=np.int64).reshape(
-            len(volumes), lines_per_group)
-        state_count = base.sum() if target_total is None else target_total
-        multiplier = max(
-            int(np.rint(state_count / weights.sum())),
-            int(np.max(np.ceil(lines_per_group / weights))),
-        )
-        targets = multiplier * weights
-        matched = []
-        for group, target in zip(base, targets):
-            # Reserve one cell per line, then use largest-remainder rounding.
-            ideal = 1 + (target - lines_per_group) * group / group.sum()
-            lengths = np.floor(ideal).astype(np.int64)
-            remainder = int(target - lengths.sum())
-            order = np.argsort(-(ideal - lengths), kind="stable")
-            lengths[order[:remainder]] += 1
-            matched.append(lengths)
-        return np.concatenate(matched)
-
-    return (match_delay_totals_to_volumes,)
 
 
 @app.cell
@@ -212,7 +179,7 @@ def _(Nper, V, avg_delays, match_delay_totals_to_volumes, mo, np, pyFDN):
     delays = match_delay_totals_to_volumes(co_prime_delays, Nroom, V)
 
     delays_per_fdn = np.asarray([delays[:N1], delays[N1:]], dtype=np.int32)
-    M1, M2 = int(d1.sum()), int(d2.sum())
+    M1, M2 = map(int, delays_per_fdn.sum(axis=1))
     _delay_totals = [M1, M2]
     ratio_mismatch = (V[0] / V[1]) / (M1 / M2)
 
@@ -406,14 +373,16 @@ def _(mo):
 def _(Q, fs, gamma, n_samp, np, num_rooms, trajectory):
     # --- True physical trajectory e(t) = expm(Q t) e(0), source = room 1 -------
     tsec = np.arange(n_samp) / fs
-    _, Eref = trajectory(Q, np.array([0.0, 1.0]), np.eye(num_rooms), fs, n_samp)
+    source_room = 1
+    source_energy = np.eye(num_rooms)[source_room]
+    _, Eref = trajectory(Q, source_energy, np.eye(num_rooms), fs, n_samp)
     _, Eref_lossy = trajectory(Q,
-                               np.array([0.0, 1.0]),
+                               source_energy,
                                np.eye(num_rooms),
                                fs,
                                n_samp,
                                gamma=gamma)
-    return Eref, Eref_lossy, tsec
+    return Eref, Eref_lossy, source_room, tsec
 
 
 @app.cell
@@ -429,6 +398,7 @@ def _(
     np,
     num_rooms,
     plt,
+    source_room,
     tsec,
 ):
     # --- The comparison plot -----------------------------------------------------
@@ -443,10 +413,10 @@ def _(
 
     for _ax, _Eex, _Eref, _title in zip(_axs, [E_ex, db(E_ex_lossy)],
                                         [Eref, db(Eref_lossy)],
-                                        ["Lossless, src = R2", "Lossy, src = R2"]):
+                                        [f"Lossless, src = R{source_room+1}", f"Lossy, src = R{source_room+1}"]):
         for _r in range(num_rooms):
             _ax.plot(tsec[:n_ex],
-                     _Eex[1, :, _r],
+                     _Eex[source_room, :, _r],
                      color=_colors[_r],
                      lw=1.1,
                      label=f"GFDN {_labels[_r]}")
@@ -473,13 +443,13 @@ def _(
 
 
 @app.cell
-def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np):
+def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np, source_room):
     _tail = slice(int(0.85 * n_ex), n_ex)
 
-    _err = np.max(np.abs(E_ex[0] - Eref[:n_ex]))
-    _err_lossy = np.max(np.abs(E_ex_lossy[0] - Eref_lossy[:n_ex]))
+    _err = np.max(np.abs(E_ex[source_room] - Eref[:n_ex]))
+    _err_lossy = np.max(np.abs(E_ex_lossy[source_room] - Eref_lossy[:n_ex]))
 
-    _gfdn_tail = E_ex[0, _tail].mean(0)
+    _gfdn_tail = E_ex[source_room, _tail].mean(0)
     _gfdn_split = _gfdn_tail / _gfdn_tail.sum()
     _ref_tail = Eref[_tail].mean(0)
     _ref_split = _ref_tail / _ref_tail.sum()
@@ -503,15 +473,13 @@ def _(E_ex, E_ex_lossy, Eref, Eref_lossy, N1, V, delays, mo, n_ex, np):
     | target $V_i/V_{{\rm tot}}$ | {_target_split[0]:.4f} | {_target_split[1]:.4f} |
     | $M_i/M_{{\rm tot}}$ (theoretical GFDN asymptote) | {_equipartition_split[0]:.4f} | {_equipartition_split[1]:.4f} |
 
-    **The GFDN's true long-run target is the $M_i/M_{{\rm tot}}$ row, not $V_i/V_{{\rm tot}}$ directly**
-    — the mixing angle $\theta$ only sets *how fast* the GFDN approaches it, never *where* it ends up.
-    $V_i/V_{{\rm tot}}$ and $M_i/M_{{\rm tot}}$ should be close to each other by design (that's the whole
-    point of $M_i\propto V_i$), but they're two different quantities: if the GFDN row disagrees with
-    $M_i/M_{{\rm tot}}$, suspect insufficient equilibration time (try increasing `dur` well beyond a
-    few relaxation times and see if it keeps drifting toward $M_i/M_{{\rm tot}}$) or something in the
-    live delay-line/matrix realization; if it already matches $M_i/M_{{\rm tot}}$ but that itself is
-    off from $V_i/V_{{\rm tot}}$, the fix is tightening the delay-length design so $M_1/M_2$ lands
-    closer to $V_1/V_2$.
+    **Conditional equilibrium target.** Uniform mean energy per delay cell
+    gives the $M_i/M_{{\rm tot}}$ split. Matching it to room volume is a storage
+    design condition. A fixed orthogonal feedback matrix need not reach that
+    state: persistent correlations and source-dependent modal excitation can
+    sustain a bias. Compare finite-window errors without assuming convergence.
+    The paper's separate noise-start verification is reproduced by
+    `export_paper_figures.py`; these plots explore impulse-driven onset.
     """)
     return
 

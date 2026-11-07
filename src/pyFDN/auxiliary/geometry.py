@@ -547,17 +547,8 @@ def get_point_to_room_weights(
         if aperture_hit_order is None:
             continue
 
-        # weights[cur_target_room_idx] = _chained_aperture_weight(
-        #     aperture_hit_order,
-        #     point,
-        #     start_room_idx,
-        #     ROOM_DIMS,
-        #     apertures,
-        # )
-
-        weights[
-            cur_target_room_idx] = spherical_polygon_intersection_solid_angle(
-                aperture_hit_order, point) / (4 * np.pi)
+        weights[cur_target_room_idx] = _chained_aperture_weight(
+            aperture_hit_order, point, start_room_idx, ROOM_DIMS, apertures)
 
         distance_traversed = 0.0
         cur_point = point.copy()

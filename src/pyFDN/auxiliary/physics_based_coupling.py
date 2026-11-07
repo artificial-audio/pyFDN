@@ -151,20 +151,61 @@ def trajectory_with_delays(
     return w, out
 
 
+def match_delay_totals_to_volumes(base_delays: ArrayLike, lines_per_group:int, volumes:ArrayLike, target_total=None):
+    """Match integer volume ratios exactly, retaining each group's delay spread.
+
+    Start from independently sampled coprime delays, then apportion integer
+    lengths to exact group totals. No coprimality constraint is imposed on
+    the result. Its total number of cells stays close to the original total.
+    Supply target_total to choose the nearest feasible total to a requested
+    global mean instead of retaining the original sampled total.
+    """
+    volumes = np.asarray(volumes, dtype=float)
+    integer_volumes = np.rint(volumes).astype(np.int64)
+    if np.any(volumes <= 0) or not np.allclose(volumes, integer_volumes):
+        raise ValueError("Exact-ratio comparison requires positive integer volumes.")
+    weights = integer_volumes // np.gcd.reduce(integer_volumes)
+    base = np.asarray(base_delays, dtype=np.int64).reshape(
+        len(volumes), lines_per_group)
+    state_count = base.sum() if target_total is None else target_total
+    multiplier = max(
+        int(np.rint(state_count / weights.sum())),
+        int(np.max(np.ceil(lines_per_group / weights))),
+    )
+    targets = multiplier * weights
+    matched = []
+    for group, target in zip(base, targets):
+        # Reserve one cell per line, then use largest-remainder rounding.
+        ideal = 1 + (target - lines_per_group) * group / group.sum()
+        lengths = np.floor(ideal).astype(np.int64)
+        remainder = int(target - lengths.sum())
+        order = np.argsort(-(ideal - lengths), kind="stable")
+        lengths[order[:remainder]] += 1
+        matched.append(lengths)
+    return np.concatenate(matched)
+
+
+
 def get_coupling_angles(beta: NDArray, dt_i: List) -> NDArray:
+    """Rate-match two-room coupling; use the pairwise rule approximately for N>2.
+
+    With volume-proportional storage, beta_ij * dt_i = C_ij / H.
+    Directional values are averaged when integer storage only approximates
+    that ratio. The full skew exponential is not an exact multi-room match.
     """
-    Get the coupling angles from the coupling coefficients
-    and mean free path lengths for all FDNs
-    """
+    beta = np.asarray(beta, dtype=float)
+    dt_i = np.asarray(dt_i, dtype=float)
     n = len(dt_i)
-    theta = np.zeros((n, n))
-    for _i in range(n):
-        for _j in range(_i + 1, n):
-            val = 0.5 * (beta[_i, _j] * dt_i[_i] + beta[_j, _i] * dt_i[_j])
-            val = 0.999 if val > 0.999 else val
-            theta[_i,
-                  _j] = theta[_j,
-                              _i] = np.arcsin(np.sqrt(val)) if val > 0 else 0.0
+    if beta.shape != (n, n) or not np.all(np.isfinite(beta)) or np.any(beta < 0):
+        raise ValueError("beta must be a finite nonnegative square matrix matching dt_i")
+    if dt_i.ndim != 1 or not np.all(np.isfinite(dt_i)) or np.any(dt_i <= 0):
+        raise ValueError("dt_i must contain positive finite mean traversal times")
+    probabilities = beta * dt_i[:, None]
+    probabilities = 0.5 * (probabilities + probabilities.T)
+    if np.any(probabilities > 1):
+        raise ValueError("Coupling fraction exceeds one; reduce aperture area or delay storage")
+    theta = np.arcsin(np.sqrt(probabilities))
+    np.fill_diagonal(theta, 0.0)
     return theta
 
 
@@ -315,7 +356,7 @@ def run_gfdn(A,
              C: NDArray,
              delays: ArrayLike,
              n_samp: int,
-             src: Union[int, List] = 0,
+             src: Optional[Union[int, List]] = None,
              tv_matrix: Optional[TimeOperator] = None):
     """
     Generic wrapper around process_dss.
@@ -324,24 +365,28 @@ def run_gfdn(A,
         B (NDArray): (Ntot, num_inputs) input matrix
         C (NDArray) : (num_outputs, Ntot) output matrix
         delays (ArrayLike): delay line lengths in samples
-        src (int, list): room where the source is
+        src (int, list, optional): input indices to excite; None renders every input
         n_samp (int): number of time samples
         tv_matrix (TimeOperator, optional): feedback hook, including the operator
             returned by get_room_time_varying_matrix. Reset it before independent
             renders when identical initial modulation is required.
     Returns:
-        NDArray : GFDN output of size (num_inputs, n_samp, num_outputs)
+        NDArray : GFDN output of size (number of selected inputs, n_samp, num_outputs)
     """
 
     num_inputs = B.shape[1]
     num_outputs = C.shape[0]
 
-    Y = np.zeros((num_inputs, n_samp, num_outputs))
-    for n_src in range(num_inputs):
+    sources = np.arange(num_inputs) if src is None else np.atleast_1d(src)
+    if any(not isinstance(k, (int, np.integer)) or k < 0 or k >= num_inputs for k in sources):
+        raise ValueError("src must select valid input indices")
+    Y = np.zeros((len(sources), n_samp, num_outputs))
+    for n_src, k in enumerate(sources):
         x = np.zeros((n_samp, num_inputs))
-        k = src[n_src] if isinstance(src, list) else src
         x[0, k] = 1.0
 
+        if tv_matrix is not None:
+            tv_matrix.reset()
         Y[n_src] = pyFDN.process_dss(
             x,
             delays,
@@ -369,12 +414,14 @@ def gfdn_energy_ledger(Y: NDArray, num_rooms: int, Nroom: int,
     Ntot = num_rooms * Nroom
     # cumulative sum of the energy
     cs = np.concatenate(
-        [np.zeros((num_rooms, 1, Ntot)),
+        [np.zeros((Y.shape[0], 1, Ntot)),
          np.cumsum(Y**2, axis=1)], axis=1)
     n_samp = Y.shape[1]
     n_ex = n_samp - int(delays.max()) - 1
+    if n_ex <= 0:
+        raise ValueError("Simulation must exceed the longest delay")
     idx = np.arange(n_ex)
-    E = np.zeros((num_rooms, n_ex, num_rooms))
+    E = np.zeros((Y.shape[0], n_ex, num_rooms))
     bounds = [i * Nroom for i in range(num_rooms)]
     for _j, _m in enumerate(delays):
         # current room

@@ -1204,3 +1204,28 @@ class RecursionState:
         self.buffer[:] = 0.0
         self.pointers[:] = 0
         self._last_indices = None
+
+    def set_lines(self, lines: Sequence[ArrayLike]) -> None:
+        """Overwrite the whole content of every delay line.
+
+        ``lines[i]`` holds exactly ``delays[i]`` samples in output order:
+        ``lines[i][k]`` is what line ``i`` emits ``k`` samples from now.
+        """
+        if len(lines) != self.num_delays:
+            raise ValueError(f"Need one array per delay line ({self.num_delays})")
+        for i, (line, m, p) in enumerate(
+            zip(lines, self.delays, self.pointers, strict=True)
+        ):
+            line_arr = np.asarray(line, dtype=float).reshape(-1)
+            if line_arr.size != m:
+                raise ValueError(
+                    f"lines[{i}] has {line_arr.size} samples, delay line {i} holds {m}"
+                )
+            self.buffer[i, (p + np.arange(m)) % m] = line_arr
+
+    def fill_noise(
+        self, variance: float = 1.0, rng: np.random.Generator | None = None
+    ) -> None:
+        """Fill every delay line with zero-mean Gaussian noise of ``variance``."""
+        rng = np.random.default_rng() if rng is None else rng
+        self.set_lines([rng.normal(0.0, np.sqrt(variance), m) for m in self.delays])

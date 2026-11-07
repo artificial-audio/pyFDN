@@ -2,7 +2,7 @@ import numpy as np
 
 from pyFDN.auxiliary.geometry import (
     Aperture,
-    aperture_form_factor,
+    get_aperture_form_factor,
     get_plane_area,
     get_point_to_room_weights,
 )
@@ -68,7 +68,7 @@ def test_aperture_form_factor_matches_far_field_limit():
     )
     aperture_to = aperture_from + np.asarray([0.0, 0.0, 10.0])
 
-    form_factor = aperture_form_factor(aperture_from, aperture_to, order=8)
+    form_factor = get_aperture_form_factor(Aperture(aperture_from, 0, 1), Aperture(aperture_to, 1, 2), order=8)
     far_field = get_plane_area(aperture_to) / (np.pi * 10.0**2)
 
     np.testing.assert_allclose(form_factor, far_field, rtol=2e-2)
@@ -95,8 +95,8 @@ def test_aperture_form_factor_obeys_reciprocity():
         dtype=float,
     )
 
-    forward = aperture_form_factor(aperture_small, aperture_large, order=8)
-    reverse = aperture_form_factor(aperture_large, aperture_small, order=8)
+    forward = get_aperture_form_factor(Aperture(aperture_small, 0, 1), Aperture(aperture_large, 1, 2), order=8)
+    reverse = get_aperture_form_factor(Aperture(aperture_large, 1, 2), Aperture(aperture_small, 0, 1), order=8)
 
     np.testing.assert_allclose(
         get_plane_area(aperture_small) * forward,

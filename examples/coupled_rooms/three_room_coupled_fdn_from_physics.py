@@ -19,7 +19,7 @@ def _():
     from pyFDN.auxiliary.physics_based_coupling import (
         create_lossless_coupling_matrix, create_diagonal_absorption_matrix,
         create_state_transition_matrix, trajectory, trajectory_with_delays,
-        get_coupling_angles, get_coupling_matrix, get_decay_matrix,
+        match_delay_totals_to_volumes, get_coupling_angles, get_coupling_matrix, get_decay_matrix,
         get_feedback_matrix, get_room_time_varying_matrix, gfdn_energy_ledger)
 
 
@@ -32,6 +32,7 @@ def _():
         create_lossless_coupling_matrix,
         create_state_transition_matrix,
         expm,
+        match_delay_totals_to_volumes,
         get_coupling_angles,
         get_coupling_matrix,
         get_decay_matrix,
@@ -55,6 +56,8 @@ def _(mo):
 
     - **Chain**: room 1 ↔ room 2 ↔ room 3, no direct 1–3 aperture ($S_{13}=0$).
     - **Complete**: all three rooms mutually coupled ($S_{13}>0$ too).
+
+    This notebook explores impulse-driven onset. The paper's noise-start SA verification and reproducible exports are in `export_paper_figures.py`.
 
     Pipeline: physical dimensions $\to$ Cremer–Müller generator $\mathbf Q$ $\to$ pairwise angles
     $\theta_{ij}$ (rate-matched via each room's own clock $\Delta t_i\propto V_i$) $\to$ skew-symmetric
@@ -204,7 +207,7 @@ def _(
 
 
 @app.cell
-def _(ArrayLike, NDArray, Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
+def _(ArrayLike, NDArray, Nper, V, avg_delays, match_delay_totals_to_volumes, mo, np, num_rooms, pyFDN):
     # --- Geometry: equal N per room, M_i proportional to V_i -------------------
     fs = 48000
     Nroom = Nper.value
@@ -229,38 +232,6 @@ def _(ArrayLike, NDArray, Nper, V, avg_delays, mo, np, num_rooms, pyFDN):
         delays = np.concatenate(delays).astype(int)
         return delays
 
-    def match_delay_totals_to_volumes(base_delays: ArrayLike, lines_per_group:int, volumes:ArrayLike, target_total=None):
-        """Match integer volume ratios exactly, retaining each group's delay spread.
-
-        Start from independently sampled coprime delays, then apportion integer
-        lengths to exact group totals. No coprimality constraint is imposed on
-        the result. Its total number of cells stays close to the original total.
-        Supply target_total to choose the nearest feasible total to a requested
-        global mean instead of retaining the original sampled total.
-        """
-        volumes = np.asarray(volumes, dtype=float)
-        integer_volumes = np.rint(volumes).astype(np.int64)
-        if np.any(volumes <= 0) or not np.allclose(volumes, integer_volumes):
-            raise ValueError("Exact-ratio comparison requires positive integer volumes.")
-        weights = integer_volumes // np.gcd.reduce(integer_volumes)
-        base = np.asarray(base_delays, dtype=np.int64).reshape(
-            len(volumes), lines_per_group)
-        state_count = base.sum() if target_total is None else target_total
-        multiplier = max(
-            int(np.rint(state_count / weights.sum())),
-            int(np.max(np.ceil(lines_per_group / weights))),
-        )
-        targets = multiplier * weights
-        matched = []
-        for group, target in zip(base, targets):
-            # Reserve one cell per line, then use largest-remainder rounding.
-            ideal = 1 + (target - lines_per_group) * group / group.sum()
-            lengths = np.floor(ideal).astype(np.int64)
-            remainder = int(target - lengths.sum())
-            order = np.argsort(-(ideal - lengths), kind="stable")
-            lengths[order[:remainder]] += 1
-            matched.append(lengths)
-        return np.concatenate(matched)
 
     co_prime_delays = sample_delay_line_lengths(avg_delays.value, Nroom)
     delays = match_delay_totals_to_volumes(co_prime_delays, Nroom, V)
@@ -727,48 +698,25 @@ def _(mo):
 
 
 @app.cell
-def _(E_ex_chain, E_ex_complete, Eref_chain, Eref_complete, fs, np, num_rooms):
-    def calculate_time_constant(E_ledger, fs: float, is_rising: bool = False) -> float:
-        """
-        Estimates time constant of lossless energy trajectories by analyzing only the early, unclipped data points.
-        """
-        # 1. Isolate the unclipped data (e.g., grab the first 15% of the sample window)
-        # This assumes the system hasn't hit the saturation limit yet in this early window
-        num_samples = len(E_ledger)
-        unclipped_end_idx = int(num_samples * 0.5) 
-
-        y_data = E_ledger[:unclipped_end_idx]
-        x_time = np.arange(unclipped_end_idx) / fs
-
-        if not is_rising:
-            # Falling: Fit a straight line to ln(y) -> ln(y) = mx + c
-
-            # where slope m = -1/tau
-            slope, intercept = np.polyfit(x_time, np.log(y_data), 1)
-            tau = -1.0 / slope
-        else:
-            # Rising: Requires estimating the true maximum via an optimization routine
-            from scipy.optimize import curve_fit
-
-            def rising_func(t, E_max, tau_val):
-                return E_max * (1 - np.exp(-t / tau_val))
-
-            # Fit only using the unclipped initial window
-            popt, _ = curve_fit(rising_func, x_time, y_data, p0=[E_ledger[-1]*2, 0.1])
-            tau = popt[1] # Extracted tau value
-
-        return tau
-
-
-    tau_ref = np.zeros(num_rooms)
-    tau_gfdn = np.zeros(num_rooms)
-    for  _Eex, _Eref,in zip([E_ex_chain, E_ex_complete], [Eref_chain, Eref_complete]):
-        for _r in range(num_rooms):
-            is_rising = _r != 0
-            tau_ref[_r] = calculate_time_constant(_Eex[0, :, _r], fs, is_rising)
-            print(f'Cur reference time constant for room {_r+1} is {tau_ref[_r]:.3f}s')
-            tau_gfdn[_r] = calculate_time_constant(_Eref[:, _r], fs, is_rising)
-            print(f'Cur GFDN time constant for room {_r+1} is {tau_gfdn[_r]:.3f}s')
+def _(E_ex_chain, E_ex_complete, Eref_chain, Eref_complete, Q_chain, Q_complete, fs, mo, np):
+    rows = []
+    for name, ledger, reference, generator in (
+        ("Chain", E_ex_chain[0], Eref_chain, Q_chain),
+        ("Complete", E_ex_complete[0], Eref_complete, Q_complete),
+    ):
+        stop = min(len(ledger), len(reference))
+        rates = np.linalg.eigvals(generator).real
+        relaxation = sorted(-1 / rates[rates < -1e-10])
+        errors = np.abs(ledger[:stop] - reference[:stop])
+        early_stop = min(int(0.2 * fs), stop)
+        for room in range(reference.shape[1]):
+            rows.append({"Topology": name, "Room": room + 1,
+                         "SA modal relaxation times (s)": ", ".join(f"{t:.4f}" for t in relaxation),
+                         "Full MAE (pp)": 100 * errors[:, room].mean(),
+                         "First 200 ms MAE (pp)": 100 * errors[:early_stop, room].mean()})
+    mo.vstack([mo.md("Lossless relaxation rates are shared modes of the SA generator; "
+                     "fitting an unshifted exponential to a nonzero equilibrium does not estimate them."),
+               mo.ui.table(rows, selection=None)])
     return
 
 
@@ -786,7 +734,7 @@ def _(
     def calculate_t60_from_energy(E_ledger, fs: float) -> float:
         """
         Calculates T60 reverberation time from an energy trajectory array
-        using ISO 3382-1 standard T30 window evaluation [-5 dB to -35 dB].
+        using a peak-relative [-5 dB, -35 dB] slope fit on stored energy.
 
         Parameters:
         -----------
@@ -803,7 +751,7 @@ def _(
         # Normalize against the peak energy so the max point acts as 0 dB
         peak_energy= np.max(E_ledger)
         peak_idx = np.argmax(E_ledger)
-        energy_db = 10 * np.log10((E_ledger[peak_idx:] + np.finfo(np.float32).eps) / peak_energy)
+        energy_db = 10 * np.log10((E_ledger[peak_idx:] + np.finfo(float).tiny) / peak_energy)
 
         # Generate structural time track matching the array size (Time = Index / fs)
         time_axis = np.arange(len(energy_db)) / fs
@@ -836,10 +784,11 @@ def _(
         return t60
 
     for  _Eex, _Eref,in zip([E_ex_chain_lossy, E_ex_complete_lossy], [Eref_chain_lossy, Eref_complete_lossy]):
+        _stop = min(_Eex.shape[1], len(_Eref))
         for _r in range(num_rooms):
-            t60_ref = calculate_t60_from_energy(_Eex[src_room, :, _r], fs)
+            t60_ref = calculate_t60_from_energy(_Eref[:_stop, _r], fs)
             print(f'Cur reference T60 for room {_r+1} is {t60_ref:.3f}s')
-            t60_gfdn = calculate_t60_from_energy(_Eref[:, _r], fs)
+            t60_gfdn = calculate_t60_from_energy(_Eex[src_room, :_stop, _r], fs)
             print(f'Cur GFDN T60 for room {_r+1} is {t60_gfdn:.3f}s')
     return
 
@@ -887,7 +836,7 @@ def _(
     ## 4 · How closely does the GFDN track the physics?
 
     Max absolute deviation between the exact GFDN ledger and the true $e^{{tQ}}$ trajectory over the
-    whole impulse response: chain = **{np.max(np.abs(_err_chain)):.4f}**, complete = **{np.abs(np.max(_err_complete)):.4f}**.
+    whole impulse response: chain = **{np.max(np.abs(_err_chain)):.4f}**, complete = **{np.max(np.abs(_err_complete)):.4f}**.
 
     **Numeric long-run split for chain topology** (mean over the last 15% of the simulation):
 

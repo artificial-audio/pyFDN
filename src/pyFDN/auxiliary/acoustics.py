@@ -498,10 +498,7 @@ def estimate_initial_level_bands(
     if rt.size != len(f_centre):
         raise ValueError("rt must have one entry per octave band")
 
-    sos_bank = pra.bandpass_filterbank(bands,
-                                       fs=fs,
-                                       order=filter_order,
-                                       output="sos")
+    sos_bank = octave_band_filterbank(bands, fs, filter_order)
     level = np.zeros(len(f_centre))
     for k, sos in enumerate(sos_bank):
         ir_band = sosfilt(sos, ir)
