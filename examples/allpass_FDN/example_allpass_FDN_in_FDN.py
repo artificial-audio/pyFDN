@@ -37,7 +37,7 @@ def _():
     from flamo.processor import dsp, system
 
     import pyFDN
-    from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
+    from pyFDN import delay_module, gain_module, sos_filter_module
 
     fs = 48000
     nfft = 2**17
@@ -110,7 +110,9 @@ def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
-    sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, main_delay_smp, fs=fs)
+    sos = pyFDN.decay_to_first_order_shelf(
+        rt_dc, main_delay_smp, fs=fs, rt_nyquist=rt_ny
+    )
     attenuation = sos_filter_module(sos, nfft, device="cpu")
     return attenuation, input_delays, main_delays, output_delays
 

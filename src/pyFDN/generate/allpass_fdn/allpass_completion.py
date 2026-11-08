@@ -108,7 +108,9 @@ def diagonal_similarity_from_abs2_lyapunov(
     This is a sufficient-condition style preprocessing; it does NOT guarantee existence for
     arbitrary A. If (I - M) is ill-conditioned or yields nonpositive entries, this fails.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         x : (N,) positive vector, X = diag(x)
     """
     A = np.asarray(A)
@@ -405,8 +407,10 @@ def optimize_diagonal_similarity_rank_defect_scipy(
     """
     Optimize u (log-diagonal scaling) so that G(u) is PSD with rank ~ k.
 
-    Returns:
-      u_opt, info dict including achieved eigenvalues and success flag.
+    Returns
+    -------
+    object
+        u_opt, info dict including achieved eigenvalues and success flag.
     """
     A = np.asarray(A)
     N = A.shape[0]
@@ -501,23 +505,32 @@ def complete_fdn(
     tol_one: float = 1e-8,
     psd_clip: float = 0.0,
     rng: np.random.Generator | int | None = None,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute a completion (B,C,D) for given A.
 
-    Args:
-      A: (N,N) feedback matrix
-      num_io: number of IO channels k, as in complete_orthogonal. If None -> full MIMO (k=N).
-      preprocessing:
-         "none"  -> X = I
-         "optimize" -> find diagonal similarity X=diag(x) that makes G(u) PSD with rank ~ k.
-      q: RHS for diagonal similarity solve (scalar or (N,) vector).
-      tol_one: tolerance for 'singular value equals 1' decisions in general MIMO.
-      psd_clip: eigenvalue clip (>=0) for PSD square roots in full MIMO completion.
-      rng: Generator or integer seed for the random start and mixing.
+    Parameters
+    ----------
+    A
+        (N,N) feedback matrix
+    num_io
+        number of IO channels k, as in complete_orthogonal. If None -> full MIMO (k=N).
+    preprocessing
+        "none"  -> X = I
+        "optimize" -> find diagonal similarity X=diag(x) that makes G(u) PSD with rank ~ k.
+    q
+        RHS for diagonal similarity solve (scalar or (N,) vector).
+    tol_one
+        tolerance for 'singular value equals 1' decisions in general MIMO.
+    psd_clip
+        eigenvalue clip (>=0) for PSD square roots in full MIMO completion.
+    rng
+        Generator or integer seed for the random start and mixing.
 
-    Returns:
-      B, C, D, x, where x is the diagonal of the similarity X used (ones if none).
+    Returns
+    -------
+    object
+        B, C, D, x, where x is the diagonal of the similarity X used (ones if none).
     """
     rng = as_generator(rng)
     A = np.asarray(A)
@@ -592,8 +605,10 @@ def check_completion(
     Check balanced orthogonality/unitarity of V = [[A,B],[C,D]]:
       V^* V should be identity.
 
-    Returns:
-      dict with Frobenius norm error and max-abs error.
+    Returns
+    -------
+    dict[str, Any]
+        dict with Frobenius norm error and max-abs error.
     """
     V = block_matrix(A, B, C, D)
     n = V.shape[1]

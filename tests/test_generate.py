@@ -358,7 +358,7 @@ def test_fdn_dss_gallery_rt_nyquist_defaults_to_rt():
 def test_fdn_dss_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_attenuation(rt, rt_nyquist, delays, fs, *, crossover=None):
+    def fake_attenuation(rt, delays, fs, *, rt_nyquist, crossover=None):
         captured["crossover"] = crossover
         return np.ones((1, 6, len(delays)))
 
@@ -396,7 +396,9 @@ def test_fdn_dss_gallery_post_eq_scalar_and_per_channel():
     )
     post_output = per_channel["post_output"]
     assert post_output is not None and post_output.shape == (1, 6, 3)
-    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, 48_000.0)
+    expected = gain_to_first_order_shelf(
+        [0.0, -3.0, -6.0], 48_000.0, gain_db_nyquist=-6.0
+    )
     np.testing.assert_allclose(post_output, expected)
 
 

@@ -207,7 +207,9 @@ def _(fs, np, pyFDN, td):
     C_fdn = gen.standard_normal((6, n_lines)) / np.sqrt(
         n_lines
     )  # lines -> loudspeakers
-    fdn_absorption = pyFDN.decay_to_first_order_shelf(1.2, 0.6, fdn_delays, fs)
+    fdn_absorption = pyFDN.decay_to_first_order_shelf(
+        1.2, fdn_delays, fs, rt_nyquist=0.6
+    )
     fdn_block = 64  # Recursion block size; must be at most half the shortest delay
 
     def make_reverberator(time_varying, g):

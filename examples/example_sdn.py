@@ -59,7 +59,7 @@ def _(np, pyFDN):
     # One first-order shelving EQ per wall (floor, ceiling, left, right, front,
     # back); each wall filters the five delay lines it sends into.
     wall_filters = pyFDN.gain_to_first_order_shelf(
-        np.full(6, -1.0), np.full(6, -6.0), fs, crossover=8000.0
+        np.full(6, -1.0), fs, crossover=8000.0, gain_db_nyquist=np.full(6, -6.0)
     )
     return fs, receiver_pos, room_size, source_pos, wall_filters
 

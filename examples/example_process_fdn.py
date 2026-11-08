@@ -323,7 +323,7 @@ def _(mo):
     Real rooms absorb high frequencies faster than low ones, so a single number
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
-    `decay_to_geq` designs those filters from a target curve at ten octave
+    `decay_to_graphic_eq` designs those filters from a target curve at ten octave
     centres (31.25 Hz – 16 kHz).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
@@ -337,7 +337,7 @@ def _(mo):
 def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     target_rt = np.array([2.4, 2.4, 2.3, 2.1, 1.8, 1.4, 1.0, 0.7, 0.5, 0.5])
 
-    absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
+    absorption = pyFDN.decay_to_graphic_eq(target_rt, delays, fs)  # (n_sections, 6, N)
 
     graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
     ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
@@ -414,7 +414,7 @@ def _(mo):
 
 @app.cell
 def _(fs, ir, pyFDN):
-    pyFDN.plot_spectrogram(ir, fs, title="Impulse response — time-frequency energy")
+    pyFDN.plot_spectrogram(ir, title="Impulse response — time-frequency energy", fs=fs)
     return
 
 
@@ -505,7 +505,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
     #   post_matrix=td.AbsoluteValue(len(delays))
     #       -> a rectifier in the loop. The harmonics were never in the input;
     #          the FDN is generating them. No transfer function exists any more.
-    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_geq
+    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_graphic_eq
     mo.hstack(
         [
             pyFDN.labeled_audio("static matrix", pyFDN.peak_normalize(wet), fs=fs),

@@ -100,25 +100,34 @@ def sample_delay_lengths(
     integer seed (or generator) makes the result reproducible without touching
     NumPy's global random state.
 
-    Args:
-        N: Number of delay lines.
-        delay_range: Inclusive ``(low, high)`` range in samples.
-        distribution: Sampling distribution for the delay lengths:
+    Parameters
+    ----------
+    N
+        Number of delay lines.
+    delay_range
+        Inclusive ``(low, high)`` range in samples.
+    distribution
+        Sampling distribution for the delay lengths:
 
-            * ``"uniform"`` – flat in linear space.
-            * ``"geometric"`` – flat in log space (log-uniform), i.e.
-              geometrically spaced with equal probability per octave.
-            * ``"lognormal"`` – Gaussian in log space, centred on the
-              geometric mean of the range. The range span roughly ±2 sigma.
+        * ``"uniform"`` – flat in linear space.
+        * ``"geometric"`` – flat in log space (log-uniform), i.e.
+          geometrically spaced with equal probability per octave.
+        * ``"lognormal"`` – Gaussian in log space, centred on the
+          geometric mean of the range. The range span roughly ±2 sigma.
 
-        coprime: When ``True``, snap the sampled values to the nearest distinct,
-            pairwise-coprime integers. Coprime delays avoid coinciding echoes
-            and degenerate modes; snapping may nudge values slightly outside
-            ``delay_range``.
-        sort: Sort the returned delays in ascending order.
-        rng: Local NumPy generator or integer seed.
+    coprime
+        When ``True``, snap the sampled values to the nearest distinct,
+        pairwise-coprime integers. Coprime delays avoid coinciding echoes
+        and degenerate modes; snapping may nudge values slightly outside
+        ``delay_range``.
+    sort
+        Sort the returned delays in ascending order.
+    rng
+        Local NumPy generator or integer seed.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Integer array of shape ``(N,)`` with the delay lengths in samples.
 
     Example::

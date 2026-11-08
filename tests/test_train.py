@@ -74,7 +74,7 @@ def _magnitude(model):
 
 def _decayed(dss: DSS, rt: float, nfft: int) -> Any:
     """A trainable model of ``dss`` with a homogeneous first-order-shelf decay."""
-    sos = pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, FS)
+    sos = pyFDN.decay_to_first_order_shelf(rt, dss.delays, FS, rt_nyquist=rt)
     return trainable_from_dss(*dss, FS, post_delay=sos, nfft=nfft, device="cpu")
 
 
@@ -184,7 +184,7 @@ def test_det_negative_orthogonal_warns_and_projects():
 
 
 def test_an_attenuation_filter_reproduces_the_designed_absorption_filters():
-    """The trainable attenuation filter agrees with ``decay_to_geq``."""
+    """The trainable attenuation filter agrees with ``decay_to_graphic_eq``."""
     from scipy.signal import sosfreqz
 
     fs = 48000.0
@@ -200,7 +200,7 @@ def test_an_attenuation_filter_reproduces_the_designed_absorption_filters():
     model = trainable_from_dss(
         *dss, FS, post_delay=_decay(dss, rt), nfft=2**12, device="cpu"
     )
-    designed = pyFDN.decay_to_geq(rt, delays, fs)
+    designed = pyFDN.decay_to_graphic_eq(rt, delays, fs)
     trained = param(model, "post_delay").value().detach().numpy().astype(float)
     assert trained.shape == designed.shape
 
@@ -437,8 +437,8 @@ def test_match_spectrogram_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=0,
     )
@@ -449,8 +449,8 @@ def test_match_spectrogram_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=9,
     )
@@ -470,8 +470,8 @@ def test_mimo_target_wrong_shape_raises():
         N=4,
         rt=None,
         nfft=2**10,
-        input_gain=np.ones((4, 2)),
-        output_gain=np.ones((2, 4)),
+        B=np.ones((4, 2)),
+        C=np.ones((2, 4)),
         device="cpu",
         rng=0,
     )
@@ -487,7 +487,7 @@ def test_a_first_order_shelf_decay_realizes_rt():
     dss = pyFDN.flamo_to_dss(
         trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     )[0]
-    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.3, dss.delays, FS)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, dss.delays, FS, rt_nyquist=0.3)
     assert sos.shape == (1, 6, 6)
 
     ir = np.asarray(
@@ -509,8 +509,8 @@ def test_response_is_the_true_ir_matrix():
         N=5,
         rt=None,
         nfft=nfft,
-        input_gain=np.eye(5, n_in),
-        output_gain=np.eye(n_out, 5),
+        B=np.eye(5, n_in),
+        C=np.eye(n_out, 5),
         device="cpu",
         rng=4,
     )
@@ -1003,8 +1003,8 @@ def test_match_phase_spectrogram_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=16,
     )
@@ -1015,8 +1015,8 @@ def test_match_phase_spectrogram_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=17,
     )
@@ -1086,8 +1086,8 @@ def test_match_mel_magnitude_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=20,
     )
@@ -1098,8 +1098,8 @@ def test_match_mel_magnitude_mimo_target():
         N=N,
         rt=0.05,
         nfft=nfft,
-        input_gain=rng.standard_normal((N, n_in)),
-        output_gain=rng.standard_normal((n_out, N)),
+        B=rng.standard_normal((N, n_in)),
+        C=rng.standard_normal((n_out, N)),
         device="cpu",
         rng=21,
     )
@@ -1322,7 +1322,9 @@ def test_trainable_post_eq_starts_flat_and_is_the_gain_in_db():
 
 
 def test_a_baked_post_eq_is_frozen_and_training_it_is_a_module_you_build():
-    baked = pyFDN.gain_to_geq(np.linspace(-6, 6, 10), fs=48000.0)[:, :, np.newaxis]
+    baked = pyFDN.gain_to_graphic_eq(np.linspace(-6, 6, 10), fs=48000.0)[
+        :, :, np.newaxis
+    ]
     dss = _plain_dss()
 
     frozen = trainable_from_dss(*dss, FS, post_output=baked, nfft=2**12, device="cpu")
@@ -1435,7 +1437,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     np.testing.assert_allclose(ref.raw().detach().numpy(), rt, rtol=1e-6)
 
     # and the filter it maps onto is the numpy design, to float64
-    expected = pyFDN.decay_to_first_order_shelf(rt[0], rt[1], dss.delays, fs)
+    expected = pyFDN.decay_to_first_order_shelf(rt[0], dss.delays, fs, rt_nyquist=rt[1])
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
 
     post_delay = pyFDN.flamo_to_dss(model)[1]["post_delay"]
@@ -1466,7 +1468,9 @@ def test_shelf_post_eq_is_the_numpy_design():
     assert ref.trainable is True
     np.testing.assert_allclose(ref.raw().detach().numpy(), [[3.0], [-6.0]], rtol=1e-6)
 
-    expected = pyFDN.gain_to_first_order_shelf(gains[0], gains[1], fs)[:, :, None]
+    expected = pyFDN.gain_to_first_order_shelf(gains[0], fs, gain_db_nyquist=gains[1])[
+        :, :, None
+    ]
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-10)
 
     # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter
@@ -1712,7 +1716,7 @@ def test_one_pole_and_the_shelf_are_told_apart_by_name_not_by_length():
     assert param(shelf_model, "post_delay").module.design == "first_order_shelf"
     assert param(one_pole_model, "post_delay").module.design == "one_pole"
 
-    designed = pyFDN.decay_to_one_pole(1.5, 0.6, dss.delays, FS)
+    designed = pyFDN.decay_to_one_pole(1.5, dss.delays, FS, rt_nyquist=0.6)
     trained = param(one_pole_model, "post_delay").value().detach().numpy()
     np.testing.assert_allclose(trained, designed, atol=1e-6)
 

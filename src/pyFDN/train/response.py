@@ -75,7 +75,7 @@ class Response:
 
 
 def impulse_excitation(
-    n_in: int, nfft: int, device: Any = None, dtype: Any = None
+    num_inputs: int, nfft: int, device: Any = None, dtype: Any = None
 ) -> torch.Tensor:
     """The excitation that makes a model's output the full IR matrix.
 
@@ -87,8 +87,8 @@ def impulse_excitation(
     import torch
 
     torch_dtype = torch.float32 if dtype is None else dtype
-    x = torch.zeros((n_in, nfft, n_in), device=device, dtype=torch_dtype)
-    for i in range(n_in):
+    x = torch.zeros((num_inputs, nfft, num_inputs), device=device, dtype=torch_dtype)
+    for i in range(num_inputs):
         x[i, 0, i] = 1.0
     return x
 

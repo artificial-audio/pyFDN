@@ -19,22 +19,22 @@ from .graphic_eq import (
     COMMAND_FREQUENCIES,
     N_GRAPHIC_EQ_BANDS,
     N_GRAPHIC_EQ_SECTIONS,
-    gain_to_geq,
-    geq_design_matrix,
+    gain_to_graphic_eq,
+    graphic_eq_design_matrix,
 )
 
 EQDesign = Literal["graphic_eq", "first_order_shelf", "one_pole", "two_stage"]
 EQ_DESIGNS = get_args(EQDesign)
 
 
-def decay_to_geq(rt: Any, delays: Any, fs: float) -> Any:
+def decay_to_graphic_eq(rt: Any, delays: Any, fs: float) -> Any:
     """Design attenuation GEQs from ten reverberation times in seconds.
 
     ``rt`` is ordered on :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES`
     (31.25 Hz through 16 kHz).
     """
     gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
-    sos = gain_to_geq(gain_db, fs)
+    sos = gain_to_graphic_eq(gain_db, fs)
     return sos
 
 
@@ -45,9 +45,9 @@ def _shelf_crossover_omega(fs: float, crossover: float | None) -> float:
 
 def gain_to_first_order_shelf(
     gain_db: Any,
-    gain_db_nyquist: Any,
     fs: float,
     *,
+    gain_db_nyquist: Any,
     crossover: float | None = None,
 ) -> Any:
     """Design a first-order shelf from its endpoint amplitudes in dB.
@@ -70,10 +70,10 @@ def gain_to_first_order_shelf(
 
 def decay_to_first_order_shelf(
     rt: Any,
-    rt_nyquist: Any,
     delays: Any,
     fs: float,
     *,
+    rt_nyquist: Any,
     crossover: float | None = None,
 ) -> Any:
     """Design first-order attenuation shelves from endpoint RTs in seconds.
@@ -82,14 +82,13 @@ def decay_to_first_order_shelf(
     """
     gain_db = _decay_to_gain_db(rt, delays, fs)
     nyquist_db = _decay_to_gain_db(rt_nyquist, delays, fs)
-    sos = gain_to_first_order_shelf(gain_db, nyquist_db, fs, crossover=crossover)
+    sos = gain_to_first_order_shelf(
+        gain_db, fs, crossover=crossover, gain_db_nyquist=nyquist_db
+    )
     return sos
 
 
-def gain_to_one_pole(
-    gain_db: Any,
-    gain_db_nyquist: Any,
-) -> Any:
+def gain_to_one_pole(gain_db: Any, *, gain_db_nyquist: Any) -> Any:
     """Design a one-pole filter from its endpoint amplitudes in dB."""
     xp = array_namespace(gain_db)
     if xp is np:
@@ -106,14 +105,15 @@ def gain_to_one_pole(
 
 def decay_to_one_pole(
     rt: Any,
-    rt_nyquist: Any,
     delays: Any,
     fs: float,
+    *,
+    rt_nyquist: Any,
 ) -> Any:
     """Design one-pole attenuation filters from endpoint RTs in seconds."""
     sos = gain_to_one_pole(
         _decay_to_gain_db(rt, delays, fs),
-        _decay_to_gain_db(rt_nyquist, delays, fs),
+        gain_db_nyquist=_decay_to_gain_db(rt_nyquist, delays, fs),
     )
     return sos
 
@@ -138,7 +138,7 @@ def gain_to_two_stage(
     ``gain_db`` has shape ``(10,)`` or ``(10, n_channels)`` and is ordered on
     :data:`~pyFDN.eq.graphic_eq.COMMAND_FREQUENCIES` (31.25 Hz through
     16 kHz). The result stacks the shelf section before the
-    :func:`gain_to_geq` sections.
+    :func:`gain_to_graphic_eq` sections.
 
     Reference: V. Välimäki, K. Prawda, and S. J. Schlecht, "Two-Stage
     Attenuation Filter for Artificial Reverberation," IEEE Signal Process.
@@ -152,9 +152,11 @@ def gain_to_two_stage(
         raise ValueError(f"two_stage takes {N_GRAPHIC_EQ_BANDS} gains, got {got}")
 
     crossover = TWO_STAGE_CROSSOVER if crossover is None else crossover
-    shelf = gain_to_first_order_shelf(gain_db[0], gain_db[-1], fs, crossover=crossover)
+    shelf = gain_to_first_order_shelf(
+        gain_db[0], fs, crossover=crossover, gain_db_nyquist=gain_db[-1]
+    )
     residual_db = gain_db - _first_order_gain_db(shelf[0], fs, gain_db)
-    geq = gain_to_geq(residual_db, fs, design_matrix=design_matrix)
+    geq = gain_to_graphic_eq(residual_db, fs, design_matrix=design_matrix)
     return xp.concatenate([shelf, geq], 0)
 
 
@@ -232,7 +234,7 @@ def _design_section_count(design: EQDesign) -> int:
 def _design_buffers(design: EQDesign, fs: float) -> dict[str, np.ndarray]:
     _validate_filter_design(design)
     if design in ("graphic_eq", "two_stage"):
-        return {"graphic_eq_matrix": geq_design_matrix(fs)}
+        return {"graphic_eq_matrix": graphic_eq_design_matrix(fs)}
     return {}
 
 
@@ -246,16 +248,16 @@ def _gain_to_design(
 ) -> Any:
     _validate_filter_design(design)
     if design == "graphic_eq":
-        return gain_to_geq(gain_db, fs, design_matrix=graphic_eq_matrix)
+        return gain_to_graphic_eq(gain_db, fs, design_matrix=graphic_eq_matrix)
     if design == "two_stage":
         return gain_to_two_stage(
             gain_db, fs, design_matrix=graphic_eq_matrix, crossover=crossover
         )
     if design == "first_order_shelf":
         return gain_to_first_order_shelf(
-            gain_db[0], gain_db[1], fs, crossover=crossover
+            gain_db[0], fs, crossover=crossover, gain_db_nyquist=gain_db[1]
         )
-    return gain_to_one_pole(gain_db[0], gain_db[1])
+    return gain_to_one_pole(gain_db[0], gain_db_nyquist=gain_db[1])
 
 
 def _validate_filter_design(design: str) -> None:
@@ -271,7 +273,7 @@ __all__ = [
     "EQ_DESIGNS",
     "EQDesign",
     "decay_to_first_order_shelf",
-    "decay_to_geq",
+    "decay_to_graphic_eq",
     "TWO_STAGE_CROSSOVER",
     "decay_to_one_pole",
     "decay_to_two_stage",

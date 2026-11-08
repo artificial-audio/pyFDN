@@ -224,13 +224,21 @@ def is_bounding_curve(
 ) -> bool:
     """
     Check if all value points are bounded by the curve.
-    Args:
-        x_points: x-coordinates of data points (1D array)
-        y_points: y-coordinates of data points (1D array)
-        x_curve: x-coordinates of curve points (1D array)
-        y_curve: y-coordinates of curve points (1D array)
-        bound_type: 'upper' or 'lower'
-    Returns:
+    Parameters
+    ----------
+    x_points
+        x-coordinates of data points (1D array)
+    y_points
+        y-coordinates of data points (1D array)
+    x_curve
+        x-coordinates of curve points (1D array)
+    y_curve
+        y-coordinates of curve points (1D array)
+    bound_type
+        'upper' or 'lower'
+    Returns
+    -------
+    bool
         Whether every data point lies on the bounded side of the curve.
     """
     # Spline interpolation with extrapolation
@@ -260,16 +268,24 @@ def pole_boundaries(
     Combines the singular values of the feedback matrix with the magnitude
     and group delay of the per-line absorption filters.
 
-    Args:
-        delays: Delays in samples, shape ``(N,)``.
-        A: Feedback matrix ``(N, N)``, or the FIR matrix ``(N, N, L)`` in the
-            z^{-1} convention that sits on the feedback path.
-        fs: Sampling frequency in Hz.
-        post_delay: Per-line absorption, the ``post_delay`` filter hook as an
-            SOS bank of shape ``(sections, 6, N)``.
-        nfft: Number of frequency bins between 0 and Nyquist.
+    Parameters
+    ----------
+    delays
+        Delays in samples, shape ``(N,)``.
+    A
+        Feedback matrix ``(N, N)``, or the FIR matrix ``(N, N, L)`` in the
+        z^{-1} convention that sits on the feedback path.
+    fs
+        Sampling frequency in Hz.
+    post_delay
+        Per-line absorption, the ``post_delay`` filter hook as an
+        SOS bank of shape ``(sections, 6, N)``.
+    nfft
+        Number of frequency bins between 0 and Nyquist.
 
-    Returns:
+    Returns
+    -------
+    tuple[ndarray, ndarray, ndarray]
         min_curve: Lower bound of the pole magnitude, shape ``(nfft,)``.
         max_curve: Upper bound of the pole magnitude, shape ``(nfft,)``.
         f: Frequency points in Hz, shape ``(nfft,)``.

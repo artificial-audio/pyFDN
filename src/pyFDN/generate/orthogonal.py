@@ -42,10 +42,14 @@ def nearest_orthogonal(A: np.ndarray) -> np.ndarray:
     Computed via the polar decomposition: ``B = U V^T`` where
     ``A = U S V^T`` is the SVD of A.
 
-    Args:
-        A: Square real matrix, shape ``(N, N)``.
+    Parameters
+    ----------
+    A
+        Square real matrix, shape ``(N, N)``.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Orthogonal matrix of shape ``(N, N)``.
     """
     U, _, Vt = np.linalg.svd(np.asarray(A, dtype=float))
@@ -82,7 +86,7 @@ def _sign_variable_exchange(
 def nearest_sign_agnostic_orthogonal(
     A: np.ndarray,
     max_trials: int = 100_000,
-    tolerance: float = float(np.finfo(float).eps) * 1e5,
+    tol: float = float(np.finfo(float).eps) * 1e5,
     *,
     rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
@@ -91,13 +95,20 @@ def nearest_sign_agnostic_orthogonal(
     Solves the non-convex problem by repeated random restarts followed by
     a sign-variable-exchange local search.
 
-    Args:
-        A: Input square matrix, shape ``(N, N)``.  Signs are ignored.
-        max_trials: Number of random sign-pattern restarts.
-        tolerance: Stop early when the Frobenius error is below this value.
-        rng: Generator or integer seed for the random restarts.
+    Parameters
+    ----------
+    A
+        Input square matrix, shape ``(N, N)``.  Signs are ignored.
+    max_trials
+        Number of random sign-pattern restarts.
+    tol
+        Stop early when the Frobenius error is below this value.
+    rng
+        Generator or integer seed for the random restarts.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Orthogonal matrix of shape ``(N, N)``.
     """
     A = np.asarray(A, dtype=float)
@@ -117,7 +128,7 @@ def nearest_sign_agnostic_orthogonal(
         if distance < best_error:
             best_matrix = B
             best_error = distance
-            if best_error < tolerance:
+            if best_error < tol:
                 break
 
     return best_matrix
@@ -142,11 +153,16 @@ def complete_orthogonal(
         C = diag(sqrt(1 - σ²)) * V_s^T
         D = -diag(σ)
 
-    Args:
-        A: Feedback matrix of shape ``(N, N)``.
-        num_io: Number of input/output channels.
+    Parameters
+    ----------
+    A
+        Feedback matrix of shape ``(N, N)``.
+    num_io
+        Number of input/output channels.
 
-    Returns:
+    Returns
+    -------
+    tuple[ndarray, ndarray, ndarray, ndarray]
         ``(B, C, D, V)`` with shapes ``(N, num_io)``, ``(num_io, N)``,
         ``(num_io, num_io)``, and ``(N + num_io, N + num_io)`` respectively.
     """
@@ -173,10 +189,14 @@ def householder_matrix(u: np.ndarray) -> np.ndarray:
 
     ``H = I - 2 * (u u^T) / (u^T u)``
 
-    Args:
-        u: Vector orthogonal to the reflection hyperplane, shape ``(N,)``.
+    Parameters
+    ----------
+    u
+        Vector orthogonal to the reflection hyperplane, shape ``(N,)``.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Householder matrix of shape ``(N, N)``.  Orthogonal and symmetric.
     """
     u = np.asarray(u, dtype=float).ravel()
@@ -196,14 +216,21 @@ def anderson_matrix(
     The matrix is block-diagonal with ``N/K`` blocks of size ``K×K``, then
     row-shifted by ``K`` to produce the block-circulant structure.
 
-    Args:
-        N: Total matrix size.
-        K: Block size.  Defaults to the smallest prime factor of N.
-        matrix_type: Type string passed to :func:`fdn_matrix_gallery` for each
-                     block (default ``"hadamard"``).
-        rng: Generator or integer seed for random block types.
+    Parameters
+    ----------
+    N
+        Total matrix size.
+    K
+        Block size.  Defaults to the smallest prime factor of N.
+    matrix_type
+        Type string passed to :func:`fdn_matrix_gallery` for each
+        block (default ``"hadamard"``).
+    rng
+        Generator or integer seed for random block types.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Orthogonal matrix of shape ``(N, N)``.
     """
     if K is None:
@@ -228,12 +255,17 @@ def rotation_matrix_from_angles(angles: ArrayLike, N: int | None = None) -> np.n
     angle, so the eigenvalues are exp(+-1j * angles). For odd matrix sizes,
     a single eigenvalue at 1 is appended.
 
-    Args:
-        angles: Eigenvalue angles in radians, one per conjugate pair.
-        N: Matrix size; either 2 * len(angles) or 2 * len(angles) + 1
-            (default 2 * len(angles)).
+    Parameters
+    ----------
+    angles
+        Eigenvalue angles in radians, one per conjugate pair.
+    N
+        Matrix size; either 2 * len(angles) or 2 * len(angles) + 1
+        (default 2 * len(angles)).
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Orthogonal matrix of shape (N, N).
     """
     angles = np.asarray(angles, dtype=float).ravel()
@@ -273,13 +305,20 @@ def tiny_rotation_matrix(
 
     Translation of tinyRotationMatrix.m from fdnToolbox.
 
-    Args:
-        N: Matrix size.
-        delta: Mean normalized eigenvalue angle.
-        spread: Spreading of the eigenvalue angles (default 0.1).
-        rng: Generator or integer seed.
+    Parameters
+    ----------
+    N
+        Matrix size.
+    delta
+        Mean normalized eigenvalue angle.
+    spread
+        Spreading of the eigenvalue angles (default 0.1).
+    rng
+        Generator or integer seed.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Orthogonal matrix of shape (N, N).
     """
     num_pairs = N // 2

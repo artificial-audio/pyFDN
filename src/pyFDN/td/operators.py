@@ -741,7 +741,7 @@ class SOSBank(TimeOperator):
         This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
         ``parallelSOSFilter`` input and the output of
         :func:`pyFDN.decay_to_first_order_shelf`,
-        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_geq`.
+        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_graphic_eq`.
 
     Attributes
     ----------

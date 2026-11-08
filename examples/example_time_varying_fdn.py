@@ -42,8 +42,7 @@ def _():
     import scipy.linalg as la
 
     import pyFDN
-    from pyFDN import td
-    from pyFDN.generate.orthogonal import random_orthogonal
+    from pyFDN import random_orthogonal, td
 
     return (
         la,
@@ -149,7 +148,7 @@ def _(delays, fs, pyFDN, td):
     RT_DC = 4  # seconds
     RT_NY = 1  # seconds
 
-    coeffs = pyFDN.decay_to_one_pole(RT_DC, RT_NY, delays, fs)
+    coeffs = pyFDN.decay_to_one_pole(RT_DC, delays, fs, rt_nyquist=RT_NY)
 
     absorption = td.SOSBank(coeffs)
     return (absorption,)
@@ -238,12 +237,12 @@ def _(fs, matrix_types, mo, pyFDN, reverbed_synth):
         [
             pyFDN.plot_spectrogram(
                 reverbed_synth[name][:, 0],
-                fs,
                 nperseg=2048 * 8,
                 noverlap=2048 * 1,
                 title=f"{name} — spectrogram",
                 cmap="magma",
                 figsize=(8.0, 3.5),
+                fs=fs,
             )
             for name in matrix_types
         ]

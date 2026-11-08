@@ -78,7 +78,7 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     feedback = pyFDN.random_orthogonal(len(delays))
 
     # one-pole absorption filters targeting RT of 1.2 s at DC and 0.9 s at Nyquist
-    absorption = pyFDN.decay_to_one_pole(1.2, 0.9, delays, fs)
+    absorption = pyFDN.decay_to_one_pole(1.2, delays, fs, rt_nyquist=0.9)
 
     # convert delay state-space to standard state-space
     B, C, D = np.ones((4, 1)) / 2, np.ones((1, 4)) / 2, np.zeros((1, 1))
@@ -89,7 +89,7 @@ Alternatively, import specific functions directly::
     from pyFDN import decay_to_one_pole, lin_to_db, random_orthogonal
 
     feedback = random_orthogonal(4)
-    absorption = decay_to_one_pole(1.2, 0.9, [100, 150, 200, 250], 48_000)
+    absorption = decay_to_one_pole(1.2, [100, 150, 200, 250], 48_000, rt_nyquist=0.9)
 
 
 Citing pyFDN

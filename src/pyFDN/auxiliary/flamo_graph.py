@@ -8,11 +8,14 @@ with the feedback path drawn so the loop is visible (e.g. fB below fF).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pyFDN.auxiliary.flamo import to_numpy
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
 
@@ -399,10 +402,9 @@ def plot_flamo_graph(
     model: Any,
     *,
     name: str = "flamo",
-    ax: Any = None,
     scale: float = 0.85,
     fontsize: float = 9.0,
-) -> Any:
+) -> Figure:
     """
     Draw the FLAMO model signal flow with matplotlib.
 
@@ -415,28 +417,24 @@ def plot_flamo_graph(
     model : FLAMO model (Shell, Series, Parallel, Recursion, or dsp module)
     name : str
         Name for the root node.
-    ax : matplotlib Axes, optional
-        Draw into this axes; otherwise a new figure sized to the layout
-        is created.
     scale : float
-        Inches per layout unit when creating a new figure.
+        Inches per layout unit; the figure is sized to the layout.
     fontsize : float
         Base font size for leaf labels.
 
     Returns
     -------
-    ax : matplotlib Axes
+    matplotlib.figure.Figure
+        Like every pyFDN plot; the drawing is ``fig.axes[0]``.
     """
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
     from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch
 
     root = flamo_model_to_nodes(model, name=name, include_shell_io=True)
     total_w, total_h, root_ay = _measure(root)
 
-    if ax is None:
-        fig_w = (total_w + 2.0) * scale
-        fig_h = (total_h + 0.8) * scale
-        _, ax = plt.subplots(figsize=(fig_w, fig_h))
+    fig = Figure(figsize=((total_w + 2.0) * scale, (total_h + 0.8) * scale))
+    ax = fig.add_subplot()
 
     Point = tuple[float, float]
     Ports = tuple[Point, Point]
@@ -642,4 +640,4 @@ def plot_flamo_graph(
     ax.set_ylim(total_h + 0.4, -0.4)  # inverted: layout y grows downward
     ax.set_aspect("equal")
     ax.axis("off")
-    return ax
+    return fig

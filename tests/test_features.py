@@ -105,5 +105,5 @@ def test_mimo_eigenvalues_time_axis_can_be_last():
     torch.manual_seed(0)
     ir = torch.randn(256, 3, 3, dtype=torch.float64)
     expected = mimo_rir_eigenvalues_per_frequency(ir, nfft=256)
-    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), nfft=256, dim=2)
+    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), nfft=256, axis=2)
     torch.testing.assert_close(moved, expected)

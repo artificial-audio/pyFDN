@@ -959,8 +959,8 @@ def plot_impulse_response_matrix(
 
 def plot_spectrogram(
     ir: ArrayLike,
-    fs: float,
     *,
+    fs: float,
     nperseg: int = 1024,
     noverlap: int | None = None,
     window: str | tuple[Any, ...] = "blackman",

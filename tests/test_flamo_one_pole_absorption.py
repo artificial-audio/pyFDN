@@ -42,7 +42,7 @@ def one_pole_absorption_reference(loadmat):
     sos_matlab = ref["absorption"]
 
     # Generate coefficients in Python (SOS bank, shape (1, 6, N))
-    sos_python = decay_to_one_pole(RT_DC, RT_NY, delays, fs)
+    sos_python = decay_to_one_pole(RT_DC, delays, fs, rt_nyquist=RT_NY)
 
     # Generate impulse response via FLAMO integration (if available)
     try:

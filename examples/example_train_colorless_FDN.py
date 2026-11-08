@@ -184,7 +184,7 @@ def _(fs, init_dss, opt_dss, pyFDN):
 
     def render(dss, rt):
         """dss (with homogeneous decay) -> peak-normalized 1-D impulse response."""
-        decay = pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, fs)
+        decay = pyFDN.decay_to_first_order_shelf(rt, dss.delays, fs, rt_nyquist=rt)
         graph = pyFDN.dss_to_td(*dss, post_delay=decay)
         ir = graph.impulse_response(n_samples).squeeze()
         # peak-normalize so the A/B compares timbre at matched level, not loudness.

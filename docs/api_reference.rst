@@ -114,21 +114,16 @@ used by those modules.
    :nosignatures:
 
    pyFDN.EQDesign
-   pyFDN.decay_to_geq
+   pyFDN.decay_to_graphic_eq
    pyFDN.decay_to_first_order_shelf
    pyFDN.decay_to_one_pole
    pyFDN.decay_to_two_stage
-   pyFDN.gain_to_geq
-   pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_graphic_eq
+   pyFDN.gain_to_bounded_graphic_eq
    pyFDN.gain_to_first_order_shelf
    pyFDN.gain_to_one_pole
    pyFDN.gain_to_two_stage
-   pyFDN.geq_design_matrix
-   pyFDN.lowshelf_biquad
-   pyFDN.highshelf_biquad
-   pyFDN.peaking_biquad
-   pyFDN.first_order_shelf_biquad
-   pyFDN.one_pole_biquad
+   pyFDN.graphic_eq_design_matrix
    pyFDN.probe_sos
 
 Time-Domain Graph (``pyFDN.td``)

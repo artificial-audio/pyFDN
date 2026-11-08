@@ -135,11 +135,16 @@ def sq_to_db(squared: ArrayLike) -> np.ndarray:
 def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
     """Mu-law companding (encode): linear amplitude to companded.
 
-    Args:
-        x: Input signal. If input is in [-1, 1], the output will be in [-1, 1].
-        mu: Compression parameter (default 255, as in G.711).
+    Parameters
+    ----------
+    x
+        Input signal. If input is in [-1, 1], the output will be in [-1, 1].
+    mu
+        Compression parameter (default 255, as in G.711).
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Companded signal.
     """
     x = np.asarray(x, dtype=float)
@@ -153,11 +158,16 @@ def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
 
     If the array is all zeros, it is returned unchanged.
 
-    Args:
-        x: Input signal (any shape).
-        target_peak: Desired peak magnitude (default 1.0).
+    Parameters
+    ----------
+    x
+        Input signal (any shape).
+    target_peak
+        Desired peak magnitude (default 1.0).
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Scaled array, same shape as input.
     """
     x = np.asarray(x, dtype=float)
@@ -173,12 +183,17 @@ def fade_out(x: ArrayLike, fade_samples: int) -> np.ndarray:
     Ramps the tail of ``x`` linearly from 1 to 0 along the last axis, so a
     finite render can end at zero instead of clicking on an abrupt cutoff.
 
-    Args:
-        x: Input signal; the fade is applied along the last axis.
-        fade_samples: Number of trailing samples to ramp down. Clamped to the
-            signal length; values <= 0 leave the signal unchanged.
+    Parameters
+    ----------
+    x
+        Input signal; the fade is applied along the last axis.
+    fade_samples
+        Number of trailing samples to ramp down. Clamped to the
+        signal length; values <= 0 leave the signal unchanged.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Faded copy of ``x`` (float), same shape as the input. ``x`` is not
         modified in place.
     """

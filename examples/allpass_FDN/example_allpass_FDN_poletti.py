@@ -35,12 +35,7 @@ def _():
     import numpy as np
 
     import pyFDN
-    from pyFDN.auxiliary.allpass import (
-        is_allpass,
-        is_paraunitary,
-        is_uniallpass,
-    )
-    from pyFDN.generate.structures import poletti_allpass
+    from pyFDN import is_allpass, is_paraunitary, is_uniallpass, poletti_allpass
 
     return (
         is_allpass,
@@ -190,7 +185,7 @@ def _(mo):
 def _(fs, impulse_response, mo, pyFDN):
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
-    _fig = pyFDN.plot_spectrogram(channel_ir, fs, xlim=(0, 2))
+    _fig = pyFDN.plot_spectrogram(channel_ir, xlim=(0, 2), fs=fs)
 
     mo.vstack([_fig, mo.audio(channel_ir, fs)])
     return

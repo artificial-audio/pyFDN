@@ -107,7 +107,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, delays, fs, rt_nyquist=0.1)  # (1, 6, N)
     assert sos.shape == (1, 6, n)
     x = rng.standard_normal((200, n))
 
@@ -151,7 +151,9 @@ def test_process_dss_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(
+        0.15, delays, fs, rt_nyquist=0.05
+    )  # (1, 6, N)
 
     # constract the SOSFilter
     absorption = td.SOSBank(sos)
@@ -194,7 +196,7 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
 
-    eq_sos = pyFDN.gain_to_geq(np.linspace(-6.0, 6.0, 10), fs=fs)
+    eq_sos = pyFDN.gain_to_graphic_eq(np.linspace(-6.0, 6.0, 10), fs=fs)
 
     def build(output_filter):
         return pyFDN.dss_to_flamo(
@@ -234,7 +236,7 @@ def _siso_dss() -> DSS:
 
 
 def _decay(dss: DSS, rt: float) -> np.ndarray:
-    return pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, FS)
+    return pyFDN.decay_to_first_order_shelf(rt, dss.delays, FS, rt_nyquist=rt)
 
 
 def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
@@ -249,7 +251,9 @@ def test_dss_to_td_sos_arrays_match_sosbank_objects() -> None:
     """SOS arrays given as hooks become the same SOSBank nodes."""
     dss = _siso_dss()
     filters = {
-        "post_delay": pyFDN.decay_to_first_order_shelf(0.3, 0.1, dss.delays, FS),
+        "post_delay": pyFDN.decay_to_first_order_shelf(
+            0.3, dss.delays, FS, rt_nyquist=0.1
+        ),
         "post_matrix": _flat_gain_sos(0.8, 4),
         "post_output": _flat_gain_sos(0.5, 1),
     }

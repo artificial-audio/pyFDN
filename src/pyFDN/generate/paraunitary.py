@@ -27,10 +27,14 @@ from .orthogonal import random_orthogonal
 def degree_one_lossless(v: np.ndarray) -> np.ndarray:
     """Build the degree-one lossless polynomial matrix ``V(z) = (I - vv^T) + z^{-1} vv^T``.
 
-    Args:
-        v: Vector of shape ``(N,)`` or ``(N, 1)``.
+    Parameters
+    ----------
+    v
+        Vector of shape ``(N,)`` or ``(N, 1)``.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Polynomial matrix of shape ``(N, N, 2)`` where index ``[..., 0]``
         is the ``z^0`` coefficient and ``[..., 1]`` is the ``z^{-1}`` coefficient.
     """

@@ -107,7 +107,7 @@ def _(fs, np, pyFDN):
 def _(fs, mo, pyFDN, rir):
     mo.vstack(
         [
-            pyFDN.plot_spectrogram(rir, fs, title="The target: a measured hall"),
+            pyFDN.plot_spectrogram(rir, title="The target: a measured hall", fs=fs),
             pyFDN.labeled_audio("the room", pyFDN.peak_normalize(rir), fs=fs),
         ]
     )
@@ -372,13 +372,13 @@ def _(fs, ir_init, ir_trained, pyFDN, rir):
 
 @app.cell
 def _(fs, ir_init, pyFDN):
-    pyFDN.plot_spectrogram(ir_init, fs, title="FDN, untrained")
+    pyFDN.plot_spectrogram(ir_init, title="FDN, untrained", fs=fs)
     return
 
 
 @app.cell
 def _(fs, ir_trained, pyFDN):
-    pyFDN.plot_spectrogram(ir_trained, fs, title="FDN, trained")
+    pyFDN.plot_spectrogram(ir_trained, title="FDN, trained", fs=fs)
     return
 
 

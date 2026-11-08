@@ -59,10 +59,10 @@ def trainable_fdn(
     N: int | None = None,
     rt: float | tuple[float, float] | None = 2.0,
     matrix: MatrixParam = "orthogonal",
-    feedback: np.ndarray | None = None,
-    input_gain: np.ndarray | None = None,
-    output_gain: np.ndarray | None = None,
-    direct: float | np.ndarray = 0.0,
+    A: np.ndarray | None = None,
+    B: np.ndarray | None = None,
+    C: np.ndarray | None = None,
+    D: float | np.ndarray = 0.0,
     trainable: Trainable | None = None,
     train_rt: bool = False,
     fs: float = 48000.0,
@@ -89,11 +89,11 @@ def trainable_fdn(
         :func:`trainable_from_dss` as ``post_delay=``.
     matrix : {"orthogonal", "random"}
         Feedback-matrix parametrization.
-    feedback : np.ndarray, optional
+    A : np.ndarray, optional
         Initial ``(N, N)`` feedback matrix; defaults to a random SO(N) matrix.
-    input_gain, output_gain : np.ndarray, optional
+    B, C : np.ndarray, optional
         ``B`` (``(N, n_in)``) and ``C`` (``(n_out, N)``); default ones / sqrt(N).
-    direct : float or np.ndarray
+    D : float or np.ndarray
         Direct path ``D``; a scalar fills ``(n_out, n_in)``.
     trainable : Trainable, optional
         Which gain groups are trained (default :class:`~pyFDN.Trainable`).
@@ -131,28 +131,28 @@ def trainable_fdn(
     else:
         raise ValueError("provide either delays= or N=")
 
-    if feedback is not None:
-        a = np.asarray(feedback, dtype=float)
+    if A is not None:
+        a = np.asarray(A, dtype=float)
         if a.shape != (n, n):
-            raise ValueError(f"feedback must have shape ({n}, {n}), got {a.shape}")
+            raise ValueError(f"A must have shape ({n}, {n}), got {a.shape}")
     else:
         a = _random_so_n(n, local_rng)
 
     # Default IO is "normalized" (ones / sqrt(N)): puts the initial |H| near unity
-    # so a colorless objective starts well-conditioned. Override with input_gain/
-    # output_gain for other layouts.
+    # so a colorless objective starts well-conditioned. Override with B / C for
+    # other layouts.
     b = (
         np.ones((n, 1)) / np.sqrt(n)
-        if input_gain is None
-        else np.asarray(input_gain, float).reshape(n, -1)
+        if B is None
+        else np.asarray(B, float).reshape(n, -1)
     )
     c = (
         np.ones((1, n)) / np.sqrt(n)
-        if output_gain is None
-        else np.atleast_2d(np.asarray(output_gain, float))
+        if C is None
+        else np.atleast_2d(np.asarray(C, float))
     )
     n_out, n_in = c.shape[0], b.shape[1]
-    d = _resolve_direct(direct, n_out, n_in)
+    d = _resolve_direct(D, n_out, n_in)
 
     if alias_decay_db is None:
         alias_decay_db = LOSSLESS_ALIAS_DECAY_DB if rt is None else 0.0

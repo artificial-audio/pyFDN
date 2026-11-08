@@ -69,21 +69,30 @@ def filter_matrix_gallery(
     All types are paraunitary (lossless): ``A^T(z^{-1}) A(z) = I``. Used as
     scattering feedback matrices in an FDN (Schlecht & Habets 2020).
 
-    Args:
-        N: Matrix size.
-        matrix_type: One of :data:`FILTER_MATRIX_TYPES`: ``"random_dense"`` (dense cascaded paraunitary
-            matrix), ``"velvet"`` (sparse velvet-noise feedback matrix), or
-            ``"from_elementals"`` (cascade of degree-one lossless factors,
-            polynomial degree ``N * num_stages``).
-        num_stages: Number of cascade stages (or degree factor for
-            ``"from_elementals"``).
-        sparsity: Sparsity of the ``"velvet"`` type (ignored otherwise).
-        stage_matrix_type: Stage matrix for ``"random_dense"`` and ``"velvet"``:
-            ``"hadamard"`` or ``"random"`` (random orthogonal; avoids the
-            structural double poles at z = ±1 of Hadamard stages).
-        rng: Generator or integer seed, as for every random function.
+    Parameters
+    ----------
+    N
+        Matrix size.
+    matrix_type
+        One of :data:`FILTER_MATRIX_TYPES`: ``"random_dense"`` (dense cascaded paraunitary
+        matrix), ``"velvet"`` (sparse velvet-noise feedback matrix), or
+        ``"from_elementals"`` (cascade of degree-one lossless factors,
+        polynomial degree ``N * num_stages``).
+    num_stages
+        Number of cascade stages (or degree factor for
+        ``"from_elementals"``).
+    sparsity
+        Sparsity of the ``"velvet"`` type (ignored otherwise).
+    stage_matrix_type
+        Stage matrix for ``"random_dense"`` and ``"velvet"``:
+        ``"hadamard"`` or ``"random"`` (random orthogonal; avoids the
+        structural double poles at z = ±1 of Hadamard stages).
+    rng
+        Generator or integer seed, as for every random function.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Feedback matrix of shape ``(N, N, L)`` in z^{-1} convention.
 
     Example::
@@ -130,18 +139,26 @@ def fdn_matrix_gallery(
 ) -> np.ndarray:
     """Return a feedback matrix of the requested type.
 
-    Args:
-        N: Matrix size.
-        matrix_type: One of :data:`FEEDBACK_MATRIX_TYPES`.
-        angles: Kernel angles for the ``"kronecker"`` type, innermost first
-            (see :func:`pyFDN.kronecker_matrix`).  Defaults to ``pi / 4`` on
-            every kernel, the equal-mixing setting.  Ignored otherwise.
-        kernel_type: Kernel family for the ``"kronecker"`` type,
-            ``"rotation"`` or ``"reflection"``, either once for all kernels or
-            one per kernel.  Ignored otherwise.
-        rng: Generator or integer seed for the random types.
+    Parameters
+    ----------
+    N
+        Matrix size.
+    matrix_type
+        One of :data:`FEEDBACK_MATRIX_TYPES`.
+    angles
+        Kernel angles for the ``"kronecker"`` type, innermost first
+        (see :func:`pyFDN.kronecker_matrix`).  Defaults to ``pi / 4`` on
+        every kernel, the equal-mixing setting.  Ignored otherwise.
+    kernel_type
+        Kernel family for the ``"kronecker"`` type,
+        ``"rotation"`` or ``"reflection"``, either once for all kernels or
+        one per kernel.  Ignored otherwise.
+    rng
+        Generator or integer seed for the random types.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Feedback matrix of shape ``(N, N)``.
 
     Example::
@@ -209,12 +226,18 @@ def fdn_system_gallery(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return a full FDN system ``(A, B, C, D)`` of the requested type.
 
-    Args:
-        N: System order.
-        system_type: One of :data:`SYSTEM_TYPES`.
-        rng: Generator or integer seed for the random gains.
+    Parameters
+    ----------
+    N
+        System order.
+    system_type
+        One of :data:`SYSTEM_TYPES`.
+    rng
+        Generator or integer seed for the random gains.
 
-    Returns:
+    Returns
+    -------
+    tuple[ndarray, ndarray, ndarray, ndarray]
         The system matrices ``(A, B, C, D)``, as the structure builders in
         :mod:`pyFDN.generate.structures` return them.
 

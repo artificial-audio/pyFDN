@@ -37,7 +37,7 @@ def to_numpy(value: Any) -> np.ndarray:
     return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
 
 
-def flamo_to_impz(model) -> np.ndarray:
+def flamo_to_impz(model: Any) -> np.ndarray:
     """Impulse response of a FLAMO model, shape ``(nfft, out, in)``.
 
     One Dirac per input channel, as :func:`pyFDN.dss_to_impz` and
@@ -54,12 +54,12 @@ def flamo_to_impz(model) -> np.ndarray:
 
 
 def flamo_process(
-    model,
+    model: Any,
     signal: np.ndarray,
     *,
     fs: float | None = None,
     tail_seconds: float = 0.0,
-    dtype=None,
+    dtype: Any = None,
 ) -> np.ndarray:
     """Run a 1-D signal through a FLAMO ``Shell`` model offline.
 
@@ -120,11 +120,11 @@ def gain_module(
     values: np.ndarray,
     nfft: int,
     *,
-    device=None,
-    dtype=None,
+    device: Any = None,
+    dtype: Any = None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
-):
+) -> Any:
     """
     Build a FLAMO Gain module from a numpy array.
 
@@ -176,12 +176,12 @@ def delay_module(
     nfft: int,
     *,
     fs: float,
-    device=None,
-    dtype=None,
+    device: Any = None,
+    dtype: Any = None,
     isint: bool = True,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
-):
+) -> Any:
     """
     Build a FLAMO parallelDelay module from delay lengths in samples.
 
@@ -241,11 +241,11 @@ def fir_matrix_module(
     coeffs: np.ndarray,
     nfft: int,
     *,
-    device=None,
-    dtype=None,
+    device: Any = None,
+    dtype: Any = None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
-):
+) -> Any:
     """
     Build a FLAMO Filter module from a matrix FIR coefficient array.
 
@@ -299,11 +299,11 @@ def sos_filter_module(
     sos: np.ndarray,
     nfft: int,
     *,
-    device=None,
-    dtype=None,
+    device: Any = None,
+    dtype: Any = None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
-):
+) -> Any:
     """
     Build a FLAMO parallelSOSFilter from an SOS coefficient array.
 
@@ -410,7 +410,7 @@ def matrix_module(
     dtype: Any = None,
     alias_decay_db: float = 0,
     requires_grad: bool = False,
-):
+) -> Any:
     """
     Build a FLAMO ``Matrix`` initialized to ``values`` under a parametrization.
 

@@ -211,6 +211,34 @@ Unreleased
 * **Breaking:** ``flamo_time_response`` is ``flamo_to_impz``, pairing with
   ``dss_to_impz``, ``tf_to_impz`` and ``pr_to_impz``.
 
+* **Breaking:** ``trainable_fdn`` takes its starting matrices as ``A``,
+  ``B``, ``C``, ``D`` (were ``feedback``, ``input_gain``, ``output_gain``,
+  ``direct``), like ``trainable_from_dss``.
+* **Breaking: the EQ designers are named after their designs.**
+  ``decay_to_geq``, ``gain_to_geq``, ``gain_to_bounded_geq`` and
+  ``geq_design_matrix`` are ``decay_to_graphic_eq``, ``gain_to_graphic_eq``,
+  ``gain_to_bounded_graphic_eq`` and ``graphic_eq_design_matrix``. The
+  Nyquist targets are keyword-only, as in ``AttenuationFilter`` and
+  ``OutputEQ``: ``decay_to_first_order_shelf(rt, delays, fs, *, rt_nyquist,
+  crossover=None)``, ``decay_to_one_pole(rt, delays, fs, *, rt_nyquist)``,
+  ``gain_to_first_order_shelf(gain_db, fs, *, gain_db_nyquist,
+  crossover=None)``, ``gain_to_one_pole(gain_db, *, gain_db_nyquist)``.
+  ``OutputEQ`` takes ``channels`` (was ``n_channels``).
+* The biquad builders (``lowshelf_biquad``, ``highshelf_biquad``,
+  ``peaking_biquad``, ``first_order_shelf_biquad``, ``one_pole_biquad``) are
+  no longer exported; they stay in ``pyFDN.eq.biquads`` behind the designers.
+* Every public docstring uses the NumPy style.
+* ``impulse_excitation`` takes ``num_inputs``; the FLAMO module builders,
+  ``flamo_to_impz``, ``flamo_process`` and ``complete_fdn`` are fully typed.
+* **Breaking:** ``plot_flamo_graph`` returns a Figure like every other plot
+  and no longer takes ``ax``.
+* **Breaking:** ``fdn_dss_gallery`` accepts ``io_type="normalized"`` only
+  (the default; ``"normalised"`` is gone).
+* **Breaking:** ``mimo_rir_eigenvalues_per_frequency`` takes ``axis`` like
+  ``edc`` (was ``dim``), ``nearest_sign_agnostic_orthogonal`` takes ``tol``
+  (was ``tolerance``), and ``plot_spectrogram`` takes ``fs`` as a keyword like
+  the other plots.
+
 0.5.0 (2026-09-28)
 ------------------
 

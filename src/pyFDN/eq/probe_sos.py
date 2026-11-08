@@ -18,14 +18,21 @@ def probe_sos(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Evaluate the magnitude response of each biquad at control frequencies.
 
-    Args:
-        sos: Filter matrix of shape ``(num_bands, 6)`` with columns
-             ``[b0, b1, b2, a0, a1, a2]`` (rows are independent sections).
-        fs: Sampling frequency in Hz.
-        control_frequencies: Frequencies in Hz at which to evaluate.
-        nfft: Number of frequency points of the response.
+    Parameters
+    ----------
+    sos
+        Filter matrix of shape ``(num_bands, 6)`` with columns
+        ``[b0, b1, b2, a0, a1, a2]`` (rows are independent sections).
+    fs
+        Sampling frequency in Hz.
+    control_frequencies
+        Frequencies in Hz at which to evaluate.
+    nfft
+        Number of frequency points of the response.
 
-    Returns:
+    Returns
+    -------
+    tuple[ndarray, ndarray, ndarray]
         ``(G, H, W)`` where
 
         - ``G`` — magnitude in dB, shape ``(len(control_frequencies), num_bands)``.

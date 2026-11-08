@@ -768,12 +768,12 @@ def _(fs, mo, modulated_wet, modulation_names, pyFDN):
         [
             pyFDN.plot_spectrogram(
                 modulated_wet[name][:, 0],
-                fs,
                 nperseg=2048 * 8,
                 noverlap=2048 * 6,
                 title=f"Modulation {name} — spectrogram",
                 cmap="magma",
                 figsize=(8.0, 3.3),
+                fs=fs,
             )
             for name in modulation_names
         ]

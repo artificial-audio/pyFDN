@@ -37,14 +37,21 @@ class Series(TimeOperator):
         """Flatten the operator list.
         Avoids nesting Series instances.
 
-        Args:
-            ops (list[TimeOperator] | TimeOperator): List of operators
+        Parameters
+        ----------
+        ops : list[TimeOperator] | TimeOperator
+            List of operators
 
-        Raises:
-            ValueError: At least one operator in argin ops is not child of TimeOperator
-            ValueError: No operator in argin ops
+        Raises
+        ------
+        ValueError
+            At least one operator in argin ops is not child of TimeOperator
+        ValueError
+            No operator in argin ops
 
-        Returns:
+        Returns
+        -------
+        list[TimeOperator]
             list[TimeOperator]: Flattened list of operators
         """
         flat: list[TimeOperator] = []
@@ -100,14 +107,21 @@ class Parallel(TimeOperator):
         """Flatten the operator list.
         Avoids nesting Parallel instances.
 
-        Args:
-            ops (list[TimeOperator] | TimeOperator): List of operators
+        Parameters
+        ----------
+        ops : list[TimeOperator] | TimeOperator
+            List of operators
 
-        Raises:
-            ValueError: At least one operator in argin ops is not child of TimeOperator
-            ValueError: No operator in argin ops
+        Raises
+        ------
+        ValueError
+            At least one operator in argin ops is not child of TimeOperator
+        ValueError
+            No operator in argin ops
 
-        Returns:
+        Returns
+        -------
+        list[TimeOperator]
             list[TimeOperator]: Flattened list of operators
         """
         flat: list[TimeOperator] = []
@@ -227,13 +241,19 @@ class Recursion(TimeOperator):
     def process_block(self, block: ArrayLike) -> np.ndarray:
         """Process one block of audio.
 
-        Args:
-            block (ArrayLike): Input block of audio.
+        Parameters
+        ----------
+        block : ArrayLike
+            Input block of audio.
 
-        Raises:
-            ValueError: Mismatch between audio-block channels and Recursion input channels
+        Raises
+        ------
+        ValueError
+            Mismatch between audio-block channels and Recursion input channels
 
-        Returns:
+        Returns
+        -------
+        ndarray
             np.ndarray: Output block of audio.
         """
         x = _as_2d(block)

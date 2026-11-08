@@ -130,7 +130,7 @@ def _(mo):
 @app.cell
 def _(fs, impulse_response, mo, pyFDN):
     _fig = pyFDN.plot_spectrogram(
-        impulse_response, fs, title="Schroeder series allpass — spectrogram"
+        impulse_response, title="Schroeder series allpass — spectrogram", fs=fs
     )
 
     mo.vstack([_fig, mo.audio(impulse_response, fs)])

@@ -24,11 +24,10 @@ def _build_io_matrices(
     if min(num_inputs, num_outputs) < 1:
         raise ValueError("num_inputs and num_outputs must be positive")
 
-    io_type = "normalised" if io_type == "normalized" else io_type
     if io_type == "ones":
         B = np.ones((N, num_inputs))
         C = np.ones((num_outputs, N))
-    elif io_type == "normalised":
+    elif io_type == "normalized":
         B = np.ones((N, num_inputs)) / np.sqrt(N)
         C = np.ones((num_outputs, N)) / np.sqrt(N)
     elif io_type == "identity":
@@ -39,7 +38,7 @@ def _build_io_matrices(
         C = rng.standard_normal((num_outputs, N))
     else:
         raise ValueError(
-            "io_type must be one of 'ones', 'normalised', 'identity', or 'random'"
+            "io_type must be one of 'ones', 'normalized', 'identity', or 'random'"
         )
 
     B = input_scale * B
@@ -84,9 +83,9 @@ def _build_post_output(
 
     return gain_to_first_order_shelf(
         _per_output(gain_db, "output_gain_db"),
-        _per_output(gain_db_nyquist, "output_gain_db_nyquist"),
         fs,
         crossover=crossover,
+        gain_db_nyquist=_per_output(gain_db_nyquist, "output_gain_db_nyquist"),
     )
 
 
@@ -101,7 +100,7 @@ def fdn_dss_gallery(
     sort_delays: bool = False,
     num_inputs: int = 1,
     num_outputs: int = 1,
-    io_type: str = "normalised",
+    io_type: str = "normalized",
     input_scale: float = 1.0,
     output_scale: float = 1.0,
     direct_gain: float | None = 0.0,
@@ -177,7 +176,7 @@ def fdn_dss_gallery(
 
         rt_nyquist = rt if rt_nyquist is None else rt_nyquist
         post_delay = decay_to_first_order_shelf(
-            rt, rt_nyquist, delays_array, float(fs), crossover=rt_crossover
+            rt, delays_array, float(fs), crossover=rt_crossover, rt_nyquist=rt_nyquist
         )
 
     post_output = _build_post_output(

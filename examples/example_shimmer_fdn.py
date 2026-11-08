@@ -94,7 +94,7 @@ def _(np, pyFDN):
 
     target_rt = np.array([4.4, 4.4, 4.3, 4.1, 3.8, 3.4, 3.0, 1.7, 1.5, 0.5])
 
-    absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
+    absorption = pyFDN.decay_to_graphic_eq(target_rt, delays, fs)  # (n_sections, 6, N)
 
     graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
     ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
@@ -112,7 +112,7 @@ def _(fs, ir, mo, pyFDN):
             # pyFDN.plot_impulse_response(
             #     ir, fs=fs, title="Linear (Vanilla) FDN"
             # ),
-            # pyFDN.plot_spectrogram(ir, fs, title="Impulse response — time-frequency energy"),
+            # pyFDN.plot_spectrogram(ir, fs=fs, title="Impulse response — time-frequency energy"),
             pyFDN.labeled_audio(
                 "Linear (Vanilla) FDN", pyFDN.peak_normalize(ir), fs=fs
             ),
@@ -334,7 +334,9 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
         coprime=True,  # avoid coinciding echoes
         rng=2,
     )
-    absorption_2 = pyFDN.decay_to_geq(target_rt, delays_2, fs)  # (n_sections, 6, N)
+    absorption_2 = pyFDN.decay_to_graphic_eq(
+        target_rt, delays_2, fs
+    )  # (n_sections, 6, N)
 
     window = 2048
     wet_ps = pyFDN.dss_to_td(
