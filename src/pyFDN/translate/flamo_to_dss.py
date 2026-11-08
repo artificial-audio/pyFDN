@@ -59,7 +59,7 @@ def flamo_to_dss(model: Any) -> tuple[DSS, dict[str, np.ndarray | None]]:
         """Every node belonging to hook ``name``.
 
         A hook given several modules is a ``Series`` whose leaves
-        :func:`pyFDN.hook_module` names ``{name}_0``, ``{name}_1``, ... -- and
+        ``pyFDN.auxiliary.flamo.hook_module`` names ``{name}_0``, ``{name}_1``, ... -- and
         flamo's ``Series`` flattens a nested one, so the container's own name is
         gone by the time the graph is walked. Matching the prefix too is what
         keeps such a hook visible instead of silently reading as empty.

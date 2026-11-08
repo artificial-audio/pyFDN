@@ -132,7 +132,7 @@ def _(
         refinement_tol=1e-10,
         maximum_iterations=80,
         reject_unstable_poles=True,
-        deflation_type="fullDeflation",
+        deflation_type="full",
         verbose=False,
     )
     print(f"Number of FDN poles: {poles.size} (conjugate pairs reduced)")

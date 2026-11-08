@@ -7,9 +7,7 @@ All main functions are accessible directly from ``pyFDN``::
     import pyFDN
 
     feedback = pyFDN.random_orthogonal(4)
-    attenuation = pyFDN.decay_to_first_order_shelf(
-        1.2, 0.9, None, [100, 150, 200, 250], 48_000
-    )
+    attenuation = pyFDN.decay_to_first_order_shelf(1.2, 0.9, [100, 150, 200, 250], 48_000)
     gain_db = pyFDN.lin_to_db([0.5, 1.0, 2.0])
 
 Or import specific functions::
@@ -57,7 +55,7 @@ public API, independent of the current working directory::
     dry, fs = pyFDN.load_audio("synth_dry")
 
     dss = pyFDN.load_fdn_preset("colorless_N8_d1")
-    decay = pyFDN.decay_to_first_order_shelf(1.5, 1.5, None, dss.delays, fs)
+    decay = pyFDN.decay_to_first_order_shelf(1.5, 1.5, dss.delays, fs)
     wet = pyFDN.dss_to_td(*dss, post_delay=decay).process_signal(dry, squeeze=True)
 
     citation = pyFDN.paper_link("Allpass_Feedback_Delay_Networks")

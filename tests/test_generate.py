@@ -18,8 +18,7 @@ from pyFDN.generate.orthogonal import (
     tiny_rotation_matrix,
 )
 from pyFDN.generate.paraunitary import (
-    construct_cascaded_paraunitary_matrix,
-    construct_velvet_feedback_matrix,
+    cascaded_paraunitary_matrix,
     degree_one_lossless,
     random_matrix_shift,
     shift_matrix,
@@ -82,32 +81,22 @@ def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
 
 def test_cascaded_paraunitary_matrix_is_reproducible_with_global_seed():
     np.random.seed(0)
-    first, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    first, _ = cascaded_paraunitary_matrix(4, 2, sparsity=2)
     np.random.seed(0)
-    second, _ = construct_cascaded_paraunitary_matrix(4, 2, sparsity=2)
+    second, _ = cascaded_paraunitary_matrix(4, 2, sparsity=2)
     np.testing.assert_array_equal(first, second)
 
 
-def test_construct_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
+def test_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
     monkeypatch.setattr(
         "pyFDN.generate.paraunitary.shift_matrix_distribute",
         lambda *args, **kwargs: np.zeros(args[0].shape[0], dtype=int),
     )
-    matrix, rev = construct_cascaded_paraunitary_matrix(4, 0, matrix_type="hadamard")
+    matrix, rev = cascaded_paraunitary_matrix(4, 0, matrix_type="hadamard")
     product = matrix_convolution(matrix, rev)
     identity = np.zeros_like(product)
     identity[:, :, 0] = np.eye(4)
     np.testing.assert_allclose(product, identity)
-
-
-def test_construct_velvet_feedback_matches_wrapper(monkeypatch):
-    monkeypatch.setattr(
-        "pyFDN.generate.paraunitary.construct_cascaded_paraunitary_matrix",
-        lambda *args, **kwargs: (np.ones((2, 2, 1)), np.ones((2, 2, 1))),
-    )
-    matrix, rev = construct_velvet_feedback_matrix(2, 1, 0.5)
-    np.testing.assert_equal(matrix, 1.0)
-    np.testing.assert_equal(rev, 1.0)
 
 
 def test_filter_matrix_gallery_types_are_paraunitary():
@@ -371,8 +360,8 @@ def test_fdn_dss_gallery_rt_nyquist_defaults_to_rt():
 def test_fdn_dss_gallery_forwards_rt_crossover(monkeypatch):
     captured = {}
 
-    def fake_attenuation(rt, rt_nyquist, rt_crossover, delays, fs):
-        captured["crossover"] = rt_crossover
+    def fake_attenuation(rt, rt_nyquist, delays, fs, *, crossover=None):
+        captured["crossover"] = crossover
         return np.ones((1, 6, len(delays)))
 
     monkeypatch.setattr("pyFDN.eq.decay_to_first_order_shelf", fake_attenuation)
@@ -409,7 +398,7 @@ def test_fdn_dss_gallery_post_eq_scalar_and_per_channel():
     )
     post_output = per_channel["post_output"]
     assert post_output is not None and post_output.shape == (1, 6, 3)
-    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, None, 48_000.0)
+    expected = gain_to_first_order_shelf([0.0, -3.0, -6.0], -6.0, 48_000.0)
     np.testing.assert_allclose(post_output, expected)
 
 
@@ -525,7 +514,7 @@ def test_tiny_rotation_matrix_is_orthogonal_with_prescribed_angles():
 
 
 def test_rotation_matrix_from_angles_block_structure():
-    rotation = rotation_matrix_from_angles([0.1, 0.2], n=5)
+    rotation = rotation_matrix_from_angles([0.1, 0.2], N=5)
     np.testing.assert_allclose(rotation @ rotation.T, np.eye(5), atol=1e-12)
     np.testing.assert_allclose(
         rotation[:2, :2], [[np.cos(0.1), -np.sin(0.1)], [np.sin(0.1), np.cos(0.1)]]

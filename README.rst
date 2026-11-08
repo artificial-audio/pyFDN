@@ -80,8 +80,9 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     # one-pole absorption filters targeting RT of 1.2 s at DC and 0.9 s at Nyquist
     absorption = pyFDN.decay_to_one_pole(1.2, 0.9, delays, fs)
 
-    # convert delay state-space to standard state-space (A_ss, b, c, d)
-    A_ss, b, c, d = pyFDN.dss_to_ss(delays, feedback)
+    # convert delay state-space to standard state-space
+    B, C, D = np.ones((4, 1)) / 2, np.ones((1, 4)) / 2, np.zeros((1, 1))
+    A_ss, B_ss, C_ss, D_ss = pyFDN.dss_to_ss(delays, feedback, B, C, D)
 
 Alternatively, import specific functions directly::
 

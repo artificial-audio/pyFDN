@@ -74,7 +74,7 @@ def _magnitude(model):
 
 def _decayed(dss: DSS, rt: float, nfft: int) -> Any:
     """A trainable model of ``dss`` with a homogeneous first-order-shelf decay."""
-    sos = pyFDN.decay_to_first_order_shelf(rt, rt, None, dss.delays, FS)
+    sos = pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, FS)
     return trainable_from_dss(*dss, FS, post_delay=sos, nfft=nfft, device="cpu")
 
 
@@ -487,7 +487,7 @@ def test_a_first_order_shelf_decay_realizes_rt():
     dss = pyFDN.flamo_to_dss(
         trainable_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     )[0]
-    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.3, None, dss.delays, FS)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.3, dss.delays, FS)
     assert sos.shape == (1, 6, 6)
 
     ir = np.asarray(
@@ -1439,7 +1439,7 @@ def test_shelf_absorption_is_the_numpy_design_and_survives_extraction():
     np.testing.assert_allclose(ref.raw().detach().numpy(), rt, rtol=1e-6)
 
     # and the filter it maps onto is the numpy design, to float64
-    expected = pyFDN.decay_to_first_order_shelf(rt[0], rt[1], None, dss.delays, fs)
+    expected = pyFDN.decay_to_first_order_shelf(rt[0], rt[1], dss.delays, fs)
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-8)
 
     post_delay = pyFDN.flamo_to_dss(model)[1]["post_delay"]
@@ -1470,7 +1470,7 @@ def test_shelf_post_eq_is_the_numpy_design():
     assert ref.trainable is True
     np.testing.assert_allclose(ref.raw().detach().numpy(), [[3.0], [-6.0]], rtol=1e-6)
 
-    expected = pyFDN.gain_to_first_order_shelf(gains[0], gains[1], None, fs)[:, :, None]
+    expected = pyFDN.gain_to_first_order_shelf(gains[0], gains[1], fs)[:, :, None]
     np.testing.assert_allclose(ref.value().detach().numpy(), expected, atol=1e-10)
 
     # the shelf reaches its endpoints: the gain at DC and at Nyquist is the parameter

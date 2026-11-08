@@ -171,7 +171,7 @@ def _(
         quality_threshold=1e-10,
         refinement_tol=1e-10,
         maximum_iterations=80,
-        deflation_type="fullDeflation",
+        deflation_type="full",
         verbose=False,
         num_poles=num_poles,
     )

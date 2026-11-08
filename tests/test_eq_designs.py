@@ -269,7 +269,7 @@ def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
     if design == "graphic_eq":
         sos = pyFDN.gain_to_geq(gain, fs)
     elif design == "first_order_shelf":
-        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], 3000.0, fs)
+        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], fs, crossover=3000.0)
     else:
         sos = pyFDN.gain_to_one_pole(gain[0], gain[1])
     assert sos.shape == (n_sections, 6)
@@ -282,7 +282,7 @@ def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
         (pyFDN.gain_to_geq, (np.linspace(-6.0, -1.0, 10), 48000.0)),
         (
             pyFDN.gain_to_first_order_shelf,
-            (-6.0, -1.0, 3000.0, 48000.0),
+            (-6.0, -1.0, 48000.0),
         ),
         (pyFDN.gain_to_one_pole, (-6.0, -1.0)),
     ],
@@ -299,7 +299,6 @@ def test_gain_designs_run_differentiably_in_torch(design_fn, args):
             torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
             torch.tensor(args[1], dtype=torch.float64, requires_grad=True),
             args[2],
-            args[3],
         ]
     else:
         tensor_args = [
@@ -331,12 +330,14 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     delays = np.array([809.0, 1153.0])
     rt_dc, rt_nyquist, crossover = 1.4, 0.7, 3500.0
     np.testing.assert_allclose(
-        pyFDN.decay_to_first_order_shelf(rt_dc, rt_nyquist, crossover, delays, fs),
+        pyFDN.decay_to_first_order_shelf(
+            rt_dc, rt_nyquist, delays, fs, crossover=crossover
+        ),
         pyFDN.gain_to_first_order_shelf(
             -60.0 * delays / (rt_dc * fs),
             -60.0 * delays / (rt_nyquist * fs),
-            crossover,
             fs,
+            crossover=crossover,
         ),
         atol=1e-12,
     )
@@ -348,7 +349,7 @@ def test_first_order_shelf_crosses_at_the_requested_frequency():
     fs = 48000.0
 
     def midpoint(crossover):
-        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, fs, crossover=crossover)
         w, h = sosfreqz(sos, worN=2**14, fs=fs)
         db = 20.0 * np.log10(np.abs(h) + 1e-300)
         return float(w[np.argmin(np.abs(db + 6.0))])
@@ -385,10 +386,7 @@ def test_geq_rejects_the_wrong_number_of_targets():
 def test_attenuation_designs_flatten_delays(design_fn):
     fs = 48000.0
     flat = np.array([100.0, 150.0, 200.0, 250.0])
-    if design_fn is pyFDN.decay_to_first_order_shelf:
-        args: tuple[float | None, ...] = (4.0, 1.0, None)
-    else:
-        args = (4.0, 1.0)
+    args = (4.0, 1.0)
     np.testing.assert_allclose(
         design_fn(*args, flat.reshape(2, 2), fs),
         design_fn(*args, flat, fs),
@@ -404,11 +402,11 @@ def _band_error_db(sos, gain_db, fs):
 def test_two_stage_is_a_shelf_followed_by_a_geq():
     fs = 48000.0
     gain_db = np.array([-1.0, -1.2, -1.1, -1.3, -1.5, -1.8, -2.3, -3.2, -4.8, -8.0])
-    sos = pyFDN.gain_to_two_stage(gain_db, fs, 1000.0)
+    sos = pyFDN.gain_to_two_stage(gain_db, fs, crossover=1000.0)
     assert sos.shape == (12, 6)
     np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
     np.testing.assert_allclose(
-        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, 1000.0, fs)
+        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, fs, crossover=1000.0)
     )
     np.testing.assert_allclose(pyFDN.gain_to_two_stage(gain_db, fs), sos, atol=1e-12)
 

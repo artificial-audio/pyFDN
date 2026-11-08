@@ -85,8 +85,8 @@ def _build_post_output(
     return gain_to_first_order_shelf(
         _per_output(gain_db, "output_gain_db"),
         _per_output(gain_db_nyquist, "output_gain_db_nyquist"),
-        crossover,
         fs,
+        crossover=crossover,
     )
 
 
@@ -177,11 +177,7 @@ def fdn_dss_gallery(
 
         rt_nyquist = rt if rt_nyquist is None else rt_nyquist
         post_delay = decay_to_first_order_shelf(
-            rt,
-            rt_nyquist,
-            rt_crossover,
-            delays_array,
-            float(fs),
+            rt, rt_nyquist, delays_array, float(fs), crossover=rt_crossover
         )
 
     post_output = _build_post_output(

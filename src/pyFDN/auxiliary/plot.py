@@ -207,10 +207,10 @@ def _hide_ticks(ax: Any) -> None:
 
 def plot_matrix(
     A: ArrayLike,
+    *,
     title: str | None = None,
     zmin: float | None = None,
     zmax: float | None = None,
-    *,
     block_boundaries: Sequence[int] | None = None,
 ) -> Figure:
     """Plot a single matrix as a heatmap (RdBu, square pixels).
@@ -400,9 +400,10 @@ def plot_system_matrix(
     B: ArrayLike,
     C: ArrayLike,
     D: ArrayLike,
+    *,
+    title: str | None = None,
     zmin: float | None = None,
     zmax: float | None = None,
-    title: str | None = None,
 ) -> Figure:
     """Plot system matrix [A B; C D] as 2x2 heatmaps, shared RdBu color scale.
 

@@ -6,9 +6,9 @@ from scipy.linalg import block_diag
 def dss_to_ss(
     delays: ArrayLike,
     A: ArrayLike,
-    b: ArrayLike | None = None,
-    c: ArrayLike | None = None,
-    d: ArrayLike | None = None,
+    B: ArrayLike,
+    C: ArrayLike,
+    D: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Convert a delay state-space (DSS) system to standard state-space.
@@ -23,13 +23,10 @@ def dss_to_ss(
     delays : array-like
         Delay lengths in samples (min 3 samples).
     A : array-like
-        Feedback matrix (NxN).
-    b : array-like, optional
-        Input gains (Nx1). Defaults to ones(N,1).
-    c : array-like, optional
-        Output gains (1xN). Defaults to ones(1,N).
-    d : array-like, optional
-        Direct gains (1x1). Defaults to np.ones((1,1)).
+        Feedback matrix (N, N).
+    B, C, D : array-like
+        Input ``(N, inputs)``, output ``(outputs, N)`` and direct
+        ``(outputs, inputs)`` gains.
 
     Returns
     -------
@@ -52,10 +49,9 @@ def dss_to_ss(
             f"got minimum {int(delays_arr.min())}."
         )
 
-    # Default gains
-    b = np.ones((N, 1)) if b is None else np.asarray(b, dtype=float)
-    c = np.ones((1, N)) if c is None else np.asarray(c, dtype=float)
-    d = np.ones((1, 1)) if d is None else np.asarray(d, dtype=float)
+    B = np.asarray(B, dtype=float).reshape(N, -1)
+    C = np.asarray(C, dtype=float).reshape(-1, N)
+    D = np.asarray(D, dtype=float).reshape(C.shape[0], B.shape[1])
 
     U_blocks = []
     P = np.zeros((N, 0))  # start with 0 columns
@@ -98,15 +94,8 @@ def dss_to_ss(
 
     NN = AA.shape[0]
 
-    # Construct bb
-    bb = np.zeros((NN, 1))
-    bb[-N:] = b
-
-    # Construct cc
-    cc = np.zeros((1, NN))
-    cc[0, -2 * N : -N] = c
-
-    # Direct gain
-    dd = d
-
-    return AA, bb, cc, dd
+    bb = np.zeros((NN, B.shape[1]))
+    bb[-N:] = B
+    cc = np.zeros((C.shape[0], NN))
+    cc[:, -2 * N : -N] = C
+    return AA, bb, cc, D

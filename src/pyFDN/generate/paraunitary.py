@@ -136,9 +136,9 @@ def random_matrix_shift(
     return shifted, shifted_rev, rand_left, rand_right
 
 
-def construct_cascaded_paraunitary_matrix(
-    n: int,
-    k: int,
+def cascaded_paraunitary_matrix(
+    N: int,
+    stages: int,
     *,
     sparsity: float = 1.0,
     matrix_type: str = "hadamard",
@@ -147,8 +147,8 @@ def construct_cascaded_paraunitary_matrix(
     """Construct a paraunitary matrix and its reverse response."""
 
     if matrix_type == "hadamard":
-        if n & (n - 1) != 0:
-            raise ValueError("Hadamard construction requires n to be a power of two")
+        if N & (N - 1) != 0:
+            raise ValueError("Hadamard construction requires N to be a power of two")
 
         def generate_matrix(size: int) -> np.ndarray:
             return hadamard(size) / math.sqrt(size)
@@ -159,17 +159,17 @@ def construct_cascaded_paraunitary_matrix(
             f"matrix_type must be 'hadamard' or 'random', got {matrix_type!r}"
         )
 
-    sparsity_vector = np.concatenate(([sparsity], np.ones(max(k - 1, 0))))
-    matrix = ensure_3d(generate_matrix(n))
+    sparsity_vector = np.concatenate(([sparsity], np.ones(max(stages - 1, 0))))
+    matrix = ensure_3d(generate_matrix(N))
     rev_matrix = ensure_3d(np.linalg.inv(matrix[:, :, 0]))
 
     pulse_size = 1
-    for stage in range(k):
+    for stage in range(stages):
         shift_left = shift_matrix_distribute(
             matrix, sparsity_vector[stage], pulse_size=pulse_size
         )
         gain_diag = np.diag(np.power(gain_per_sample, shift_left))
-        R1 = ensure_3d(generate_matrix(n) @ gain_diag)
+        R1 = ensure_3d(generate_matrix(N) @ gain_diag)
 
         matrix = shift_matrix(matrix, shift_left, "left")
         matrix = matrix_convolution(R1, matrix)
@@ -178,24 +178,12 @@ def construct_cascaded_paraunitary_matrix(
         R1_inv = ensure_3d(np.linalg.inv(R1[:, :, 0]))
         rev_matrix = matrix_convolution(rev_matrix, R1_inv)
 
-        pulse_size = max(int(pulse_size * n * sparsity_vector[stage]), 1)
+        pulse_size = max(int(pulse_size * N * sparsity_vector[stage]), 1)
 
     return matrix, rev_matrix
 
 
-def construct_velvet_feedback_matrix(
-    n: int, stages: int, sparsity: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Wrapper for ``construct_cascaded_paraunitary_matrix`` using Hadamard stages."""
-
-    return construct_cascaded_paraunitary_matrix(
-        n, stages, sparsity=sparsity, matrix_type="hadamard"
-    )
-
-
-def construct_paraunitary_from_elementals(
-    n: int, degree: int
-) -> tuple[np.ndarray, np.ndarray]:
+def paraunitary_from_elementals(N: int, degree: int) -> tuple[np.ndarray, np.ndarray]:
     """Construct a random paraunitary matrix as a cascade of elemental factors.
 
     The matrix is a random orthogonal matrix multiplied by ``degree - 1``
@@ -203,24 +191,24 @@ def construct_paraunitary_from_elementals(
 
     Parameters
     ----------
-    n : int
+    N : int
         Size of the paraunitary matrix.
     degree : int
         Polynomial degree of the matrix (number of taps).
 
     Returns
     -------
-    matrix : (n, n, degree) ndarray
+    matrix : (N, N, degree) ndarray
         Random paraunitary FIR matrix in z^{-1} convention.
-    v : (n, degree - 1) ndarray
+    v : (N, degree - 1) ndarray
         The unit-norm direction vectors of the elemental factors.
     """
     if degree < 1:
         raise ValueError("degree must be at least 1")
 
-    matrix = ensure_3d(random_orthogonal(n))
+    matrix = ensure_3d(random_orthogonal(N))
 
-    v = np.random.randn(n, degree - 1)
+    v = np.random.randn(N, degree - 1)
     v = v / np.sqrt(np.sum(v**2, axis=0, keepdims=True))
     for it in range(degree - 1):
         matrix = matrix_convolution(matrix, degree_one_lossless(v[:, it]))

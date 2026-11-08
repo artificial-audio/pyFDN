@@ -24,20 +24,15 @@ Matrix Generators
    :nosignatures:
 
    pyFDN.random_orthogonal
-   pyFDN.random_matrix_shift
-   pyFDN.shift_matrix
-   pyFDN.shift_matrix_distribute
    pyFDN.householder_matrix
    pyFDN.anderson_matrix
    pyFDN.complete_orthogonal
    pyFDN.nearest_orthogonal
    pyFDN.nearest_sign_agnostic_orthogonal
-   pyFDN.degree_one_lossless
    pyFDN.schroeder_reverberator
    pyFDN.allpass_in_fdn
-   pyFDN.construct_cascaded_paraunitary_matrix
-   pyFDN.construct_paraunitary_from_elementals
-   pyFDN.construct_velvet_feedback_matrix
+   pyFDN.cascaded_paraunitary_matrix
+   pyFDN.paraunitary_from_elementals
    pyFDN.tiny_rotation_matrix
    pyFDN.rotation_matrix_from_angles
    pyFDN.rotation_kernel
@@ -198,7 +193,6 @@ names.
    pyFDN.matrix_module
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
-   pyFDN.hook_module
    pyFDN.AttenuationFilter
    pyFDN.OutputEQ
 
@@ -218,10 +212,7 @@ Polynomial & Matrix Maths
    pyFDN.is_unilossless
    pyFDN.loop_transfer_function
    pyFDN.matrix_convolution
-   pyFDN.matrix_polyval
    pyFDN.outer_sum_approximation
-   pyFDN.poly_degree
-   pyFDN.polyder_rational
 
 General Utilities
 -----------------
@@ -237,12 +228,10 @@ General Utilities
    pyFDN.hertz_to_rad
    pyFDN.rad_to_hertz
    pyFDN.is_bounding_curve
-   pyFDN.last_nonzero_indices
    pyFDN.max_corr
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
    pyFDN.pole_boundaries
-   pyFDN.skew
 
 Saving, Packaged Examples & References
 --------------------------------------
@@ -290,7 +279,7 @@ straight into each of them, with its filters alongside:
    pyFDN.flamo_decompose_for_pr
    pyFDN.FlamoDecompositionForPR
    pyFDN.impz_to_res
-   pyFDN.mtf_to_impz
+   pyFDN.tf_to_impz
    pyFDN.pr_to_impz
 
 Experimental Lindsey–Fox modal decomposition
@@ -403,7 +392,6 @@ Plotting
    pyFDN.plot_edc
    pyFDN.plot_spectrogram
    pyFDN.animate
-   pyFDN.downsample_minmax
 
 Notebook Display
 ----------------
@@ -422,5 +410,3 @@ FLAMO Graph
    :nosignatures:
 
    pyFDN.plot_flamo_graph
-   pyFDN.flamo_model_to_nodes
-   pyFDN.flamo_nodes_flat

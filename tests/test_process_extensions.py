@@ -18,7 +18,7 @@ FDNFixture = dict[str, np.ndarray]
 @pytest.fixture()  # type: ignore[misc]
 def paraunitary_fdn() -> FDNFixture:
     np.random.seed(0)
-    fbm, _ = pyFDN.construct_cascaded_paraunitary_matrix(4, 2, matrix_type="random")
+    fbm, _ = pyFDN.cascaded_paraunitary_matrix(4, 2, matrix_type="random")
     return {
         "A": fbm,
         "delays": np.array([19, 31, 42, 57]),
@@ -107,7 +107,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, None, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, delays, fs)  # (1, 6, N)
     assert sos.shape == (1, 6, n)
     x = np.random.randn(200, n)
 
@@ -128,10 +128,10 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
             td.SOSBank(bad)
 
 
-def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
+def test_paraunitary_from_elementals_is_paraunitary() -> None:
     np.random.seed(5)
     n, degree = 3, 5
-    matrix, v = pyFDN.construct_paraunitary_from_elementals(n, degree)
+    matrix, v = pyFDN.paraunitary_from_elementals(n, degree)
     assert matrix.shape == (n, n, degree)
     assert v.shape == (n, degree - 1)
     is_p, _, _ = pyFDN.is_paraunitary(matrix)
@@ -151,7 +151,7 @@ def test_process_dss_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, None, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, delays, fs)  # (1, 6, N)
 
     # constract the SOSFilter
     absorption = td.SOSBank(sos)
@@ -234,7 +234,7 @@ def _siso_dss() -> DSS:
 
 
 def _decay(dss: DSS, rt: float) -> np.ndarray:
-    return pyFDN.decay_to_first_order_shelf(rt, rt, None, dss.delays, FS)
+    return pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, FS)
 
 
 def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
@@ -249,7 +249,7 @@ def test_dss_to_td_sos_arrays_match_sosbank_objects() -> None:
     """SOS arrays given as hooks become the same SOSBank nodes."""
     dss = _siso_dss()
     filters = {
-        "post_delay": pyFDN.decay_to_first_order_shelf(0.3, 0.1, None, dss.delays, FS),
+        "post_delay": pyFDN.decay_to_first_order_shelf(0.3, 0.1, dss.delays, FS),
         "post_matrix": _flat_gain_sos(0.8, 4),
         "post_output": _flat_gain_sos(0.5, 1),
     }
@@ -265,7 +265,7 @@ def test_dss_to_td_sos_arrays_match_sosbank_objects() -> None:
 def test_dss_to_td_fir_feedback_mimo_and_direct_path() -> None:
     rng = np.random.default_rng(17)
     n, num_inputs, num_outputs = 4, 2, 3
-    fir, _ = pyFDN.construct_cascaded_paraunitary_matrix(n, 2, matrix_type="random")
+    fir, _ = pyFDN.cascaded_paraunitary_matrix(n, 2, matrix_type="random")
     dss = DSS(
         delays=np.array([19, 31, 42, 57]),
         A=np.eye(n),
@@ -286,7 +286,7 @@ def test_a_lossless_fir_fdn_renders_through_flamo_with_alias_decay() -> None:
     """A FIR matrix module carries the model's alias decay, like every hook."""
     torch = pytest.importorskip("torch")
     pytest.importorskip("flamo")
-    fir, _ = pyFDN.construct_cascaded_paraunitary_matrix(4, 2, matrix_type="random")
+    fir, _ = pyFDN.cascaded_paraunitary_matrix(4, 2, matrix_type="random")
     dss = DSS(
         np.array([19, 31, 42, 57]),
         np.eye(4),

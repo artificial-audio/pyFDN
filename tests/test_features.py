@@ -19,7 +19,7 @@ def test_mimo_eigenvalues_identity_system():
     for ch in range(n_out):
         ir[0, ch, ch] = 1.0
 
-    eigvals = mimo_rir_eigenvalues_per_frequency(ir, n_fft=n_fft)
+    eigvals = mimo_rir_eigenvalues_per_frequency(ir, nfft=n_fft)
 
     # Shape: (n_fft // 2 + 1, n_out)
     assert eigvals.shape == (n_fft // 2 + 1, n_out)
@@ -36,7 +36,7 @@ def test_mimo_eigenvalues_shape_and_fft_length():
     n_fft = 2048
     ir = torch.randn(n_samples, n_ch, n_ch, dtype=torch.float32)
 
-    eigvals = mimo_rir_eigenvalues_per_frequency(ir, n_fft=n_fft)
+    eigvals = mimo_rir_eigenvalues_per_frequency(ir, nfft=n_fft)
     assert eigvals.shape == (n_fft // 2 + 1, n_ch)
     assert torch.all(torch.isfinite(eigvals.real))
     assert torch.all(torch.isfinite(eigvals.imag))
@@ -104,6 +104,6 @@ def test_mimo_eigenvalues_time_axis_can_be_last():
     """``dim`` moves the time axis; the result matches the time-first layout."""
     torch.manual_seed(0)
     ir = torch.randn(256, 3, 3, dtype=torch.float64)
-    expected = mimo_rir_eigenvalues_per_frequency(ir, n_fft=256)
-    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), n_fft=256, dim=2)
+    expected = mimo_rir_eigenvalues_per_frequency(ir, nfft=256)
+    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), nfft=256, dim=2)
     torch.testing.assert_close(moved, expected)

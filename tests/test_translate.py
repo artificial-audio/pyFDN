@@ -39,12 +39,27 @@ def test_dss_to_ss_supports_mixed_delays_including_minimum():
 def test_dss_to_ss_handles_minimum_delay_of_three():
     # Regression test for #240: delays=[3] previously raised a dimension
     # mismatch instead of returning a (3, 3) state-space matrix.
-    AA, bb, cc, dd = dss_to_ss(delays=np.array([3]), A=np.array([[0.5]]))
+    AA, bb, cc, dd = dss_to_ss(np.array([3]), [[0.5]], [[1.0]], [[1.0]], [[0.0]])
 
     assert AA.shape == (3, 3)
     assert bb.shape == (3, 1)
     assert cc.shape == (1, 3)
     assert dd.shape == (1, 1)
+
+
+def test_dss_to_ss_is_mimo_and_matches_dss_to_impz():
+    from scipy.signal import dimpulse
+
+    rng = np.random.default_rng(2)
+    delays = np.array([3, 5, 7])
+    A = 0.5 * np.linalg.qr(rng.standard_normal((3, 3)))[0]
+    B, C, D = rng.standard_normal((3, 2)), rng.standard_normal((4, 3)), np.zeros((4, 2))
+    ss = dss_to_ss(delays, A, B, C, D)
+    _, responses = dimpulse((*ss, 1.0), n=64)
+    # dimpulse gives one (n, outputs) response per input
+    np.testing.assert_allclose(
+        np.stack(responses, axis=-1), dss_to_impz(delays, A, B, C, D, 64), atol=1e-12
+    )
 
 
 def test_dss_to_impz_produces_delayed_impulse():

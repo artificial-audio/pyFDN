@@ -20,7 +20,7 @@ from numpy.typing import ArrayLike
 from scipy.linalg import block_diag
 
 
-def random_orthogonal(n: int, rng: np.random.Generator | None = None) -> np.ndarray:
+def random_orthogonal(N: int, rng: np.random.Generator | None = None) -> np.ndarray:
     """Generate a random orthogonal matrix distributed according to the Haar measure.
 
     Draws from ``rng`` when given, otherwise from NumPy's global random state
@@ -28,7 +28,7 @@ def random_orthogonal(n: int, rng: np.random.Generator | None = None) -> np.ndar
     """
 
     normal = np.random.standard_normal if rng is None else rng.standard_normal
-    q, r = np.linalg.qr(normal((n, n)))
+    q, r = np.linalg.qr(normal((N, N)))
     d = np.sign(np.diag(r))
     d[d == 0] = 1
     return q * d
@@ -211,7 +211,7 @@ def anderson_matrix(
     return np.roll(A, K, axis=0)
 
 
-def rotation_matrix_from_angles(angles: ArrayLike, n: int | None = None) -> np.ndarray:
+def rotation_matrix_from_angles(angles: ArrayLike, N: int | None = None) -> np.ndarray:
     """Orthogonal matrix with prescribed eigenvalue angles.
 
     Builds a block-diagonal matrix of 2x2 Givens rotations, one block per
@@ -220,32 +220,32 @@ def rotation_matrix_from_angles(angles: ArrayLike, n: int | None = None) -> np.n
 
     Args:
         angles: Eigenvalue angles in radians, one per conjugate pair.
-        n: Matrix size; either 2 * len(angles) or 2 * len(angles) + 1
+        N: Matrix size; either 2 * len(angles) or 2 * len(angles) + 1
             (default 2 * len(angles)).
 
     Returns:
-        Orthogonal matrix of shape (n, n).
+        Orthogonal matrix of shape (N, N).
     """
     angles = np.asarray(angles, dtype=float).ravel()
     num_pairs = angles.size
-    if n is None:
-        n = 2 * num_pairs
-    if n not in (2 * num_pairs, 2 * num_pairs + 1):
-        raise ValueError(f"Matrix size n={n} requires {n // 2} angles, got {num_pairs}")
+    if N is None:
+        N = 2 * num_pairs
+    if N not in (2 * num_pairs, 2 * num_pairs + 1):
+        raise ValueError(f"Matrix size N={N} requires {N // 2} angles, got {num_pairs}")
 
     cos, sin = np.cos(angles), np.sin(angles)
-    rotation = np.zeros((n, n))
+    rotation = np.zeros((N, N))
     idx = 2 * np.arange(num_pairs)
     rotation[idx, idx] = cos
     rotation[idx, idx + 1] = -sin
     rotation[idx + 1, idx] = sin
     rotation[idx + 1, idx + 1] = cos
-    if n % 2 == 1:
+    if N % 2 == 1:
         rotation[-1, -1] = 1.0
     return rotation
 
 
-def tiny_rotation_matrix(n: int, delta: float, spread: float = 0.1) -> np.ndarray:
+def tiny_rotation_matrix(N: int, delta: float, spread: float = 0.1) -> np.ndarray:
     """Dense orthogonal matrix with small eigenvalue angles.
 
     The eigenvalue angles are delta * pi, randomly spread by the factor
@@ -253,21 +253,21 @@ def tiny_rotation_matrix(n: int, delta: float, spread: float = 0.1) -> np.ndarra
     effect, which controls how quickly the network mixes (e.g. to model coupled
     rooms). The Givens-rotation core from :func:`rotation_matrix_from_angles`
     is conjugated by a random orthogonal matrix, so the result is dense but
-    keeps the prescribed eigenvalues. For odd n one eigenvalue is at 1.
+    keeps the prescribed eigenvalues. For odd N one eigenvalue is at 1.
 
     Translation of tinyRotationMatrix.m from fdnToolbox. Draws from NumPy's
     global random state.
 
     Args:
-        n: Matrix size.
+        N: Matrix size.
         delta: Mean normalized eigenvalue angle.
         spread: Spreading of the eigenvalue angles (default 0.1).
 
     Returns:
-        Orthogonal matrix of shape (n, n).
+        Orthogonal matrix of shape (N, N).
     """
-    num_pairs = n // 2
+    num_pairs = N // 2
     frequency_spread = 2.0 * (np.random.rand(num_pairs) - 0.5) * spread + 1.0
-    givens = rotation_matrix_from_angles(delta * np.pi * frequency_spread, n)
-    q = random_orthogonal(n)
+    givens = rotation_matrix_from_angles(delta * np.pi * frequency_spread, N)
+    q = random_orthogonal(N)
     return q @ givens @ q.T

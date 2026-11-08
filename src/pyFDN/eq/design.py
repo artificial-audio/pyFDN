@@ -46,10 +46,14 @@ def _shelf_crossover_omega(fs: float, crossover: float | None) -> float:
 def gain_to_first_order_shelf(
     gain_db: Any,
     gain_db_nyquist: Any,
-    crossover: float | None,
     fs: float,
+    *,
+    crossover: float | None = None,
 ) -> Any:
-    """Design a first-order shelf from its endpoint amplitudes in dB."""
+    """Design a first-order shelf from its endpoint amplitudes in dB.
+
+    ``crossover`` is the shelf frequency in Hz; ``None`` uses ``fs / 4``.
+    """
     xp = array_namespace(gain_db)
     if xp is np:
         gain_db, gain_db_nyquist = np.broadcast_arrays(
@@ -67,14 +71,18 @@ def gain_to_first_order_shelf(
 def decay_to_first_order_shelf(
     rt: Any,
     rt_nyquist: Any,
-    rt_crossover: float | None,
     delays: Any,
     fs: float,
+    *,
+    crossover: float | None = None,
 ) -> Any:
-    """Design first-order attenuation shelves from endpoint RTs in seconds."""
+    """Design first-order attenuation shelves from endpoint RTs in seconds.
+
+    ``crossover`` is the shelf frequency in Hz; ``None`` uses ``fs / 4``.
+    """
     gain_db = _decay_to_gain_db(rt, delays, fs)
     nyquist_db = _decay_to_gain_db(rt_nyquist, delays, fs)
-    sos = gain_to_first_order_shelf(gain_db, nyquist_db, rt_crossover, fs)
+    sos = gain_to_first_order_shelf(gain_db, nyquist_db, fs, crossover=crossover)
     return sos
 
 
@@ -116,8 +124,8 @@ TWO_STAGE_CROSSOVER = 1000.0
 def gain_to_two_stage(
     gain_db: Any,
     fs: float,
-    crossover: float | None = None,
     *,
+    crossover: float | None = None,
     design_matrix: Any = None,
 ) -> Any:
     """Design a two-stage EQ from ten amplitudes in dB.
@@ -144,7 +152,7 @@ def gain_to_two_stage(
         raise ValueError(f"two_stage takes {N_GRAPHIC_EQ_BANDS} gains, got {got}")
 
     crossover = TWO_STAGE_CROSSOVER if crossover is None else crossover
-    shelf = gain_to_first_order_shelf(gain_db[0], gain_db[-1], crossover, fs)
+    shelf = gain_to_first_order_shelf(gain_db[0], gain_db[-1], fs, crossover=crossover)
     residual_db = gain_db - _first_order_gain_db(shelf[0], fs, gain_db)
     geq = gain_to_geq(residual_db, fs, design_matrix=design_matrix)
     return xp.concatenate([shelf, geq], 0)
@@ -154,6 +162,7 @@ def decay_to_two_stage(
     rt: Any,
     delays: Any,
     fs: float,
+    *,
     crossover: float | None = None,
 ) -> Any:
     """Design two-stage attenuation filters from ten reverberation times.
@@ -162,7 +171,7 @@ def decay_to_two_stage(
     (31.25 Hz through 16 kHz). See :func:`gain_to_two_stage`.
     """
     gain_db = _decay_to_gain_db(rt, delays, fs, N_GRAPHIC_EQ_BANDS)
-    sos = gain_to_two_stage(gain_db, fs, crossover)
+    sos = gain_to_two_stage(gain_db, fs, crossover=crossover)
     return sos
 
 
@@ -240,10 +249,12 @@ def _gain_to_design(
         return gain_to_geq(gain_db, fs, design_matrix=graphic_eq_matrix)
     if design == "two_stage":
         return gain_to_two_stage(
-            gain_db, fs, crossover, design_matrix=graphic_eq_matrix
+            gain_db, fs, design_matrix=graphic_eq_matrix, crossover=crossover
         )
     if design == "first_order_shelf":
-        return gain_to_first_order_shelf(gain_db[0], gain_db[1], crossover, fs)
+        return gain_to_first_order_shelf(
+            gain_db[0], gain_db[1], fs, crossover=crossover
+        )
     return gain_to_one_pole(gain_db[0], gain_db[1])
 
 

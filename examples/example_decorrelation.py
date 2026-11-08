@@ -64,8 +64,9 @@ def _(np, pyFDN):
 
     num_stages = 3
     sparsity = 3
-    feedback_matrix, _ = pyFDN.construct_velvet_feedback_matrix(
-        num_delays, num_stages, sparsity
+    # Hadamard stages make it a velvet feedback matrix
+    feedback_matrix, _ = pyFDN.cascaded_paraunitary_matrix(
+        num_delays, num_stages, sparsity=sparsity
     )
 
     print(f"Delays: {delays}")

@@ -263,7 +263,7 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
         Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
         ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
         ``nfft``.
-    fft_sizes, win_lengths, hop_lengths : sequence of int
+    nfft, win_lengths, hop_lengths : sequence of int
         One STFT resolution per entry; all three the same length.
     n_mels : int
         Number of mel bands.
@@ -275,15 +275,15 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
         self,
         target: Any,
         *,
-        fft_sizes: tuple[int, ...] = (1024, 2048, 512),
+        nfft: tuple[int, ...] = (1024, 2048, 512),
         win_lengths: tuple[int, ...] = (600, 1200, 240),
         hop_lengths: tuple[int, ...] = (120, 240, 50),
         n_mels: int = 64,
         p: float = 1.0,
     ) -> None:
-        if not len(fft_sizes) == len(win_lengths) == len(hop_lengths):
+        if not len(nfft) == len(win_lengths) == len(hop_lengths):
             raise ValueError(
-                "fft_sizes, win_lengths and hop_lengths must have the same length"
+                "nfft, win_lengths and hop_lengths must have the same length"
             )
         self.resolutions = [
             Match(
@@ -292,7 +292,7 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
                 distance=RelativeError(p),
                 reduction=Mean(),
             )
-            for n_fft, win, hop in zip(fft_sizes, win_lengths, hop_lengths, strict=True)
+            for n_fft, win, hop in zip(nfft, win_lengths, hop_lengths, strict=True)
         ]
 
     def __call__(self, response: Response) -> torch.Tensor:

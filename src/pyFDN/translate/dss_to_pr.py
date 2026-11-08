@@ -128,7 +128,7 @@ def dss_to_pr(
     response_tolerance: float = 1e-8,
     allow_approximate: bool = False,
     # ─── EAI-only knobs (ignored for mode in {"eig","roots"}) ─────────────
-    deflation_type: str = "fullDeflation",
+    deflation_type: str = "full",
     quality_threshold: float = 1e-10,
     maximum_iterations: int = 50,
     refinement_tol: float = 1e-12,
@@ -272,7 +272,10 @@ def dss_to_pr(
     a_poly = np.asarray(np.real(a_poly), dtype=float)
 
     if mode == "eig":
-        aa, _, _, _ = dss_to_ss(delays_arr, a_mat)
+        # the poles are the eigenvalues of the expanded A; no inputs or outputs
+        aa = dss_to_ss(
+            delays_arr, a_mat, np.zeros((n, 0)), np.zeros((0, n)), np.zeros((0, 0))
+        )[0]
         poles = np.linalg.eigvals(aa)
     elif mode == "lindsey_fox":
         raw_delays = np.asarray(delays)

@@ -35,7 +35,6 @@ __all__ = [
     "matrix_module",
     "fir_matrix_module",
     "sos_filter_module",
-    "hook_module",
     "AttenuationFilter",
     "OutputEQ",
     "audio_metadata",
@@ -53,10 +52,8 @@ __all__ = [
     "allpass_in_fdn",
     "anderson_matrix",
     "complete_orthogonal",
-    "construct_cascaded_paraunitary_matrix",
-    "construct_paraunitary_from_elementals",
-    "construct_velvet_feedback_matrix",
-    "degree_one_lossless",
+    "cascaded_paraunitary_matrix",
+    "paraunitary_from_elementals",
     "fdn_matrix_gallery",
     "fdn_dss_gallery",
     "fdn_system_gallery",
@@ -71,15 +68,12 @@ __all__ = [
     "kronecker_transform",
     "nearest_orthogonal",
     "nearest_sign_agnostic_orthogonal",
-    "random_matrix_shift",
     "random_orthogonal",
     "reflection_kernel",
     "rotation_kernel",
     "rotation_matrix_from_angles",
     "sample_delay_lengths",
     "schroeder_reverberator",
-    "shift_matrix",
-    "shift_matrix_distribute",
     "tiny_rotation_matrix",
     # eq
     "EQDesign",
@@ -109,24 +103,19 @@ __all__ = [
     "is_unilossless",
     "loop_transfer_function",
     "matrix_convolution",
-    "matrix_polyval",
     "outer_sum_approximation",
-    "poly_degree",
-    "polyder_rational",
     # general utilities
     "fade_out",
     "hertz_to_unit",
     "hertz_to_rad",
     "rad_to_hertz",
     "is_bounding_curve",
-    "last_nonzero_indices",
     "lin_to_db",
     "max_corr",
     "sq_to_db",
     "mulaw_encode",
     "peak_normalize",
     "pole_boundaries",
-    "skew",
     # state-space translators
     "dss_to_flamo",
     "flamo_to_dss",
@@ -139,7 +128,7 @@ __all__ = [
     "dss_to_td",
     "dss_to_tf",
     "impz_to_res",
-    "mtf_to_impz",
+    "tf_to_impz",
     "pr_to_impz",
     # fdn processing
     "process_dss",
@@ -195,12 +184,9 @@ __all__ = [
     "plot_matrix_grid",
     "plot_system_matrix",
     "plot_spectrogram",
-    "downsample_minmax",
     # notebook display (marimo)
     "labeled_audio",
     # FLAMO graph
-    "flamo_model_to_nodes",
-    "flamo_nodes_flat",
     "plot_flamo_graph",
     # time-domain graph engine
     "td",
@@ -258,14 +244,11 @@ from .auxiliary.flamo import (
     flamo_process,
     flamo_time_response,
     gain_module,
-    hook_module,
     matrix_module,
     sos_filter_module,
     wrap_fdn_shell,
 )
 from .auxiliary.flamo_graph import (
-    flamo_model_to_nodes,
-    flamo_nodes_flat,
     plot_flamo_graph,
 )
 from .auxiliary.marimo_utils import labeled_audio
@@ -281,16 +264,12 @@ from .auxiliary.math import (
     is_unilossless,
     loop_transfer_function,
     matrix_convolution,
-    matrix_polyval,
     outer_sum_approximation,
-    poly_degree,
-    polyder_rational,
 )
 
 # plotting
 from .auxiliary.plot import (
     animate,
-    downsample_minmax,
     plot_db_per_sample,
     plot_edc,
     plot_fdn_parameter,
@@ -308,14 +287,12 @@ from .auxiliary.utils import (
     hertz_to_rad,
     hertz_to_unit,
     is_bounding_curve,
-    last_nonzero_indices,
     lin_to_db,
     max_corr,
     mulaw_encode,
     peak_normalize,
     pole_boundaries,
     rad_to_hertz,
-    skew,
     sq_to_db,
 )
 from .dss import DSS
@@ -376,13 +353,8 @@ from .generate.orthogonal import (
     tiny_rotation_matrix,
 )
 from .generate.paraunitary import (
-    construct_cascaded_paraunitary_matrix,
-    construct_paraunitary_from_elementals,
-    construct_velvet_feedback_matrix,
-    degree_one_lossless,
-    random_matrix_shift,
-    shift_matrix,
-    shift_matrix_distribute,
+    cascaded_paraunitary_matrix,
+    paraunitary_from_elementals,
 )
 from .generate.sample_delay_lengths import sample_delay_lengths
 from .generate.SDN import SDN
@@ -414,8 +386,8 @@ from .translate.dss_to_td import dss_to_td
 from .translate.dss_to_tf import dss_to_tf
 from .translate.flamo_to_dss import flamo_to_dss
 from .translate.impz_to_res import impz_to_res
-from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
+from .translate.tf_to_impz import tf_to_impz
 
 # The training API and the FLAMO pole finder need torch and flamo. They are
 # imported on first access, so ``import pyFDN`` stays light for NumPy users.

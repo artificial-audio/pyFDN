@@ -1,4 +1,4 @@
-# mtf_to_impz.py
+# tf_to_impz.py
 """
 Matrix transfer function to impulse response.
 
@@ -13,7 +13,7 @@ from numpy.typing import ArrayLike
 from scipy.signal import lfilter
 
 
-def mtf_to_impz(
+def tf_to_impz(
     tfB: ArrayLike,
     tfA: ArrayLike,
     ir_len: int,

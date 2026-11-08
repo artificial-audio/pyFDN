@@ -75,7 +75,7 @@ def dss_to_flamo(
         same hook :func:`pyFDN.dss_to_td` calls ``post_delay``. An
         ``(n_sections, 6, N)`` SOS bank, a FLAMO module of input/output size N
         (e.g. a Schroeder allpass core from ``shell=False``), or a sequence of
-        both applied in order. See :func:`pyFDN.hook_module`.
+        both applied in order. See ``pyFDN.auxiliary.flamo.hook_module``.
     post_matrix : array, FLAMO module, sequence, or None
         Filter applied to the feedback path after ``A``.
     post_output : array, FLAMO module, sequence, or None
@@ -134,7 +134,7 @@ def fdn_core(
     ``feedback`` replaces the default fixed feedback module (a parametrized
     matrix, when training); ``trainable`` names which of ``input_gain``,
     ``output_gain`` and ``direct`` require gradients. Hooks are resolved by
-    :func:`pyFDN.hook_module`, so a baked SOS bank becomes a frozen filter.
+    ``pyFDN.auxiliary.flamo.hook_module``, so a baked SOS bank becomes a frozen filter.
     """
     from pyFDN.auxiliary.flamo import (
         assemble_fdn_core,

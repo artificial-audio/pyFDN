@@ -92,6 +92,32 @@ Unreleased
     their ``mode`` in lower case only.
   * ``SDN`` defaults to ``fs=48_000.0`` like the rest of pyFDN, and
     ``flamo_process`` types ``fs`` as a float.
+  * ``dss_to_ss(delays, A, B, C, D)`` takes the gains like every other
+    ``dss_*`` function (they were optional, lower case and defaulted to ones)
+    and handles several inputs and outputs.
+  * The EQ designers take the sample rate before the shelf frequency, which is
+    the keyword ``crossover``: ``decay_to_first_order_shelf(rt, rt_nyquist,
+    delays, fs, *, crossover=None)``, ``gain_to_first_order_shelf(gain_db,
+    gain_db_nyquist, fs, *, crossover=None)``, and ``crossover=`` for the
+    two-stage designers and ``AttenuationFilter`` (was ``rt_crossover``).
+  * ``AttenuationFilter`` and ``OutputEQ`` default to ``nfft=2**16`` like the
+    model builders they plug into.
+  * Matrix generators take the size as ``N``. ``construct_cascaded_paraunitary_matrix``
+    is ``cascaded_paraunitary_matrix(N, stages, ...)`` and
+    ``construct_paraunitary_from_elementals`` is ``paraunitary_from_elementals``;
+    ``construct_velvet_feedback_matrix`` is removed, since it was
+    ``cascaded_paraunitary_matrix`` with its default Hadamard stages.
+    ``mtf_to_impz`` is ``tf_to_impz``, pairing with ``dss_to_tf``.
+  * ``nfft`` names every FFT size: ``mimo_rir_eigenvalues_per_frequency`` (was
+    ``n_fft``) and ``MatchMelEnergyDecayRelief`` (was ``fft_sizes``). The EAI
+    ``deflation_type`` values are ``"full"``, ``"neighbor"`` and ``"none"``.
+  * ``plot_matrix`` and ``plot_system_matrix`` take ``title``, ``zmin`` and
+    ``zmax`` as keywords.
+  * ``pyFDN`` no longer exports single-caller helpers: ``last_nonzero_indices``,
+    ``downsample_minmax``, ``flamo_model_to_nodes``, ``flamo_nodes_flat``,
+    ``hook_module``, ``skew``, ``poly_degree``, ``polyder_rational``,
+    ``matrix_polyval``, ``shift_matrix``, ``shift_matrix_distribute``,
+    ``random_matrix_shift`` and ``degree_one_lossless`` stay in their modules.
 * ``dss_to_flamo`` takes ``alias_decay_db``, so a lossless FDN renders through
   it without time aliasing, as through ``trainable_from_dss``.
 * ``DCBlocker`` drops its ``env_tau_s`` / ``gain_tau_s`` arguments and

@@ -264,7 +264,7 @@ def _(model, pyFDN):
         refinement_tol=1e-10,
         maximum_iterations=80,
         reject_unstable_poles=True,
-        deflation_type="fullDeflation",
+        deflation_type="full",
         verbose=True,
     )
     return direct, is_pair, poles, residues

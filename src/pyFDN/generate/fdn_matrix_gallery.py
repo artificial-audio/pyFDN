@@ -88,28 +88,28 @@ def filter_matrix_gallery(
     """
     if matrix_type == "random_dense":
         from .paraunitary import (
-            construct_cascaded_paraunitary_matrix,
+            cascaded_paraunitary_matrix,
         )
 
-        return construct_cascaded_paraunitary_matrix(
+        return cascaded_paraunitary_matrix(
             N, num_stages, matrix_type=stage_matrix_type
         )[0]
 
     if matrix_type == "velvet":
         from .paraunitary import (
-            construct_cascaded_paraunitary_matrix,
+            cascaded_paraunitary_matrix,
         )
 
-        return construct_cascaded_paraunitary_matrix(
+        return cascaded_paraunitary_matrix(
             N, num_stages, sparsity=sparsity, matrix_type=stage_matrix_type
         )[0]
 
     if matrix_type == "from_elementals":
         from .paraunitary import (
-            construct_paraunitary_from_elementals,
+            paraunitary_from_elementals,
         )
 
-        return construct_paraunitary_from_elementals(N, N * num_stages)[0]
+        return paraunitary_from_elementals(N, N * num_stages)[0]
 
     raise ValueError(
         f"Unknown matrix_type {matrix_type!r}. Supported: {FILTER_MATRIX_TYPES}"
