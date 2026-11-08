@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.6.0 (2026-11-08)
+------------------
 
 * ``RecursionState.set_lines`` and ``fill_noise(variance)`` overwrite the delay-line
   content, e.g. noise for a diffuse-field start. In a ``dss_to_td`` graph the
