@@ -92,3 +92,5 @@ def test_bad_input_is_refused() -> None:
         pyFDN.track_poles(
             model, lambda t: {}, [0.5 + 0.1j], t0=0.0, t1=1.0, max_newton=1
         )
+    with pytest.raises(ValueError, match="not poles"):  # z^-97 overflows: no SVD error
+        pyFDN.track_poles(model, lambda t: {}, [1e-4 + 1e-4j], t0=0.0, t1=1.0)

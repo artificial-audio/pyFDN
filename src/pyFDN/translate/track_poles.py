@@ -108,19 +108,43 @@ def _derivative(
     return result[0], result[1]
 
 
+def _newton_step(
+    P: torch.Tensor, P_z: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """SVD-Newton step ``dz = -s_min / (l^H P_z r)`` and the singular vectors.
+
+    Works on one matrix or a batch. ``P`` and ``P_z`` are scaled together
+    first, which leaves the step unchanged but keeps points far from the unit
+    circle (where the delays' ``z^-m`` are huge) decomposable; a non-finite
+    ``P`` yields a NaN step instead of a failed SVD.
+    """
+    scale = P.abs().amax(dim=(-2, -1), keepdim=True)
+    finite = (
+        P.isfinite().all(dim=(-2, -1), keepdim=True)
+        & P_z.isfinite().all(dim=(-2, -1), keepdim=True)
+        & (scale > 0)
+    )
+    eye = torch.eye(P.shape[-1], dtype=P.dtype, device=P.device)
+    P = torch.where(finite, P / scale, eye)
+    P_z = torch.where(finite, P_z / scale, torch.zeros_like(P_z))
+    U, s, Vh = torch.linalg.svd(P)
+    left, right = U[..., -1], Vh[..., -1, :].conj().resolve_conj()
+    slope = (left.conj() * (P_z @ right[..., None])[..., 0]).sum(-1)
+    dz = -s[..., -1] / slope
+    return torch.where(finite[..., 0, 0], dz, torch.nan), left, right
+
+
 def _correct(
     loop: _Loop, z: complex, t: float, max_newton: int, tol: float = 1e-12
 ) -> tuple[complex, torch.Tensor, torch.Tensor, bool]:
-    """SVD-Newton on ``P(z, t)``: ``dz = -s_min / (l^H P_z r)``."""
+    """SVD-Newton on ``P(z, t)`` from one starting point."""
     t_ = loop.real(t)
     for _ in range(max_newton):
         P, P_z = _derivative(lambda zz: loop(zz, t_), loop.cplx(z))
-        U, s, Vh = torch.linalg.svd(P)
-        left, right = U[:, -1], Vh[-1].conj().resolve_conj()
-        slope = complex(torch.vdot(left, P_z @ right))
-        if slope == 0 or not np.isfinite(slope):
+        step, left, right = _newton_step(P, P_z)
+        dz = complex(step)
+        if not np.isfinite(dz):
             break
-        dz = -float(s[-1]) / slope
         z += dz
         if abs(dz) <= tol * max(1.0, abs(z)):
             return z, left, right, True
@@ -170,11 +194,7 @@ def _newton_batch(
     out = []
     for chunk in torch.split(z, 2048):
         for _ in range(max_newton):
-            P, P_z = probe(chunk)
-            U, s, Vh = torch.linalg.svd(P)
-            left, right = U[..., -1], Vh[..., -1, :].conj()
-            slope = torch.einsum("bi,bij,bj->b", left.conj(), P_z, right)
-            dz = -s[..., -1] / slope
+            dz, _, _ = _newton_step(*probe(chunk))
             chunk = chunk + dz
         converged = (dz.abs() <= tol * chunk.abs().clamp(min=1)) & chunk.isfinite()
         out.append(chunk[converged].cpu().numpy())
