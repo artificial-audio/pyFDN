@@ -16,7 +16,7 @@ def align_target(target: Any, response: Response) -> torch.Tensor:
     """A reference IR as a tensor shaped exactly like ``response.h``.
 
     Accepts ``(n_samples,)``, ``(n_samples, n_out)`` or the full
-    ``(n_samples, n_out, n_in)`` IR matrix (:func:`pyFDN.build_to_impz`'s
+    ``(n_samples, n_out, n_in)`` IR matrix (:func:`pyFDN.dss_to_impz`'s
     shape), and zero-pads or truncates it in time to the response length. The
     channel counts must match the model's -- a mismatch is a mistake worth
     raising rather than broadcasting away.

@@ -21,7 +21,7 @@ def _(mo):
 
     An FDN in delay state-space form keeps the delays separate from the feedback matrix. `dss_to_tf` collapses that structure into a matrix transfer function: a shared denominator polynomial `tfA` — the loop's characteristic polynomial — and a numerator polynomial `tfB` per input/output pair.
 
-    The two forms describe the same system, so they must produce the same impulse response. Rendering the delay recursion directly (`dss_to_impz`) and evaluating the polynomials (`mtf_to_impz`) is the check, and it is exact to machine precision because no approximation is involved — only a change of representation.
+    The two forms describe the same system, so they must produce the same impulse response. Rendering the delay recursion directly (`dss_to_impz`) and evaluating the polynomials (`tf_to_impz`) is the check, and it is exact to machine precision because no approximation is involved — only a change of representation.
     """)
     return
 
@@ -46,7 +46,7 @@ def _():
     fs = 48000
     impulse_response_length = fs // 100
 
-    build = pyFDN.fdn_build_gallery(
+    _dss, _ = pyFDN.fdn_dss_gallery(
         4,
         fs=fs,
         delay_range=(50, 101),
@@ -58,11 +58,11 @@ def _():
         rng=5,
     )
     A, B, C, D, delays = (
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        build.delays,
+        _dss.A,
+        _dss.B,
+        _dss.C,
+        _dss.D,
+        _dss.delays,
     )
     return A, B, C, D, delays, impulse_response_length, pyFDN
 
@@ -72,7 +72,7 @@ def _(mo):
     mo.md(r"""
     ## Through the transfer function
 
-    `dss_to_tf` returns `(tfB, tfA)` in ascending powers of $z^{-1}$; `mtf_to_impz` runs the resulting polynomial ratio out to `impulse_response_length` samples.
+    `dss_to_tf` returns `(tfB, tfA)` in ascending powers of $z^{-1}$; `tf_to_impz` runs the resulting polynomial ratio out to `impulse_response_length` samples.
     """)
     return
 
@@ -80,7 +80,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, delays, impulse_response_length, pyFDN):
     tfB, tfA = pyFDN.dss_to_tf(delays, A, B, C, D)
-    ir_tf = pyFDN.mtf_to_impz(tfB, tfA, impulse_response_length)
+    ir_tf = pyFDN.tf_to_impz(tfB, tfA, impulse_response_length)
     return (ir_tf,)
 
 
@@ -130,8 +130,8 @@ def _(mo):
 
 
 @app.cell
-def _(ir_dss, ir_tf, pyFDN):
-    assert pyFDN.is_almost_zero(ir_dss - ir_tf, tol=1e-10), (
+def _(ir_dss, ir_tf, np):
+    assert np.allclose(ir_dss, ir_tf, rtol=0, atol=1e-10), (
         "IR from TF and DSS should match"
     )
     return

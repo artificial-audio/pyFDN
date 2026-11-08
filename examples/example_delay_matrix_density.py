@@ -22,7 +22,7 @@ def _(mo, pyFDN):
 
     This example compares three FDN topologies and their **echo density** (Abel & Huang 2006):
 
-    1. **Vanilla FDN** — Build a complete FDN with `pyFDN.fdn_build_gallery`, bake in broadband decay, and render it with `pyFDN.dss_to_flamo`.
+    1. **Vanilla FDN** — Build a complete FDN with `pyFDN.fdn_dss_gallery`, bake in broadband decay, and render it with `pyFDN.dss_to_flamo`.
     2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
     3. **Swapped feedforward/feedback** — Copy again and swap the base-delay and delay-matrix paths.
 
@@ -80,14 +80,14 @@ def _(mo):
     mo.md(r"""
     ## Build vanilla FDN
 
-    Create the complete broadband FDN with `pyFDN.fdn_build_gallery`, then render it with `pyFDN.dss_to_flamo`.
+    Create the complete broadband FDN with `pyFDN.fdn_dss_gallery`, then render it with `pyFDN.dss_to_flamo`.
     """)
     return
 
 
 @app.cell
 def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
-    build = pyFDN.fdn_build_gallery(
+    _dss, _filters = pyFDN.fdn_dss_gallery(
         fs=fs,
         delays=total_delay,
         io_type="ones",
@@ -96,18 +96,9 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
         rng=42,
     )
     # Bake delay-proportional broadband decay into the lossless feedback matrix.
-    A = np.diag(gain_per_sample**build.delays) @ build.A
+    A = np.diag(gain_per_sample**_dss.delays) @ _dss.A
     model = pyFDN.dss_to_flamo(
-        build.delays,
-        A,
-        build.B,
-        build.C,
-        build.D,
-        build.fs,
-        nfft=nfft,
-        post_delay=build.post_delay,
-        post_output=build.post_output,
-        device="cpu",
+        *_dss._replace(A=A), fs, nfft=nfft, device="cpu", **_filters
     )
     ir_vanilla = pyFDN.flamo_time_response(model).flatten()
     pyFDN.plot_flamo_graph(model)

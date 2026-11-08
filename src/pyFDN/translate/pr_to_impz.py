@@ -10,7 +10,7 @@ def pr_to_impz(
     poles: np.ndarray,
     direct: np.ndarray,
     is_conjugate_pole_pair: np.ndarray,
-    impulse_response_length: int,
+    ir_len: int,
     mode: str = "fast",
 ) -> np.ndarray:
     """
@@ -26,7 +26,7 @@ def pr_to_impz(
         Direct term, shape ``(num_outputs, num_inputs)``.
     is_conjugate_pole_pair
         Boolean/vector mask, same length as ``poles``.
-    impulse_response_length
+    ir_len
         Number of samples in the synthesized response.
     mode
         ``"fast"`` (vectorized) or ``"lowMemory"``.
@@ -40,11 +40,9 @@ def pr_to_impz(
     num_poles = poles.size
     num_outputs = residues.shape[1]
     num_inputs = residues.shape[2]
-    response = np.zeros(
-        (impulse_response_length, num_outputs, num_inputs), dtype=np.float64
-    )
+    response = np.zeros((ir_len, num_outputs, num_inputs), dtype=np.float64)
 
-    t = np.arange(impulse_response_length - 1, dtype=np.float64).reshape(-1, 1)
+    t = np.arange(ir_len - 1, dtype=np.float64).reshape(-1, 1)
     angle = np.angle(poles).reshape(1, -1)
     mag = np.abs(poles).reshape(1, -1)
 

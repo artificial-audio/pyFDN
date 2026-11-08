@@ -38,14 +38,12 @@ def _(mo, pyFDN):
 
 @app.cell
 def _():
-    import dataclasses
-
     import matplotlib.pyplot as plt
     import numpy as np
 
     import pyFDN
 
-    return dataclasses, np, plt, pyFDN
+    return np, plt, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -65,7 +63,7 @@ def _(pyFDN):
     rir_len = 3 * fs  # 3 seconds
 
     # rt=None leaves the post_delay hook empty; the GEQ below fills it.
-    build = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         num_delays,
         fs=fs,
         delay_range=(500, 2001),
@@ -76,7 +74,7 @@ def _(pyFDN):
         rt=None,
         rng=5,
     )
-    return build, fs, rir_len
+    return dss, fs, rir_len
 
 
 @app.cell(hide_code=True)
@@ -90,18 +88,17 @@ def _(mo):
 
 
 @app.cell
-def _(build, dataclasses, np, pyFDN):
+def _(dss, fs, np, pyFDN):
     # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
-    sos_absorption = pyFDN.decay_to_geq(target_rt, build.delays, build.fs)
+    sos_absorption = pyFDN.decay_to_geq(target_rt, dss.delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
 
-    # The bank goes straight into the build's post_delay hook: the filter on the
-    # delay output, inside the loop, which is what sets the decay.
-    geq_build = dataclasses.replace(build, post_delay=sos_absorption)
-    return geq_build, sos_absorption, target_rt
+    # The bank goes into the post_delay hook: the filter on the delay output,
+    # inside the loop, which is what sets the decay.
+    return sos_absorption, target_rt
 
 
 @app.cell(hide_code=True)
@@ -115,11 +112,11 @@ def _(mo):
 
 
 @app.cell
-def _(build, pyFDN, sos_absorption):
+def _(dss, fs, pyFDN, sos_absorption):
     pyFDN.plot_db_per_sample(
         sos_absorption,
-        build.delays,
-        fs=build.fs,
+        dss.delays,
+        fs=fs,
         nfft=2**14,
         title="Per-delay absorption filter magnitude (one application)",
     )
@@ -131,14 +128,18 @@ def _(mo):
     mo.md(r"""
     ## Compute impulse response
 
-    `build_to_impz` renders the build straight to a time-domain impulse response through its assembled `td` graph. Signal path: input → B → [delays → SOS → A] → C → output.
+    `dss_to_td` assembles the system and its absorption hook as a `td` graph, and its `impulse_response` renders it in the time domain. Signal path: input → B → [delays → SOS → A] → C → output.
     """)
     return
 
 
 @app.cell
-def _(geq_build, np, pyFDN, rir_len):
-    rir = pyFDN.peak_normalize(pyFDN.build_to_impz(geq_build, rir_len).squeeze())
+def _(dss, np, pyFDN, rir_len, sos_absorption):
+    rir = pyFDN.peak_normalize(
+        pyFDN.dss_to_td(*dss, post_delay=sos_absorption)
+        .impulse_response(rir_len)
+        .squeeze()
+    )
     print(f"RIR computed: {rir_len} samples, peak at sample {np.argmax(np.abs(rir))}")
     return (rir,)
 

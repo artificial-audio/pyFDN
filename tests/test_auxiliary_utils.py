@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.acoustics import rt_to_slope, slope_to_rt
-from pyFDN.auxiliary.delay import ms_to_smp
+from pyFDN.auxiliary.delay import ms_to_samples
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
 from pyFDN.auxiliary.utils import (
     ensure_3d,
@@ -27,7 +27,7 @@ def test_ms_to_smp_round_trip_simple_values():
     fs = 48_000
     times_ms = [0.0, 0.5, 1.0, 10.0]
     expected = np.array([0, 24, 48, 480])
-    assert np.array_equal(ms_to_smp(times_ms, fs), expected)
+    assert np.array_equal(ms_to_samples(times_ms, fs), expected)
 
 
 def test_hertz_to_unit_maps_to_nyquist():
@@ -87,7 +87,7 @@ def test_first_order_absorption_matches_rt_targets():
     fs = 48000.0
     rt_dc, rt_ny = 1.2, 0.8
     delays = np.array([100.0, 130.0, 250.0])
-    sos = decay_to_first_order_shelf(rt_dc, rt_ny, 4000.0, delays, fs)
+    sos = decay_to_first_order_shelf(rt_dc, rt_ny, delays, fs, crossover=4000.0)
 
     assert sos.shape == (1, 6, delays.size)
     s = sos[0]  # (6, N): rows [b0, b1, b2, a0, a1, a2]
@@ -105,8 +105,8 @@ def test_first_order_absorption_matches_rt_targets():
 def test_first_order_absorption_clamps_high_crossover():
     fs = 48000.0
     delays = np.array([100.0, 130.0])
-    clamped = decay_to_first_order_shelf(1.0, 0.5, fs / 2, delays, fs)
-    limit = decay_to_first_order_shelf(1.0, 0.5, fs / 2.1, delays, fs)
+    clamped = decay_to_first_order_shelf(1.0, 0.5, delays, fs, crossover=fs / 2)
+    limit = decay_to_first_order_shelf(1.0, 0.5, delays, fs, crossover=fs / 2.1)
     np.testing.assert_allclose(clamped, limit)
 
 
@@ -179,7 +179,7 @@ def test_pole_boundaries_basic():
     feedback_matrix = np.ones((2, 2, 4))
     fs = 48000
     MinCurve, MaxCurve, f = pole_boundaries(
-        delays, absorption, feedback_matrix, fs, nfft=8
+        delays, feedback_matrix, fs, post_delay=absorption, nfft=8
     )
     assert MinCurve.shape == (8,)
     assert MaxCurve.shape == (8,)

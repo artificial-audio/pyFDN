@@ -13,7 +13,7 @@ from time import perf_counter
 
 import numpy as np
 
-from pyFDN.auxiliary.math import general_char_poly, general_char_poly_fft
+from pyFDN.auxiliary.math import general_char_poly
 
 
 def main() -> None:
@@ -33,11 +33,12 @@ def main() -> None:
         delays = 31 + 2 * np.arange(n)
         results = []
         timings = []
-        for function in (general_char_poly, general_char_poly_fft):
+        # a degree-0 polynomial matrix takes the principal-minor route
+        for feedback in (a[:, :, None], a):
             elapsed = []
             for _ in range(args.repeat):
                 start = perf_counter()
-                coefficients = function(delays, a)
+                coefficients = general_char_poly(delays, feedback)
                 elapsed.append(perf_counter() - start)
             results.append(coefficients)
             timings.append(np.median(elapsed))

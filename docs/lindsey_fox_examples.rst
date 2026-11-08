@@ -77,12 +77,12 @@ authors' `2006 description
 not a port of the reference MATLAB implementation and does not implement its
 quotient deflation, repeated-root recovery, or reciprocal search stage.
 
-For static DSS, :func:`pyFDN.general_char_poly_fft` samples
+For static DSS, :func:`pyFDN.general_char_poly` samples
 ``det(I - diag(w**delays) @ A)`` on one circle and recovers ``M+1`` coefficients,
 where ``M=sum(delays)``. Determinants are batched; cost is
 ``O(L*N**3 + L*log(L))`` for the next power of two ``L>M``. Coefficients are
 constructed once and reused on every search circle, without principal-minor
-enumeration. The original :func:`pyFDN.general_char_poly` remains unchanged.
+enumeration.
 Small coefficients can be obscured by determinant roundoff; terms are not
 trimmed. FLAMO clears known SOS denominators before coefficient recovery.
 

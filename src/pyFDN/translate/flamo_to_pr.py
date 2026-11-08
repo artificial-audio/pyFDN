@@ -295,16 +295,6 @@ def _count_loop_filter_poles(recursion_module: Any) -> int:
     return total
 
 
-def flamo_extract_pr_decomposition(model: Any) -> dict[str, Any]:
-    """
-    Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
-
-    Returns a dict with keys ``"P"``, ``"F"`` (feedforward), ``"B"`` (input
-    path), ``"C"``, ``"D"``. For poles/residues use :func:`flamo_to_pr`.
-    """
-    return _decomposition_to_public_dict(flamo_decompose_for_pr(model))
-
-
 # ───────────────────────────────────────────────────────────────────────────
 # FDN loop (P(z), dP/dz, Newton step) — used by EAI and SVD refinement
 # ───────────────────────────────────────────────────────────────────────────
@@ -404,15 +394,15 @@ def _compute_deflation(
     huge = 1.0 / np.finfo(float).eps
     huge_t = torch.tensor(huge + 0.0j, device=device, dtype=dtype)
 
-    if deflation_type == "fullDeflation":
+    if deflation_type == "full":
         neighbor_distance = pole - roots_w
         neighbor_distance = neighbor_distance.clone()
         neighbor_distance[it] = huge_t
         deflation = (1.0 / neighbor_distance).sum()
         return deflation, True
-    if deflation_type == "noDeflation":
+    if deflation_type == "none":
         return torch.tensor(0.0 + 0.0j, device=device, dtype=dtype), False
-    if deflation_type != "neighborDeflation":
+    if deflation_type != "neighbor":
         raise ValueError(f"Unknown deflation type: {deflation_type}")
 
     if steps == 1:
@@ -441,7 +431,7 @@ def _compute_deflation(
             it,
             roots_w,
             inv_newton_step,
-            deflation_type="fullDeflation",
+            deflation_type="full",
             number_of_neighbors=number_of_neighbors,
             deflation_max_error=deflation_max_error,
             steps=steps,
@@ -486,7 +476,7 @@ def _refine_pole_positions_w(
         )
 
     for iteration_counter in range(1, maximum_iterations + 1):
-        if current_deflation == "neighborDeflation":
+        if current_deflation == "neighbor":
             roots_w, sort_ind = _sort_by_torch(roots_w, torch.angle(roots_w))
             quality = quality[sort_ind]
             quality_last = quality_last[sort_ind]
@@ -495,7 +485,7 @@ def _refine_pole_positions_w(
         non_converged = (quality > quality_threshold).nonzero(as_tuple=True)[0]
 
         if non_converged.numel() < n_poles / 10.0:
-            current_deflation = "fullDeflation"
+            current_deflation = "full"
 
         for idx in range(non_converged.numel()):
             it = int(non_converged[idx].item())
@@ -750,7 +740,7 @@ def flamo_to_pr(
     lf_max_seconds: float = 3.0,
     response_tolerance: float = 1e-8,
     allow_approximate: bool = False,
-    deflation_type: str = "fullDeflation",
+    deflation_type: str = "full",
     reject_unstable_poles: bool = False,
     quality_threshold: float = 1e-10,
     maximum_iterations: int = 50,
@@ -827,8 +817,7 @@ def flamo_to_pr(
         if model is None:
             raise ValueError("Provide model or decomposition.")
         decomposition = flamo_decompose_for_pr(model)
-    mode_l = str(mode).lower()
-    if mode_l not in ("eai", "lindsey_fox"):
+    if mode not in ("eai", "lindsey_fox"):
         raise ValueError("mode must be 'eai' or 'lindsey_fox'")
     delays_arr = decomposition.delays
 
@@ -851,7 +840,7 @@ def flamo_to_pr(
         if verbose:
             print(f"Overriding detected pole count: num_poles={n_poles}")
 
-    if mode_l == "lindsey_fox":
+    if mode == "lindsey_fox":
         from pyFDN.translate._lindsey_fox_flamo import lindsey_fox_flamo
 
         if dtype != torch.complex128:

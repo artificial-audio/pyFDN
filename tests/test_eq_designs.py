@@ -255,46 +255,6 @@ def test_geq_designs_a_batch_of_gains_at_once():
 # ------------------------------------------------------ target-to-EQ API ---
 
 
-def test_eq_design_functions_optionally_return_their_targets():
-    fs = 48_000.0
-    delays = np.array([101.0, 149.0])
-    rt = np.linspace(1.5, 0.6, 10)
-    gain_db = np.linspace(0.0, -6.0, 10)
-
-    _, decay_geq = pyFDN.decay_to_geq(rt, delays, fs, return_design=True)
-    _, gain_geq = pyFDN.gain_to_geq(gain_db, fs, return_design=True)
-    _, decay_shelf = pyFDN.decay_to_first_order_shelf(
-        1.5, 0.6, 4_000.0, delays, fs, return_design=True
-    )
-    _, gain_shelf = pyFDN.gain_to_first_order_shelf(
-        0.0, -6.0, 4_000.0, fs, return_design=True
-    )
-    _, decay_pole = pyFDN.decay_to_one_pole(1.5, 0.6, delays, fs, return_design=True)
-    _, gain_pole = pyFDN.gain_to_one_pole(0.0, -6.0, return_design=True)
-
-    assert decay_geq == {"type": "graphic_eq", "rt": rt.tolist()}
-    assert gain_geq == {"type": "graphic_eq", "gain_db": gain_db.tolist()}
-    assert decay_shelf == {
-        "type": "first_order_shelf",
-        "rt": 1.5,
-        "rt_nyquist": 0.6,
-        "rt_crossover": 4_000.0,
-    }
-    assert gain_shelf == {
-        "type": "first_order_shelf",
-        "gain_db": 0.0,
-        "gain_db_nyquist": -6.0,
-        "crossover": 4_000.0,
-    }
-    assert decay_pole == {"type": "one_pole", "rt": 1.5, "rt_nyquist": 0.6}
-    assert gain_pole == {
-        "type": "one_pole",
-        "gain_db": 0.0,
-        "gain_db_nyquist": -6.0,
-    }
-    assert isinstance(pyFDN.gain_to_one_pole(0.0, -6.0), np.ndarray)
-
-
 @pytest.mark.parametrize(
     ("design", "n_parameters", "n_sections"),
     [
@@ -309,7 +269,7 @@ def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
     if design == "graphic_eq":
         sos = pyFDN.gain_to_geq(gain, fs)
     elif design == "first_order_shelf":
-        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], 3000.0, fs)
+        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], fs, crossover=3000.0)
     else:
         sos = pyFDN.gain_to_one_pole(gain[0], gain[1])
     assert sos.shape == (n_sections, 6)
@@ -322,7 +282,7 @@ def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
         (pyFDN.gain_to_geq, (np.linspace(-6.0, -1.0, 10), 48000.0)),
         (
             pyFDN.gain_to_first_order_shelf,
-            (-6.0, -1.0, 3000.0, 48000.0),
+            (-6.0, -1.0, 48000.0),
         ),
         (pyFDN.gain_to_one_pole, (-6.0, -1.0)),
     ],
@@ -339,7 +299,6 @@ def test_gain_designs_run_differentiably_in_torch(design_fn, args):
             torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
             torch.tensor(args[1], dtype=torch.float64, requires_grad=True),
             args[2],
-            args[3],
         ]
     else:
         tensor_args = [
@@ -371,12 +330,14 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     delays = np.array([809.0, 1153.0])
     rt_dc, rt_nyquist, crossover = 1.4, 0.7, 3500.0
     np.testing.assert_allclose(
-        pyFDN.decay_to_first_order_shelf(rt_dc, rt_nyquist, crossover, delays, fs),
+        pyFDN.decay_to_first_order_shelf(
+            rt_dc, rt_nyquist, delays, fs, crossover=crossover
+        ),
         pyFDN.gain_to_first_order_shelf(
             -60.0 * delays / (rt_dc * fs),
             -60.0 * delays / (rt_nyquist * fs),
-            crossover,
             fs,
+            crossover=crossover,
         ),
         atol=1e-12,
     )
@@ -388,7 +349,7 @@ def test_first_order_shelf_crosses_at_the_requested_frequency():
     fs = 48000.0
 
     def midpoint(crossover):
-        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, crossover, fs)
+        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, fs, crossover=crossover)
         w, h = sosfreqz(sos, worN=2**14, fs=fs)
         db = 20.0 * np.log10(np.abs(h) + 1e-300)
         return float(w[np.argmin(np.abs(db + 6.0))])
@@ -425,10 +386,7 @@ def test_geq_rejects_the_wrong_number_of_targets():
 def test_attenuation_designs_flatten_delays(design_fn):
     fs = 48000.0
     flat = np.array([100.0, 150.0, 200.0, 250.0])
-    if design_fn is pyFDN.decay_to_first_order_shelf:
-        args: tuple[float | None, ...] = (4.0, 1.0, None)
-    else:
-        args = (4.0, 1.0)
+    args = (4.0, 1.0)
     np.testing.assert_allclose(
         design_fn(*args, flat.reshape(2, 2), fs),
         design_fn(*args, flat, fs),
@@ -444,11 +402,11 @@ def _band_error_db(sos, gain_db, fs):
 def test_two_stage_is_a_shelf_followed_by_a_geq():
     fs = 48000.0
     gain_db = np.array([-1.0, -1.2, -1.1, -1.3, -1.5, -1.8, -2.3, -3.2, -4.8, -8.0])
-    sos = pyFDN.gain_to_two_stage(gain_db, fs, 1000.0)
+    sos = pyFDN.gain_to_two_stage(gain_db, fs, crossover=1000.0)
     assert sos.shape == (12, 6)
     np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
     np.testing.assert_allclose(
-        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, 1000.0, fs)
+        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, fs, crossover=1000.0)
     )
     np.testing.assert_allclose(pyFDN.gain_to_two_stage(gain_db, fs), sos, atol=1e-12)
 
@@ -471,10 +429,9 @@ def test_decay_and_gain_two_stage_are_the_same_mapping():
     rt = np.linspace(2.0, 0.6, 10)
     delays = np.array([809.0, 1153.0])
     gain_db = -60.0 * delays / (rt[:, None] * fs)
-    sos, design = pyFDN.decay_to_two_stage(rt, delays, fs, return_design=True)
+    sos = pyFDN.decay_to_two_stage(rt, delays, fs)
     np.testing.assert_allclose(sos, pyFDN.gain_to_two_stage(gain_db, fs), atol=1e-12)
     assert sos.shape == (12, 6, 2)
-    assert design == {"type": "two_stage", "rt": rt.tolist(), "crossover": 1000.0}
 
 
 def test_gain_to_two_stage_is_the_same_design_in_torch():

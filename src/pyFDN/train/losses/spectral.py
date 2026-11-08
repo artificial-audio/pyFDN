@@ -49,7 +49,7 @@ def _warn_if_magnitude_unbounded(model: Any, loss_name: str, consequence: str) -
         f"{loss_name} fits |H| but the model was built with alias_decay_db=0. "
         "A lossless FDN then has its poles exactly on the unit circle, |H| is "
         f"unbounded, and {consequence} Rebuild with "
-        f"build_fdn(..., alias_decay_db={LOSSLESS_ALIAS_DECAY_DB}) (the default "
+        f"trainable_fdn(..., alias_decay_db={LOSSLESS_ALIAS_DECAY_DB}) (the default "
         "when rt=None).",
         stacklevel=4,
     )
@@ -69,7 +69,7 @@ class FlatMagnitude(Match):
     ----------
     target : float
         The flat magnitude to fit. The default of 1 matches
-        :func:`pyFDN.build_fdn`'s normalized input/output gains, which put the
+        :func:`pyFDN.trainable_fdn`'s normalized input/output gains, which put the
         initial :math:`|H|` near unity.
     channels : {"sum", "mean", "none"}
         How the output channels are combined before the comparison. ``"sum"``

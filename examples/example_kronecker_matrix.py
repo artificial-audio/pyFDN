@@ -380,12 +380,12 @@ def _(
 
     stereo_ir = {
         percent: pyFDN.process_dss(
-            _impulse,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
+            _impulse,
         )
         for percent, angles in coupling_angles.items()
     }
@@ -538,12 +538,12 @@ def _(
 ):
     stereo_wet = {
         percent: pyFDN.process_dss(
-            stereo_note,
             delays_stereo,
             pyFDN.kronecker_matrix(angles) @ absorption_stereo,
             input_stereo,
             output_stereo,
             direct_stereo,
+            stereo_note,
         )
         for percent, angles in coupling_angles.items()
     }
@@ -741,15 +741,14 @@ def _(
     pyFDN,
 ):
     modulated_wet = {
-        name: pyFDN.process_dss(
-            dry_chords,
+        name: pyFDN.dss_to_td(
             delays_mod,
             absorption_mod,  # A carries the absorption only ...
             input_mod,
             output_mod,
             direct_mod,
             post_matrix=modulated_matrix(rate, depth),  # ... the operator is the matrix
-        )
+        ).process_signal(dry_chords, squeeze=True)
         for name, (rate, depth) in modulation_settings.items()
     }
     return (modulated_wet,)

@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 
-def rand_admissible_homogeneous_allpass(
+def random_admissible_homogeneous_allpass(
     G: ArrayLike,
     range_: tuple[float, float] | ArrayLike,
 ) -> np.ndarray:
@@ -36,7 +36,7 @@ def rand_admissible_homogeneous_allpass(
     Examples
     --------
     >>> G = np.diag([0.9, 0.8, 0.7])
-    >>> P = rand_admissible_homogeneous_allpass(G, (0.3, 0.8))
+    >>> P = random_admissible_homogeneous_allpass(G, (0.3, 0.8))
     >>> A, b, c, d, U = homogeneous_allpass_fdn(G, P)
     """
     G = np.asarray(G, dtype=float)

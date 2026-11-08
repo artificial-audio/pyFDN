@@ -33,7 +33,7 @@ def setup_cell(filename: str, output: str) -> dict[str, Any]:
         if output not in names:
             continue
         node.decorator_list = []
-        namespace = {"np": np, "pyFDN": pyFDN, "torch": torch}
+        namespace: dict[str, Any] = {"np": np, "pyFDN": pyFDN, "torch": torch}
         exec(
             compile(ast.Module(body=[node], type_ignores=[]), filename, "exec"),
             namespace,
@@ -92,34 +92,56 @@ def cases() -> list[dict[str, Any]]:
         ("example_dss_to_pr_flamo.py", "model"),
     ]:
         setup = setup_cell(filename, output)
-        if "build" in setup:
-            build = setup["build"]
-            model = setup["model"]
+        dss: pyFDN.DSS
+        if "dss" in setup:
+            dss, model = setup["dss"], setup["model"]
+            post_delay, fir = setup["filters"]["post_delay"], None
         else:
-            build = pyFDN.FDNBuild(
-                A=setup["feedback_matrix"],
-                B=setup["input_gain"],
-                C=setup["output_gain"],
-                D=setup["direct"],
-                delays=setup["delays"],
-                fs=setup["fs"],
-                post_delay=setup.get("absorption"),
+            matrix = np.asarray(setup["feedback_matrix"])
+            # a filter (FIR) feedback matrix is a graph operator on the feedback
+            # path, with the identity as the DSS feedback matrix
+            fir = matrix if matrix.ndim == 3 else None
+            n = matrix.shape[0]
+            dss = pyFDN.DSS(
+                setup["delays"],
+                np.eye(n) if fir is not None else matrix,
+                setup["input_gain"],
+                setup["output_gain"],
+                setup["direct"],
             )
-            model = pyFDN.build_to_flamo(build, dtype=torch.float64, device="cpu")
+            post_delay = setup.get("absorption")
+            model = pyFDN.dss_to_flamo(
+                *dss,
+                setup["fs"],
+                dtype=torch.float64,
+                device="cpu",
+                post_delay=post_delay,
+                post_matrix=None
+                if fir is None
+                else pyFDN.fir_matrix_module(
+                    fir, 2**16, dtype=torch.float64, device="cpu"
+                ),
+            )
+        graph = pyFDN.dss_to_td(
+            *dss,
+            post_delay=post_delay,
+            post_matrix=None if fir is None else pyFDN.td.MatrixFIR(fir),
+        )
         decomposition = pyFDN.flamo_decompose_for_pr(model)
-        lossless = build.A.ndim == 3
-        if lossless:
-            gcp = pyFDN.general_char_poly(build.delays, build.A)
+        lossless = fir is not None
+        if fir is not None:
+            gcp = pyFDN.general_char_poly(dss.delays, fir)
             degree = int(np.flatnonzero(np.abs(gcp) > 1e-12 * np.max(np.abs(gcp)))[-1])
         else:
-            degree = int(build.delays.sum()) + _count_loop_filter_poles(
+            degree = int(dss.delays.sum()) + _count_loop_filter_poles(
                 decomposition.recursion_module
             )
         result.append(
             {
                 "name": filename,
                 "model": model,
-                "build": build,
+                "td": graph,
+                "absorption": post_delay is not None,
                 "degree": degree,
                 "lossless": lossless,
             }

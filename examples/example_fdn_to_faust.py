@@ -28,7 +28,7 @@ def _(mo):
 
     **The pipeline:**
 
-    1. `pyFDN.fdn_build_gallery` + `pyFDN.dss_to_flamo` — design the FDN;
+    1. `pyFDN.fdn_dss_gallery` + `pyFDN.dss_to_flamo` — design the FDN;
     2. `adac.flamo_to_json` — extract parameters into a JSON IR;
     3. `adac.certify` — small-gain stability certificate for the feedback loop;
     4. `adac.json_to_faust` — emit FAUST, with optional `rt60` / `dry_wet` macro knobs;
@@ -102,7 +102,7 @@ def _(pyFDN, torch):
     n = 6
     fs = 48000
 
-    build = pyFDN.fdn_build_gallery(
+    dss, filters = pyFDN.fdn_dss_gallery(
         n,
         fs=fs,
         num_inputs=1,
@@ -113,22 +113,11 @@ def _(pyFDN, torch):
         rt_nyquist=0.4,
         rng=42,
     )
-    model = pyFDN.dss_to_flamo(
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        build.fs,
-        nfft=2**18,
-        post_delay=build.post_delay,
-        post_output=build.post_output,
-        device="cpu",
-    )
+    model = pyFDN.dss_to_flamo(*dss, fs, nfft=2**18, device="cpu", **filters)
     # (1 input, n_samples, 2 outputs) -> (n_samples, 2), the shape pyFDN plots take.
-    ir_flamo = pyFDN.flamo_time_response(model)[0]
-    print(f"{n} delay lines: {build.delays.astype(int)} samples")
-    print(f"{build.B.shape[1]} in, {build.C.shape[0]} out -> {ir_flamo.shape}")
+    ir_flamo = pyFDN.flamo_time_response(model)[:, :, 0]  # (n, outputs)
+    print(f"{n} delay lines: {dss.delays.astype(int)} samples")
+    print(f"{dss.B.shape[1]} in, {dss.C.shape[0]} out -> {ir_flamo.shape}")
     return fs, ir_flamo, model
 
 

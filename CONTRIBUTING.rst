@@ -149,10 +149,10 @@ documentation sources, and tests:
   the galleries, and the allpass and scattering-delay-network builders.
 * ``src/pyFDN/td/`` contains stateful block-processing operators and the
   connectors (``Series``, ``Parallel``, ``Recursion``) that wire them into a
-  time-domain graph. ``dss_to_td`` / ``build_to_td`` assemble an FDN from these
-  operators (``MatrixFIR`` for polynomial feedback matrices, ``SOSBank`` for
-  per-delay-line filter cascades); ``process_dss`` and ``process_fdn`` render
-  through that graph.
+  time-domain graph. ``dss_to_td`` assembles an FDN from these
+  operators (``SOSBank`` for per-delay-line filter cascades; a ``MatrixFIR``
+  feedback matrix goes in the ``post_matrix`` hook); ``process_dss`` and
+  ``dss_to_impz`` render the matrix-only system through that graph.
 * ``import pyFDN`` must not import torch or flamo (``tests/test_import.py``):
   import them inside the functions that need them, or add the module to the
   lazily loaded names at the end of ``src/pyFDN/__init__.py``.

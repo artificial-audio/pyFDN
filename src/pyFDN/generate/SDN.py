@@ -104,7 +104,7 @@ class SDN:
         room_size,
         source_pos,
         receiver_pos,
-        fs=44100,
+        fs=48_000.0,
         c=None,
         wall_filters=None,
     ):
@@ -117,7 +117,7 @@ class SDN:
             Source position in metres.
         receiver_pos : tuple (x, y, z)
             Receiver (microphone) position in metres.
-        fs : int or float
+        fs : float
             Sampling frequency in Hz.
         c : float, optional
             Speed of sound in m/s (default 343).

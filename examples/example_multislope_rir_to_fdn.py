@@ -177,7 +177,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
     slope_fdn_rt = []
 
     for _slope in range(decay_time.shape[1]):
-        _build = pyFDN.fdn_build_gallery(
+        _dss, _ = pyFDN.fdn_dss_gallery(
             16,
             fs=fs,
             delay_range=(500, 2500),
@@ -187,17 +187,17 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
             rng=10 + _slope,
         )
         _absorption = pyFDN.decay_to_geq(
-            geq_grid(decay_time[:, _slope]), _build.delays, fs
+            geq_grid(decay_time[:, _slope]), _dss.delays, fs
         )
 
         # unequalized FDN: reference level for the output GEQ
         _ir_flat = pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
-                _build.delays,
-                _build.A,
-                _build.B,
-                _build.C,
-                _build.D,
+                _dss.delays,
+                _dss.A,
+                _dss.B,
+                _dss.C,
+                _dss.D,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,
@@ -215,11 +215,11 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
 
         resynthesis += pyFDN.flamo_time_response(
             pyFDN.dss_to_flamo(
-                _build.delays,
-                _build.A,
-                _build.B,
-                _build.C,
-                _build.D,
+                _dss.delays,
+                _dss.A,
+                _dss.B,
+                _dss.C,
+                _dss.D,
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,

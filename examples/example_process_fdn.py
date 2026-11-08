@@ -1,6 +1,6 @@
 # gallery_category: Getting Started
-# gallery_title: Build an FDN with process_fdn
-# gallery_description: Hands-on walk-through of the FDN knobs - delays, feedback matrix, in/out gains and decay - assembled as a delay state space and simulated with pyFDN.process_fdn, the pure-NumPy time-domain path. Every step has experiments to try.
+# gallery_title: Build an FDN with process_dss
+# gallery_description: Hands-on walk-through of the FDN knobs - delays, feedback matrix, in/out gains and decay - assembled as a delay state space and simulated with pyFDN.process_dss, the pure-NumPy time-domain path. Every step has experiments to try.
 
 import marimo
 
@@ -18,7 +18,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Build an FDN with `process_fdn`
+    # Build an FDN with `process_dss`
 
     A feedback delay network is four objects and a loop:
 
@@ -31,7 +31,7 @@ def _(mo):
 
     Together these are the **delay state space (DSS)** — the representation every
     other view in pyFDN is translated from. This notebook turns each of them in
-    turn, renders the result with `pyFDN.process_fdn` (plain NumPy, no torch)
+    turn, renders the result with `pyFDN.process_dss` (plain NumPy, no torch)
     and listens to it.
 
     Each code cell ends with a **Try this** block: uncomment a line, or change a
@@ -102,7 +102,7 @@ def _(N, fs, np, pyFDN):
     #   distribution="uniform"     -> flat in samples instead of flat per octave
     #
     # Or set them by hand, in milliseconds:
-    #   delays = pyFDN.ms_to_smp(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
+    #   delays = pyFDN.ms_to_samples(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
     return (delays,)
 
 
@@ -124,7 +124,7 @@ def _(mo):
 @app.cell
 def _(N, np, pyFDN):
     print(f"  {'matrix type':32s}{'orthogonal':12s}lossless")
-    for _name in pyFDN.fdn_matrix_gallery():
+    for _name in pyFDN.FEEDBACK_MATRIX_TYPES:
         _matrix = pyFDN.fdn_matrix_gallery(N, _name)
         # Orthogonality is the usual sufficient condition; the weaker one is
         # "diagonally similar to orthogonal", which is lossless just the same.
@@ -327,8 +327,8 @@ def _(mo):
     centres (31.25 Hz – 16 kHz).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
-    the plain lossless `A` — all the decay is now in the filters. Bundling the
-    parts into an `FDNBuild` lets `build_to_impz` render the whole thing.
+    the plain lossless `A` — all the decay is now in the filters. `dss_to_td`
+    takes them in its `post_delay` hook and renders the impulse response.
     """)
     return
 
@@ -339,10 +339,8 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
 
     absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
-    build = pyFDN.FDNBuild(
-        A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
-    )
-    ir = pyFDN.build_to_impz(build, int(ir_len_seconds * fs)).squeeze()
+    graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
+    ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
 
     print(f"absorption SOS bank: {absorption.shape}  (sections, coefficients, lines)")
 
@@ -351,14 +349,16 @@ def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     #   target_rt = np.linspace(4.0, 0.2, 10)              -> a very dark room
     #   target_rt = np.array([4, 4, 3, 2, 1, .6, .4, .3, .2, .2])
     #       -> ask for something extreme and see where the design stops delivering
-    return absorption, build, ir, target_rt
+    return absorption, ir, target_rt
 
 
 @app.cell
-def _(build, pyFDN):
+def _(A, B, C, D, absorption, delays, fs, pyFDN):
     # Every parameter of the finished FDN in one figure: delays, A, B, C, D and
     # the absorption response of each line.
-    pyFDN.plot_fdn_build(build, title="The complete FDN")
+    pyFDN.plot_fdn_parameter(
+        delays, A, B, C, D, post_delay=absorption, fs=fs, title="The complete FDN"
+    )
 
     # Try this: pyFDN.plot_db_per_sample(absorption, delays, fs=fs, nfft=2**14)
     #   -> the attenuation each line applies per sample, which is the quantity
@@ -437,8 +437,8 @@ def _(mo):
     mo.md(r"""
     ### Run audio through it
 
-    `process_fdn` turns the complete build into a `td` graph and drives it with
-    a signal instead of an impulse. The build's absorption filters become
+    `process_dss` turns the system and its filters into a `td` graph and drives
+    it with a signal instead of an impulse. The absorption filters become
     `SOSBank` nodes at the `post_delay` hook, just after the delay outputs.
 
     Pad the input with silence, or the tail is cut off where the signal ends.
@@ -447,11 +447,13 @@ def _(mo):
 
 
 @app.cell
-def _(build, fs, mo, np, pyFDN):
+def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_fdn(x, build)
+    wet = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption).process_signal(
+        x, squeeze=True
+    )
 
     mo.hstack(
         [
@@ -486,18 +488,18 @@ def _(mo):
 
 
 @app.cell
-def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
-    np.random.seed(11)  # TimeVaryingMatrix draws its phases from the global stream
-    wet_moving = pyFDN.process_dss(
-        x,
+def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
+    wet_moving = pyFDN.dss_to_td(
         delays,
         A,
         B,
         C,
         D,
         post_delay=td.SOSBank(absorption),
-        post_matrix=td.TimeVaryingMatrix(len(delays), 10.0, 1.1, fs, 0.7),
-    )
+        post_matrix=td.TimeVaryingMatrix(
+            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, seed=11
+        ),
+    ).process_signal(x, squeeze=True)
 
     # Try this:
     #   post_matrix=td.AbsoluteValue(len(delays))

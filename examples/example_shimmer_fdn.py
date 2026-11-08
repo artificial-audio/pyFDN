@@ -96,10 +96,8 @@ def _(np, pyFDN):
 
     absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
 
-    build = pyFDN.FDNBuild(
-        A=A, B=B, C=C, D=D, delays=delays, fs=fs, post_delay=absorption
-    )
-    ir = pyFDN.build_to_impz(build, int(ir_len_seconds * fs)).squeeze()
+    graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
+    ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
     return A, B, C, D, N, absorption, delays, fs, ir, target_rt
 
 
@@ -107,8 +105,8 @@ def _(np, pyFDN):
 def _(fs, ir, mo, pyFDN):
     mo.vstack(
         [
-            # pyFDN.plot_fdn_build(
-            #     build,
+            # pyFDN.plot_fdn_parameter(
+            #     delays, A, B, C, D, post_delay=absorption, fs=fs,
             #     title="The complete FDN"
             #     ),
             # pyFDN.plot_impulse_response(
@@ -141,15 +139,14 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td):
     dry, _ = pyFDN.load_audio("synth_dry", fs=fs)
     x = np.pad(dry, (0, 2 * fs))  # room for the tail
 
-    wet = pyFDN.process_dss(
-        x,
+    wet = pyFDN.dss_to_td(
         delays,
         A,
         B,
         C,
         D,
         post_delay=td.SOSBank(absorption),  # absorption inside the loop
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [
@@ -181,8 +178,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
-    wet_cfwr = pyFDN.process_dss(
-        x,
+    wet_cfwr = pyFDN.dss_to_td(
         delays,
         A,
         B,
@@ -196,7 +192,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
                 ),
             ]
         ),
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [
@@ -230,8 +226,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
-    wet_sdfd = pyFDN.process_dss(
-        x,
+    wet_sdfd = pyFDN.dss_to_td(
         delays,
         A,
         B,
@@ -243,7 +238,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
                 td.SDFD(len(delays), d=0.5, active_channels=[4, 5, 6, 7]),
             ]
         ),
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [
@@ -274,8 +269,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
-    wet_rm = pyFDN.process_dss(
-        x,
+    wet_rm = pyFDN.dss_to_td(
         delays,
         A,
         B,
@@ -293,7 +287,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
                 ),
             ]
         ),
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [
@@ -341,8 +335,7 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
     absorption_2 = pyFDN.decay_to_geq(target_rt, delays_2, fs)  # (n_sections, 6, N)
 
     window_size = 2048
-    wet_ps = pyFDN.process_dss(
-        x,
+    wet_ps = pyFDN.dss_to_td(
         delays_2,
         A,
         B,
@@ -361,7 +354,7 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
                 ),
             ]
         ),
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [
@@ -392,8 +385,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
     grain_dur_samps = 1024
-    wet_gps = pyFDN.process_dss(
-        x,
+    wet_gps = pyFDN.dss_to_td(
         delays_2,
         A,
         B,
@@ -414,7 +406,7 @@ def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
                 ),
             ]
         ),
-    )
+    ).process_signal(x, squeeze=True)
 
     mo.hstack(
         [

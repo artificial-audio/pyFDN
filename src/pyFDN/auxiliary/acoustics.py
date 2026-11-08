@@ -50,7 +50,7 @@ def schroeder_integral(energy: Any, axis: int = 0) -> Any:
     return xp.flip(xp.cumsum(flipped, dim=axis), dims=[axis])
 
 
-def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
+def edc(ir: Any, axis: int = 0) -> Any:
     """Energy decay curve: backward cumulative sum of squared signal along an axis.
 
     EDC(t) = sum(ir[t:]^2), so the curve decreases from total energy to zero.
@@ -67,8 +67,9 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
 
     Returns
     -------
-    np.ndarray
-        Same shape as ir. Values are non-negative and non-increasing along axis.
+    np.ndarray or torch.Tensor
+        Same type and shape as ir. Values are non-negative and non-increasing
+        along axis.
     """
     if array_namespace(ir) is np:
         ir = np.asarray(ir, dtype=float)

@@ -5,7 +5,7 @@ import pytest
 from scipy.optimize import linear_sum_assignment
 
 from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
-from pyFDN.auxiliary.math import general_char_poly_fft
+from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.translate.dss_to_impz import dss_to_impz
 from pyFDN.translate.dss_to_pr import dss_to_pr
 from pyFDN.translate.pr_to_impz import pr_to_impz
@@ -113,12 +113,12 @@ def test_modal_backend_constructs_polynomial_once_without_principal_minors(monke
 
     def construct(delays, a):
         calls.append(1)
-        return general_char_poly_fft(delays, a)
+        return general_char_poly(delays, a)
 
     def forbidden(*args, **kwargs):
         raise AssertionError("Modal FFT backend must not enumerate principal minors")
 
-    monkeypatch.setattr(module, "general_char_poly_fft", construct)
+    monkeypatch.setattr(module, "general_char_poly", construct)
     monkeypatch.setattr("pyFDN.auxiliary.math.combinations", forbidden)
     a = np.array([[0.6, 0.1], [-0.2, 0.7]])
     result = dss_to_pr(

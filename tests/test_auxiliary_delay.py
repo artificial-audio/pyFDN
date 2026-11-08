@@ -7,7 +7,7 @@ import torch
 from pyFDN.auxiliary.delay import (
     flamo_delay_feedback_matrix,
     matrix_delay_approximation,
-    mgrpdelay,
+    matrix_group_delay,
     swap_flamo_recursion_paths,
 )
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
@@ -15,7 +15,7 @@ from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 def test_mgrpdelay_handles_zero_rows():
     matrix = np.zeros((1, 2, 4))
-    gd, freq = mgrpdelay(matrix)
+    gd, freq = matrix_group_delay(matrix)
     assert gd.shape == (1, 2, freq.size)
     assert np.isnan(gd).all()
     assert np.isclose(freq[-1], np.pi)
@@ -31,7 +31,7 @@ def test_matrix_delay_approximation_uses_nanmean(monkeypatch):
     mock_freq = np.array([0.0, 1.0])
 
     monkeypatch.setattr(
-        "pyFDN.auxiliary.delay.mgrpdelay",
+        "pyFDN.auxiliary.delay.matrix_group_delay",
         lambda _: (mock_gd, mock_freq),
     )
 

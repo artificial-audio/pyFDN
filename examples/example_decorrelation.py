@@ -64,8 +64,9 @@ def _(np, pyFDN):
 
     num_stages = 3
     sparsity = 3
-    feedback_matrix, _ = pyFDN.construct_velvet_feedback_matrix(
-        num_delays, num_stages, sparsity
+    # Hadamard stages make it a velvet feedback matrix
+    feedback_matrix, _ = pyFDN.cascaded_paraunitary_matrix(
+        num_delays, num_stages, sparsity=sparsity
     )
 
     print(f"Delays: {delays}")
@@ -102,15 +103,15 @@ def _(mo):
     mo.md(r"""
     ## Adjugate of the characteristic matrix
 
-    `loop_tf` constructs the polynomial matrix $P(z)$; `adj_poly` computes its adjugate by evaluating $P$ on a DFT grid, taking the scalar adjugate at every bin, and transforming back.
+    `loop_transfer_function` constructs the polynomial matrix $P(z)$; `adjugate_polynomial` computes its adjugate by evaluating $P$ on a DFT grid, taking the scalar adjugate at every bin, and transforming back.
     """)
     return
 
 
 @app.cell
 def _(delays, feedback_matrix, pyFDN):
-    P = pyFDN.loop_tf(delays, feedback_matrix)
-    adj_mat = pyFDN.adj_poly(P, "z^1")
+    P = pyFDN.loop_transfer_function(delays, feedback_matrix)
+    adj_mat = pyFDN.adjugate_polynomial(P, "z^1")
     print(f"Loop transfer function P: {P.shape}")
     print(f"Adjugate matrix: {adj_mat.shape}")
     return P, adj_mat

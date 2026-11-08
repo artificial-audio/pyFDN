@@ -15,7 +15,6 @@ import numpy as np
 from scipy.optimize import lsq_linear
 
 from ..auxiliary.utils import array_namespace, hertz_to_rad
-from ._design_record import design_value, with_design
 from .biquads import highshelf_biquad, lowshelf_biquad, peaking_biquad
 from .probe_sos import probe_sos
 
@@ -102,7 +101,6 @@ def gain_to_geq(
     fs: float,
     *,
     design_matrix: Any = None,
-    return_design: bool = False,
 ) -> Any:
     """Design a ten-band graphic EQ from amplitudes in dB.
 
@@ -122,11 +120,7 @@ def gain_to_geq(
     center_omega, shelving_omega = _band_omega(float(fs))
     sos = _geq_sections(center_omega, shelving_omega, BANDWIDTH_R, matrix @ gain_db)
     sos = sos / sos[:, 3:4, ...]
-    return with_design(
-        sos,
-        {"type": "graphic_eq", "gain_db": design_value(gain_db)},
-        return_design,
-    )
+    return sos
 
 
 def gain_to_bounded_geq(

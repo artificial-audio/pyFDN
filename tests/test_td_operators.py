@@ -26,9 +26,9 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
     tvm_kwargs = {
         "N": N,
-        "cycles_per_second": 1.3,
-        "amplitude": 0.2,
         "fs": fs,
+        "rate": 1.3,
+        "depth": 0.2,
         "spread": 0.1,
     }
     return tvm_kwargs
@@ -36,7 +36,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
 def _absorption_sos(delays: np.ndarray, fs: float) -> np.ndarray:
     """Per-delay first-order shelving absorption, shape (n_sections, 6, N)."""
-    return pyFDN.decay_to_first_order_shelf(1.5, 0.4, None, delays, fs)
+    return pyFDN.decay_to_first_order_shelf(1.5, 0.4, delays, fs)
 
 
 def _noise(rng: np.random.Generator, length: int, channels: int) -> np.ndarray:
@@ -107,17 +107,17 @@ def test_delay() -> None:
     max_block_size = 256
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    delay_ref = td.RecursionState(delays=fdnbuild.delays, max_block_size=max_block_size)
+    delay_ref = td.RecursionState(delays=dss.delays, max_block_size=max_block_size)
 
     # input signal
     n_samples = 4000
     in_sig = _noise(rng=rng, length=n_samples, channels=N)
 
     # td engine
-    delay_td = td.Delay(fdnbuild.delays)
+    delay_td = td.Delay(dss.delays)
 
     # filter signal
     out_sig_ref = np.zeros_like(in_sig, dtype=float)
@@ -151,10 +151,10 @@ def test_sosbank() -> None:
     fs = 48_000.0
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    sos = _absorption_sos(fdnbuild.delays, fs)
+    sos = _absorption_sos(dss.delays, fs)
 
     # input signal
     n_samples = 4000
@@ -190,10 +190,10 @@ def test_sosbank_block_consistency_and_reset() -> None:
     block = 128
 
     # reference
-    fdnbuild = pyFDN.fdn_build_gallery(
+    dss, _ = pyFDN.fdn_dss_gallery(
         N=N, fs=fs, num_inputs=n_in, num_outputs=n_out, rng=rng
     )
-    sos = _absorption_sos(fdnbuild.delays, fs)
+    sos = _absorption_sos(dss.delays, fs)
 
     # input signal
     n_samples = 1024
@@ -311,8 +311,7 @@ def test_tvmatrix() -> None:
     fs = 48_000.0
 
     # td engine
-    np.random.seed(3)
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs))
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
 
     # input signal
     n_samples = 400
@@ -321,8 +320,8 @@ def test_tvmatrix() -> None:
     # reference: build the rotation matrix sample by sample and apply it
     out_sig_ref = np.zeros_like(in_sig)
     for n in range(n_samples):
-        angles = tvmatrix_td.angle_amplitude * np.sin(
-            2 * np.pi * tvmatrix_td.frequency * (n / fs) + tvmatrix_td.phase
+        angles = tvmatrix_td.depth * np.sin(
+            2 * np.pi * tvmatrix_td.rate * (n / fs) + tvmatrix_td.phase
         )
         rotation = np.zeros((N, N))
         for pair, angle in enumerate(angles):
@@ -351,8 +350,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     fs = 48_000.0
 
     # td engine
-    np.random.seed(3)
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs))
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
 
     # input signal
     n_samples = 400
@@ -382,15 +380,9 @@ def test_tvmatrix_rejects_odd_channel_count() -> None:
     """Test that TimeVaryingMatrix rejects channel counts it cannot pair up"""
 
     # Test
-    with pytest.raises(ValueError, match="N must be even"):
-        td.TimeVaryingMatrix(
-            N=3, cycles_per_second=1.3, amplitude=0.2, fs=48_000.0, spread=0.1
-        )
-
-    with pytest.raises(ValueError, match="N must be a positive integer"):
-        td.TimeVaryingMatrix(
-            N=0, cycles_per_second=1.3, amplitude=0.2, fs=48_000.0, spread=0.1
-        )
+    for N in (3, 0):
+        with pytest.raises(ValueError, match="positive even integer"):
+            td.TimeVaryingMatrix(N, 48_000.0, rate=1.3, depth=0.2)
 
 
 def test_absolute_value() -> None:

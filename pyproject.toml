@@ -35,6 +35,7 @@ dependencies = [
   "soundfile",
   "scipy",
   "flamo>=0.2.20",  # canonical module devices (string "cpu"/"cuda" mix with .to())
+  "cloudpickle>=3",  # save_fdn: FLAMO models hold lambdas
 ]
 
 [project.optional-dependencies]
@@ -156,6 +157,7 @@ disable_error_code = ["no-any-return"]
 [[tool.mypy.overrides]]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
+    "cloudpickle",
     "flamo.*",
     "marimo.*",
     "mpl_toolkits.*",

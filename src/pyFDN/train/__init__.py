@@ -1,7 +1,7 @@
 """Training pipeline for FDNs -- an explicit three-step API over flamo.
 
-1. **build** a trainable flamo model from a config (:func:`build_fdn`, or
-   :func:`trainable_from_build` from an existing :class:`~pyFDN.FDNBuild`).
+1. **build** a trainable flamo model from a config (:func:`trainable_fdn`, or
+   :func:`trainable_from_dss` from an existing :class:`~pyFDN.DSS`).
 2. **train** it toward an objective (:func:`train_fdn`), built by composing
    losses with ``+`` and ``*``::
 
@@ -10,8 +10,8 @@
    Losses come in two families: those that read the model's impulse response
    (:class:`~pyFDN.train.losses.base.ResponseLoss`) and those that put a cost on
    one of its parameters (:class:`~pyFDN.train.losses.base.ParameterLoss`).
-3. **extract** an :class:`~pyFDN.FDNBuild` back out
-   (:func:`pyFDN.extract_build`), plus a :class:`TrainLog`.
+3. **extract** the :class:`~pyFDN.DSS` and baked filters back out
+   (:func:`pyFDN.flamo_to_dss`), plus a :class:`TrainLog`.
 """
 
 from __future__ import annotations
@@ -20,16 +20,11 @@ from .build import (
     LOSSLESS_ALIAS_DECAY_DB,
     MatrixParam,
     Trainable,
-    build_fdn,
-    build_set_decay,
-    trainable_from_build,
-    trainable_from_preset,
+    trainable_fdn,
+    trainable_from_dss,
 )
 from .engine import TrainLog, train_fdn
-from .features import (
-    energy_decay_curve,
-    mimo_rir_eigenvalues_per_frequency,
-)
+from .features import mimo_rir_eigenvalues_per_frequency
 from .filters import AttenuationFilter, EQDesign, OutputEQ
 from .losses import (
     L1,
@@ -62,10 +57,8 @@ from .response import Response, impulse_excitation, model_response
 
 __all__ = [
     # build
-    "build_fdn",
-    "trainable_from_build",
-    "trainable_from_preset",
-    "build_set_decay",
+    "trainable_fdn",
+    "trainable_from_dss",
     "Trainable",
     "MatrixParam",
     "LOSSLESS_ALIAS_DECAY_DB",
@@ -109,5 +102,4 @@ __all__ = [
     "L2",
     # features
     "mimo_rir_eigenvalues_per_frequency",
-    "energy_decay_curve",
 ]

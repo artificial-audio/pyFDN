@@ -71,14 +71,14 @@ def _(np, pyFDN):
         _name: pyFDN.filter_matrix_gallery(
             num_delays, _name, num_stages=num_stages, sparsity=sparsity
         )
-        for _name in pyFDN.filter_matrix_gallery()
+        for _name in pyFDN.FILTER_MATRIX_TYPES
     }
-    feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays)
+    # a static matrix is a one-tap filter matrix
+    feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays)[:, :, None]
 
     print(f"Delays: {delays}")
     for _name, _mat in feedback_matrices.items():
-        _taps = _mat.shape[2] if _mat.ndim == 3 else 1
-        print(f"{_name}: {_taps} taps")
+        print(f"{_name}: {_mat.shape[2]} taps")
     return (
         delays,
         direct,
@@ -95,7 +95,7 @@ def _(mo):
     mo.md(r"""
     ## Impulse responses and echo density
 
-    `pyFDN.process_dss` handles the FIR feedback matrices directly in the time-domain recursion (each matrix entry is an FIR filter with persistent state).
+    Each FIR feedback matrix is a `td.MatrixFIR` on the feedback path of the time-domain graph (each matrix entry is an FIR filter with persistent state), with `A` the identity.
     """)
     return
 
@@ -108,15 +108,22 @@ def _(
     fs,
     input_gain,
     ir_len,
+    np,
     output_gain,
     pyFDN,
 ):
     irs = {}
     echo_densities = {}
     for _name, _mat in feedback_matrices.items():
-        irs[_name] = pyFDN.dss_to_impz(
-            delays, _mat, input_gain, output_gain, direct, ir_len
-        )[:, 0, 0]
+        _graph = pyFDN.dss_to_td(
+            delays,
+            np.eye(len(delays)),
+            input_gain,
+            output_gain,
+            direct,
+            post_matrix=pyFDN.td.MatrixFIR(_mat),
+        )
+        irs[_name] = _graph.impulse_response(ir_len)[:, 0, 0]
         _t_mix, echo_densities[_name] = pyFDN.echo_density(irs[_name], 1024, fs, 0)
         print(f"{_name}: mixing time = {_t_mix:.0f} ms")
     return echo_densities, irs

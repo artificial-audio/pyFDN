@@ -134,16 +134,17 @@ def _absorption_model():
     sos[0, 0] = 0.6
     sos[0, 1] = 0.001
     sos[0, 3] = 1
-    build = pyFDN.FDNBuild(
+    dss = pyFDN.DSS(
+        delays=np.array([17, 23]),
         A=np.array([[0.4, 0.1], [-0.1, 0.3]]),
         B=np.eye(2),
         C=np.eye(2),
         D=np.zeros((2, 2)),
-        delays=np.array([17, 23]),
-        fs=48000,
-        post_delay=sos,
     )
-    return build, pyFDN.build_to_flamo(build, dtype=torch.float64, device="cpu")
+    model = pyFDN.dss_to_flamo(
+        *dss, 48000, dtype=torch.float64, device="cpu", post_delay=sos
+    )
+    return pyFDN.dss_to_td(*dss, post_delay=sos).impulse_response(512), model
 
 
 @pytest.mark.parametrize("allow_approximate", [False, True])
@@ -164,21 +165,21 @@ def test_flamo_lf_static_and_sos_complete():
         None,
         np.array([[[0.6, 0.5], [0.1, -0.05], [0, 0], [1, 1], [-0.2, -0.3], [0, 0]]]),
     ]:
-        build = pyFDN.FDNBuild(
+        dss = pyFDN.DSS(
+            delays=delays,
             A=np.array([[0.4, 0.1], [-0.15, 0.3]]),
             B=np.eye(2),
             C=np.eye(2),
             D=np.zeros((2, 2)),
-            delays=delays,
-            fs=48000,
-            post_delay=sos,
         )
-        model = pyFDN.build_to_flamo(build, dtype=torch.float64, device="cpu")
+        model = pyFDN.dss_to_flamo(
+            *dss, 48000, dtype=torch.float64, device="cpu", post_delay=sos
+        )
         result = pyFDN.flamo_to_pr(model, mode="lindsey_fox")
         assert result[4]["solver"] == "lindsey_fox" and result[4]["complete"]
         np.testing.assert_allclose(
             pyFDN.pr_to_impz(*result[:4], 512),
-            pyFDN.build_to_impz(build, 512),
+            pyFDN.dss_to_td(*dss, post_delay=sos).impulse_response(512),
             atol=1e-9,
             rtol=1e-9,
         )
@@ -199,7 +200,7 @@ def test_eai_approximation_still_checks_external_residues(monkeypatch):
 
 
 def test_eai_absorption_approximation_uses_the_same_acceptance_policy():
-    build, model = _absorption_model()
+    reference, model = _absorption_model()
     with pytest.raises(RuntimeError, match="allow_approximate=True"):
         pyFDN.flamo_to_pr(model)
     with pytest.warns(RuntimeWarning, match="validated approximate"):
@@ -211,6 +212,6 @@ def test_eai_absorption_approximation_uses_the_same_acceptance_policy():
     assert meta["externalResponseValidation"]["relativeL2"] < 1e-8
     np.testing.assert_allclose(
         pyFDN.pr_to_impz(*result[:4], 512),
-        pyFDN.build_to_impz(build, 512),
+        reference,
         atol=1e-9,
     )

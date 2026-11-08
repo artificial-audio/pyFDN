@@ -146,7 +146,7 @@ def _(A, B, C, D, fs, delays, is_paraunitary, pyFDN, rt):
     impulse_response = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)
     # Shape: (ir_len, n_out, n_in)
 
-    is_p, test_matrix, max_off = is_paraunitary(impulse_response)
+    is_p, test_matrix, max_off = is_paraunitary(impulse_response.transpose(1, 2, 0))
     assert is_p, "Expected paraunitary impulse response"
     print("Paraunitary: OK")
     print("Max off-diagonal in correlation matrix:", max_off)

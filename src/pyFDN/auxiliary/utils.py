@@ -75,7 +75,7 @@ def max_corr(signals: ArrayLike) -> np.ndarray:
     ----------
     signals : array
         MIMO signal matrix of shape (N1, N2, time), e.g. an adjugate
-        polynomial matrix from :func:`pyFDN.adj_poly`.
+        polynomial matrix from :func:`pyFDN.adjugate_polynomial`.
 
     Returns
     -------
@@ -128,26 +128,12 @@ def lin_to_db(linear: ArrayLike) -> np.ndarray:
     return 20.0 * np.log10(np.maximum(np.abs(mag), tiny))
 
 
-def db_to_lin(db: ArrayLike) -> np.ndarray:
-    """Convert decibel values to linear magnitude."""
-
-    db_arr = np.asarray(db, dtype=float)
-    return np.power(10.0, db_arr / 20.0)
-
-
 def sq_to_db(squared: ArrayLike) -> np.ndarray:
     """Convert squared magnitude (power) to decibels with numerical guard."""
 
     p = np.asarray(squared, dtype=float)
     tiny = np.finfo(float).tiny
     return 10.0 * np.log10(np.maximum(np.abs(p), tiny))
-
-
-def db_to_sq(db: ArrayLike) -> np.ndarray:
-    """Convert decibel values to squared magnitude (power)."""
-
-    db_arr = np.asarray(db, dtype=float)
-    return np.power(10.0, db_arr / 10.0)
 
 
 def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
@@ -164,22 +150,6 @@ def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
     sgn = np.sign(x)
     x_abs = np.abs(x)
     return sgn * np.log1p(mu * x_abs) / np.log1p(mu)
-
-
-def mulaw_decode(y: ArrayLike, mu: float = 255.0) -> np.ndarray:
-    """Mu-law companding (decode): companded to linear amplitude.
-
-    Args:
-        y: Companded signal.
-        mu: Compression parameter (default 255, as in G.711).
-
-    Returns:
-        Linear-amplitude signal.
-    """
-    y = np.asarray(y, dtype=float)
-    sgn = np.sign(y)
-    y_abs = np.abs(y)
-    return sgn * ((1.0 + mu) ** y_abs - 1.0) / mu
 
 
 def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
@@ -281,9 +251,10 @@ def is_bounding_curve(
 
 def pole_boundaries(
     delays: ArrayLike,
-    absorption: ArrayLike,
-    feedback_matrix: ArrayLike,
+    A: ArrayLike,
     fs: float,
+    *,
+    post_delay: ArrayLike,
     nfft: int = 2**12,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Upper and lower bounds of the pole magnitudes of an FDN loop.
@@ -293,12 +264,11 @@ def pole_boundaries(
 
     Args:
         delays: Delays in samples, shape ``(N,)``.
-        absorption: Per-line absorption as an SOS bank of shape
-            ``(sections, 6, N)``, the format of an :class:`~pyFDN.FDNBuild`'s
-            ``post_delay``.
-        feedback_matrix: ``(N, N)`` or FIR ``(N, N, L)`` in the z^{-1}
-            convention.
+        A: Feedback matrix ``(N, N)``, or the FIR matrix ``(N, N, L)`` in the
+            z^{-1} convention that sits on the feedback path.
         fs: Sampling frequency in Hz.
+        post_delay: Per-line absorption, the ``post_delay`` filter hook as an
+            SOS bank of shape ``(sections, 6, N)``.
         nfft: Number of frequency bins between 0 and Nyquist.
 
     Returns:
@@ -307,13 +277,13 @@ def pole_boundaries(
         f: Frequency points in Hz, shape ``(nfft,)``.
     """
     delays_arr = np.asarray(delays, dtype=float).ravel()
-    sos = np.asarray(absorption, dtype=float)
+    sos = np.asarray(post_delay, dtype=float)
     if sos.ndim != 3 or sos.shape[1] != 6 or sos.shape[2] != delays_arr.size:
-        raise ValueError("absorption must be an SOS bank of shape (sections, 6, N)")
+        raise ValueError("post_delay must be an SOS bank of shape (sections, 6, N)")
     # The FFT bins of a 2 * nfft transform: 0 up to (not including) Nyquist.
     w = np.pi * np.arange(nfft) / nfft
 
-    spectrum = np.fft.fft(ensure_3d(feedback_matrix), n=nfft * 2, axis=2)[:, :, :nfft]
+    spectrum = np.fft.fft(ensure_3d(A), n=nfft * 2, axis=2)[:, :, :nfft]
     singular = np.array([svd(spectrum[:, :, k], compute_uv=False) for k in range(nfft)])
     matrix_min = np.min(singular, axis=1) ** (1 / np.min(delays_arr))
     matrix_max = np.max(singular, axis=1) ** (1 / np.max(delays_arr))

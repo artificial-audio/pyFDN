@@ -7,16 +7,10 @@ from pyFDN.td import TimeVaryingMatrix
 
 
 def _make_time_varying_matrix() -> TimeVaryingMatrix:
-    tvm = TimeVaryingMatrix(
-        N=4,
-        cycles_per_second=2.0,
-        amplitude=0.5,
-        fs=48000.0,
-        spread=0.0,
-    )
+    tvm = TimeVaryingMatrix(4, 48000.0, rate=2.0, depth=0.5)
     tvm.phase = np.array([0.25, 1.25])
-    tvm.frequency = np.array([2.0, 3.0])
-    tvm.angle_amplitude = np.array([0.5, 0.25])
+    tvm.rate = np.array([2.0, 3.0])
+    tvm.depth = np.array([0.5, 0.25])
     tvm.sample_index = 0
     return tvm
 
@@ -25,7 +19,7 @@ def _explicit_pairwise_rotation(tvm: TimeVaryingMatrix, x: np.ndarray) -> np.nda
     length = x.shape[0]
     sample_indices = tvm.sample_index + np.arange(length)
     time = sample_indices[:, np.newaxis] / tvm.fs
-    angles = tvm.angle_amplitude * np.sin(2 * np.pi * tvm.frequency * time + tvm.phase)
+    angles = tvm.depth * np.sin(2 * np.pi * tvm.rate * time + tvm.phase)
     cos = np.cos(angles)
     sin = np.sin(angles)
 

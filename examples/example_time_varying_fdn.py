@@ -44,12 +44,10 @@ def _():
     import pyFDN
     from pyFDN import td
     from pyFDN.generate.orthogonal import random_orthogonal
-    from pyFDN.process import process_dss
 
     return (
         la,
         np,
-        process_dss,
         pyFDN,
         random_orthogonal,
         td,
@@ -163,7 +161,7 @@ def _(mo):
     mo.md(r"""
     ## Three modulation rates
 
-    `td.TimeVaryingMatrix` rotates the feedback matrix continuously, and takes a modulation frequency, an amplitude and a spread over the delay lines. The same phrase is rendered three times: static, 1 Hz, and 10 Hz.
+    `td.TimeVaryingMatrix` rotates the feedback matrix continuously, and takes a modulation `rate` in Hz, a `depth` in radians and a `spread` over the delay lines. The same phrase is rendered three times: static, 1 Hz, and 10 Hz.
     """)
     return
 
@@ -178,7 +176,7 @@ def _(
     fs,
     input_gain,
     output_gain,
-    process_dss,
+    pyFDN,
     synth,
     td,
 ):
@@ -203,11 +201,10 @@ def _(
             spread = 0.7
 
         tv_matrix = td.TimeVaryingMatrix(
-            N, modulation_frequency, modulation_amplitude, fs, spread
+            N, fs, rate=modulation_frequency, depth=modulation_amplitude, spread=spread
         )
 
-        reverbed_synth[matrix_type] = process_dss(
-            synth,
+        reverbed_synth[matrix_type] = pyFDN.dss_to_td(
             delays,
             feedback_matrix,
             input_gain,
@@ -215,7 +212,7 @@ def _(
             direct,
             post_delay=absorption,
             post_matrix=tv_matrix,
-        )
+        ).process_signal(synth, squeeze=True)
     return matrix_types, reverbed_synth
 
 

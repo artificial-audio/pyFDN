@@ -24,20 +24,15 @@ Matrix Generators
    :nosignatures:
 
    pyFDN.random_orthogonal
-   pyFDN.random_matrix_shift
-   pyFDN.shift_matrix
-   pyFDN.shift_matrix_distribute
    pyFDN.householder_matrix
    pyFDN.anderson_matrix
    pyFDN.complete_orthogonal
    pyFDN.nearest_orthogonal
    pyFDN.nearest_sign_agnostic_orthogonal
-   pyFDN.degree_one_lossless
    pyFDN.schroeder_reverberator
    pyFDN.allpass_in_fdn
-   pyFDN.construct_cascaded_paraunitary_matrix
-   pyFDN.construct_paraunitary_from_elementals
-   pyFDN.construct_velvet_feedback_matrix
+   pyFDN.cascaded_paraunitary_matrix
+   pyFDN.paraunitary_from_elementals
    pyFDN.tiny_rotation_matrix
    pyFDN.rotation_matrix_from_angles
    pyFDN.rotation_kernel
@@ -47,11 +42,13 @@ Matrix Generators
    pyFDN.kronecker_transform
    pyFDN.fdn_matrix_gallery
    pyFDN.fdn_system_gallery
+   pyFDN.FEEDBACK_MATRIX_TYPES
+   pyFDN.FILTER_MATRIX_TYPES
+   pyFDN.SYSTEM_TYPES
    pyFDN.filter_matrix_gallery
-   pyFDN.fdn_build_gallery
+   pyFDN.fdn_dss_gallery
    pyFDN.sample_delay_lengths
-   pyFDN.FDNSystem
-   pyFDN.FDNBuild
+   pyFDN.DSS
 
 Allpass FDN
 -----------
@@ -61,7 +58,7 @@ Allpass FDN
    :nosignatures:
 
    pyFDN.homogeneous_allpass_fdn
-   pyFDN.rand_admissible_homogeneous_allpass
+   pyFDN.random_admissible_homogeneous_allpass
    pyFDN.complete_fdn
    pyFDN.complete_full_mimo_halmos
    pyFDN.complete_general_mimo_svd
@@ -108,8 +105,7 @@ filter design. The same functions run in NumPy or Torch; the trainable
 :class:`pyFDN.AttenuationFilter` and :class:`pyFDN.OutputEQ` modules use these
 mappings inside a training loop. ``EQDesign`` is the literal choice of
 ``"graphic_eq"``, ``"first_order_shelf"``, ``"one_pole"``, or ``"two_stage"``
-used by those modules. The target-to-EQ functions accept ``return_design=True`` when their
-JSON-compatible design record is also needed for an ``FDNPreset``.
+used by those modules.
 
 .. autosummary::
    :toctree: generated/
@@ -173,10 +169,9 @@ Delay Utilities
    :nosignatures:
 
    pyFDN.matrix_delay_approximation
-   pyFDN.mgrpdelay
-   pyFDN.ms_to_smp
+   pyFDN.matrix_group_delay
+   pyFDN.ms_to_samples
    pyFDN.flamo_time_response
-   pyFDN.flamo_freq_response
 
 Building a FLAMO Graph
 ----------------------
@@ -184,7 +179,7 @@ Building a FLAMO Graph
 An FDN as FLAMO modules, assembled from numpy values. The three filter hooks --
 ``post_delay`` inside the loop, ``post_matrix`` on the feedback path,
 ``post_output`` on the wet signal -- are the same three
-:func:`pyFDN.process_dss` takes, in the same positions and under the same
+:func:`pyFDN.dss_to_td` takes, in the same positions and under the same
 names.
 
 .. autosummary::
@@ -198,7 +193,6 @@ names.
    pyFDN.matrix_module
    pyFDN.fir_matrix_module
    pyFDN.sos_filter_module
-   pyFDN.hook_module
    pyFDN.AttenuationFilter
    pyFDN.OutputEQ
 
@@ -209,24 +203,16 @@ Polynomial & Matrix Maths
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.adj_poly
+   pyFDN.adjugate_polynomial
    pyFDN.adjugate
    pyFDN.det_polynomial
    pyFDN.general_char_poly
-   pyFDN.general_char_poly_fft
    pyFDN.interpolate_orthogonal
    pyFDN.is_orthogonal
    pyFDN.is_unilossless
-   pyFDN.loop_tf
+   pyFDN.loop_transfer_function
    pyFDN.matrix_convolution
-   pyFDN.matrix_polyder
-   pyFDN.matrix_polyval
-   pyFDN.matrix_sqrt
-   pyFDN.negpolyder
    pyFDN.outer_sum_approximation
-   pyFDN.poly_degree
-   pyFDN.polyder_rational
-   pyFDN.polydiag
 
 General Utilities
 -----------------
@@ -235,26 +221,25 @@ General Utilities
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.db_to_lin
-   pyFDN.db_to_sq
    pyFDN.lin_to_db
    pyFDN.sq_to_db
-   pyFDN.ensure_3d
    pyFDN.fade_out
    pyFDN.hertz_to_unit
    pyFDN.hertz_to_rad
    pyFDN.rad_to_hertz
    pyFDN.is_bounding_curve
-   pyFDN.last_nonzero_indices
    pyFDN.max_corr
-   pyFDN.mulaw_decode
    pyFDN.mulaw_encode
    pyFDN.peak_normalize
    pyFDN.pole_boundaries
-   pyFDN.skew
 
-Build Files, Packaged Examples & References
---------------------------------------------
+Saving, Packaged Examples & References
+--------------------------------------
+
+:func:`pyFDN.save_fdn` writes a :class:`~pyFDN.DSS` as readable JSON and
+pickles anything else -- a ``td`` graph, a FLAMO model -- with the pyFDN and
+Python versions that wrote it. Loading a pickle runs code from the file, so
+only load pickles you trust. The packaged presets are DSS JSON files.
 
 .. autosummary::
    :toctree: generated/
@@ -264,16 +249,10 @@ Build Files, Packaged Examples & References
    pyFDN.audio_metadata
    pyFDN.load_audio
    pyFDN.available_fdn_presets
-   pyFDN.get_fdn_preset
-   pyFDN.FDNPreset
-   pyFDN.fdn_preset_to_dict
-   pyFDN.fdn_preset_from_dict
-   pyFDN.save_fdn_preset
    pyFDN.load_fdn_preset
-   pyFDN.fdn_build_to_dict
-   pyFDN.fdn_build_from_dict
-   pyFDN.save_fdn_build
-   pyFDN.load_fdn_build
+   pyFDN.save_fdn
+   pyFDN.load_fdn
+   pyFDN.resave_fdn
    pyFDN.paper_reference
    pyFDN.paper_link
 
@@ -281,9 +260,9 @@ State-Space Translators
 -----------------------
 
 Convert a delay state-space (DSS) system -- ``A``, ``B``, ``C``, ``D``,
-``delays`` -- to another representation. Each ``build_to_*`` function is a
-thin wrapper over its ``dss_to_*`` counterpart that unpacks an
-:class:`~pyFDN.FDNBuild` instead.
+``delays`` -- to another representation. A :class:`~pyFDN.DSS` unpacks
+straight into each of them, with its filters alongside:
+``pyFDN.dss_to_td(*dss, **filters)``.
 
 .. autosummary::
    :toctree: generated/
@@ -291,19 +270,16 @@ thin wrapper over its ``dss_to_*`` counterpart that unpacks an
 
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
-   pyFDN.build_to_impz
    pyFDN.dss_to_td
-   pyFDN.build_to_td
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
-   pyFDN.build_to_flamo
+   pyFDN.flamo_to_dss
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
-   pyFDN.flamo_extract_pr_decomposition
    pyFDN.FlamoDecompositionForPR
    pyFDN.impz_to_res
-   pyFDN.mtf_to_impz
+   pyFDN.tf_to_impz
    pyFDN.pr_to_impz
 
 Experimental Lindsey–Fox modal decomposition
@@ -317,11 +293,9 @@ completion, or response validation raises without switching to EAI. Direct EAI
 calls may accept incomplete results with explicit ``allow_approximate=True``
 and successful response checks; this option does not relax LF acceptance.
 
-:func:`pyFDN.general_char_poly_fft` recovers the static characteristic
+:func:`pyFDN.general_char_poly` recovers the static characteristic
 coefficients once from determinant samples and reuses them on every search
 circle. The static ``"roots"`` backend uses these FFT coefficients too.
-:func:`pyFDN.general_char_poly` retains the principal-minor implementation as
-a reference and for polynomial feedback matrices.
 
 All modal backends report solver and pole-count metadata. Complete eig, roots,
 and direct EAI results have ``responseValidation=None``; LF always checks the
@@ -345,7 +319,6 @@ FDN Processing
    :nosignatures:
 
    pyFDN.process_dss
-   pyFDN.process_fdn
    pyFDN.flamo_process
 
 Training
@@ -355,10 +328,8 @@ Training
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.build_fdn
-   pyFDN.trainable_from_build
-   pyFDN.trainable_from_preset
-   pyFDN.build_set_decay
+   pyFDN.trainable_fdn
+   pyFDN.trainable_from_dss
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
@@ -403,7 +374,6 @@ parameter take a :class:`pyFDN.ParamRef` from :func:`pyFDN.param`.
    pyFDN.L1
    pyFDN.L2
    pyFDN.mimo_rir_eigenvalues_per_frequency
-   pyFDN.energy_decay_curve
 
 Plotting
 --------
@@ -416,14 +386,12 @@ Plotting
    pyFDN.plot_matrix_grid
    pyFDN.plot_system_matrix
    pyFDN.plot_fdn_parameter
-   pyFDN.plot_fdn_build
    pyFDN.plot_db_per_sample
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
    pyFDN.plot_edc
    pyFDN.plot_spectrogram
    pyFDN.animate
-   pyFDN.downsample_minmax
 
 Notebook Display
 ----------------
@@ -442,6 +410,3 @@ FLAMO Graph
    :nosignatures:
 
    pyFDN.plot_flamo_graph
-   pyFDN.flamo_model_to_nodes
-   pyFDN.flamo_nodes_flat
-   pyFDN.extract_build

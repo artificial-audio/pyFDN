@@ -149,7 +149,7 @@ def _(np, pyFDN):
     delays = np.random.randint(1, 31, size=_N)
     _g = 0.99
     _G = np.diag(_g**delays)  # global gain per sample
-    _X = pyFDN.rand_admissible_homogeneous_allpass(_G, (0.7, 0.999))
+    _X = pyFDN.random_admissible_homogeneous_allpass(_G, (0.7, 0.999))
     _X @ _G @ _G
     _A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(_G, _X)
     is_a0, P0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)

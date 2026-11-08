@@ -6,7 +6,7 @@ pytest.importorskip("torch")
 
 import torch
 
-from pyFDN import energy_decay_curve, mimo_rir_eigenvalues_per_frequency
+from pyFDN import edc, mimo_rir_eigenvalues_per_frequency
 
 
 def test_mimo_eigenvalues_identity_system():
@@ -19,7 +19,7 @@ def test_mimo_eigenvalues_identity_system():
     for ch in range(n_out):
         ir[0, ch, ch] = 1.0
 
-    eigvals = mimo_rir_eigenvalues_per_frequency(ir, n_fft=n_fft)
+    eigvals = mimo_rir_eigenvalues_per_frequency(ir, nfft=n_fft)
 
     # Shape: (n_fft // 2 + 1, n_out)
     assert eigvals.shape == (n_fft // 2 + 1, n_out)
@@ -36,7 +36,7 @@ def test_mimo_eigenvalues_shape_and_fft_length():
     n_fft = 2048
     ir = torch.randn(n_samples, n_ch, n_ch, dtype=torch.float32)
 
-    eigvals = mimo_rir_eigenvalues_per_frequency(ir, n_fft=n_fft)
+    eigvals = mimo_rir_eigenvalues_per_frequency(ir, nfft=n_fft)
     assert eigvals.shape == (n_fft // 2 + 1, n_ch)
     assert torch.all(torch.isfinite(eigvals.real))
     assert torch.all(torch.isfinite(eigvals.imag))
@@ -62,7 +62,7 @@ def test_mimo_eigenvalues_rejects_non_float_or_invalid_type():
         mimo_rir_eigenvalues_per_frequency([1, 2, 3])
 
 
-def test_energy_decay_curve_exponential():
+def test_edc_of_a_tensor_decays_linearly_in_db():
     """An exponential decay must produce a linear downward slope in dB."""
     fs = 48000.0
     t = torch.arange(48000, dtype=torch.float32) / fs
@@ -72,37 +72,38 @@ def test_energy_decay_curve_exponential():
     decay_rate = 3.0 * torch.log(torch.tensor(10.0)) / rt60
     ir = torch.exp(-decay_rate * t).unsqueeze(-1).unsqueeze(-1)
 
-    edc = energy_decay_curve(ir, dim=0, db=True, normalize=True)
+    curve = edc(ir)
+    curve = 10.0 * torch.log10(curve / curve[0])
 
     # Initial value must be 0 dB
-    assert float(edc[0, 0, 0]) == pytest.approx(0.0, abs=1e-4)
+    assert float(curve[0, 0, 0]) == pytest.approx(0.0, abs=1e-4)
 
     # EDC must be monotonically non-increasing
-    diffs = edc[1:, 0, 0] - edc[:-1, 0, 0]
+    diffs = curve[1:, 0, 0] - curve[:-1, 0, 0]
     assert torch.all(diffs <= 1e-6)
 
     # At t = 0.5 s, the decay should be approximately -30 dB
     half_sec_idx = int(0.5 * fs)
-    assert float(edc[half_sec_idx, 0, 0]) == pytest.approx(-30.0, abs=1.0)
+    assert float(curve[half_sec_idx, 0, 0]) == pytest.approx(-30.0, abs=1.0)
 
 
-def test_energy_decay_curve_linear_mode():
-    """Verify linear mode (db=False, normalize=False) returns raw integrated power."""
+def test_edc_of_a_tensor_is_the_raw_integrated_power():
     # Unit impulse at t=0
     ir = torch.zeros(100, 1, 1, dtype=torch.float32)
     ir[0, 0, 0] = 2.0  # Energy = 4.0
 
-    edc = energy_decay_curve(ir, dim=0, db=False, normalize=False)
+    curve = edc(ir)
 
     # The entire tail before and at t=0 contains 4.0; after t=0 it is 0.0
-    assert float(edc[0, 0, 0]) == pytest.approx(4.0, abs=1e-6)
-    assert float(edc[1, 0, 0]) == pytest.approx(0.0, abs=1e-6)
+    assert isinstance(curve, torch.Tensor)
+    assert float(curve[0, 0, 0]) == pytest.approx(4.0, abs=1e-6)
+    assert float(curve[1, 0, 0]) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_mimo_eigenvalues_time_axis_can_be_last():
     """``dim`` moves the time axis; the result matches the time-first layout."""
     torch.manual_seed(0)
     ir = torch.randn(256, 3, 3, dtype=torch.float64)
-    expected = mimo_rir_eigenvalues_per_frequency(ir, n_fft=256)
-    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), n_fft=256, dim=2)
+    expected = mimo_rir_eigenvalues_per_frequency(ir, nfft=256)
+    moved = mimo_rir_eigenvalues_per_frequency(ir.permute(1, 2, 0), nfft=256, dim=2)
     torch.testing.assert_close(moved, expected)

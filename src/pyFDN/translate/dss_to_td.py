@@ -1,4 +1,4 @@
-"""Build time-domain processing graphs from a DSS system or a complete FDN build."""
+"""Build time-domain processing graphs from a delay state-space (DSS) system."""
 
 from __future__ import annotations
 
@@ -7,23 +7,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.build import FDNBuild
 from pyFDN.td.connectors import Parallel, Series
 from pyFDN.td.operators import (
     Gain,
-    MatrixFIR,
     RecursionState,
     SOSBank,
     TimeOperator,
 )
-
-
-def _feedback_operator(A: np.ndarray) -> TimeOperator:
-    if A.ndim == 2:
-        return Gain(A)
-    if A.ndim == 3:
-        return MatrixFIR(A)
-    raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
 
 
 class _BlockHook(TimeOperator):
@@ -124,15 +114,17 @@ def dss_to_td(
     to zero state with ``reset``.
 
     The delay bank breaks the feedback loop, so the graph processes blocks of
-    up to ``block_size`` samples and implements ``delays`` exactly. To build the graph for a complete :class:`~pyFDN.FDNBuild`, use
-    :func:`pyFDN.build_to_td`.
+    up to ``block_size`` samples and implements ``delays`` exactly. A
+    :class:`~pyFDN.DSS` unpacks straight in: ``dss_to_td(*dss, post_delay=sos)``.
 
     Parameters
     ----------
     delays : array-like
         Positive delay lengths in samples, one per delay line.
     A : array-like
-        Feedback matrix, ``(N, N)`` static or ``(N, N, order)`` FIR.
+        Feedback matrix, ``(N, N)``. A filter (FIR) feedback matrix is a graph
+        operator, not a DSS matrix: put it on the feedback path, e.g.
+        ``dss_to_td(delays, np.eye(N), B, C, D, post_matrix=td.MatrixFIR(fir))``.
     B, C, D : array-like
         Input, output, and direct gain matrices.
     post_delay, post_matrix, post_output : optional
@@ -174,7 +166,7 @@ def dss_to_td(
 
     post_delay_ops: list[TimeOperator] = []
     _append_hook(post_delay_ops, post_delay, n_lines)
-    feedback_ops: list[TimeOperator] = [_feedback_operator(np.asarray(A, dtype=float))]
+    feedback_ops: list[TimeOperator] = [Gain(np.asarray(A, dtype=float))]
     _append_hook(feedback_ops, post_matrix, n_lines)
     loop = _DelayLoop(
         delays_arr,
@@ -191,36 +183,3 @@ def dss_to_td(
     _append_hook(wet_ops, post_output, np.shape(C)[0])
 
     return Parallel([Series(wet_ops), Gain(D)], sum_output=True)
-
-
-def build_to_td(build: FDNBuild, *, block_size: int | None = None) -> TimeOperator:
-    """Assemble a complete :class:`FDNBuild` as a stateful ``td`` graph.
-
-    Thin wrapper over :func:`dss_to_td` that unpacks the build's DSS system
-    (``A``/``B``/``C``/``D``/``delays``) and its three filter hooks. ``fs`` is
-    metadata here; delays and SOS coefficients are already expressed in
-    samples.
-
-    Parameters
-    ----------
-    build : FDNBuild
-        Complete baked FDN configuration.
-    block_size : int, optional
-        See :func:`dss_to_td`.
-
-    Returns
-    -------
-    TimeOperator
-        A stateful graph from FDN inputs to outputs.
-    """
-    return dss_to_td(
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        post_delay=build.post_delay,
-        post_matrix=build.post_matrix,
-        post_output=build.post_output,
-        block_size=block_size,
-    )

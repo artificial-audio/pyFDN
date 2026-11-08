@@ -109,7 +109,7 @@ def _(
     torch,
 ):
     min_curve, max_curve, f_bounds = pyFDN.pole_boundaries(
-        delays, absorption, feedback_matrix, fs
+        delays, feedback_matrix, fs, post_delay=absorption
     )
 
     model = pyFDN.dss_to_flamo(
@@ -132,7 +132,7 @@ def _(
         refinement_tol=1e-10,
         maximum_iterations=80,
         reject_unstable_poles=True,
-        deflation_type="fullDeflation",
+        deflation_type="full",
         verbose=False,
     )
     print(f"Number of FDN poles: {poles.size} (conjugate pairs reduced)")

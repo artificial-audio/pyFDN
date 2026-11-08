@@ -13,4 +13,5 @@ repos:
         exclude: "^(examples|docs)/"
         additional_dependencies:
           - numpy
+          - pytest  # types pytest.mark.parametrize, which tests decorate typed functions with
           - torch

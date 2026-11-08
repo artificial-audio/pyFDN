@@ -1,6 +1,6 @@
 # gallery_category: Optimization
 # gallery_title: Colorless FDN presets
-# gallery_description: Load optimized colorless FDN builds, add a chosen decay time, and compare their magnitude responses and impulse responses.
+# gallery_description: Load optimized colorless FDN presets, add a chosen decay time, and compare their magnitude responses and impulse responses.
 
 import marimo
 
@@ -23,7 +23,7 @@ def _(mo, pyFDN):
     FDN optimized for reduced metallic ringing (perceptually colorless reverberation).
     Original method published in *{pyFDN.paper_link("Differentiable_FDN_For_Colorless_Reverberation")}.*
 
-    Parameters are loaded from readable, versioned JSON `FDNBuild` files converted from the [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless) companion material. The impulse response is computed with `pyFDN.dss_to_impz`.
+    Parameters are the packaged `colorless_*` presets, delay state-space systems converted from the [diff-fdn-colorless](https://github.com/gdalsanto/diff-fdn-colorless) companion material. The impulse response is computed with `pyFDN.dss_to_impz`.
     """)
     return
 
@@ -60,7 +60,7 @@ def _(mo):
     mo.md(r"""
     ## Choose parameter file
 
-    Pick the FDN size $N$ and delay set; the matching `colorless_init_*` JSON build provides the random initialization.
+    Pick the FDN size $N$ and delay set; the matching `colorless_init_*` preset provides the random initialization.
     """)
     return
 
@@ -99,19 +99,23 @@ def _(mo):
     mo.md(r"""
     ## Load the packaged preset
 
-    `pyFDN.get_fdn_preset` retrieves the packaged preset. We take its baked
-    `FDNBuild`, add the desired decay with `pyFDN.build_set_decay`, and render
-    it directly.
+    `pyFDN.load_fdn_preset` retrieves the packaged preset as a `DSS` system. We
+    add the desired decay as a first-order shelf in the `post_delay` hook and
+    render it directly.
     """)
     return
 
 
 @app.cell
-def _(N, delay_set, ir_len, pyFDN, rt):
+def _(N, delay_set, fs, ir_len, pyFDN, rt):
     _preset = f"colorless_N{N}_d{delay_set}"
-    _lossless = pyFDN.get_fdn_preset(_preset).build
-    _build = pyFDN.build_set_decay(_lossless, rt)
-    ir_optim = pyFDN.build_to_impz(_build, ir_len).squeeze()
+    _lossless = pyFDN.load_fdn_preset(_preset)
+    _decay = pyFDN.decay_to_first_order_shelf(rt, rt, _lossless.delays, fs)
+    ir_optim = (
+        pyFDN.dss_to_td(*_lossless, post_delay=_decay)
+        .impulse_response(ir_len)
+        .squeeze()
+    )
     A, B, C, D, m = (
         _lossless.A,
         _lossless.B,
@@ -133,11 +137,15 @@ def _(mo):
 
 
 @app.cell
-def _(N, delay_set, ir_len, pyFDN, rt):
+def _(N, delay_set, fs, ir_len, pyFDN, rt):
     _preset = f"colorless_init_N{N}_d{delay_set}"
-    _lossless = pyFDN.get_fdn_preset(_preset).build
-    _build = pyFDN.build_set_decay(_lossless, rt)
-    ir_init = pyFDN.build_to_impz(_build, ir_len).squeeze()
+    _lossless = pyFDN.load_fdn_preset(_preset)
+    _decay = pyFDN.decay_to_first_order_shelf(rt, rt, _lossless.delays, fs)
+    ir_init = (
+        pyFDN.dss_to_td(*_lossless, post_delay=_decay)
+        .impulse_response(ir_len)
+        .squeeze()
+    )
     A_i, B_i, C_i, D_i, m_i = (
         _lossless.A,
         _lossless.B,

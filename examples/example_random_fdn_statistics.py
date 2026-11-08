@@ -65,7 +65,7 @@ def _(np, pyFDN):
     fs = 48000
     ir_len = fs // 2
 
-    build = pyFDN.fdn_build_gallery(
+    _dss, _ = pyFDN.fdn_dss_gallery(
         8,
         fs=fs,
         delay_range=(100, 401),
@@ -74,9 +74,9 @@ def _(np, pyFDN):
         rt=None,
         rng=3,
     )
-    delays = build.delays
-    feedback_matrix = build.A
-    input_gain, output_gain, direct = build.B, build.C, build.D
+    delays = _dss.delays
+    feedback_matrix = _dss.A
+    input_gain, output_gain, direct = _dss.B, _dss.C, _dss.D
 
     print(f"Delays: {delays} (sum = {delays.sum()})")
     return delays, direct, feedback_matrix, input_gain, ir_len, output_gain

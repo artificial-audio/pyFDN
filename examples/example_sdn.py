@@ -196,7 +196,7 @@ def _(block_diag, np, pyFDN, sdn_result):
         B,
         C,
         D,
-        post_delay_sos=sdn_result["wall_filters_sos"],
+        post_delay=sdn_result["wall_filters_sos"],
         fs=sdn_result["fs"],
         title="SDN FDN parameters",
     )

@@ -164,7 +164,7 @@ def lindsey_fox_roots(
             for k in range(radial_count)
         )
         angles = np.exp(2j * np.pi * np.arange(nfft) / nfft)
-        candidates = []
+        candidates: list[complex] = []
         previous = None
         center = None
         center_radius = 0.0
@@ -185,7 +185,7 @@ def lindsey_fox_roots(
                 candidates.extend(center_radius * angles[minimum])
             previous, center = center, values
             center_radius = radius
-        roots = np.asarray(candidates, dtype=complex)
+        roots = np.asarray(candidates, dtype=np.complex128)
         evaluator = FFTPolynomial(coefficients, nfft, deadline)
         roots = _unique_roots(_polish(roots, evaluator, degree))
         if degree >= 2048:

@@ -34,9 +34,9 @@ def test_eai_rejects_empty_result_even_with_approximation():
 
 def test_inaccurate_partial_eai_result_cannot_be_opted_into():
     with pytest.raises(RuntimeError, match="allow_approximate=True"):
-        _eai(deflation_type="noDeflation")
+        _eai(deflation_type="none")
     with pytest.raises(RuntimeError, match="All-port modal response validation failed"):
-        _eai(deflation_type="noDeflation", allow_approximate=True)
+        _eai(deflation_type="none", allow_approximate=True)
 
 
 @pytest.mark.parametrize("mode", ["eig", "roots", "eai", "lindsey_fox"])

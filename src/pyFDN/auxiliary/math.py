@@ -13,7 +13,7 @@ from scipy.linalg import expm, logm
 from pyFDN.auxiliary.utils import ensure_3d, is_almost_zero, lin_to_db
 
 if TYPE_CHECKING:
-    import torch
+    pass
 
 
 def interpolate_orthogonal(A: np.ndarray, B: np.ndarray, t: float) -> np.ndarray:
@@ -186,40 +186,6 @@ def negpolyder(
     return q, p
 
 
-def matrix_polyder(B: np.ndarray, A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Derivative of rational filter matrices in the z^{-1} convention.
-
-    Coefficients are ordered as [z^0, z^{-1}, z^{-2}, ...] along axis 0.
-
-    Args:
-        B: Numerator coefficients, shape (order, N, M).
-        A: Denominator coefficients, shape (order, N, M).
-
-    Returns:
-        Q: Numerator of the derivative, shape (order, N, M).
-        P: Denominator of the derivative, shape (order, N, M).
-    """
-    order_B = B.shape[0]
-    order_A = A.shape[0]
-    Q = np.zeros((order_B, B.shape[1], B.shape[2]), dtype=complex)
-    P = np.zeros((order_A, A.shape[1], A.shape[2]), dtype=complex)
-
-    for it1 in range(B.shape[1]):
-        for it2 in range(B.shape[2]):
-            q, p = negpolyder(B[:, it1, it2], A[:, it1, it2])
-            Q_len = min(len(q), order_B)
-            P_len = min(len(p), order_A)
-            Q[:Q_len, it1, it2] = q[:Q_len]
-            P[:P_len, it1, it2] = p[:P_len]
-
-    if np.allclose(Q.imag, 0.0):
-        Q = Q.real.astype(float)
-    if np.allclose(P.imag, 0.0):
-        P = P.real.astype(float)
-
-    return Q, P
-
-
 def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     """Determinant of a polynomial matrix in the z^{-1} convention.
 
@@ -262,19 +228,13 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     return determinant
 
 
-def general_char_poly_fft(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
-    """Static FDN characteristic coefficients from one circle of determinants.
+def _char_poly_fft(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
+    """Static branch of :func:`general_char_poly`: one circle of determinants.
 
     Samples ``det(I - diag(w**delays) @ A)`` at roots of unity and uses an
-    inverse FFT to recover coefficients in the same z^{-1} order as
-    :func:`general_char_poly`. For M = sum(delays), returns exactly M+1
-    coefficients, without trimming small terms. Real static A and positive
-    integer delays are required. Cost is O(L N^3 + L log L), with L the next
-    power of two above M; determinant samples are batched to limit memory.
-
-    Coefficient accuracy depends on determinant conditioning; small terms may
-    be obscured by roundoff. This avoids principal-minor enumeration, not the
-    conditioning limitations of a scalar coefficient representation.
+    inverse FFT to recover the coefficients. Cost is O(L N^3 + L log L), with L
+    the next power of two above M; determinant samples are batched to limit
+    memory.
     """
     raw_delays = np.asarray(delays)
     if (
@@ -320,13 +280,21 @@ def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     matrices in feedback delay networks. J. Acoust. Soc. Amer., 138(3), 1389-1398.
     Matches the reference generalCharPoly.m.
 
+    For a static ``(N, N)`` A the coefficients come from one circle of
+    determinant samples, ``det(I - diag(w**delays) @ A)`` at roots of unity,
+    and an inverse FFT: exactly ``M + 1`` of them for ``M = sum(delays)``, with
+    small terms not trimmed, and no principal-minor enumeration, so N is not
+    limited. Their accuracy is that of the determinants; small terms may be
+    obscured by roundoff. A polynomial ``(N, N, L)`` A is expanded over its
+    principal minors, which is exponential in N.
+
     Parameters
     ----------
     delays : array-like
-        Vector of delays in samples (length ND); used with z^{-1} convention.
+        Positive integer delays in samples (length N); z^{-1} convention.
     A : array-like
-        Feedback matrix. If 2D (scalar matrix), GCP is built via submatrix
-        determinants. If 3D of shape (N, N, L), polynomial matrix in z^{-1}.
+        Real feedback matrix, static ``(N, N)`` or polynomial ``(N, N, L)`` in
+        z^{-1}.
 
     Returns
     -------
@@ -334,22 +302,12 @@ def general_char_poly(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
         Generalized characteristic polynomial coefficients in z^{-1} ordering
         (index 0 = z^0, index k = z^{-k}).
     """
+    if np.ndim(A) == 2:
+        return _char_poly_fft(delays, A)
     delays = np.asarray(delays, dtype=int).ravel()
     A = np.asarray(A, dtype=float)
     ND = len(delays)
     N = A.shape[1]
-
-    if A.ndim == 2:
-        # Scalar matrix: p_len = sum(d) + 1, iterate over submatrix determinants
-        p_len = int(delays.sum()) + 1
-        p = np.zeros(p_len)
-        p[0] = 1.0
-        for nn in range(1, N + 1):
-            for ind_tup in combinations(range(ND), nn):
-                ind = np.array(ind_tup)
-                p_ind = int(delays[ind].sum())
-                p[p_ind] += ((-1) ** nn) * np.linalg.det(A[np.ix_(ind, ind)])
-        return p
 
     # Polyphase: A is (N, N, L); m = degree of det(A)
     det_A = det_polynomial(A)
@@ -393,7 +351,7 @@ def adjugate(A: np.ndarray) -> np.ndarray:
     return det_uv * (Vh.conj().T * adj_s) @ U.conj().T
 
 
-def adj_poly(
+def adjugate_polynomial(
     polynomial_matrix: ArrayLike, var: str = "z^1", tol: float = -200.0
 ) -> np.ndarray:
     """Adjugate of a polynomial matrix via FFT evaluation.
@@ -409,7 +367,7 @@ def adj_poly(
     var : str
         Coefficient convention along axis 2:
         ``"z^1"`` — descending powers of z, last slice = z^0 (the
-        :func:`loop_tf` convention); ``"z^-1"`` — ascending powers of z^{-1},
+        :func:`loop_transfer_function` convention); ``"z^-1"`` — ascending powers of z^{-1},
         first slice = z^0 (the pyFDN convention used by
         :func:`det_polynomial`).
     tol : float
@@ -424,7 +382,9 @@ def adj_poly(
     """
     P = np.asarray(polynomial_matrix)
     if P.ndim != 3 or P.shape[0] != P.shape[1]:
-        raise ValueError("adj_poly expects a square polynomial matrix (N, N, L)")
+        raise ValueError(
+            "adjugate_polynomial expects a square polynomial matrix (N, N, L)"
+        )
     if var not in ("z^1", "z^-1"):
         raise ValueError("var must be 'z^1' or 'z^-1'")
     N, _, L = P.shape
@@ -450,7 +410,7 @@ def adj_poly(
     return adj
 
 
-def loop_tf(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
+def loop_transfer_function(delays: ArrayLike, A: ArrayLike) -> np.ndarray:
     """Loop transfer function ``P(z) = diag(z^m) - A`` as a polynomial matrix.
 
     Coefficients are stored in the ``z^1`` convention along axis 2
@@ -538,26 +498,3 @@ def outer_sum_approximation(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     u = np.log(np.abs(eu)) * max_val
     v = np.log(np.abs(ev)) * max_val
     return u, v
-
-
-def matrix_sqrt(A: torch.Tensor) -> torch.Tensor:
-    """Matrix square root via eigenvalue decomposition.
-
-    sqrtm(A) = V @ sqrt(D) @ V^(-1) where A = V @ D @ V^(-1).
-
-    Parameters
-    ----------
-    A : torch.Tensor
-        Square real matrix.
-
-    Returns
-    -------
-    torch.Tensor
-        Real matrix square root of A, in A's dtype (float64 in, float64 out).
-    """
-    import torch
-
-    complex_dtype = torch.complex128 if A.dtype == torch.float64 else torch.complex64
-    eigenvals, eigenvecs = torch.linalg.eig(A.to(complex_dtype))
-    root = eigenvecs @ torch.diag(torch.sqrt(eigenvals)) @ torch.linalg.inv(eigenvecs)
-    return torch.real(root).to(A.dtype)

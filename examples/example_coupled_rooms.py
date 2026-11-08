@@ -51,7 +51,7 @@ def _(mo):
     mo.md(r"""
     ## Single-room FDNs
 
-    Build each room with `pyFDN.fdn_build_gallery`. Both rooms have frequency-dependent reverberation (RT at DC and at Nyquist, realised as per-line first-order shelving absorption) and a different per-room output EQ.
+    Build each room with `pyFDN.fdn_dss_gallery`. Both rooms have frequency-dependent reverberation (RT at DC and at Nyquist, realised as per-line first-order shelving absorption) and a different per-room output EQ.
     """)
     return
 
@@ -70,7 +70,7 @@ def _(pyFDN):
     num_output = 2
 
     # Room 1: small, short RT, brighter (high frequencies decay faster); dark EQ.
-    room1 = pyFDN.fdn_build_gallery(
+    room1, room1_filters = pyFDN.fdn_dss_gallery(
         N1,
         fs=fs,
         delay_range=(400, 800),
@@ -84,7 +84,7 @@ def _(pyFDN):
         rng=5,
     )
     # Room 2: large, long RT; different (brighter) EQ.
-    room2 = pyFDN.fdn_build_gallery(
+    room2, room2_filters = pyFDN.fdn_dss_gallery(
         N2,
         fs=fs,
         delay_range=(1100, 2600),
@@ -97,7 +97,19 @@ def _(pyFDN):
         io_type="ones",
         rng=6,
     )
-    return N, fs, ix1, ix2, nfft, num_input, num_output, room1, room2
+    return (
+        N,
+        fs,
+        ix1,
+        ix2,
+        nfft,
+        num_input,
+        num_output,
+        room1,
+        room1_filters,
+        room2,
+        room2_filters,
+    )
 
 
 @app.cell(hide_code=True)
@@ -111,14 +123,30 @@ def _(mo):
 
 
 @app.cell
-def _(N, block_diag, ix1, ix2, np, num_input, num_output, room1, room2):
+def _(
+    N,
+    block_diag,
+    ix1,
+    ix2,
+    np,
+    num_input,
+    num_output,
+    room1,
+    room1_filters,
+    room2,
+    room2_filters,
+):
     coupling = 0.2  # coupling angle between the two rooms (0 = uncoupled)
 
     # Concatenate the two single-room FDNs.
     delays = np.concatenate([room1.delays, room2.delays])
     A_rooms = block_diag(room1.A, room2.A)
-    attenuation_sos = np.concatenate([room1.post_delay, room2.post_delay], axis=2)
-    post_eq_sos = np.concatenate([room1.post_output, room2.post_output], axis=2)
+    attenuation_sos = np.concatenate(
+        [room1_filters["post_delay"], room2_filters["post_delay"]], axis=2
+    )
+    post_eq_sos = np.concatenate(
+        [room1_filters["post_output"], room2_filters["post_output"]], axis=2
+    )
 
     # Mixing matrix: orthogonal block rotation coupling room 1 with room 2.
     eye = np.eye(room1.delays.size)
@@ -217,8 +245,8 @@ def _(A, B, C, D, attenuation_sos, delays, fs, post_eq_sos, pyFDN):
         B,
         C,
         D,
-        post_delay_sos=attenuation_sos,
-        post_output_sos=post_eq_sos,
+        post_delay=attenuation_sos,
+        post_output=post_eq_sos,
         fs=fs,
         title="Coupled Rooms FDN Parameters",
     )

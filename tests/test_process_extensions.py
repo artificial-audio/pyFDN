@@ -3,17 +3,14 @@ the paraunitary / scattering / pole-boundary examples)."""
 
 from __future__ import annotations
 
-import dataclasses
-
 import numpy as np
 import pytest
 
 import pyFDN
 from pyFDN import td
 from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.build import FDNBuild
-from pyFDN.train import build_set_decay
-from pyFDN.translate.dss_to_impz import build_to_impz, dss_to_impz
+from pyFDN.dss import DSS
+from pyFDN.translate.dss_to_impz import dss_to_impz
 
 FDNFixture = dict[str, np.ndarray]
 
@@ -21,7 +18,7 @@ FDNFixture = dict[str, np.ndarray]
 @pytest.fixture()  # type: ignore[misc]
 def paraunitary_fdn() -> FDNFixture:
     np.random.seed(0)
-    fbm, _ = pyFDN.construct_cascaded_paraunitary_matrix(4, 2, matrix_type="random")
+    fbm, _ = pyFDN.cascaded_paraunitary_matrix(4, 2, matrix_type="random")
     return {
         "A": fbm,
         "delays": np.array([19, 31, 42, 57]),
@@ -51,14 +48,15 @@ def test_general_char_poly_polynomial_matches_det(
         assert det_p == pytest.approx(gcp_val, rel=1e-8)
 
 
-def test_process_dss_fir_matrix_matches_frequency_inversion(
+def test_fir_feedback_on_the_td_graph_matches_frequency_inversion(
     paraunitary_fdn: FDNFixture,
 ) -> None:
     A = paraunitary_fdn["A"]
     delays = paraunitary_fdn["delays"]
     B, C, D = paraunitary_fdn["B"], paraunitary_fdn["C"], paraunitary_fdn["D"]
     ir_len = 1024
-    ir_time = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)[:, 0, 0]
+    graph = pyFDN.dss_to_td(delays, np.eye(4), B, C, D, post_matrix=td.MatrixFIR(A))
+    ir_time = graph.impulse_response(ir_len)[:, 0, 0]
 
     # inverse z-transform on circle |z| = r > 1 (lossless system: unit-circle poles)
     nfft = 2**14
@@ -109,7 +107,7 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
     n = 3
     fs = 48000
     delays = np.array([100, 200, 300])
-    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, None, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.3, 0.1, delays, fs)  # (1, 6, N)
     assert sos.shape == (1, 6, n)
     x = np.random.randn(200, n)
 
@@ -130,13 +128,13 @@ def test_sos_filter_bank_block_consistency_and_shapes() -> None:
             td.SOSBank(bad)
 
 
-def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
+def test_paraunitary_from_elementals_is_paraunitary() -> None:
     np.random.seed(5)
     n, degree = 3, 5
-    matrix, v = pyFDN.construct_paraunitary_from_elementals(n, degree)
+    matrix, v = pyFDN.paraunitary_from_elementals(n, degree)
     assert matrix.shape == (n, n, degree)
     assert v.shape == (n, degree - 1)
-    is_p, _, _ = pyFDN.is_paraunitary(matrix.transpose(2, 0, 1))
+    is_p, _, _ = pyFDN.is_paraunitary(matrix)
     assert is_p
 
 
@@ -153,7 +151,7 @@ def test_process_dss_absorption_matches_flamo() -> None:
     C = np.ones((1, n))
     D = np.zeros((1, 1))
     # short RTs so the IR decays well within nfft (FLAMO is circular)
-    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, None, delays, fs)  # (1, 6, N)
+    sos = pyFDN.decay_to_first_order_shelf(0.15, 0.05, delays, fs)  # (1, 6, N)
 
     # constract the SOSFilter
     absorption = td.SOSBank(sos)
@@ -161,7 +159,9 @@ def test_process_dss_absorption_matches_flamo() -> None:
     ir_len = 4096
     impulse = np.zeros(ir_len)
     impulse[0] = 1.0
-    ir_td = pyFDN.process_dss(impulse, delays, A, B, C, D, post_delay=absorption)
+    ir_td = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption).process_signal(
+        impulse, squeeze=True
+    )
 
     model = pyFDN.dss_to_flamo(
         delays,
@@ -216,143 +216,25 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
 
 
 # ============================================================================
-# build_to_impz (build -> time-domain IR via process_fdn)
+# DSS systems with filter hooks (dss_to_td / dss_to_flamo)
 # ============================================================================
 
+FS = 48_000.0
 
-def _siso_build(filters: np.ndarray | None = None) -> FDNBuild:
+
+def _siso_dss() -> DSS:
     n = 4
-    return FDNBuild(
+    return DSS(
+        delays=np.array([101, 143, 165, 177]),
         A=pyFDN.random_orthogonal(n),
         B=np.ones((n, 1)),
         C=np.ones((1, n)),
         D=np.zeros((1, 1)),
-        delays=np.array([101, 143, 165, 177]),
-        fs=48000.0,
-        post_delay=filters,
     )
 
 
-def test_build_to_td_matches_process_dss_with_all_hooks() -> None:
-    """The build graph creates and connects all three SOS hook nodes."""
-    post_delay = pyFDN.decay_to_first_order_shelf(
-        0.3, 0.1, None, np.array([101, 143, 165, 177]), 48_000.0
-    )
-    build = dataclasses.replace(
-        _siso_build(post_delay),
-        post_matrix=_flat_gain_sos(0.8, 4),
-        post_output=_flat_gain_sos(0.5, 1),
-    )
-    signal = np.zeros(2048)
-    signal[0] = 1.0
-
-    graph = pyFDN.build_to_td(build)
-    got = graph.process_signal(signal, squeeze=True)
-    expected = pyFDN.process_dss(
-        signal,
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        post_delay=td.SOSBank(build.post_delay),
-        post_matrix=td.SOSBank(build.post_matrix),
-        post_output=td.SOSBank(build.post_output),
-    )
-    np.testing.assert_allclose(got, expected)
-
-
-def test_build_to_td_fir_feedback_mimo_and_direct_path() -> None:
-    rng = np.random.default_rng(17)
-    n, num_inputs, num_outputs = 4, 2, 3
-    A, _ = pyFDN.construct_cascaded_paraunitary_matrix(n, 2, matrix_type="random")
-    build = FDNBuild(
-        A=0.8 * A,
-        B=rng.standard_normal((n, num_inputs)),
-        C=rng.standard_normal((num_outputs, n)),
-        D=rng.standard_normal((num_outputs, num_inputs)),
-        delays=np.array([19, 31, 42, 57]),
-        fs=48_000.0,
-    )
-    signal = rng.standard_normal((512, num_inputs))
-
-    got = pyFDN.build_to_td(build, block_size=16).process_signal(signal)
-    expected = pyFDN.process_dss(
-        signal, build.delays, build.A, build.B, build.C, build.D
-    )
-    np.testing.assert_allclose(got, expected, atol=1e-12)
-
-
-def test_build_to_td_process_block_matches_process_signal() -> None:
-    build = build_set_decay(_siso_build(), 0.3)
-    signal = np.zeros(2048)
-    signal[0] = 1.0
-
-    whole = pyFDN.build_to_td(build, block_size=32).process_signal(signal)
-    streamed_graph = pyFDN.build_to_td(build, block_size=32)
-    streamed = np.vstack(
-        [
-            streamed_graph.process_block(signal[start : start + 47])
-            for start in range(0, signal.size, 47)
-        ]
-    )
-    np.testing.assert_allclose(streamed, whole, atol=1e-12)
-
-
-def test_process_fdn_wraps_a_fresh_build_graph() -> None:
-    build = build_set_decay(_siso_build(), 0.3)
-    signal = np.zeros(2048)
-    signal[0] = 1.0
-
-    expected = pyFDN.build_to_td(build).process_signal(signal, squeeze=True)
-    np.testing.assert_allclose(pyFDN.process_fdn(signal, build), expected)
-    np.testing.assert_allclose(pyFDN.process_fdn(signal, build), expected)
-
-
-def test_build_to_td_reset_restores_initial_state() -> None:
-    build = build_set_decay(_siso_build(), 0.3)
-    graph = pyFDN.build_to_td(build, block_size=32)
-    signal = np.zeros(2048)
-    signal[0] = 1.0
-
-    first = graph.process_signal(signal)
-    assert not np.allclose(graph.process_signal(signal), first)
-    graph.reset()
-    np.testing.assert_allclose(graph.process_signal(signal), first)
-
-
-def test_build_to_td_rejects_invalid_block_size() -> None:
-    build = _siso_build()
-    with pytest.raises(ValueError, match="positive integer"):
-        pyFDN.build_to_td(build, block_size=0)
-    with pytest.raises(ValueError, match="shortest FDN delay"):
-        pyFDN.build_to_td(build, block_size=102)
-
-
-def test_build_to_impz_lossless_matches_dss_to_impz() -> None:
-    np.random.seed(3)
-    build = _siso_build()  # post_delay=None -> no absorption
-    ir_len = 4096
-    got = build_to_impz(build, ir_len)
-    ref = dss_to_impz(build.delays, build.A, build.B, build.C, build.D, ir_len)
-    assert got.shape == (ir_len, 1, 1)
-    np.testing.assert_allclose(got, ref)
-
-
-def test_build_to_impz_applies_absorption_decay() -> None:
-    np.random.seed(3)
-    lossless = _siso_build()
-    decayed = build_set_decay(lossless, 0.3)
-    assert decayed.post_delay is not None
-
-    ir_len = 16384
-    ir_loss = build_to_impz(lossless, ir_len).squeeze()
-    ir_dec = build_to_impz(decayed, ir_len).squeeze()
-
-    # A lossless orthogonal FDN rings on; a 0.3 s RT is nearly gone by the
-    # second half of the buffer, so its tail energy is far lower.
-    tail = slice(ir_len // 2, None)
-    assert np.sum(ir_dec[tail] ** 2) < 1e-2 * np.sum(ir_loss[tail] ** 2)
+def _decay(dss: DSS, rt: float) -> np.ndarray:
+    return pyFDN.decay_to_first_order_shelf(rt, rt, dss.delays, FS)
 
 
 def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
@@ -363,43 +245,157 @@ def _flat_gain_sos(gain: float, n_channels: int) -> np.ndarray:
     return sos
 
 
-def test_build_carries_all_three_hooks_and_both_renderers_agree() -> None:
-    """post_matrix is a build field like the other two, and both paths honour it."""
-    pytest.importorskip("flamo")
-    build = dataclasses.replace(
-        _siso_build(),
-        post_matrix=_flat_gain_sos(0.5, 4),
+def test_dss_to_td_sos_arrays_match_sosbank_objects() -> None:
+    """SOS arrays given as hooks become the same SOSBank nodes."""
+    dss = _siso_dss()
+    filters = {
+        "post_delay": pyFDN.decay_to_first_order_shelf(0.3, 0.1, dss.delays, FS),
+        "post_matrix": _flat_gain_sos(0.8, 4),
+        "post_output": _flat_gain_sos(0.5, 1),
+    }
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    got = pyFDN.dss_to_td(*dss, **filters).process_signal(signal, squeeze=True)
+    sosbanks = {k: td.SOSBank(v) for k, v in filters.items()}
+    expected = pyFDN.dss_to_td(*dss, **sosbanks).process_signal(signal, squeeze=True)
+    np.testing.assert_allclose(got, expected)
+
+
+def test_dss_to_td_fir_feedback_mimo_and_direct_path() -> None:
+    rng = np.random.default_rng(17)
+    n, num_inputs, num_outputs = 4, 2, 3
+    fir, _ = pyFDN.cascaded_paraunitary_matrix(n, 2, matrix_type="random")
+    dss = DSS(
+        delays=np.array([19, 31, 42, 57]),
+        A=np.eye(n),
+        B=rng.standard_normal((n, num_inputs)),
+        C=rng.standard_normal((num_outputs, n)),
+        D=rng.standard_normal((num_outputs, num_inputs)),
     )
+    signal = rng.standard_normal((512, num_inputs))
+
+    small = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(0.8 * fir), block_size=16)
+    default = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(0.8 * fir))
+    np.testing.assert_allclose(
+        small.process_signal(signal), default.process_signal(signal), atol=1e-12
+    )
+
+
+def test_a_lossless_fir_fdn_renders_through_flamo_with_alias_decay() -> None:
+    """A FIR matrix module carries the model's alias decay, like every hook."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("flamo")
+    fir, _ = pyFDN.cascaded_paraunitary_matrix(4, 2, matrix_type="random")
+    dss = DSS(
+        np.array([19, 31, 42, 57]),
+        np.eye(4),
+        np.eye(4, 1),
+        np.eye(1, 4),
+        np.zeros((1, 1)),
+    )
+    nfft, alias = 2**12, 60.0
+    model = pyFDN.dss_to_flamo(
+        *dss,
+        48_000.0,
+        nfft=nfft,
+        alias_decay_db=alias,
+        dtype=torch.float64,
+        device="cpu",
+        post_matrix=pyFDN.fir_matrix_module(
+            fir, nfft, alias_decay_db=alias, dtype=torch.float64, device="cpu"
+        ),
+    )
+    reference = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(fir)).impulse_response(
+        nfft
+    )
+    error = np.linalg.norm(pyFDN.flamo_time_response(model) - reference)
+    # the residual is the alias decay, by construction
+    assert 20 * np.log10(error / np.linalg.norm(reference)) < -alias + 2
+
+
+def test_dss_to_td_process_block_matches_process_signal() -> None:
+    dss = _siso_dss()
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    graph = pyFDN.dss_to_td(*dss, post_delay=_decay(dss, 0.3), block_size=32)
+    whole = graph.process_signal(signal)
+    streamed_graph = pyFDN.dss_to_td(*dss, post_delay=_decay(dss, 0.3), block_size=32)
+    streamed = np.vstack(
+        [
+            streamed_graph.process_block(signal[start : start + 47])
+            for start in range(0, signal.size, 47)
+        ]
+    )
+    np.testing.assert_allclose(streamed, whole, atol=1e-12)
+
+
+def test_dss_to_td_reset_restores_initial_state() -> None:
+    dss = _siso_dss()
+    graph = pyFDN.dss_to_td(*dss, post_delay=_decay(dss, 0.3), block_size=32)
+    signal = np.zeros(2048)
+    signal[0] = 1.0
+
+    first = graph.process_signal(signal)
+    assert not np.allclose(graph.process_signal(signal), first)
+    graph.reset()
+    np.testing.assert_allclose(graph.process_signal(signal), first)
+
+
+def test_dss_to_td_rejects_invalid_block_size() -> None:
+    dss = _siso_dss()
+    with pytest.raises(ValueError, match="positive integer"):
+        pyFDN.dss_to_td(*dss, block_size=0)
+    with pytest.raises(ValueError, match="shortest FDN delay"):
+        pyFDN.dss_to_td(*dss, block_size=102)
+
+
+def test_td_impulse_response_applies_absorption_decay() -> None:
+    np.random.seed(3)
+    dss = _siso_dss()
+
+    ir_len = 16384
+    ir_loss = dss_to_impz(*dss, ir_len).squeeze()
+    graph = pyFDN.dss_to_td(*dss, post_delay=_decay(dss, 0.3))
+    ir_dec = graph.impulse_response(ir_len).squeeze()
+
+    # A lossless orthogonal FDN rings on; a 0.3 s RT is nearly gone by the
+    # second half of the buffer, so its tail energy is far lower.
+    tail = slice(ir_len // 2, None)
+    assert np.sum(ir_dec[tail] ** 2) < 1e-2 * np.sum(ir_loss[tail] ** 2)
+
+
+def test_all_three_hooks_render_alike_and_extract_back() -> None:
+    """post_matrix is a hook like the other two, and both renderers honour it."""
+    pytest.importorskip("flamo")
+    dss = _siso_dss()
+    post_matrix = _flat_gain_sos(0.5, 4)
     ir_len = 4096
-    numpy_ir = build_to_impz(build, ir_len).squeeze()
-    flamo_ir = np.asarray(
-        pyFDN.flamo_time_response(
-            pyFDN.build_to_flamo(build, nfft=2**14, device="cpu"), fs=build.fs
-        )
-    ).reshape(-1)[:ir_len]
-    np.testing.assert_allclose(numpy_ir, flamo_ir, atol=1e-4)
+    graph = pyFDN.dss_to_td(*dss, post_matrix=post_matrix)
+    numpy_ir = graph.impulse_response(ir_len).squeeze()
+    model = pyFDN.dss_to_flamo(
+        *dss, FS, nfft=2**14, device="cpu", post_matrix=post_matrix
+    )
+    flamo_ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
+    np.testing.assert_allclose(numpy_ir, flamo_ir[:ir_len], atol=1e-4)
 
     # and it is not a no-op: halving the feedback path shortens the decay
-    plain = build_to_impz(_siso_build(), ir_len).squeeze()
+    plain = dss_to_impz(*dss, ir_len).squeeze()
     assert not np.allclose(numpy_ir, plain, atol=1e-3)
 
-    # the graph round-trips it back into the same field
-    extracted = pyFDN.extract_build(
-        pyFDN.build_to_flamo(build, nfft=2**14, device="cpu")
-    )
-    np.testing.assert_allclose(extracted.post_matrix, build.post_matrix, atol=1e-6)
+    # the graph round-trips it back into the same hook
+    _, filters = pyFDN.flamo_to_dss(model)
+    np.testing.assert_allclose(filters["post_matrix"], post_matrix, atol=1e-6)
 
 
-def test_build_to_impz_applies_the_post_output_hook() -> None:
-    """post_output becomes the build graph's wet-output SOS node."""
-    plain = _siso_build()
-    half = np.zeros((1, 6, 1))
-    half[:, 0, :] = 0.5  # a flat 0.5 gain as a one-section SOS
-    half[:, 3, :] = 1.0
-    quiet = dataclasses.replace(plain, post_output=half)
-
+def test_td_impulse_response_applies_the_post_output_hook() -> None:
+    """post_output becomes the graph's wet-output SOS node."""
+    dss = _siso_dss()
     np.testing.assert_allclose(
-        build_to_impz(quiet, 256), 0.5 * build_to_impz(plain, 256), atol=1e-12
+        pyFDN.dss_to_td(*dss, post_output=_flat_gain_sos(0.5, 1)).impulse_response(256),
+        0.5 * dss_to_impz(*dss, 256),
+        atol=1e-12,
     )
 
 

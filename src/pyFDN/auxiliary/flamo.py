@@ -34,75 +34,24 @@ def to_numpy(value: Any) -> np.ndarray:
     return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
 
 
-def flamo_time_response(
-    model,
-    fs: int = 48000,
-    identity: bool = False,
-) -> np.ndarray:
-    """Return a FLAMO model's time response as a NumPy array.
+def flamo_time_response(model) -> np.ndarray:
+    """Impulse response of a FLAMO model, shape ``(nfft, out, in)``.
 
-    This is the NumPy-facing counterpart of FLAMO's
-    ``model.get_time_response()``. It detaches the returned tensor from any
-    autograd graph, transfers it to CPU memory, and preserves its dimensions
-    and dtype during conversion.
-
-    Parameters
-    ----------
-    model
-        FLAMO model exposing ``get_time_response``.
-    fs : int
-        Sampling frequency passed to FLAMO.
-    identity : bool
-        Whether to request FLAMO's input-free identity response.
-
-    Returns
-    -------
-    np.ndarray
-        Time response with the same shape and numeric dtype as FLAMO's tensor.
+    One Dirac per input channel, as :func:`pyFDN.dss_to_impz` and
+    :meth:`pyFDN.td.TimeOperator.impulse_response` return it, so the three
+    renders compare directly. The array is detached from any autograd graph
+    and moved to CPU memory. FLAMO renders circularly, so the response wraps
+    around after ``nfft`` samples.
     """
-    return to_numpy(model.get_time_response(fs=fs, identity=identity))
-
-
-def flamo_freq_response(
-    model,
-    fs: int = 48000,
-    identity: bool = False,
-) -> np.ndarray:
-    """Return a FLAMO model's (complex) frequency response as a NumPy array.
-
-    The NumPy-facing counterpart of FLAMO's ``model.get_freq_response()`` and the
-    frequency-domain sibling of :func:`flamo_time_response`. It detaches the
-    returned tensor from any autograd graph, transfers it to CPU memory, and
-    preserves its shape and (complex) dtype. Take ``np.abs(...)`` for the
-    magnitude response, ``np.angle(...)`` for the phase.
-
-    ``get_freq_response`` evaluates over ``nfft`` DFT bins by temporarily swapping
-    the model's input/output layers to FFT and restoring them before returning,
-    so this is side-effect-free regardless of the model's current output layer.
-
-    Parameters
-    ----------
-    model
-        FLAMO model exposing ``get_freq_response`` (e.g. a ``Shell``).
-    fs : int
-        Sampling frequency passed to FLAMO.
-    identity : bool
-        Whether to request FLAMO's input-free identity response.
-
-    Returns
-    -------
-    np.ndarray
-        Complex frequency response with the same shape and numeric dtype as
-        FLAMO's tensor.
-    """
-    return to_numpy(model.get_freq_response(fs=fs, identity=identity))
+    response = to_numpy(model.get_time_response(identity=True))[0]
+    return response if response.ndim == 3 else response[:, :, np.newaxis]
 
 
 def flamo_process(
     model,
     signal: np.ndarray,
     *,
-    fs: int | None = None,
+    fs: float | None = None,
     tail_seconds: float = 0.0,
     dtype=None,
 ) -> np.ndarray:
@@ -126,7 +75,7 @@ def flamo_process(
         of :func:`pyFDN.dss_to_flamo`).
     signal : np.ndarray
         1-D input signal.
-    fs : int, optional
+    fs : float, optional
         Sampling rate, required only when ``tail_seconds > 0``.
     tail_seconds : float
         Trailing silence to reserve so the reverb tail does not wrap around.
@@ -289,6 +238,7 @@ def fir_matrix_module(
     *,
     device=None,
     dtype=None,
+    alias_decay_db: float = 0,
     requires_grad: bool = False,
 ):
     """
@@ -306,6 +256,8 @@ def fir_matrix_module(
     dtype : torch.dtype or None
         Optional dtype for module parameters (e.g., torch.float64).
         If None, uses float32.
+    alias_decay_db : float
+        FLAMO alias decay in dB; must match the model the module goes into.
     requires_grad : bool
         Whether the filter parameters are trainable.
 
@@ -328,6 +280,7 @@ def fir_matrix_module(
         size=(n_taps, n_out, n_in),
         nfft=nfft,
         requires_grad=requires_grad,
+        alias_decay_db=alias_decay_db,
         device=dev,
         dtype=torch_dtype,
     )
@@ -591,10 +544,10 @@ def assemble_fdn_core(
 
     Single source of truth for the FDN signal flow, shared by the render path
     (:func:`pyFDN.dss_to_flamo`) and the training builder
-    (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
+    (:func:`pyFDN.train.trainable_from_dss`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
-    :func:`pyFDN.extract_build` requires).
+    :func:`pyFDN.flamo_to_dss` requires).
 
     Signal flow::
 
@@ -604,8 +557,8 @@ def assemble_fdn_core(
 
     with the direct path ``direct`` summed in parallel when provided.
 
-    The three optional filter slots are the hooks :func:`pyFDN.process_dss`
-    takes and an :class:`~pyFDN.FDNBuild` stores: ``post_delay`` on the delay
+    The three optional filter slots are the hooks :func:`pyFDN.dss_to_td`
+    takes and :func:`pyFDN.flamo_to_dss` returns: ``post_delay`` on the delay
     output (shaping both the output and the feedback), ``post_matrix`` on the
     feedback path only, ``post_output`` on the wet signal only.
 
@@ -629,14 +582,14 @@ def assemble_fdn_core(
         In-loop filter after the delays (named ``post_delay``). Any module of
         input/output size N: a :class:`~pyFDN.AttenuationFilter` or a plain
         :func:`sos_filter_module` for attenuation, or a whole nested core such as
-        a Schroeder allpass. Only an SOS filter here is extractable into an
-        :class:`~pyFDN.FDNBuild`.
+        a Schroeder allpass. Only an SOS filter here is extractable with
+        :func:`pyFDN.flamo_to_dss`.
     post_matrix : FLAMO module or None
         Filter on the feedback path after the feedback matrix (named
         ``post_matrix``); the position a time-varying mixing stage occupies.
         Adding it names the feedback branch ``mixing_matrix`` rather than
         leaving the matrix bare on ``fB``, which is where
-        :func:`pyFDN.extract_build` looks for it either way.
+        :func:`pyFDN.flamo_to_dss` looks for it either way.
     post_output : FLAMO module or None
         Per-output filter after the output gain (named ``post_output``);
         typically an :class:`OutputEQ`.
@@ -710,7 +663,7 @@ def wrap_fdn_shell(
     The core evaluates the system on a circle of radius :math:`\gamma < 1`, so
     its response carries a :math:`\gamma^n` envelope; the output layer removes
     it again. What comes out is the true impulse response, accurate to
-    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_build`). At
+    ``alias_decay_db`` (see :func:`pyFDN.trainable_from_dss`). At
     ``alias_decay_db=0`` the layer is an ordinary inverse FFT.
 
     Parameters

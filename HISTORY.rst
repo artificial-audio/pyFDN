@@ -14,7 +14,115 @@ Unreleased
   graphic EQ fits the remainder per band. It follows steep high-frequency
   decays more closely than the graphic EQ alone.
 * ``EQDesign`` gains ``"two_stage"``, so ``AttenuationFilter`` and
-  ``OutputEQ`` can train it and preset design records accept it.
+  ``OutputEQ`` can train it.
+* **Breaking: ``FDNBuild`` is replaced by ``DSS``**, a named tuple of exactly
+  ``(delays, A, B, C, D)`` in the argument order of the ``dss_to_*`` functions,
+  so ``pyFDN.dss_to_td(*dss, **filters)`` works. Filters (``post_delay``,
+  ``post_matrix``, ``post_output``) and the sample rate are passed alongside.
+  ``build_to_td`` / ``build_to_impz`` / ``build_to_flamo`` / ``process_fdn``,
+  ``build_set_decay`` and ``plot_fdn_build`` (and ``plot_FDN_build``) are
+  removed. ``dss_to_impz`` and ``process_dss`` take the matrices only; a
+  system with filters renders through its ``td`` graph, and the new
+  ``TimeOperator.impulse_response(ir_len)`` gives
+  ``dss_to_td(*dss, **filters).impulse_response(ir_len)``.
+* **Breaking: a filter (FIR) feedback matrix is a graph operator, not a DSS
+  matrix.** ``dss_to_td`` and ``dss_to_flamo`` take a 2-D ``A`` only; put the
+  FIR matrix on the feedback path with ``A`` the identity:
+  ``post_matrix=td.MatrixFIR(fir)`` or
+  ``post_matrix=pyFDN.fir_matrix_module(fir, nfft)``.
+  ``plot_fdn_parameter``'s ``post_*_sos`` keywords are now ``post_*``.
+  Renamed: ``extract_build`` -> ``flamo_to_dss`` (returns ``(dss, filters)``,
+  now in ``pyFDN.translate`` next to ``dss_to_flamo``),
+  ``trainable_from_build`` -> ``trainable_from_dss(*dss, fs, ...)``,
+  ``fdn_build_gallery`` -> ``fdn_dss_gallery`` (returns ``(dss, filters)``).
+* **Breaking: one save for everything.** ``save_fdn`` / ``load_fdn`` /
+  ``resave_fdn`` write a ``DSS`` as readable JSON (``"format": "pyfdn-dss"``,
+  one matrix row per line) and pickle anything else -- a ``td`` graph, a FLAMO
+  model -- with ``cloudpickle``, plus the pyFDN and Python versions that wrote
+  it; ``pyFDN.save.RENAMED`` maps classes that moved since. The JSON build
+  format (``save_fdn_build`` / ``load_fdn_build`` / ``fdn_build_*_dict``),
+  ``FDNPreset`` with its design records, ``trainable_from_preset`` and the EQ
+  designers' ``return_design`` option are removed. ``get_fdn_preset`` is now
+  ``load_fdn_preset``, pairing with ``load_audio`` and ``load_fdn``, and returns
+  a ``DSS``; the packaged presets are DSS JSON files. New dependency:
+  ``cloudpickle>=3``.
+* **Breaking: one convention per concept.**
+
+  * ``flamo_time_response(model)`` returns ``(nfft, out, in)``, one response
+    per input like ``dss_to_impz``; its ``fs`` and ``identity`` arguments are
+    gone. ``pr_to_impz``'s ``impulse_response_length`` is ``ir_len``.
+  * ``is_paraunitary`` takes an FIR matrix in pyFDN's ``(out, in, taps)``
+    layout; pass an impulse response as ``ir.transpose(1, 2, 0)``.
+  * ``fir_matrix_module`` takes ``alias_decay_db`` like the other module
+    builders, so an FIR feedback matrix works in a model with alias decay.
+  * ``dss_to_flamo``'s ``nfft`` and ``device`` are keyword-only; every FLAMO
+    builder defaults to ``nfft=2**16``.
+  * Gains are ``B, C, D`` everywhere: ``plot_system_matrix``,
+    ``plot_fdn_parameter``, ``allpass_in_fdn``, ``schroeder_reverberator``.
+  * ``pole_boundaries(delays, A, fs, *, post_delay, nfft)``.
+  * Galleries return a matrix and nothing else; ``FEEDBACK_MATRIX_TYPES``,
+    ``FILTER_MATRIX_TYPES`` and ``SYSTEM_TYPES`` list their names. The old
+    fdnToolbox spellings (``"Hadamard"``, ``"nestedAllpass"``, ...) are no
+    longer accepted. ``FDNSystem`` is removed; ``fdn_system_gallery`` returns
+    ``(A, B, C, D)`` like the structure builders.
+  * ``pyFDN`` no longer exports the allpass-completion internals,
+    ``is_almost_zero``, ``ensure_3d``, ``polydiag``, ``negpolyder``, or the
+    ``pyFDN.allpass`` / ``pyFDN.allpass_completion`` aliases; they stay in
+    their modules. Removed as unused: ``flamo_freq_response``,
+    ``flamo_extract_pr_decomposition``, ``matrix_polyder``, ``matrix_sqrt``,
+    ``mulaw_decode``, ``db_to_lin``, ``db_to_sq``.
+  * The system comes before the signal: ``process_dss(*dss, x)``, as in
+    ``dss_to_impz`` and ``flamo_process(model, x)``.
+  * ``TimeVaryingMatrix(N, fs, *, rate, depth, spread=0.0, seed=None)`` names
+    its knobs as ``TimeVaryingKroneckerMatrix`` does (``rate``, ``depth``,
+    ``phase`` attributes) and draws from its own ``seed`` instead of NumPy's
+    global generator.
+  * ``build_fdn`` is ``trainable_fdn``, pairing with ``trainable_from_dss``.
+  * One function per quantity: ``general_char_poly`` uses the FFT route of
+    the former ``general_char_poly_fft`` for a static ``A`` (principal minors
+    remain for a polynomial ``A``), and ``energy_decay_curve`` is removed in
+    favour of ``edc``, which already takes tensors.
+  * Descriptive names for the MATLAB-style ones: ``mgrpdelay`` ->
+    ``matrix_group_delay``, ``ms_to_smp`` -> ``ms_to_samples``, ``adj_poly``
+    -> ``adjugate_polynomial``, ``loop_tf`` -> ``loop_transfer_function``,
+    ``rand_admissible_homogeneous_allpass`` ->
+    ``random_admissible_homogeneous_allpass``.
+  * Option names are matched exactly: ``construct_cascaded_paraunitary_matrix``
+    takes ``"hadamard"`` / ``"random"`` and ``dss_to_pr`` / ``flamo_to_pr``
+    their ``mode`` in lower case only.
+  * ``SDN`` defaults to ``fs=48_000.0`` like the rest of pyFDN, and
+    ``flamo_process`` types ``fs`` as a float.
+  * ``dss_to_ss(delays, A, B, C, D)`` takes the gains like every other
+    ``dss_*`` function (they were optional, lower case and defaulted to ones)
+    and handles several inputs and outputs.
+  * The EQ designers take the sample rate before the shelf frequency, which is
+    the keyword ``crossover``: ``decay_to_first_order_shelf(rt, rt_nyquist,
+    delays, fs, *, crossover=None)``, ``gain_to_first_order_shelf(gain_db,
+    gain_db_nyquist, fs, *, crossover=None)``, and ``crossover=`` for the
+    two-stage designers and ``AttenuationFilter`` (was ``rt_crossover``).
+  * ``AttenuationFilter`` and ``OutputEQ`` default to ``nfft=2**16`` like the
+    model builders they plug into.
+  * Matrix generators take the size as ``N``. ``construct_cascaded_paraunitary_matrix``
+    is ``cascaded_paraunitary_matrix(N, stages, ...)`` and
+    ``construct_paraunitary_from_elementals`` is ``paraunitary_from_elementals``;
+    ``construct_velvet_feedback_matrix`` is removed, since it was
+    ``cascaded_paraunitary_matrix`` with its default Hadamard stages.
+    ``mtf_to_impz`` is ``tf_to_impz``, pairing with ``dss_to_tf``.
+  * ``nfft`` names every FFT size: ``mimo_rir_eigenvalues_per_frequency`` (was
+    ``n_fft``) and ``MatchMelEnergyDecayRelief`` (was ``fft_sizes``). The EAI
+    ``deflation_type`` values are ``"full"``, ``"neighbor"`` and ``"none"``.
+  * ``plot_matrix`` and ``plot_system_matrix`` take ``title``, ``zmin`` and
+    ``zmax`` as keywords.
+  * ``pyFDN`` no longer exports single-caller helpers: ``last_nonzero_indices``,
+    ``downsample_minmax``, ``flamo_model_to_nodes``, ``flamo_nodes_flat``,
+    ``hook_module``, ``skew``, ``poly_degree``, ``polyder_rational``,
+    ``matrix_polyval``, ``shift_matrix``, ``shift_matrix_distribute``,
+    ``random_matrix_shift`` and ``degree_one_lossless`` stay in their modules.
+* ``dss_to_flamo`` takes ``alias_decay_db``, so a lossless FDN renders through
+  it without time aliasing, as through ``trainable_from_dss``.
+* ``DCBlocker`` drops its ``env_tau_s`` / ``gain_tau_s`` arguments and
+  ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
+  are now fixed at 50 ms, 20 ms and 3 samples.
 
 0.5.0 (2026-09-28)
 ------------------

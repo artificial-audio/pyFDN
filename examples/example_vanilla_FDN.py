@@ -19,7 +19,7 @@ def _(mo):
     mo.md(r"""
     # Vanilla FDN (FLAMO)
 
-    The shortest path from nothing to a reverberator you can listen to. `pyFDN.fdn_build_gallery` picks a complete set of FDN parameters — delays, an orthogonal feedback matrix, input/output gains and frequency-dependent absorption — and `pyFDN.dss_to_flamo` turns them into a FLAMO model, which is a differentiable torch module that also happens to render audio.
+    The shortest path from nothing to a reverberator you can listen to. `pyFDN.fdn_dss_gallery` picks a complete set of FDN parameters — delays, an orthogonal feedback matrix, input/output gains and frequency-dependent absorption — and `pyFDN.dss_to_flamo` turns them into a FLAMO model, which is a differentiable torch module that also happens to render audio.
 
     Two things come out of that model here: its impulse response, which is the reverb on its own, and a dry recording pushed through it.
     """)
@@ -41,7 +41,7 @@ def _(mo):
     mo.md(r"""
     ## Build the model
 
-    Eight delay lines at 48 kHz, decaying over 2 s at DC and half that at Nyquist — the frequency-dependent absorption every real room has. `dss_to_flamo` takes the build's matrices, delays and per-line filters and returns the FLAMO model; `flamo_time_response` renders its impulse response.
+    Eight delay lines at 48 kHz, decaying over 2 s at DC and half that at Nyquist — the frequency-dependent absorption every real room has. `dss_to_flamo` takes the matrices, delays and per-line filters and returns the FLAMO model; `flamo_time_response` renders its impulse response.
     """)
     return
 
@@ -52,7 +52,7 @@ def _(pyFDN, torch):
     n = 8
     fs = 48000
 
-    build = pyFDN.fdn_build_gallery(
+    dss, filters = pyFDN.fdn_dss_gallery(
         n,
         fs=fs,
         io_type="ones",
@@ -63,20 +63,9 @@ def _(pyFDN, torch):
         output_gain_db_nyquist=-6.0,
         rng=42,
     )
-    model = pyFDN.dss_to_flamo(
-        build.delays,
-        build.A,
-        build.B,
-        build.C,
-        build.D,
-        build.fs,
-        nfft=2**18,
-        post_delay=build.post_delay,
-        post_output=build.post_output,
-        device="cpu",
-    )
+    model = pyFDN.dss_to_flamo(*dss, fs, nfft=2**18, device="cpu", **filters)
     ir = pyFDN.flamo_time_response(model).flatten()
-    return build, fs, ir, model
+    return dss, filters, fs, ir, model
 
 
 @app.cell(hide_code=True)
@@ -90,8 +79,8 @@ def _(mo):
 
 
 @app.cell
-def _(build, pyFDN):
-    pyFDN.plot_fdn_build(build, title="Vanilla FDN parameters")
+def _(dss, filters, fs, pyFDN):
+    pyFDN.plot_fdn_parameter(*dss, **filters, fs=fs, title="Vanilla FDN parameters")
     return
 
 

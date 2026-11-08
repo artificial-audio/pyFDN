@@ -192,7 +192,7 @@ def test_kernels_are_the_paper_definitions() -> None:
 
 
 def test_gallery_lists_and_builds_the_kronecker_type() -> None:
-    assert "kronecker" in pyFDN.fdn_matrix_gallery()
+    assert "kronecker" in pyFDN.FEEDBACK_MATRIX_TYPES
 
     A = pyFDN.fdn_matrix_gallery(8, "kronecker")
     assert isinstance(A, np.ndarray)  # the gallery returns a name list when N is None
@@ -346,7 +346,7 @@ def test_kronecker_feedback_matrix_renders_a_lossless_fdn() -> None:
 
     impulse = np.zeros(4000)
     impulse[0] = 1.0
-    ir = pyFDN.process_dss(impulse, delays, A, B, C, D)
+    ir = pyFDN.process_dss(delays, A, B, C, D, impulse)
 
     # Lossless: the tail neither grows nor dies away.
     assert np.isfinite(ir).all()
@@ -376,8 +376,12 @@ def test_time_varying_kronecker_matrix_drives_process_dss() -> None:
         np.ones((1, N)) / np.sqrt(N),
         np.zeros((1, 1)),
     )
-    moving = pyFDN.process_dss(impulse, *common, post_matrix=modulated)
-    fixed = pyFDN.process_dss(impulse, *common, post_matrix=static)
+    moving = pyFDN.dss_to_td(*common, post_matrix=modulated).process_signal(
+        impulse, squeeze=True
+    )
+    fixed = pyFDN.dss_to_td(*common, post_matrix=static).process_signal(
+        impulse, squeeze=True
+    )
 
     assert np.isfinite(moving).all()
     assert not np.allclose(moving, fixed)
