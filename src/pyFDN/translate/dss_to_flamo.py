@@ -26,7 +26,6 @@ def dss_to_flamo(
     nfft: int = 2**16,
     alias_decay_db: float = 0.0,
     device: Any = None,
-    shell: bool = True,
     dtype: Any = None,
     post_delay: Any = None,
     post_matrix: Any = None,
@@ -63,10 +62,6 @@ def dss_to_flamo(
         module passed into a hook must have been built with the same value.
     device : torch device or None
         Device; default is cuda if available else cpu.
-    shell : bool
-        If True (default), wrap the core in a Shell with FFT/iFFT. Use
-        :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
-        If False, return only the core (e.g. for use as post_delay in another dss_to_flamo).
     dtype : torch.dtype or None
         Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
         If None, wrapper defaults are used.
@@ -74,7 +69,7 @@ def dss_to_flamo(
         In-loop filter applied to the delay output, inside the recursion -- the
         same hook :func:`pyFDN.dss_to_td` calls ``post_delay``. An
         ``(n_sections, 6, N)`` SOS bank, a FLAMO module of input/output size N
-        (e.g. a Schroeder allpass core from ``shell=False``), or a sequence of
+        (e.g. an allpass FDN's ``dss_to_flamo(...).get_core()``), or a sequence of
         both applied in order. See ``pyFDN.auxiliary.flamo.hook_module``.
     post_matrix : array, FLAMO module, sequence, or None
         Filter applied to the feedback path after ``A``.
@@ -84,10 +79,10 @@ def dss_to_flamo(
 
     Returns
     -------
-    model : flamo.processor.system.Shell or core
-        If shell=True, FLAMO Shell. Use :func:`pyFDN.flamo_time_response` for
-        a NumPy impulse response.
-        If shell=False, the core module (same I/O as B.shape[1] / C.shape[0]).
+    flamo.processor.system.Shell
+        Use :func:`pyFDN.flamo_to_impz` for a NumPy impulse response,
+        and ``.get_core()`` for the FDN without its FFT layers, e.g. to nest
+        it in another FDN's hook.
     """
     core = fdn_core(
         delays,
@@ -104,11 +99,9 @@ def dss_to_flamo(
         post_matrix=post_matrix,
         post_output=post_output,
     )
-    if shell:
-        from pyFDN.auxiliary.flamo import wrap_fdn_shell
+    from pyFDN.auxiliary.flamo import wrap_fdn_shell
 
-        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, device=device)
-    return core
+    return wrap_fdn_shell(core, nfft=nfft, dtype=dtype, device=device)
 
 
 def fdn_core(
@@ -171,7 +164,7 @@ def fdn_core(
     return assemble_fdn_core(
         input_gain=gains(B, "input_gain"),
         feedback=feedback,
-        delays=delay_module(delays_arr / float(fs), nfft, fs=fs, **common),
+        delays=delay_module(delays_arr, nfft, fs=fs, **common),
         output_gain=gains(C, "output_gain"),
         direct=gains(D, "direct"),
         **hooks,

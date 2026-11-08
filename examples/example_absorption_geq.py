@@ -20,7 +20,7 @@ def _(mo, pyFDN):
     mo.md(f"""
     # Absorption GEQ in an FDN
 
-    Demonstrates `pyFDN.decay_to_geq`: frequency-dependent attenuation designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
+    Demonstrates `pyFDN.decay_to_graphic_eq`: frequency-dependent attenuation designed as a 10-band graphic EQ (11 biquad sections) targeting a given reverberation time curve.
 
     The absorption filters are applied per delay line.  Here we:
 
@@ -82,7 +82,7 @@ def _(mo):
     mo.md(r"""
     ## Design absorption filters
 
-    `decay_to_geq` converts T60 to a per-sample dB slope, fits a graphic EQ, and returns SOS coefficients for each delay line.
+    `decay_to_graphic_eq` converts T60 to a per-sample dB slope, fits a graphic EQ, and returns SOS coefficients for each delay line.
     """)
     return
 
@@ -92,7 +92,7 @@ def _(dss, fs, np, pyFDN):
     # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz)
     target_rt = np.array([2.0, 2.0, 2.2, 2.3, 2.1, 1.5, 1.1, 0.8, 0.7, 0.7])
 
-    sos_absorption = pyFDN.decay_to_geq(target_rt, dss.delays, fs)
+    sos_absorption = pyFDN.decay_to_graphic_eq(target_rt, dss.delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
 
@@ -157,7 +157,7 @@ def _(mo):
 @app.cell
 def _(fs, pyFDN, rir):
     pyFDN.plot_spectrogram(
-        rir, fs, title="FDN impulse response — time-frequency energy"
+        rir, title="FDN impulse response — time-frequency energy", fs=fs
     )
     return
 

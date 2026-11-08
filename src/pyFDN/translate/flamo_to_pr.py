@@ -28,6 +28,7 @@ from pyFDN.auxiliary.poles import (
     reduce_conjugate_pairs,
     residue_at_pole,
 )
+from pyFDN.translate.pr_to_impz import PoleResidue
 
 # ───────────────────────────────────────────────────────────────────────────
 # Small infrastructure helpers
@@ -684,7 +685,7 @@ def _validate_flamo_result(
     order: int,
     response_tolerance: float,
     allow_approximate: bool,
-) -> ModalResult:
+) -> tuple[PoleResidue, dict[str, Any]]:
     residues, poles, direct, pairs, meta = result
     solver = meta["solver"]
     meta.update(modal_result_metadata(pairs, order, solver, allow_approximate))
@@ -729,7 +730,7 @@ def _validate_flamo_result(
             RuntimeWarning,
             stacklevel=3,
         )
-    return residues, poles, direct, pairs, meta
+    return PoleResidue(residues, poles, direct, pairs), meta
 
 
 def flamo_to_pr(
@@ -749,7 +750,7 @@ def flamo_to_pr(
     symmetrize: bool = True,
     verbose: bool = False,
     num_poles: int | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+) -> tuple[PoleResidue, dict[str, Any]]:
     """Poles/residues from a FLAMO transfer ``H(z) = C(z)P(z)^{-1}B(z) + D(z)``.
 
     Pass either a FLAMO ``model`` or a ``decomposition`` from
@@ -962,4 +963,4 @@ def flamo_to_pr(
         return _validate_flamo_result(
             result, decomposition, n_poles, response_tolerance, allow_approximate
         )
-    return result
+    return PoleResidue(residues, poles, direct, is_conjugate), meta_data

@@ -58,7 +58,7 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(1)
+    _rng = np.random.default_rng(1)
     fs = 48000
     types = ["Proportional", "Spread"]
 
@@ -67,17 +67,17 @@ def _(np, pyFDN):
     gain_per_sample = pyFDN.rt_to_gain_per_sample(rt, fs)
 
     num_delays = 8
-    delays = np.random.randint(100, 301, num_delays)
+    delays = _rng.integers(100, 301, num_delays)
     input_gain = np.eye(num_delays, 1)
     output_gain = np.eye(1, num_delays)
     direct = np.zeros((1, 1))
 
     gain_matrix = np.diag(gain_per_sample ** delays.astype(float))
     feedback_matrix = {
-        "Proportional": pyFDN.random_orthogonal(num_delays) @ gain_matrix,
-        "Spread": pyFDN.random_orthogonal(num_delays)
+        "Proportional": pyFDN.random_orthogonal(num_delays, rng=_rng) @ gain_matrix,
+        "Spread": pyFDN.random_orthogonal(num_delays, rng=_rng)
         @ gain_matrix
-        @ pyFDN.random_orthogonal(num_delays),
+        @ pyFDN.random_orthogonal(num_delays, rng=_rng),
     }
     print(f"Delays: {delays} (sum = {delays.sum()})")
     return (
@@ -117,7 +117,7 @@ def _(
     poles = {}
     edcs = {}
     for _type in types:
-        _res, _pol, _direct_term, _is_pair, _ = pyFDN.dss_to_pr(
+        (_res, _pol, _direct_term, _is_pair), _ = pyFDN.dss_to_pr(
             delays, feedback_matrix[_type], input_gain, output_gain, direct
         )
         poles[_type] = _pol

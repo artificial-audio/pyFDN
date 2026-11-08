@@ -34,7 +34,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
     """parameters for the time_varying matrix"""
 
     tvm_kwargs = {
-        "N": N,
+        "channels": N,
         "fs": fs,
         "rate": 1.3,
         "depth": 0.2,
@@ -45,7 +45,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
 def _absorption_sos(delays: np.ndarray, fs: float) -> np.ndarray:
     """Per-delay first-order shelving absorption, shape (n_sections, 6, N)."""
-    return pyFDN.decay_to_first_order_shelf(1.5, 0.4, delays, fs)
+    return pyFDN.decay_to_first_order_shelf(1.5, delays, fs, rt_nyquist=0.4)
 
 
 def _noise(rng: np.random.Generator, length: int, channels: int) -> np.ndarray:
@@ -595,8 +595,8 @@ def test_res_tvfdn_block_process():
 
     # Generate tv matrices
     # Identical modulation in both renders: the same seed.
-    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
-    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
+    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs, rng=7)
+    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs, rng=7)
 
     # td engine
     # Physical room

@@ -78,10 +78,11 @@ def edc(ir: Any, axis: int = 0) -> Any:
 
 def echo_density(
     ir: ArrayLike,
-    n: int = 1024,
-    fs: float = 48000.0,
+    fs: float,
+    *,
+    window: int = 1024,
     pre_delay: int = 0,
-    mixing_thresh: float = 1.0,
+    mixing_threshold: float = 1.0,
     hop: int = 500,
 ) -> tuple[float, np.ndarray]:
     """Echo density and mixing time (Abel & Huang 2006).
@@ -97,13 +98,13 @@ def echo_density(
     ----------
     ir : array-like
         Impulse response (1 channel only). Converted to 1D.
-    n : int, optional
-        Window length (must be even). Default 1024.
-    fs : float, optional
-        Sampling rate in Hz. Default 48000.
+    fs : float
+        Sampling rate in Hz.
+    window : int, optional
+        Window length in samples (must be even). Default 1024.
     pre_delay : int, optional
         Onset delay in samples for mixing time. Default 0.
-    mixing_thresh : float, optional
+    mixing_threshold : float, optional
         Normalized echo density threshold for mixing time (Abel & Huang use 1).
         Default 1.0.
     hop : int, optional
@@ -111,24 +112,24 @@ def echo_density(
 
     Returns
     -------
-    t_abel : float
-        Mixing time in milliseconds (time at which echo density first
-        exceeds mixing_thresh, relative to pre_delay). 0 if not found.
+    mixing_time : float
+        Mixing time in seconds (time at which echo density first exceeds
+        mixing_threshold, relative to pre_delay). 0 if not found.
     echo_dens : np.ndarray
         Echo density vector (length = len(ir)), normalized; interpolated
         from sparse analysis.
     """
     ir_arr = np.asarray(ir, dtype=float).ravel()
     len_ir = len(ir_arr)
-    if n % 2 != 0:
-        raise ValueError("Window length n must be even.")
-    if len_ir < n:
+    if window % 2 != 0:
+        raise ValueError("The window length must be even.")
+    if len_ir < window:
         raise ValueError(
-            f"IR length {len_ir} is shorter than analysis window {n}. "
+            f"IR length {len_ir} is shorter than analysis window {window}. "
             "Provide at least an IR of some 100 ms."
         )
-    half_win = n // 2
-    w_tau = np.hanning(n)
+    half_win = window // 2
+    w_tau = np.hanning(window)
     w_tau = w_tau / np.sum(w_tau)
 
     sparse_ind = np.arange(0, len_ir, hop, dtype=int)
@@ -158,39 +159,41 @@ def echo_density(
         echo_dens_sparse,
     )
 
-    d = np.where(echo_dens > mixing_thresh)[0]
+    d = np.where(echo_dens > mixing_threshold)[0]
     if d.size > 0:
         first_idx = int(d[0])
-        t_abel = (first_idx - pre_delay) / fs * 1000.0
-        if t_abel < 0:
-            t_abel = 0.0
+        mixing_time = (first_idx - pre_delay) / fs
+        if mixing_time < 0:
+            mixing_time = 0.0
     else:
-        t_abel = 0.0
+        mixing_time = 0.0
         warnings.warn(
             "Mixing time not found within given limits.", UserWarning, stacklevel=2
         )
 
-    return float(t_abel), echo_dens
+    return float(mixing_time), echo_dens
 
 
 def octave_bands(
+    *,
     fc: float = 1000.0,
-    start: float = -4.0,
-    n: int = 8,
+    lowest_octave: float = -4.0,
+    num_bands: int = 8,
     fs: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Octave band edges and centre frequencies.
 
-    Centre frequencies are ``fc * 2**k`` for ``k = start … start + n - 1``; the
+    Centre frequencies are ``fc * 2**k`` for
+    ``k = lowest_octave … lowest_octave + num_bands - 1``; the
     band edges are the centre frequency divided and multiplied by ``sqrt(2)``.
 
     Parameters
     ----------
     fc : float
         Reference centre frequency in Hz (default 1000).
-    start : float
+    lowest_octave : float
         Octave offset of the lowest band relative to ``fc`` (default -4 → 62.5 Hz).
-    n : int
+    num_bands : int
         Number of octave bands (default 8).
     fs : float, optional
         If given, bands whose upper edge reaches Nyquist (``fs/2``) are dropped.
@@ -202,7 +205,7 @@ def octave_bands(
     f_centre : (n_bands,) ndarray
         Centre frequency of each band in Hz.
     """
-    f_centre = fc * 2.0 ** np.arange(start, start + n)
+    f_centre = fc * 2.0 ** np.arange(lowest_octave, lowest_octave + num_bands)
     fd = np.sqrt(2.0)
     bands = np.stack((f_centre / fd, f_centre * fd), axis=1)
 
@@ -215,7 +218,7 @@ def octave_bands(
 
 
 def octave_band_filterbank(
-    bands: np.ndarray, fs: float, filter_order: int = 8
+    bands: np.ndarray, fs: float, *, filter_order: int = 8
 ) -> list[np.ndarray]:
     """Butterworth bandpass filters (SOS) for the given band edges.
 
@@ -293,9 +296,10 @@ def _rt_from_ir(ir: np.ndarray, fs: float, decay_db: float) -> float:
 def estimate_rt_bands(
     ir: ArrayLike,
     fs: float,
+    *,
     fc: float = 1000.0,
-    start: float = -4.0,
-    n: int = 8,
+    lowest_octave: float = -4.0,
+    num_bands: int = 8,
     filter_order: int = 8,
     decay_db: float = 30.0,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -310,7 +314,7 @@ def estimate_rt_bands(
     (coupled rooms) estimate the slopes with a dedicated multi-slope estimator
     and convert its amplitudes with :func:`slope_amplitude_to_level`.
 
-    Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
+    Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``lowest_octave=-4, num_bands=8``).
     Bands whose upper edge reaches ``fs/2`` are dropped.
 
     Parameters
@@ -321,9 +325,9 @@ def estimate_rt_bands(
         Sampling rate in Hz.
     fc : float
         Octave-band reference centre frequency in Hz (default 1000).
-    start : float
+    lowest_octave : float
         Octave offset of the lowest band relative to ``fc`` (default -4 → 62.5 Hz).
-    n : int
+    num_bands : int
         Number of octave bands (default 8).
     filter_order : int
         Butterworth filter order (default 8).
@@ -341,8 +345,10 @@ def estimate_rt_bands(
     from scipy.signal import sosfilt
 
     ir = np.asarray(ir, dtype=float).ravel()
-    bands, f_centre = octave_bands(fc=fc, start=start, n=n, fs=fs)
-    sos_bank = octave_band_filterbank(bands, fs, filter_order)
+    bands, f_centre = octave_bands(
+        fc=fc, lowest_octave=lowest_octave, num_bands=num_bands, fs=fs
+    )
+    sos_bank = octave_band_filterbank(bands, fs, filter_order=filter_order)
 
     rt = np.zeros(len(f_centre))
     for k, sos in enumerate(sos_bank):
@@ -406,9 +412,10 @@ def estimate_initial_level_bands(
     ir: ArrayLike,
     rt: ArrayLike,
     fs: float,
+    *,
     fc: float = 1000.0,
-    start: float = -4.0,
-    n: int = 8,
+    lowest_octave: float = -4.0,
+    num_bands: int = 8,
     filter_order: int = 8,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Estimate the initial level of the exponential decay per octave band.
@@ -428,7 +435,7 @@ def estimate_initial_level_bands(
         with the same band parameters.
     fs : float
         Sampling rate in Hz.
-    fc, start, n, filter_order
+    fc, lowest_octave, num_bands, filter_order
         Octave filterbank parameters, see :func:`estimate_rt_bands`.
 
     Returns
@@ -442,11 +449,13 @@ def estimate_initial_level_bands(
 
     ir = np.asarray(ir, dtype=float).ravel()
     rt = np.asarray(rt, dtype=float).ravel()
-    bands, f_centre = octave_bands(fc=fc, start=start, n=n, fs=fs)
+    bands, f_centre = octave_bands(
+        fc=fc, lowest_octave=lowest_octave, num_bands=num_bands, fs=fs
+    )
     if rt.size != len(f_centre):
         raise ValueError("rt must have one entry per octave band")
 
-    sos_bank = octave_band_filterbank(bands, fs, filter_order)
+    sos_bank = octave_band_filterbank(bands, fs, filter_order=filter_order)
     energy = np.array([np.sum(sosfilt(sos, ir) ** 2) for sos in sos_bank])
 
     return slope_amplitude_to_level(energy, rt, fs), f_centre

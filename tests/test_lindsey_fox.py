@@ -20,15 +20,17 @@ def test_modal_poles_residues_and_ir_match_eig(gain, delays):
     b = rng.normal(size=(3, 2))
     c = rng.normal(size=(2, 3))
     d = np.full((2, 2), 0.1)
-    reference = dss_to_pr(delays, a, b, c, d, mode="eig")
-    residues, poles, direct, pairs, meta = dss_to_pr(
+    reference, _ = dss_to_pr(delays, a, b, c, d, mode="eig")
+    (residues, poles, direct, pairs), meta = dss_to_pr(
         delays, a, b, c, d, mode="lindsey_fox"
     )
     assert np.sum(1 + pairs) == sum(delays)
     assert meta["nonPairedPoles"].size == 0
-    row, col = linear_sum_assignment(np.abs(reference[1][:, None] - poles))
-    np.testing.assert_allclose(poles[col], reference[1][row], atol=1e-10, rtol=0)
-    np.testing.assert_allclose(residues[col], reference[0][row], atol=1e-9, rtol=1e-9)
+    row, col = linear_sum_assignment(np.abs(reference.poles[:, None] - poles))
+    np.testing.assert_allclose(poles[col], reference.poles[row], atol=1e-10, rtol=0)
+    np.testing.assert_allclose(
+        residues[col], reference.residues[row], atol=1e-9, rtol=1e-9
+    )
     np.testing.assert_array_equal(direct, d)
     ir = pr_to_impz(residues, poles, direct, pairs, 512)
     np.testing.assert_allclose(
@@ -70,10 +72,10 @@ def test_unequal_line_losses(n):
     delays = 2 * np.arange(n) + 3
     b = rng.normal(size=(n, 1))
     c = rng.normal(size=(1, n))
-    result = dss_to_pr(delays, a, b, c, [[0]], mode="lindsey_fox")
-    assert np.sum(1 + result[3]) == delays.sum()
+    result, _ = dss_to_pr(delays, a, b, c, [[0]], mode="lindsey_fox")
+    assert np.sum(1 + result.is_conjugate_pole_pair) == delays.sum()
     np.testing.assert_allclose(
-        pr_to_impz(*result[:4], 512),
+        pr_to_impz(*result, 512),
         dss_to_impz(delays, a, b, c, [[0]], 512),
         atol=1e-9,
         rtol=1e-9,
@@ -121,11 +123,11 @@ def test_modal_backend_constructs_polynomial_once_without_principal_minors(monke
     monkeypatch.setattr(module, "general_char_poly", construct)
     monkeypatch.setattr("pyFDN.auxiliary.math.combinations", forbidden)
     a = np.array([[0.6, 0.1], [-0.2, 0.7]])
-    result = dss_to_pr(
+    result, _ = dss_to_pr(
         [17, 23], a, np.ones((2, 1)), np.ones((1, 2)), [[0]], mode="lindsey_fox"
     )
     assert len(calls) == 1
-    assert np.sum(1 + result[3]) == 40
+    assert np.sum(1 + result.is_conjugate_pole_pair) == 40
 
 
 @pytest.mark.parametrize(

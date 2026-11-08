@@ -34,7 +34,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(1)
     return np, pyFDN
 
 
@@ -50,17 +49,17 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(1)
     fs = 48000
     N = 8
-    numio = N
 
-    delays = np.random.randint(800, 1800, size=N)
+    delays = _rng.integers(800, 1800, size=N)
     g = pyFDN.rt_to_gain_per_sample(0.6, fs)
     G = np.diag(g**delays)
-    U = pyFDN.random_orthogonal(N)
+    U = pyFDN.random_orthogonal(N, rng=_rng)
     A = G @ U
 
-    B, C, D, X = pyFDN.complete_fdn(A, N, str(numio))
+    B, C, D, X = pyFDN.complete_fdn(A, N, rng=_rng)
     return A, B, C, D, fs, delays
 
 
@@ -76,7 +75,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    is_a, _ = pyFDN.is_uniallpass(A, B, C, D, tol=1e-7)
+    is_a = pyFDN.is_uniallpass(A, B, C, D, tol=1e-7)
     assert is_a, "Expected allpass for homogeneous FDN with these delays"
     print("is_allpass: OK")
     return

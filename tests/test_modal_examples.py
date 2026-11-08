@@ -25,7 +25,6 @@ def test_model_polynomial_clears_sos_denominators():
         fs=48000,
         post_delay=sos,
         dtype=torch.float64,
-        shell=False,
     )
     coefficients = _model_polynomial(pyFDN.flamo_decompose_for_pr(model), 10)
     for w in [0, 0.7 + 0.2j, 0.3 - 0.9j]:
@@ -37,11 +36,11 @@ def test_model_polynomial_clears_sos_denominators():
         np.testing.assert_allclose(
             np.polynomial.polynomial.polyval(w, coefficients), expected, atol=1e-12
         )
-    result = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=10)
-    assert np.sum(1 + result[3]) == 10
+    result, _ = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=10)
+    assert np.sum(1 + result.is_conjugate_pole_pair) == 10
     dss = pyFDN.DSS(delays, a, np.ones((2, 1)), np.ones((1, 2)), np.zeros((1, 1)))
     np.testing.assert_allclose(
-        pyFDN.pr_to_impz(*result[:4], 256),
+        pyFDN.pr_to_impz(*result, 256),
         pyFDN.dss_to_td(*dss, post_delay=sos).impulse_response(256),
         atol=1e-10,
     )
@@ -63,7 +62,6 @@ def test_model_adapter_reconstructs_static_and_fir_models():
             48000,
             dtype=torch.float64,
             device="cpu",
-            shell=False,
             post_matrix=None
             if post_matrix is None
             else pyFDN.fir_matrix_module(
@@ -78,10 +76,10 @@ def test_model_adapter_reconstructs_static_and_fir_models():
             d,
             post_matrix=None if post_matrix is None else pyFDN.td.MatrixFIR(fir),
         )
-        result = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=degree)
-        assert np.sum(1 + result[3]) == degree
+        result, _ = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=degree)
+        assert np.sum(1 + result.is_conjugate_pole_pair) == degree
         np.testing.assert_allclose(
-            pyFDN.pr_to_impz(*result[:4], 256), graph.impulse_response(256), atol=1e-10
+            pyFDN.pr_to_impz(*result, 256), graph.impulse_response(256), atol=1e-10
         )
 
 

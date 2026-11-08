@@ -93,7 +93,7 @@ def test_is_allpass_schroeder_siso():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(delays, A, B, C, D)
+    result = is_allpass(delays, A, B, C, D)
     assert result
 
 
@@ -103,7 +103,7 @@ def test_is_allpass_rejects_non_allpass():
     B = np.array([[1.0]])
     C = np.array([[1.0]])
     D = np.array([[0.5]])
-    result, _, _ = is_allpass(delays, A, B, C, D)
+    result = is_allpass(delays, A, B, C, D)
     assert not result
 
 
@@ -129,10 +129,8 @@ def test_is_allpass_near_singular_D_does_not_use_inv():
     B = np.array([[1.0]])
     C = np.array([[1 - g**2]])
     D = np.array([[g]])
-    result, den, num = is_allpass(delays, A, B, C, D)
-    assert result
-    assert len(den) > 0
-    assert len(num) > 0
+    result = is_allpass(delays, A, B, C, D)
+    assert result is True
 
 
 # ============================================================================

@@ -77,6 +77,8 @@ Scattering Delay Network
    :nosignatures:
 
    pyFDN.SDN
+   pyFDN.sdn_to_flamo
+   pyFDN.plot_sdn
 
 Acoustics & Absorption
 -----------------------
@@ -112,21 +114,16 @@ used by those modules.
    :nosignatures:
 
    pyFDN.EQDesign
-   pyFDN.decay_to_geq
+   pyFDN.decay_to_graphic_eq
    pyFDN.decay_to_first_order_shelf
    pyFDN.decay_to_one_pole
    pyFDN.decay_to_two_stage
-   pyFDN.gain_to_geq
-   pyFDN.gain_to_bounded_geq
+   pyFDN.gain_to_graphic_eq
+   pyFDN.gain_to_bounded_graphic_eq
    pyFDN.gain_to_first_order_shelf
    pyFDN.gain_to_one_pole
    pyFDN.gain_to_two_stage
-   pyFDN.geq_design_matrix
-   pyFDN.lowshelf_biquad
-   pyFDN.highshelf_biquad
-   pyFDN.peaking_biquad
-   pyFDN.first_order_shelf_biquad
-   pyFDN.one_pole_biquad
+   pyFDN.graphic_eq_design_matrix
    pyFDN.probe_sos
 
 Time-Domain Graph (``pyFDN.td``)
@@ -145,8 +142,8 @@ rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
    pyFDN.td.DCBlocker
-   pyFDN.td.ControllableFullWaveRect
-   pyFDN.td.SDFD
+   pyFDN.td.ControllableFullWaveRectifier
+   pyFDN.td.SignalDependentFractionalDelay
    pyFDN.td.RingModulator
    pyFDN.td.PitchShift
    pyFDN.td.GranularPitchShift
@@ -171,7 +168,7 @@ Delay Utilities
    pyFDN.matrix_delay_approximation
    pyFDN.matrix_group_delay
    pyFDN.ms_to_samples
-   pyFDN.flamo_time_response
+   pyFDN.flamo_to_impz
 
 Building a FLAMO Graph
 ----------------------
@@ -281,6 +278,7 @@ straight into each of them, with its filters alongside:
    pyFDN.impz_to_res
    pyFDN.tf_to_impz
    pyFDN.pr_to_impz
+   pyFDN.PoleResidue
 
 Experimental Lindsey–Fox modal decomposition
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

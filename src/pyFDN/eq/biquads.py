@@ -1,8 +1,9 @@
-"""Biquad coefficient primitives used by the EQ designs.
+"""Biquad coefficient primitives behind the EQ designers (internal).
 
 The functions in this module describe filter sections, not why a filter is
-being designed.  Their gains are linear amplitudes and their frequencies are
-in radians.
+being designed: their gains are linear amplitudes and their frequencies in
+radians per sample. Design filters with the ``gain_to_*`` / ``decay_to_*``
+functions of :mod:`pyFDN.eq.design`, which take dB, seconds and Hz.
 """
 
 from __future__ import annotations

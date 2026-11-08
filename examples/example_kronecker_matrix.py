@@ -768,12 +768,12 @@ def _(fs, mo, modulated_wet, modulation_names, pyFDN):
         [
             pyFDN.plot_spectrogram(
                 modulated_wet[name][:, 0],
-                fs,
                 nperseg=2048 * 8,
                 noverlap=2048 * 6,
                 title=f"Modulation {name} — spectrogram",
-                colorscale="Magma",
-                height=330,
+                cmap="magma",
+                figsize=(8.0, 3.3),
+                fs=fs,
             )
             for name in modulation_names
         ]
@@ -816,7 +816,7 @@ def _(fs, np, pyFDN):
 
     def pole_frequencies(angles):
         """Positive pole frequencies in Hz of the lossless FDN at these angles."""
-        _, poles, _, _, _ = pyFDN.dss_to_pr(
+        (_, poles, _, _), _ = pyFDN.dss_to_pr(
             figure6_delays,
             pyFDN.kronecker_matrix(angles),
             np.ones((N_figure6, 1)),

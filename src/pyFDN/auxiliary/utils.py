@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
-from numpy.linalg import svd
 from numpy.typing import ArrayLike
-from scipy.interpolate import interp1d
-from scipy.signal import freqz, group_delay
 
 
 def as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
@@ -139,11 +135,16 @@ def sq_to_db(squared: ArrayLike) -> np.ndarray:
 def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
     """Mu-law companding (encode): linear amplitude to companded.
 
-    Args:
-        x: Input signal. If input is in [-1, 1], the output will be in [-1, 1].
-        mu: Compression parameter (default 255, as in G.711).
+    Parameters
+    ----------
+    x
+        Input signal. If input is in [-1, 1], the output will be in [-1, 1].
+    mu
+        Compression parameter (default 255, as in G.711).
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Companded signal.
     """
     x = np.asarray(x, dtype=float)
@@ -157,11 +158,16 @@ def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
 
     If the array is all zeros, it is returned unchanged.
 
-    Args:
-        x: Input signal (any shape).
-        target_peak: Desired peak magnitude (default 1.0).
+    Parameters
+    ----------
+    x
+        Input signal (any shape).
+    target_peak
+        Desired peak magnitude (default 1.0).
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Scaled array, same shape as input.
     """
     x = np.asarray(x, dtype=float)
@@ -177,12 +183,17 @@ def fade_out(x: ArrayLike, fade_samples: int) -> np.ndarray:
     Ramps the tail of ``x`` linearly from 1 to 0 along the last axis, so a
     finite render can end at zero instead of clicking on an abrupt cutoff.
 
-    Args:
-        x: Input signal; the fade is applied along the last axis.
-        fade_samples: Number of trailing samples to ramp down. Clamped to the
-            signal length; values <= 0 leave the signal unchanged.
+    Parameters
+    ----------
+    x
+        Input signal; the fade is applied along the last axis.
+    fade_samples
+        Number of trailing samples to ramp down. Clamped to the
+        signal length; values <= 0 leave the signal unchanged.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Faded copy of ``x`` (float), same shape as the input. ``x`` is not
         modified in place.
     """
@@ -213,93 +224,3 @@ def hertz_to_rad(hz: ArrayLike, fs: float) -> np.ndarray:
     Relationship: omega = 2*pi*f/fs. Inverse of :func:`rad_to_hertz`.
     """
     return np.asarray(hz, dtype=np.float64) * (2.0 * np.pi) / fs
-
-
-def is_bounding_curve(
-    x_points: ArrayLike,
-    y_points: ArrayLike,
-    x_curve: ArrayLike,
-    y_curve: ArrayLike,
-    bound_type: str,
-) -> tuple[Any, np.ndarray]:
-    """
-    Check if all value points are bounded by the curve.
-    Args:
-        x_points: x-coordinates of data points (1D array)
-        y_points: y-coordinates of data points (1D array)
-        x_curve: x-coordinates of curve points (1D array)
-        y_curve: y-coordinates of curve points (1D array)
-        bound_type: 'upper' or 'lower'
-    Returns:
-        all_bounded: bool, whether all data points are bounded
-        is_bounded: boolean array, whether each data point is bounded
-    """
-    # Spline interpolation with extrapolation
-    interp = interp1d(x_curve, y_curve, kind="cubic", fill_value="extrapolate")
-    y_curve_interp = interp(x_points)
-
-    if bound_type == "upper":
-        is_bounded = y_curve_interp >= y_points
-    elif bound_type == "lower":
-        is_bounded = y_curve_interp <= y_points
-    else:
-        raise ValueError("bound_type must be 'upper' or 'lower'")
-
-    all_bounded = np.all(is_bounded)
-    return all_bounded, is_bounded
-
-
-def pole_boundaries(
-    delays: ArrayLike,
-    A: ArrayLike,
-    fs: float,
-    *,
-    post_delay: ArrayLike,
-    nfft: int = 2**12,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Upper and lower bounds of the pole magnitudes of an FDN loop.
-
-    Combines the singular values of the feedback matrix with the magnitude
-    and group delay of the per-line absorption filters.
-
-    Args:
-        delays: Delays in samples, shape ``(N,)``.
-        A: Feedback matrix ``(N, N)``, or the FIR matrix ``(N, N, L)`` in the
-            z^{-1} convention that sits on the feedback path.
-        fs: Sampling frequency in Hz.
-        post_delay: Per-line absorption, the ``post_delay`` filter hook as an
-            SOS bank of shape ``(sections, 6, N)``.
-        nfft: Number of frequency bins between 0 and Nyquist.
-
-    Returns:
-        min_curve: Lower bound of the pole magnitude, shape ``(nfft,)``.
-        max_curve: Upper bound of the pole magnitude, shape ``(nfft,)``.
-        f: Frequency points in Hz, shape ``(nfft,)``.
-    """
-    delays_arr = np.asarray(delays, dtype=float).ravel()
-    sos = np.asarray(post_delay, dtype=float)
-    if sos.ndim != 3 or sos.shape[1] != 6 or sos.shape[2] != delays_arr.size:
-        raise ValueError("post_delay must be an SOS bank of shape (sections, 6, N)")
-    # The FFT bins of a 2 * nfft transform: 0 up to (not including) Nyquist.
-    w = np.pi * np.arange(nfft) / nfft
-
-    spectrum = np.fft.fft(ensure_3d(A), n=nfft * 2, axis=2)[:, :, :nfft]
-    singular = np.array([svd(spectrum[:, :, k], compute_uv=False) for k in range(nfft)])
-    matrix_min = np.min(singular, axis=1) ** (1 / np.min(delays_arr))
-    matrix_max = np.max(singular, axis=1) ** (1 / np.max(delays_arr))
-
-    magnitude = np.ones((nfft, delays_arr.size))
-    group = np.zeros((nfft, delays_arr.size))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        for line in range(delays_arr.size):
-            for section in sos[:, :, line]:
-                _, h = freqz(section[:3], section[3:], w)
-                _, gd = group_delay((section[:3], section[3:]), w)
-                magnitude[:, line] *= np.abs(h)
-                group[:, line] += gd
-
-    per_line = magnitude ** (1.0 / (delays_arr + group))
-    min_curve = np.min(per_line, axis=1) * matrix_min
-    max_curve = np.max(per_line, axis=1) * matrix_max
-    return min_curve, max_curve, w / np.pi * fs / 2

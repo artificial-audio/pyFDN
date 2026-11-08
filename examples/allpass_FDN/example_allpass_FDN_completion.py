@@ -35,7 +35,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(3)
     return np, pyFDN, scipy
 
 
@@ -51,13 +50,14 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(3)
     _N = 12
     _num_io = _N
-    _U = pyFDN.random_orthogonal(_N)
-    _G = np.diag(np.random.rand(_N))
+    _U = pyFDN.random_orthogonal(_N, rng=_rng)
+    _G = np.diag(_rng.random(_N))
     _A = _U @ _G
-    _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=_num_io)
-    _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
+    _B, _C, _D, _X = pyFDN.complete_fdn(_A, num_io=_num_io, rng=_rng)
+    _is_a = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
     assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
@@ -75,14 +75,15 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN, scipy):
+    _rng = np.random.default_rng(3)
     _N = 3
     _num_io = 2
-    X1 = scipy.linalg.block_diag(np.diag(np.random.rand(_N)), np.eye(_num_io))
-    V = pyFDN.random_orthogonal(_N + _num_io)
+    X1 = scipy.linalg.block_diag(np.diag(_rng.random(_N)), np.eye(_num_io))
+    V = pyFDN.random_orthogonal(_N + _num_io, rng=_rng)
     XVX = np.linalg.solve(X1, V @ X1)
     XAX = XVX[:_N, :_N]
-    _B, _C, _D, _X = pyFDN.complete_fdn(XAX, k=_num_io)
-    _is_a, _P = pyFDN.is_uniallpass(XAX, _B, _C, _D, tol=1e-07)
+    _B, _C, _D, _X = pyFDN.complete_fdn(XAX, num_io=_num_io, rng=_rng)
+    _is_a = pyFDN.is_uniallpass(XAX, _B, _C, _D, tol=1e-07)
     assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(XAX, _B, _C, _D)
     return
@@ -100,11 +101,12 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(3)
     _N = 4
-    _g = np.random.uniform(0.5, 0.99, _N)
+    _g = _rng.uniform(0.5, 0.99, _N)
     _A, _, _, _ = pyFDN.series_allpass(_g)
-    _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
-    _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
+    _B, _C, _D, _X = pyFDN.complete_fdn(_A, num_io=1, rng=_rng)
+    _is_a = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
     assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
@@ -122,11 +124,12 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(3)
     _N = 3
-    _g = np.random.uniform(0.5, 0.99, _N)
+    _g = _rng.uniform(0.5, 0.99, _N)
     _A, _, _, _ = pyFDN.nested_allpass(_g)
-    _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
-    _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
+    _B, _C, _D, _X = pyFDN.complete_fdn(_A, num_io=1, rng=_rng)
+    _is_a = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
     assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
@@ -145,17 +148,18 @@ def _(mo):
 @app.cell
 def _(np, pyFDN):
     # Homogeneous allpass FDN with random admissible diagonal X
+    _rng = np.random.default_rng(3)
     _N = 4
-    delays = np.random.randint(1, 31, size=_N)
+    delays = _rng.integers(1, 31, size=_N)
     _g = 0.99
     _G = np.diag(_g**delays)  # global gain per sample
-    _X = pyFDN.random_admissible_homogeneous_allpass(_G, (0.7, 0.999))
+    _X = pyFDN.random_admissible_homogeneous_allpass(_G, (0.7, 0.999), rng=_rng)
     _X @ _G @ _G
     _A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(_G, _X)
-    is_a0, P0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)
+    is_a0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)
     assert is_a0, "Completed system should be uniallpass"
-    _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
-    _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
+    _B, _C, _D, _X = pyFDN.complete_fdn(_A, num_io=1, rng=_rng)
+    _is_a = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
     assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return

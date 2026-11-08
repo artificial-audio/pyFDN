@@ -57,16 +57,16 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(5)
+    _rng = np.random.default_rng(5)
 
     num_delays = 4
-    delays = np.random.randint(300, 1001, num_delays)
+    delays = _rng.integers(300, 1001, num_delays)
 
     num_stages = 3
     sparsity = 3
     # Hadamard stages make it a velvet feedback matrix
     feedback_matrix, _ = pyFDN.cascaded_paraunitary_matrix(
-        num_delays, num_stages, sparsity=sparsity
+        num_delays, num_stages, sparsity=sparsity, rng=_rng
     )
 
     print(f"Delays: {delays}")
@@ -131,16 +131,14 @@ def _(mo):
 
 @app.cell
 def _(P, adj_mat, mo, pyFDN):
-    _fig_char, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig_char = pyFDN.plot_impulse_response_matrix(
         P.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",
         title="Characteristic matrix",
         linewidth=0.6,
     )
-    _fig_adj, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig_adj = pyFDN.plot_impulse_response_matrix(
         adj_mat.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",
@@ -212,8 +210,7 @@ def _(adj_mat, mo, np, num_delays, pyFDN):
     input_gains = np.ones((num_delays, 1, 1))
     adj_vector = pyFDN.matrix_convolution(adj_mat, input_gains)
 
-    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig = pyFDN.plot_impulse_response_matrix(
         adj_vector.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",

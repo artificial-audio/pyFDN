@@ -42,8 +42,7 @@ def _():
     import scipy.linalg as la
 
     import pyFDN
-    from pyFDN import td
-    from pyFDN.generate.orthogonal import random_orthogonal
+    from pyFDN import random_orthogonal, td
 
     return (
         la,
@@ -77,8 +76,6 @@ def _(mo):
 
 @app.cell
 def _(mo, np, pyFDN, sound_selection):
-    np.random.seed(1)
-
     # init source signal
     mode = sound_selection.value
 
@@ -119,19 +116,20 @@ def _(mo):
 
 @app.cell
 def _(la, np, random_orthogonal):
+    _rng = np.random.default_rng(1)
     N = 8
     num_input = 1
     num_output = 2
 
-    input_gain = la.orth(np.random.randn(N, num_input))
+    input_gain = la.orth(_rng.standard_normal((N, num_input)))
 
-    random_matrix = np.random.randn(num_output, N)
+    random_matrix = _rng.standard_normal((num_output, N))
     output_gain = la.orth(random_matrix.T).T
 
     direct = np.zeros((num_output, num_input))
-    delays = np.random.randint(750, 2001, size=N)[None, :]
+    delays = _rng.integers(750, 2001, size=N)[None, :]
 
-    feedback_matrix = random_orthogonal(N)
+    feedback_matrix = random_orthogonal(N, rng=_rng)
     return N, delays, direct, feedback_matrix, input_gain, output_gain
 
 
@@ -150,7 +148,7 @@ def _(delays, fs, pyFDN, td):
     RT_DC = 4  # seconds
     RT_NY = 1  # seconds
 
-    coeffs = pyFDN.decay_to_one_pole(RT_DC, RT_NY, delays, fs)
+    coeffs = pyFDN.decay_to_one_pole(RT_DC, delays, fs, rt_nyquist=RT_NY)
 
     absorption = td.SOSBank(coeffs)
     return (absorption,)
@@ -175,11 +173,13 @@ def _(
     feedback_matrix,
     fs,
     input_gain,
+    np,
     output_gain,
     pyFDN,
     synth,
     td,
 ):
+    _rng = np.random.default_rng(1)
     matrix_types = ["no_variation", "slow_variation", "fast_variation"]
 
     reverbed_synth = {}
@@ -201,7 +201,12 @@ def _(
             spread = 0.7
 
         tv_matrix = td.TimeVaryingMatrix(
-            N, fs, rate=modulation_frequency, depth=modulation_amplitude, spread=spread
+            N,
+            fs,
+            rate=modulation_frequency,
+            depth=modulation_amplitude,
+            spread=spread,
+            rng=_rng,
         )
 
         reverbed_synth[matrix_type] = pyFDN.dss_to_td(
@@ -232,12 +237,12 @@ def _(fs, matrix_types, mo, pyFDN, reverbed_synth):
         [
             pyFDN.plot_spectrogram(
                 reverbed_synth[name][:, 0],
-                fs,
                 nperseg=2048 * 8,
                 noverlap=2048 * 1,
                 title=f"{name} — spectrogram",
-                colorscale="Magma",
-                height=350,
+                cmap="magma",
+                figsize=(8.0, 3.5),
+                fs=fs,
             )
             for name in matrix_types
         ]

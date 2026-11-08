@@ -19,7 +19,7 @@ from numpy.typing import ArrayLike
 from scipy.linalg import hadamard
 
 from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.auxiliary.utils import ensure_3d, last_nonzero_indices
+from pyFDN.auxiliary.utils import as_generator, ensure_3d, last_nonzero_indices
 
 from .orthogonal import random_orthogonal
 
@@ -27,10 +27,14 @@ from .orthogonal import random_orthogonal
 def degree_one_lossless(v: np.ndarray) -> np.ndarray:
     """Build the degree-one lossless polynomial matrix ``V(z) = (I - vv^T) + z^{-1} vv^T``.
 
-    Args:
-        v: Vector of shape ``(N,)`` or ``(N, 1)``.
+    Parameters
+    ----------
+    v
+        Vector of shape ``(N,)`` or ``(N, 1)``.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         Polynomial matrix of shape ``(N, N, 2)`` where index ``[..., 0]``
         is the ``z^0`` coefficient and ``[..., 1]`` is the ``z^{-1}`` coefficient.
     """
@@ -84,7 +88,11 @@ def shift_matrix(mat: ArrayLike, shift: ArrayLike, direction: str) -> np.ndarray
 
 
 def shift_matrix_distribute(
-    mat: ArrayLike, sparsity: float, *, pulse_size: int | None = None
+    mat: ArrayLike,
+    sparsity: float,
+    *,
+    pulse_size: int | None = None,
+    rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
     """Randomly distribute time shifts for a polynomial matrix."""
 
@@ -96,14 +104,20 @@ def shift_matrix_distribute(
 
     n = mat_arr.shape[0]
     base = np.arange(n)
-    rand_left_shift = np.floor(sparsity * (base + np.random.rand(n) * 0.99)).astype(int)
+    jitter = as_generator(rng).random(n) * 0.99
+    rand_left_shift = np.floor(sparsity * (base + jitter)).astype(int)
     return rand_left_shift * pulse_size
 
 
 def random_matrix_shift(
-    max_shift: int, matrix: ArrayLike, matrix_rev: ArrayLike | None = None
+    max_shift: int,
+    matrix: ArrayLike,
+    matrix_rev: ArrayLike | None = None,
+    *,
+    rng: np.random.Generator | int | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray]:
     """Randomly shift polynomial matrices in time."""
+    rng = as_generator(rng)
 
     mat = ensure_3d(matrix)
     rev = ensure_3d(matrix_rev) if matrix_rev is not None else None
@@ -112,14 +126,14 @@ def random_matrix_shift(
     rand_left: np.ndarray
     rand_right: np.ndarray
     if max_shift >= n:
-        rand_left = np.random.permutation(max_shift)[:n]
-        rand_right = np.random.permutation(max_shift)[:n]
+        rand_left = rng.permutation(max_shift)[:n]
+        rand_right = rng.permutation(max_shift)[:n]
     elif max_shift <= 0:
         rand_left = np.zeros(n, dtype=int)
         rand_right = np.zeros(n, dtype=int)
     else:
-        rand_left = np.asarray(np.random.randint(0, max_shift, size=n))
-        rand_right = np.asarray(np.random.randint(0, max_shift, size=n))
+        rand_left = np.asarray(rng.integers(0, max_shift, size=n))
+        rand_right = np.asarray(rng.integers(0, max_shift, size=n))
 
     rand_left -= rand_left.min()
     rand_right -= rand_right.min()
@@ -143,8 +157,14 @@ def cascaded_paraunitary_matrix(
     sparsity: float = 1.0,
     matrix_type: str = "hadamard",
     gain_per_sample: float = 1.0,
+    rng: np.random.Generator | int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Construct a paraunitary matrix and its reverse response."""
+    """Construct a paraunitary matrix and its reverse response.
+
+    ``rng`` (a Generator or an integer seed) draws the time shifts and, for
+    ``matrix_type="random"``, the stage matrices.
+    """
+    rng = as_generator(rng)
 
     if matrix_type == "hadamard":
         if N & (N - 1) != 0:
@@ -153,7 +173,10 @@ def cascaded_paraunitary_matrix(
         def generate_matrix(size: int) -> np.ndarray:
             return hadamard(size) / math.sqrt(size)
     elif matrix_type == "random":
-        generate_matrix = random_orthogonal  # type: ignore[assignment]
+
+        def generate_matrix(size: int) -> np.ndarray:
+            return random_orthogonal(size, rng=rng)
+
     else:
         raise ValueError(
             f"matrix_type must be 'hadamard' or 'random', got {matrix_type!r}"
@@ -166,7 +189,7 @@ def cascaded_paraunitary_matrix(
     pulse_size = 1
     for stage in range(stages):
         shift_left = shift_matrix_distribute(
-            matrix, sparsity_vector[stage], pulse_size=pulse_size
+            matrix, sparsity_vector[stage], pulse_size=pulse_size, rng=rng
         )
         gain_diag = np.diag(np.power(gain_per_sample, shift_left))
         R1 = ensure_3d(generate_matrix(N) @ gain_diag)
@@ -183,7 +206,9 @@ def cascaded_paraunitary_matrix(
     return matrix, rev_matrix
 
 
-def paraunitary_from_elementals(N: int, degree: int) -> tuple[np.ndarray, np.ndarray]:
+def paraunitary_from_elementals(
+    N: int, degree: int, *, rng: np.random.Generator | int | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """Construct a random paraunitary matrix as a cascade of elemental factors.
 
     The matrix is a random orthogonal matrix multiplied by ``degree - 1``
@@ -195,6 +220,8 @@ def paraunitary_from_elementals(N: int, degree: int) -> tuple[np.ndarray, np.nda
         Size of the paraunitary matrix.
     degree : int
         Polynomial degree of the matrix (number of taps).
+    rng : Generator, int or None
+        Random generator or integer seed.
 
     Returns
     -------
@@ -206,9 +233,10 @@ def paraunitary_from_elementals(N: int, degree: int) -> tuple[np.ndarray, np.nda
     if degree < 1:
         raise ValueError("degree must be at least 1")
 
-    matrix = ensure_3d(random_orthogonal(N))
+    rng = as_generator(rng)
+    matrix = ensure_3d(random_orthogonal(N, rng=rng))
 
-    v = np.random.randn(N, degree - 1)
+    v = rng.standard_normal((N, degree - 1))
     v = v / np.sqrt(np.sum(v**2, axis=0, keepdims=True))
     for it in range(degree - 1):
         matrix = matrix_convolution(matrix, degree_one_lossless(v[:, it]))

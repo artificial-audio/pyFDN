@@ -16,6 +16,7 @@ delay lines.
 
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TypedDict
@@ -25,6 +26,7 @@ from numpy.typing import ArrayLike
 from scipy.fft import irfft, next_fast_len, rfft
 from scipy.signal import lfilter, sosfilt
 
+from pyFDN.auxiliary.utils import as_generator
 from pyFDN.generate.kronecker_matrix import kronecker_transform
 
 
@@ -36,6 +38,15 @@ def _as_2d(block: ArrayLike) -> np.ndarray:
     if x.ndim != 2:
         raise ValueError("signal block must be 1-D or 2-D")
     return x
+
+
+def _channel_mask(channels: int, active_channels: ArrayLike | None) -> np.ndarray:
+    """Boolean mask of the channels an operator acts on; ``None`` means all."""
+    if active_channels is None:
+        return np.ones(channels, dtype=bool)
+    mask = np.zeros(channels, dtype=bool)
+    mask[np.asarray(active_channels)] = True
+    return mask
 
 
 class TimeOperator(ABC):
@@ -158,10 +169,10 @@ class AbsoluteValue(TimeOperator):
 
 class DCBlocker(TimeOperator):
     """Stateful per-channel first-order DC blocker with optional slow energy
-    compensation, ``y[n, c] = x[n, c] - x[n-1, c] + R * y[n-1, c]``.
+    compensation, ``y[n, c] = x[n, c] - x[n-1, c] + pole * y[n-1, c]``.
 
     The differencing term removes the DC offset a nonlinearity such as
-    :class:`ControllableFullWaveRect` would otherwise inject into a feedback
+    :class:`ControllableFullWaveRectifier` would otherwise inject into a feedback
     loop, at the cost of also attenuating content near DC. When
     ``correct_loss`` is enabled, a slowly-varying gain tracks the ratio of
     input to output power through two exponential envelope followers -- one
@@ -172,14 +183,13 @@ class DCBlocker(TimeOperator):
     ----------
     channels : int
         Number of channels processed independently.
-    R : float
-        Pole location of the blocker, ``0 < R < 1``. Closer to 1 pushes the
+    pole : float
+        Pole location of the blocker, ``0 < pole < 1``. Closer to 1 pushes the
         cutoff frequency down and preserves more low-frequency content.
     correct_loss : bool
-        If ``True``, apply the energy-compensation gain described above.
-    fs : float
-        Sampling rate in Hz. The power envelopes follow with a 50 ms time
-        constant and the gain is smoothed over 20 ms.
+        If ``True``, apply the energy-compensation gain described above. The
+        power envelopes follow over 2400 samples and the gain is smoothed
+        over 960 (50 ms and 20 ms at 48 kHz).
     max_gain : float
         Ceiling on the compensation gain. A signal the blocker removes almost
         entirely -- anything close to pure DC -- has an output power near zero,
@@ -190,13 +200,13 @@ class DCBlocker(TimeOperator):
     def __init__(
         self,
         channels: int,
-        R: float = 0.995,
+        *,
+        pole: float = 0.995,
         correct_loss: bool = False,
-        fs: float = 48000.0,
         max_gain: float = 4.0,  # +12 dB
     ) -> None:
         self.in_channels = self.out_channels = int(channels)
-        self.R = float(R)
+        self.pole = float(pole)
         self.correct_loss = bool(correct_loss)
         self.max_gain = float(max_gain)
 
@@ -209,8 +219,8 @@ class DCBlocker(TimeOperator):
         self.out_pow = np.full(self.in_channels, 1e-12)
         self.gain = np.ones(self.in_channels)
 
-        self.alpha_env = float(np.exp(-1.0 / (fs * 0.05)))  # 50 ms power envelope
-        self.alpha_gain = float(np.exp(-1.0 / (fs * 0.02)))  # 20 ms gain smoothing
+        self.alpha_env = float(np.exp(-1.0 / 2400))  # power envelope
+        self.alpha_gain = float(np.exp(-1.0 / 960))  # gain smoothing
 
     def _one_pole(
         self, signal: np.ndarray, alpha: float, state: np.ndarray
@@ -237,10 +247,10 @@ class DCBlocker(TimeOperator):
         # blocker across block boundaries.
         y, _ = lfilter(
             [1.0, -1.0],
-            [1.0, -self.R],
+            [1.0, -self.pole],
             x,
             axis=0,
-            zi=(-self.prev_x + self.R * self.prev_y)[np.newaxis],
+            zi=(-self.prev_x + self.pole * self.prev_y)[np.newaxis],
         )
         self.prev_x[:] = x[-1]
         self.prev_y[:] = y[-1]  # pre-compensation, i.e. the actual filter state
@@ -263,10 +273,11 @@ class DCBlocker(TimeOperator):
         self.gain[:] = 1.0
 
 
-class ControllableFullWaveRect(TimeOperator):
+class ControllableFullWaveRectifier(TimeOperator):
     """Stateful, controllable, memoryless nonlinearity,
     ``y[n, c] = g_cfwr * ((1 - alpha) * x[n, c] + alpha * abs(x[n, c]))``,
-    applied to ``active_channels`` only; the rest pass through unchanged.
+    applied to ``active_channels`` (default all); the rest pass through
+    unchanged.
 
     At ``alpha = 0`` the nonlinearity drops out and only the DC blocker below
     is left, at ``alpha = 1`` it is a full-wave rectifier;
@@ -280,14 +291,19 @@ class ControllableFullWaveRect(TimeOperator):
     otherwise accumulate in a feedback loop.
     """
 
-    def __init__(self, channels: int, alpha: float, active_channels: ArrayLike) -> None:
+    def __init__(
+        self,
+        channels: int,
+        *,
+        alpha: float,
+        active_channels: ArrayLike | None = None,
+    ) -> None:
         self.in_channels = self.out_channels = int(channels)
         self.state = np.zeros((1, self.in_channels), dtype=float)
-        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+        self.dc_blocker = DCBlocker(self.in_channels, correct_loss=True)
         self.alpha = float(alpha)
         self.g_cfwr = np.sqrt(2 - 2 * abs(self.alpha - 0.5))
-        self._mask = np.zeros(self.in_channels, dtype=bool)
-        self._mask[np.asarray(active_channels)] = True
+        self._mask = _channel_mask(self.in_channels, active_channels)
 
     def anti_dev(self, x: np.ndarray) -> np.ndarray:
         y = 0.5 * x * np.abs(x)
@@ -307,7 +323,7 @@ class ControllableFullWaveRect(TimeOperator):
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
             raise ValueError(
-                f"ControllableFullWaveRect expects {self.in_channels} input channels"
+                f"ControllableFullWaveRectifier expects {self.in_channels} input channels"
             )
         y = self.g_cfwr * ((1 - self.alpha) * x + self.alpha * self.abs(x))
         y = self.dc_blocker.process_block(y)
@@ -320,10 +336,11 @@ class ControllableFullWaveRect(TimeOperator):
         self.dc_blocker.reset()
 
 
-class SDFD(TimeOperator):
-    """Stateful, controllable Signal-Dependent Fractional Delay,
-    ``y[n, c] = (1 - d) n[n-1, c] + d n[n, c] + d p[n-2, c] + (1 - d) p[n-1, c]``,
-    applied to ``active_channels`` only; the rest pass through unchanged.
+class SignalDependentFractionalDelay(TimeOperator):
+    """Stateful, controllable signal-dependent fractional delay (SDFD),
+    ``y[n, c] = (1 - d) n[n-1, c] + d n[n, c] + d p[n-2, c] + (1 - d) p[n-1, c]``
+    with ``d = fraction``, applied to ``active_channels`` (default all); the
+    rest pass through unchanged.
 
     ``p = max(x, 0)`` and ``n = min(x, 0)`` are the positive and negative
     half-wave rectified branches of the input, each delayed by a different,
@@ -333,11 +350,16 @@ class SDFD(TimeOperator):
     reads as a soft, amplitude-dependent distortion rather than a hard clip.
     """
 
-    def __init__(self, channels: int, d: float, active_channels: ArrayLike) -> None:
+    def __init__(
+        self,
+        channels: int,
+        *,
+        fraction: float,
+        active_channels: ArrayLike | None = None,
+    ) -> None:
         self.in_channels = self.out_channels = int(channels)
-        self.d = float(d)
-        self._mask = np.zeros(self.in_channels, dtype=bool)
-        self._mask[np.asarray(active_channels)] = True
+        self.fraction = float(fraction)
+        self._mask = _channel_mask(self.in_channels, active_channels)
         # p_state[0] = p[n-2], p_state[1] = p[n-1]
         self.p_state = np.zeros((2, self.in_channels), dtype=float)
         self.n_state = np.zeros(self.in_channels, dtype=float)
@@ -345,7 +367,9 @@ class SDFD(TimeOperator):
     def process_block(self, block: ArrayLike) -> np.ndarray:
         x = _as_2d(block)
         if x.shape[1] != self.in_channels:
-            raise ValueError(f"SDFD expects {self.in_channels} input channels")
+            raise ValueError(
+                f"SignalDependentFractionalDelay expects {self.in_channels} input channels"
+            )
 
         p = np.maximum(x, 0.0)
         n = np.minimum(x, 0.0)
@@ -357,7 +381,7 @@ class SDFD(TimeOperator):
         p2 = p_ext[:-2]
         n1 = n_ext[:-1]
 
-        d = self.d
+        d = self.fraction
         y = (1 - d) * n1 + d * n + d * p2 + (1 - d) * p1
 
         self.p_state = p_ext[-2:].copy()
@@ -374,15 +398,16 @@ class SDFD(TimeOperator):
 
 class RingModulator(TimeOperator):
     """Stateful, controllable ring modulator,
-    ``y[n, c] = mod_amp * x[n, c] * sin(2 * pi * mod_freq * n / fs)``, applied
-    to ``active_channels`` only; the rest pass through unchanged.
+    ``y[n, c] = depth * x[n, c] * sin(2 * pi * rate * n / fs)``, applied
+    to ``active_channels`` (default all); the rest pass through unchanged.
 
     Multiplying by a sine shifts the spectrum of the active channels by
-    ``+-mod_freq`` rather than adding harmonics on top of it, so the effect
-    reads as tremolo at low ``mod_freq`` and as an inharmonic, bell-like
-    retuning once ``mod_freq`` enters the audible range. A unit-amplitude
+    ``+-rate`` rather than adding harmonics on top of it, so the effect
+    reads as tremolo at a low ``rate`` and as an inharmonic, bell-like
+    retuning once ``rate`` enters the audible range. A unit-amplitude
     sine carries only half the power of the signal it multiplies, so
-    ``mod_amp = sqrt(2)`` keeps the operator energy-preserving. The
+    ``depth = sqrt(2)`` keeps the operator energy-preserving. ``rate`` and
+    ``depth`` are named as in :class:`TimeVaryingMatrix`. The
     modulation phase runs continuously across :meth:`process_block` calls, tracked
     by ``sample_index``.
     """
@@ -390,17 +415,17 @@ class RingModulator(TimeOperator):
     def __init__(
         self,
         channels: int,
-        mod_freq: float,
-        mod_amp: float,
         fs: float,
-        active_channels: ArrayLike,
+        *,
+        rate: float,
+        depth: float,
+        active_channels: ArrayLike | None = None,
     ) -> None:
         self.in_channels = self.out_channels = int(channels)
-        self.mod_freq = float(mod_freq)
-        self.mod_amp = float(mod_amp)
         self.fs = float(fs)
-        self._mask = np.zeros(self.in_channels, dtype=bool)
-        self._mask[np.asarray(active_channels)] = True
+        self.rate = float(rate)
+        self.depth = float(depth)
+        self._mask = _channel_mask(self.in_channels, active_channels)
         self.sample_index = 0
 
     def process_block(self, block: ArrayLike) -> np.ndarray:
@@ -410,7 +435,7 @@ class RingModulator(TimeOperator):
 
         length = x.shape[0]
         n = self.sample_index + np.arange(length)
-        mod = self.mod_amp * np.sin(2 * np.pi * self.mod_freq * n / self.fs)
+        mod = self.depth * np.sin(2 * np.pi * self.rate * n / self.fs)
         self.sample_index += length
 
         out = x.copy()
@@ -426,33 +451,32 @@ class PitchShift(TimeOperator):
 
     Writes into one circular buffer per channel and reads it back with two
     read heads spaced half a window apart, each sliding at a rate set by
-    ``transpose_cents`` and crossfaded with a complementary sine window so
-    the head that is about to wrap is always faded out. Only
-    ``active_channels`` are shifted; the rest pass through unchanged.
+    ``transpose_cents`` and crossfaded with a complementary sine window of
+    ``window`` samples, so the head that is about to wrap is always faded
+    out. Only ``active_channels`` (default all) are shifted; the rest pass
+    through unchanged. ``max_delay`` is the buffer length in samples.
     """
 
     def __init__(
         self,
         channels: int,
-        max_delay_samps: int,
-        window_size: int,
+        *,
+        max_delay: int,
+        window: int,
         transpose_cents: float,
-        fs: float,
-        active_channels: ArrayLike,
+        active_channels: ArrayLike | None = None,
     ) -> None:
         # 3 is the smallest delay that keeps the cubic interpolator, which
         # reaches two samples forward, off the sample just written.
         self.min_delay = 3
-        if max_delay_samps <= window_size + self.min_delay:
-            raise ValueError("max_delay_samps must be > window_size + 3")
+        if max_delay <= window + self.min_delay:
+            raise ValueError("max_delay must be > window + 3")
 
         self.in_channels = self.out_channels = int(channels)
-        self.max_delay = int(max_delay_samps)
-        self.window_size = int(window_size)
-        self.fs = float(fs)
-        self._mask = np.zeros(self.in_channels, dtype=bool)
-        self._mask[np.asarray(active_channels)] = True
-        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+        self.max_delay = int(max_delay)
+        self.window = int(window)
+        self._mask = _channel_mask(self.in_channels, active_channels)
+        self.dc_blocker = DCBlocker(self.in_channels, correct_loss=True)
 
         self.buffer = np.zeros((self.max_delay, self.in_channels), dtype=float)
         self.write_ptr = 0
@@ -465,7 +489,7 @@ class PitchShift(TimeOperator):
         self.transpose_cents = float(cents)
         self.pitch_ratio = 2.0 ** (self.transpose_cents / 1200.0)
         # Delay slope: dD/dn = 1 - ratio, with D = min_delay + phase * window
-        self.phase_inc = (1.0 - self.pitch_ratio) / float(self.window_size)
+        self.phase_inc = (1.0 - self.pitch_ratio) / float(self.window)
 
     def _read_interpolated(self, ptr: float) -> np.ndarray:
         """Cubic interpolated read from the buffer, one value per channel."""
@@ -497,8 +521,8 @@ class PitchShift(TimeOperator):
             self.buffer[w] = x[i]
             self.write_ptr = (w + 1) % self.max_delay
 
-            d1 = self.min_delay + self.phase_1 * self.window_size
-            d2 = self.min_delay + self.phase_2 * self.window_size
+            d1 = self.min_delay + self.phase_1 * self.window
+            d2 = self.min_delay + self.phase_2 * self.window
 
             s1 = self._read_interpolated(w - d1)
             s2 = self._read_interpolated(w - d2)
@@ -534,37 +558,39 @@ class GranularPitchShift(TimeOperator):
 
     Two grains, triggered half a grain apart, read a shared per-channel
     circular buffer at a rate set by ``transpose_cents``. Each grain is
-    windowed by a raised-cosine envelope and, on reaching ``grain_dur_samps``,
-    restarts at a new random position inside the buffer -- trading the
-    continuous read-head wraparound of :class:`PitchShift` for grain-boundary
-    clicks disguised by the envelope. Only ``active_channels`` are shifted;
-    the rest pass through unchanged.
+    windowed by a raised-cosine envelope and, after ``grain_length`` samples,
+    restarts at a new random position inside the ``max_delay``-sample buffer
+    -- trading the continuous read-head wraparound of :class:`PitchShift` for
+    grain-boundary clicks disguised by the envelope. Only ``active_channels``
+    (default all) are shifted; the rest pass through unchanged.
     """
 
     def __init__(
         self,
         channels: int,
-        max_delay_samps: int,
-        grain_dur_samps: int,
+        *,
+        max_delay: int,
+        grain_length: int,
         transpose_cents: float,
-        active_channels: ArrayLike,
         fade_ratio: float = 0.25,
-        seed: int | None = None,
+        active_channels: ArrayLike | None = None,
+        rng: np.random.Generator | int | None = None,
     ) -> None:
-        if max_delay_samps <= 2 * grain_dur_samps:
-            raise ValueError("max_delay_samps must be greater than 2 * grain_dur_samps")
+        if max_delay <= 2 * grain_length:
+            raise ValueError("max_delay must be greater than 2 * grain_length")
         if not (0 < fade_ratio <= 0.5):
             raise ValueError("fade_ratio must be in (0, 0.5]")
 
         self.in_channels = self.out_channels = int(channels)
-        self.max_delay = int(max_delay_samps)
-        self.grain_dur = int(grain_dur_samps)
+        self.max_delay = int(max_delay)
+        self.grain_length = int(grain_length)
         self.fade_ratio = float(fade_ratio)
-        self.seed = seed  # kept so reset() can rewind the grain positions too
-        self.rng = np.random.default_rng(seed)
-        self._mask = np.zeros(self.in_channels, dtype=bool)
-        self._mask[np.asarray(active_channels)] = True
-        self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
+        # A copy of the starting generator, so reset() rewinds the grain
+        # positions too and a seeded operator repeats exactly.
+        self._rng_start = copy.deepcopy(as_generator(rng))
+        self.rng = copy.deepcopy(self._rng_start)
+        self._mask = _channel_mask(self.in_channels, active_channels)
+        self.dc_blocker = DCBlocker(self.in_channels, correct_loss=True)
 
         self.set_transpose_cents(transpose_cents)
 
@@ -575,7 +601,7 @@ class GranularPitchShift(TimeOperator):
         # Two grains interleaved with 180 degrees phase offset
         self.grains = [
             self._new_grain(phase_offset=0),
-            self._new_grain(phase_offset=self.grain_dur // 2),
+            self._new_grain(phase_offset=self.grain_length // 2),
         ]
 
     def set_transpose_cents(self, cents: float) -> None:
@@ -585,24 +611,24 @@ class GranularPitchShift(TimeOperator):
     def _random_read_start(self) -> float:
         """Pick a random starting read position inside the filled buffer."""
         filled = min(self.samples_written, self.max_delay)
-        max_age = max(filled - self.grain_dur, 1)
-        age = self.rng.integers(self.grain_dur, max_age + self.grain_dur)
+        max_age = max(filled - self.grain_length, 1)
+        age = self.rng.integers(self.grain_length, max_age + self.grain_length)
         return float((self.write_ptr - int(age)) % self.max_delay)
 
     def _new_grain(self, phase_offset: int = 0) -> _Grain:
         return {
             "read_ptr": self._random_read_start(),
-            "pos": phase_offset % self.grain_dur,
+            "pos": phase_offset % self.grain_length,
         }
 
     def _grain_envelope(self, pos: int) -> float:
-        fade_len = int(self.fade_ratio * self.grain_dur)
+        fade_len = int(self.fade_ratio * self.grain_length)
         if fade_len == 0:
             return 1.0
         if pos < fade_len:
             return np.sin(0.5 * np.pi * pos / fade_len)
-        elif pos >= self.grain_dur - fade_len:
-            pos_in_fade = pos - (self.grain_dur - fade_len)
+        elif pos >= self.grain_length - fade_len:
+            pos_in_fade = pos - (self.grain_length - fade_len)
             return np.cos(0.5 * np.pi * pos_in_fade / fade_len)
         else:
             return 1.0
@@ -646,7 +672,7 @@ class GranularPitchShift(TimeOperator):
                 g["read_ptr"] = (g["read_ptr"] + self.pitch_ratio) % self.max_delay
                 g["pos"] += 1
 
-                if g["pos"] >= self.grain_dur:
+                if g["pos"] >= self.grain_length:
                     g["read_ptr"] = self._random_read_start()
                     g["pos"] = 0
 
@@ -660,11 +686,10 @@ class GranularPitchShift(TimeOperator):
         self.write_ptr = 0
         self.samples_written = 0
         self.dc_blocker.reset()
-        # Rewind the draw as well, so a seeded operator repeats exactly.
-        self.rng = np.random.default_rng(self.seed)
+        self.rng = copy.deepcopy(self._rng_start)
         self.grains = [
             self._new_grain(phase_offset=0),
-            self._new_grain(phase_offset=self.grain_dur // 2),
+            self._new_grain(phase_offset=self.grain_length // 2),
         ]
 
 
@@ -716,7 +741,7 @@ class SOSBank(TimeOperator):
         This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
         ``parallelSOSFilter`` input and the output of
         :func:`pyFDN.decay_to_first_order_shelf`,
-        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_geq`.
+        :func:`pyFDN.decay_to_one_pole`, and :func:`pyFDN.decay_to_graphic_eq`.
 
     Attributes
     ----------
@@ -879,8 +904,8 @@ class TimeVaryingMatrix(TimeOperator):
 
     Parameters
     ----------
-    N : int
-        Number of channels (the matrix is N x N). Must be a positive even integer.
+    channels : int
+        Number of channels N (the matrix is N x N), a positive even integer.
     fs : float
         Sampling rate in Hz; the modulation clock.
     rate : float
@@ -890,8 +915,8 @@ class TimeVaryingMatrix(TimeOperator):
     spread : float
         Relative random spread of ``rate`` and ``depth`` across the rotation
         planes: each plane draws from ``value * (1 +- spread)``.
-    seed : int or None
-        Seed for the random per-plane phases and spread.
+    rng : Generator, int or None
+        Random generator or integer seed for the per-plane phases and spread.
 
     Attributes
     ----------
@@ -905,23 +930,23 @@ class TimeVaryingMatrix(TimeOperator):
 
     def __init__(
         self,
-        N: int,
+        channels: int,
         fs: float,
         *,
         rate: float,
         depth: float,
         spread: float = 0.0,
-        seed: int | None = None,
+        rng: np.random.Generator | int | None = None,
     ) -> None:
-        N = int(N)
+        N = int(channels)
         if N <= 0 or N % 2:
-            raise ValueError(f"N must be a positive even integer, got {N}")
+            raise ValueError(f"channels must be a positive even integer, got {N}")
         self.N = N
         self.in_channels = self.out_channels = N
         self.fs = float(fs)
         self.num_pairs = N // 2
 
-        rng = np.random.default_rng(seed)
+        rng = as_generator(rng)
         self.phase = 2 * np.pi * rng.random(self.num_pairs)
         self.rate = rate * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
         self.depth = depth * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
@@ -1227,14 +1252,14 @@ class RecursionState:
             self.buffer[i, (p + np.arange(m)) % m] = line_arr
 
     def fill_noise(
-        self, variance: float = 1.0, rng: np.random.Generator | None = None
+        self, variance: float = 1.0, *, rng: np.random.Generator | int | None = None
     ) -> None:
         """Fill with zero-mean Gaussian noise of finite, non-negative variance.
 
-        Pass a seeded ``rng`` for reproducible noise. Zero variance clears the
+        Pass ``rng`` (a Generator or an integer seed) for reproducible noise. Zero variance clears the
         lines without moving their read positions.
         """
         if not np.isfinite(variance) or variance < 0:
             raise ValueError("variance must be finite and non-negative")
-        rng = np.random.default_rng() if rng is None else rng
+        rng = as_generator(rng)
         self.set_lines([rng.normal(0.0, np.sqrt(variance), m) for m in self.delays])

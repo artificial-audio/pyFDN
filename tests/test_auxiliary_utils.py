@@ -6,15 +6,14 @@ import pytest
 from pyFDN.auxiliary.acoustics import rt_to_slope, slope_to_rt
 from pyFDN.auxiliary.delay import ms_to_samples
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
+from pyFDN.auxiliary.poles import is_bounding_curve, pole_boundaries
 from pyFDN.auxiliary.utils import (
     ensure_3d,
     fade_out,
     hertz_to_unit,
-    is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
     max_corr,
-    pole_boundaries,
 )
 from pyFDN.eq import decay_to_first_order_shelf, decay_to_one_pole
 
@@ -78,7 +77,7 @@ def test_lin_to_db_from_poly_degree():
 
 def test_one_pole_absorption_shapes_are_correct():
     delays = np.array([10.0, 20.0, 30.0])
-    sos = decay_to_one_pole(1.2, 0.8, delays, 44100.0)
+    sos = decay_to_one_pole(1.2, delays, 44100.0, rt_nyquist=0.8)
     assert sos.shape == (1, 6, delays.size)
     assert np.all(sos[0, 3, :] == 1.0)
 
@@ -87,7 +86,9 @@ def test_first_order_absorption_matches_rt_targets():
     fs = 48000.0
     rt_dc, rt_ny = 1.2, 0.8
     delays = np.array([100.0, 130.0, 250.0])
-    sos = decay_to_first_order_shelf(rt_dc, rt_ny, delays, fs, crossover=4000.0)
+    sos = decay_to_first_order_shelf(
+        rt_dc, delays, fs, crossover=4000.0, rt_nyquist=rt_ny
+    )
 
     assert sos.shape == (1, 6, delays.size)
     s = sos[0]  # (6, N): rows [b0, b1, b2, a0, a1, a2]
@@ -105,8 +106,12 @@ def test_first_order_absorption_matches_rt_targets():
 def test_first_order_absorption_clamps_high_crossover():
     fs = 48000.0
     delays = np.array([100.0, 130.0])
-    clamped = decay_to_first_order_shelf(1.0, 0.5, delays, fs, crossover=fs / 2)
-    limit = decay_to_first_order_shelf(1.0, 0.5, delays, fs, crossover=fs / 2.1)
+    clamped = decay_to_first_order_shelf(
+        1.0, delays, fs, crossover=fs / 2, rt_nyquist=0.5
+    )
+    limit = decay_to_first_order_shelf(
+        1.0, delays, fs, crossover=fs / 2.1, rt_nyquist=0.5
+    )
     np.testing.assert_allclose(clamped, limit)
 
 
@@ -151,9 +156,8 @@ def test_is_bounding_curve_upper():
     y = np.array([1, 2, 3, 4, 5])
     x_curve = x
     y_curve = y + 1
-    all_bounded, is_bounded = is_bounding_curve(x, y, x_curve, y_curve, "upper")
-    assert all_bounded
-    assert np.all(is_bounded)
+    all_bounded = is_bounding_curve(x, y, x_curve, y_curve, "upper")
+    assert all_bounded is True
 
 
 def test_is_bounding_curve_lower():
@@ -161,9 +165,8 @@ def test_is_bounding_curve_lower():
     y = np.array([1, 2, 3, 4, 5])
     x_curve = x
     y_curve = y - 1
-    all_bounded, is_bounded = is_bounding_curve(x, y, x_curve, y_curve, "lower")
-    assert all_bounded
-    assert np.all(is_bounded)
+    all_bounded = is_bounding_curve(x, y, x_curve, y_curve, "lower")
+    assert all_bounded is True
 
 
 # ============================================================================

@@ -224,7 +224,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(7)
     print("pyFDN version:", getattr(pyFDN, "__version__", "unknown"))
     return np, pyFDN, torch
 
@@ -256,7 +255,7 @@ def _(pyFDN, torch):
 @app.cell
 def _(model, pyFDN):
     # Run modal decomposition (delays and recursion are read from the model)
-    residues, poles, direct, is_pair, meta = pyFDN.flamo_to_pr(
+    (residues, poles, direct, is_pair), meta = pyFDN.flamo_to_pr(
         model,
         # Unresolved absorption modes are accepted only after response validation.
         allow_approximate=True,
@@ -273,7 +272,7 @@ def _(model, pyFDN):
 @app.cell
 def _(fs, direct, is_pair, model, np, poles, pyFDN, residues):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
-    ir_flamo = pyFDN.flamo_time_response(model).squeeze()
+    ir_flamo = pyFDN.flamo_to_impz(model).squeeze()
     if ir_flamo.ndim > 1:
         ir_flamo = ir_flamo[:, 0, 0]
     ir_flamo = np.asarray(ir_flamo, dtype=np.float64)

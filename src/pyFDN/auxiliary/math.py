@@ -38,7 +38,9 @@ def _is_diagonally_equivalent_to_orthogonal(
     Implements the Berman–Parlett–Plemmons (1981) diagonal scaling approach via
     a rank-1 SVD of the Hadamard quotient C = inv(A) / A^T.
 
-    Returns:
+    Returns
+    -------
+    tuple[bool, ndarray, ndarray, ndarray]
         (is_doe, Q, D, E)
     """
     inv_A = np.linalg.inv(A)
@@ -151,12 +153,18 @@ def negpolyder(
     """
     Derivative of rational polynomial with negative exponents.
 
-    Args:
-        b: Numerator coefficients
-        a: Denominator coefficients
-        dont_truncate: Leading zeros are not truncated
+    Parameters
+    ----------
+    b
+        Numerator coefficients
+    a
+        Denominator coefficients
+    dont_truncate
+        Leading zeros are not truncated
 
-    Returns:
+    Returns
+    -------
+    tuple[ndarray, ndarray]
         q: Numerator coefficients of derivative
         p: Denominator coefficients of derivative
     """
@@ -193,10 +201,14 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
     Uses an FFT-based approach: evaluate at DFT points, compute scalar det
     at each frequency, then IFFT back.
 
-    Args:
-        polynomial_matrix: shape (N, N, L), polynomial matrix entries.
+    Parameters
+    ----------
+    polynomial_matrix
+        shape (N, N, L), polynomial matrix entries.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         determinant: 1-D array of determinant polynomial coefficients,
             ordered [z^0, z^{-1}, ...], trimmed to the actual degree.
     """

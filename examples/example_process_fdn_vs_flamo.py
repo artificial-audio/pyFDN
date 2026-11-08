@@ -25,7 +25,7 @@ def _(mo, pyFDN):
     1. **`pyFDN.dss_to_td`** — compact block time-domain recursion; the per-delay-line SOS cascades run in a `td.SOSBank` and the FIR feedback matrix in a `td.MatrixFIR` on the feedback path, both with persistent state.
     2. **`dss_to_flamo`** — FLAMO frequency-domain model with the same SOS cascades as `parallelSOSFilter` and the FIR feedback matrix as a `Filter` module in the loop.
 
-    The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the attenuation is a 10-band graphic EQ (`decay_to_geq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
+    The feedback matrix is a paraunitary scattering matrix from `filter_matrix_gallery`; the attenuation is a 10-band graphic EQ (`decay_to_graphic_eq`, 11 biquad sections per delay line) targeting a frequency-dependent reverberation time. The two impulse responses must match to numerical precision.
 
     Reference: *{pyFDN.paper_link("Schlecht2017AccurateReverberationTime")}.*
     """)
@@ -54,14 +54,14 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(5)
+    _rng = np.random.default_rng(5)
     fs = 48000
     num_delays = 4
     ir_len = fs  # 1 second
 
-    delays = np.sort(np.random.randint(500, 2001, num_delays))
+    delays = np.sort(_rng.integers(500, 2001, num_delays))
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "velvet", num_stages=3, sparsity=3
+        num_delays, "velvet", num_stages=3, sparsity=3, rng=_rng
     )
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
@@ -74,7 +74,7 @@ def _(mo):
     mo.md(r"""
     ## Design GEQ absorption filters
 
-    `decay_to_geq` converts the target T60 to a per-sample dB slope, fits a graphic EQ, and returns one SOS cascade per delay line, shape (N, 11, 6).
+    `decay_to_graphic_eq` converts the target T60 to a per-sample dB slope, fits a graphic EQ, and returns one SOS cascade per delay line, shape (N, 11, 6).
     """)
     return
 
@@ -84,7 +84,7 @@ def _(delays, fs, np, pyFDN):
     # Target RT at the 10 GEQ command frequencies (31.25 Hz … 16 kHz), decaying towards high frequencies
     target_rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2])
 
-    sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_graphic_eq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
     return (sos_absorption,)
 
@@ -142,11 +142,10 @@ def _(
         post_matrix=pyFDN.fir_matrix_module(
             feedback_matrix, nfft, dtype=torch.float64, device="cpu"
         ),
-        shell=True,
         dtype=torch.float64,
         device="cpu",
     )
-    ir_flamo = pyFDN.flamo_time_response(model).squeeze().astype(np.float64)[:ir_len]
+    ir_flamo = pyFDN.flamo_to_impz(model).squeeze().astype(np.float64)[:ir_len]
 
     difference = ir_td - ir_flamo
     max_deviation = np.max(np.abs(difference))

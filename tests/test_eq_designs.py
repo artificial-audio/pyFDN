@@ -10,15 +10,17 @@ import pyFDN
 from pyFDN.auxiliary.utils import hertz_to_rad
 from pyFDN.eq import (
     COMMAND_FREQUENCIES,
-    decay_to_geq,
-    gain_to_bounded_geq,
-    gain_to_geq,
-    highshelf_biquad,
-    lowshelf_biquad,
-    peaking_biquad,
+    decay_to_graphic_eq,
+    gain_to_bounded_graphic_eq,
+    gain_to_graphic_eq,
     probe_sos,
 )
-from pyFDN.eq.graphic_eq import _geq_control_problem, _geq_sections, geq_design_matrix
+from pyFDN.eq.biquads import highshelf_biquad, lowshelf_biquad, peaking_biquad
+from pyFDN.eq.graphic_eq import (
+    _geq_control_problem,
+    _geq_sections,
+    graphic_eq_design_matrix,
+)
 
 
 @pytest.fixture()
@@ -71,7 +73,7 @@ def test_geq_zero_gains_flat(geq_setup):
     center_omega, shelving_omega, R, fs = geq_setup
     sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(200, 8000, 20)
-    G, _, _ = probe_sos(sos, ctrl, 2**14, fs)
+    G, _, _ = probe_sos(sos, fs, control_frequencies=ctrl, nfft=2**14)
     # Each section at 0 dB should contribute ≈ 0 dB
     np.testing.assert_allclose(G.sum(axis=1), np.zeros(len(ctrl)), atol=0.5)
 
@@ -86,31 +88,31 @@ def test_probe_sos_shapes(geq_setup):
     center_omega, shelving_omega, R, fs = geq_setup
     sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(100, 10000, 30)
-    G, H, W = probe_sos(sos, ctrl, 512, fs)
+    G, H, W = probe_sos(sos, fs, control_frequencies=ctrl, nfft=512)
     assert G.shape == (30, 11)
     assert H.shape == (512, 11)
     assert W.shape == (512, 11)
 
 
 def test_gain_to_geq_shape():
-    sos = gain_to_geq(np.zeros(10), 48000.0)
+    sos = gain_to_graphic_eq(np.zeros(10), 48000.0)
     assert sos.shape == (11, 6)
 
 
 def test_gain_to_geq_flat_target():
     """Flat 0 dB target should give ≈ 0 dB total response at all bands."""
-    sos = gain_to_geq(np.zeros(10), 48000.0)
+    sos = gain_to_graphic_eq(np.zeros(10), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
-    G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
+    G, _, _ = probe_sos(sos, 48000.0, control_frequencies=ctrl, nfft=2**16)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.zeros(len(ctrl)), atol=0.5)
 
 
 def test_gain_to_geq_uniform_target():
     """Uniform -3 dB target should give ≈ -3 dB at all bands."""
-    sos = gain_to_geq(np.full(10, -3.0), 48000.0)
+    sos = gain_to_graphic_eq(np.full(10, -3.0), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
-    G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
+    G, _, _ = probe_sos(sos, 48000.0, control_frequencies=ctrl, nfft=2**16)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.full(len(ctrl), -3.0), atol=0.5)
 
@@ -136,7 +138,7 @@ def test_geq_interpolation_holds_constant_outside_the_command_range():
 
 
 def test_geq_top_band_moves_the_fitted_response_as_much_as_a_mid_band():
-    matrix = geq_design_matrix(48000.0)
+    matrix = graphic_eq_design_matrix(48000.0)
     mid = np.linalg.norm(matrix[:, 4])
     top = np.linalg.norm(matrix[:, -1])
     assert top > 0.3 * mid
@@ -144,11 +146,11 @@ def test_geq_top_band_moves_the_fitted_response_as_much_as_a_mid_band():
 
 def test_gain_to_bounded_geq_matches_closed_form_when_bounds_are_slack():
     target = np.linspace(-6.0, 4.0, 10)
-    bounded = gain_to_bounded_geq(target, 48000.0)
-    closed = gain_to_geq(target, 48000.0)
+    bounded = gain_to_bounded_graphic_eq(target, 48000.0)
+    closed = gain_to_graphic_eq(target, 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000])
-    bounded_db = probe_sos(bounded, ctrl, 2**16, 48000.0)[0]
-    closed_db = probe_sos(closed, ctrl, 2**16, 48000.0)[0]
+    bounded_db = probe_sos(bounded, 48000.0, control_frequencies=ctrl, nfft=2**16)[0]
+    closed_db = probe_sos(closed, 48000.0, control_frequencies=ctrl, nfft=2**16)[0]
     np.testing.assert_allclose(bounded_db.sum(axis=1), closed_db.sum(axis=1), atol=0.05)
 
 
@@ -169,7 +171,7 @@ def test_gain_to_bounded_geq_limits_internal_commands(monkeypatch):
         )
 
     monkeypatch.setattr(graphic_eq, "_geq_sections", capture)
-    sos = gain_to_bounded_geq(
+    sos = gain_to_bounded_graphic_eq(
         np.linspace(-100.0, 100.0, 10),
         48000.0,
         max_command_gain_db=7.0,
@@ -183,25 +185,25 @@ def test_gain_to_bounded_geq_limits_internal_commands(monkeypatch):
 
 def test_gain_to_bounded_geq_designs_multiple_channels():
     targets = np.stack([np.linspace(-6.0, 4.0, 10), np.full(10, -2.0)], axis=1)
-    sos = gain_to_bounded_geq(targets, 48000.0)
+    sos = gain_to_bounded_graphic_eq(targets, 48000.0)
     assert sos.shape == (11, 6, 2)
     for channel in range(targets.shape[1]):
         np.testing.assert_allclose(
             sos[:, :, channel],
-            gain_to_bounded_geq(targets[:, channel], 48000.0),
+            gain_to_bounded_graphic_eq(targets[:, channel], 48000.0),
             atol=1e-12,
         )
 
 
 def test_gain_to_bounded_geq_rejects_invalid_limit():
     with pytest.raises(ValueError, match="finite and positive"):
-        gain_to_bounded_geq(np.zeros(10), 48000.0, max_command_gain_db=0.0)
+        gain_to_bounded_graphic_eq(np.zeros(10), 48000.0, max_command_gain_db=0.0)
 
 
 def test_decay_to_geq_shape():
     rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.6, 0.7, 0.8, 0.9])
     delays = np.array([1000.0, 1300.0, 1700.0])
-    sos = decay_to_geq(rt, delays, 48000.0)
+    sos = decay_to_graphic_eq(rt, delays, 48000.0)
     assert sos.shape == (11, 6, 3)
 
 
@@ -209,7 +211,7 @@ def test_decay_to_geq_normalised():
     """All sections should have a₀ = 1 after normalisation."""
     rt = np.ones(10) * 0.5
     delays = np.array([800.0, 1200.0])
-    sos = decay_to_geq(rt, delays, 48000.0)
+    sos = decay_to_graphic_eq(rt, delays, 48000.0)
     np.testing.assert_allclose(sos[:, 3, :], np.ones((11, 2)), atol=1e-10)
 
 
@@ -219,13 +221,13 @@ def test_gain_to_geq_is_the_same_design_in_torch():
     target = np.stack([np.linspace(-6.0, 4.0, 10), np.full(10, -2.0)], axis=1)
 
     tensor_target = torch.tensor(target, dtype=torch.float64, requires_grad=True)
-    tensor_sos = gain_to_geq(tensor_target, 48000.0)
+    tensor_sos = gain_to_graphic_eq(tensor_target, 48000.0)
     assert tensor_sos.shape == (11, 6, 2)
 
     for channel in range(target.shape[1]):
         np.testing.assert_allclose(
             tensor_sos[:, :, channel].detach().numpy(),
-            gain_to_geq(target[:, channel], 48000.0),
+            gain_to_graphic_eq(target[:, channel], 48000.0),
             atol=1e-12,
         )
 
@@ -267,50 +269,39 @@ def test_gain_designs_have_one_contract(design, n_parameters, n_sections):
     fs = 48000.0
     gain = np.linspace(-6.0, -1.0, n_parameters)
     if design == "graphic_eq":
-        sos = pyFDN.gain_to_geq(gain, fs)
+        sos = pyFDN.gain_to_graphic_eq(gain, fs)
     elif design == "first_order_shelf":
-        sos = pyFDN.gain_to_first_order_shelf(gain[0], gain[1], fs, crossover=3000.0)
+        sos = pyFDN.gain_to_first_order_shelf(
+            gain[0], fs, crossover=3000.0, gain_db_nyquist=gain[1]
+        )
     else:
-        sos = pyFDN.gain_to_one_pole(gain[0], gain[1])
+        sos = pyFDN.gain_to_one_pole(gain[0], gain_db_nyquist=gain[1])
     assert sos.shape == (n_sections, 6)
     np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
 
 
 @pytest.mark.parametrize(
-    ("design_fn", "args"),
+    ("design", "gains"),
     [
-        (pyFDN.gain_to_geq, (np.linspace(-6.0, -1.0, 10), 48000.0)),
+        (lambda g: pyFDN.gain_to_graphic_eq(g[0], 48000.0), [np.linspace(-6, -1, 10)]),
         (
-            pyFDN.gain_to_first_order_shelf,
-            (-6.0, -1.0, 48000.0),
+            lambda g: pyFDN.gain_to_first_order_shelf(
+                g[0], 48000.0, gain_db_nyquist=g[1]
+            ),
+            [-6.0, -1.0],
         ),
-        (pyFDN.gain_to_one_pole, (-6.0, -1.0)),
+        (lambda g: pyFDN.gain_to_one_pole(g[0], gain_db_nyquist=g[1]), [-6.0, -1.0]),
     ],
 )
-def test_gain_designs_run_differentiably_in_torch(design_fn, args):
+def test_gain_designs_run_differentiably_in_torch(design, gains):
     torch = pytest.importorskip("torch")
-    if design_fn is pyFDN.gain_to_geq:
-        tensor_args = [
-            torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
-            args[1],
-        ]
-    elif design_fn is pyFDN.gain_to_first_order_shelf:
-        tensor_args = [
-            torch.tensor(args[0], dtype=torch.float64, requires_grad=True),
-            torch.tensor(args[1], dtype=torch.float64, requires_grad=True),
-            args[2],
-        ]
-    else:
-        tensor_args = [
-            torch.tensor(value, dtype=torch.float64, requires_grad=True)
-            for value in args
-        ]
-    tensor_sos = design_fn(*tensor_args)
+    tensors = [torch.tensor(g, dtype=torch.float64, requires_grad=True) for g in gains]
+    tensor_sos = design(tensors)
     assert torch.all(torch.isfinite(tensor_sos))
     tensor_sos.sum().backward()
-    target_args = [value for value in tensor_args if hasattr(value, "grad")]
-    assert all(value.grad is not None for value in target_args)
-    assert all(torch.all(torch.isfinite(value.grad)) for value in target_args)
+    assert all(
+        t.grad is not None and torch.all(torch.isfinite(t.grad)) for t in tensors
+    )
 
 
 def test_decay_and_gain_geq_are_the_same_mapping():
@@ -319,8 +310,8 @@ def test_decay_and_gain_geq_are_the_same_mapping():
     delays = np.array([809.0, 1153.0])
     gain_db = -60.0 * delays / (rt[:, None] * fs)
     np.testing.assert_allclose(
-        pyFDN.decay_to_geq(rt, delays, fs),
-        pyFDN.gain_to_geq(gain_db, fs),
+        pyFDN.decay_to_graphic_eq(rt, delays, fs),
+        pyFDN.gain_to_graphic_eq(gain_db, fs),
         atol=1e-12,
     )
 
@@ -331,13 +322,13 @@ def test_decay_and_gain_first_order_shelf_are_the_same_mapping():
     rt_dc, rt_nyquist, crossover = 1.4, 0.7, 3500.0
     np.testing.assert_allclose(
         pyFDN.decay_to_first_order_shelf(
-            rt_dc, rt_nyquist, delays, fs, crossover=crossover
+            rt_dc, delays, fs, crossover=crossover, rt_nyquist=rt_nyquist
         ),
         pyFDN.gain_to_first_order_shelf(
             -60.0 * delays / (rt_dc * fs),
-            -60.0 * delays / (rt_nyquist * fs),
             fs,
             crossover=crossover,
+            gain_db_nyquist=-60.0 * delays / (rt_nyquist * fs),
         ),
         atol=1e-12,
     )
@@ -349,7 +340,9 @@ def test_first_order_shelf_crosses_at_the_requested_frequency():
     fs = 48000.0
 
     def midpoint(crossover):
-        sos = pyFDN.gain_to_first_order_shelf(0.0, -12.0, fs, crossover=crossover)
+        sos = pyFDN.gain_to_first_order_shelf(
+            0.0, fs, crossover=crossover, gain_db_nyquist=-12.0
+        )
         w, h = sosfreqz(sos, worN=2**14, fs=fs)
         db = 20.0 * np.log10(np.abs(h) + 1e-300)
         return float(w[np.argmin(np.abs(db + 6.0))])
@@ -363,10 +356,10 @@ def test_decay_and_gain_one_pole_are_the_same_mapping():
     delays = np.array([809.0, 1153.0])
     rt_dc, rt_nyquist = 1.4, 0.7
     np.testing.assert_allclose(
-        pyFDN.decay_to_one_pole(rt_dc, rt_nyquist, delays, fs),
+        pyFDN.decay_to_one_pole(rt_dc, delays, fs, rt_nyquist=rt_nyquist),
         pyFDN.gain_to_one_pole(
             -60.0 * delays / (rt_dc * fs),
-            -60.0 * delays / (rt_nyquist * fs),
+            gain_db_nyquist=-60.0 * delays / (rt_nyquist * fs),
         ),
         atol=1e-12,
     )
@@ -374,9 +367,9 @@ def test_decay_and_gain_one_pole_are_the_same_mapping():
 
 def test_geq_rejects_the_wrong_number_of_targets():
     with pytest.raises(ValueError, match="takes 10 gains"):
-        pyFDN.gain_to_geq(np.zeros(2), 48000.0)
+        pyFDN.gain_to_graphic_eq(np.zeros(2), 48000.0)
     with pytest.raises(ValueError, match="expected 10 reverberation times"):
-        pyFDN.decay_to_geq(np.zeros(2), [100.0], 48000.0)
+        pyFDN.decay_to_graphic_eq(np.zeros(2), [100.0], 48000.0)
 
 
 @pytest.mark.parametrize(
@@ -386,12 +379,11 @@ def test_geq_rejects_the_wrong_number_of_targets():
 def test_attenuation_designs_flatten_delays(design_fn):
     fs = 48000.0
     flat = np.array([100.0, 150.0, 200.0, 250.0])
-    args = (4.0, 1.0)
     np.testing.assert_allclose(
-        design_fn(*args, flat.reshape(2, 2), fs),
-        design_fn(*args, flat, fs),
+        design_fn(4.0, flat.reshape(2, 2), fs, rt_nyquist=1.0),
+        design_fn(4.0, flat, fs, rt_nyquist=1.0),
     )
-    assert design_fn(*args, flat.reshape(1, 4), fs).shape == (1, 6, 4)
+    assert design_fn(4.0, flat.reshape(1, 4), fs, rt_nyquist=1.0).shape == (1, 6, 4)
 
 
 def _band_error_db(sos, gain_db, fs):
@@ -406,7 +398,10 @@ def test_two_stage_is_a_shelf_followed_by_a_geq():
     assert sos.shape == (12, 6)
     np.testing.assert_allclose(sos[:, 3], 1.0, atol=1e-12)
     np.testing.assert_allclose(
-        sos[:1], pyFDN.gain_to_first_order_shelf(-1.0, -8.0, fs, crossover=1000.0)
+        sos[:1],
+        pyFDN.gain_to_first_order_shelf(
+            -1.0, fs, crossover=1000.0, gain_db_nyquist=-8.0
+        ),
     )
     np.testing.assert_allclose(pyFDN.gain_to_two_stage(gain_db, fs), sos, atol=1e-12)
 
@@ -420,7 +415,7 @@ def test_two_stage_matches_a_steep_decay_better_than_the_geq_alone():
     two_stage = _band_error_db(
         pyFDN.decay_to_two_stage(rt, delays, fs)[..., 0], gain_db, fs
     )
-    geq = _band_error_db(pyFDN.decay_to_geq(rt, delays, fs)[..., 0], gain_db, fs)
+    geq = _band_error_db(pyFDN.decay_to_graphic_eq(rt, delays, fs)[..., 0], gain_db, fs)
     assert two_stage.max() < 0.6 * geq.max()
 
 

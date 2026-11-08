@@ -37,9 +37,8 @@ def _():
     from flamo.processor import dsp, system
 
     import pyFDN
-    from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
+    from pyFDN import delay_module, gain_module, sos_filter_module
 
-    np.random.seed(10)
     fs = 48000
     nfft = 2**17
     N = 4  # number of delay lines (1→N input gain, N→2 output gain)
@@ -71,17 +70,18 @@ def _(mo):
 @app.cell
 def _(fs, N, nfft, np, pyFDN):
     # Homogeneous MIMO allpass FDN: delays, G = diag(g^delays), A = G @ U, complete_fdn
-    delays_sch = np.random.randint(51, 300, size=N)
+    _rng = np.random.default_rng(10)
+    delays_sch = _rng.integers(51, 300, size=N)
     _g = pyFDN.rt_to_gain_per_sample(0.07, fs)
     G = np.diag(_g**delays_sch)
-    U = pyFDN.random_orthogonal(N)
+    U = pyFDN.random_orthogonal(N, rng=_rng)
     A_sch = G @ U
-    B_sch, C_sch, D_sch, X = pyFDN.complete_fdn(A_sch, N, N)
+    B_sch, C_sch, D_sch, X = pyFDN.complete_fdn(A_sch, N, rng=_rng)
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        delays_sch, A_sch, B_sch, C_sch, D_sch, fs, nfft=nfft, shell=False, device="cpu"
-    )
+        delays_sch, A_sch, B_sch, C_sch, D_sch, fs, nfft=nfft, device="cpu"
+    ).get_core()
     return (allpass_fdn_core,)
 
 
@@ -98,20 +98,21 @@ def _(mo):
 @app.cell
 def _(fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Main delays (feedback path), input and output delays — in seconds
-    main_delay_sec = np.random.uniform(0.02, 0.04, size=N)
-    input_delay_sec = np.linspace(0.01, 0.02 * N, N) + np.random.uniform(
-        0, 0.001, size=N
-    )
-    output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
+    _rng = np.random.default_rng(10)
+    main_delay_sec = _rng.uniform(0.02, 0.04, size=N)
+    input_delay_sec = np.linspace(0.01, 0.02 * N, N) + _rng.uniform(0, 0.001, size=N)
+    output_delay_sec = np.linspace(0.01, 0.02, N) + _rng.uniform(0, 0.001, size=N)
 
-    main_delays = delay_module(main_delay_sec, nfft, fs=fs, device="cpu")
-    input_delays = delay_module(input_delay_sec, nfft, fs=fs, device="cpu")
-    output_delays = delay_module(output_delay_sec, nfft, fs=fs, device="cpu")
+    main_delays = delay_module(main_delay_sec * fs, nfft, fs=fs, device="cpu")
+    input_delays = delay_module(input_delay_sec * fs, nfft, fs=fs, device="cpu")
+    output_delays = delay_module(output_delay_sec * fs, nfft, fs=fs, device="cpu")
 
     # Attenuation: first-order absorption, canonical (1, 6, N) SOS bank.
     main_delay_smp = np.round(main_delay_sec * fs).astype(float)
     rt_dc, rt_ny = 1.4, 0.3
-    sos = pyFDN.decay_to_first_order_shelf(rt_dc, rt_ny, main_delay_smp, fs=fs)
+    sos = pyFDN.decay_to_first_order_shelf(
+        rt_dc, main_delay_smp, fs=fs, rt_nyquist=rt_ny
+    )
     attenuation = sos_filter_module(sos, nfft, device="cpu")
     return attenuation, input_delays, main_delays, output_delays
 
@@ -143,8 +144,9 @@ def _(
     system,
 ):
     # Input gain 1→N, output gain N→2 (stereo: normalize rows for equal energy)
+    _rng = np.random.default_rng(10)
     B_in = np.ones((N, 1))
-    C_out = np.random.randn(2, N)
+    C_out = _rng.standard_normal((2, N))
     C_out = C_out / np.linalg.norm(C_out, axis=1, keepdims=True)
 
     gain_B_in = gain_module(B_in, nfft, device="cpu")
@@ -180,7 +182,7 @@ def _(
         output_layer=dsp.iFFT(nfft).to("cpu"),
     )
 
-    ir_stereo = pyFDN.flamo_time_response(model).squeeze()
+    ir_stereo = pyFDN.flamo_to_impz(model).squeeze()
     if ir_stereo.ndim == 3:
         ir_stereo = ir_stereo[0]
     return ir_stereo, model

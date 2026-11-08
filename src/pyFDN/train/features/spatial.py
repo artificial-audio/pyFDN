@@ -8,7 +8,7 @@ import torch
 def mimo_rir_eigenvalues_per_frequency(
     ir: torch.Tensor,
     nfft: int = 2048,
-    dim: int = 0,
+    axis: int = 0,
 ) -> torch.Tensor:
     r"""Compute eigenvalues of a MIMO transfer matrix at each frequency bin.
 
@@ -20,11 +20,12 @@ def mimo_rir_eigenvalues_per_frequency(
     ----------
     ir : torch.Tensor
         MIMO impulse response with shape ``(n_samples, n_out, n_in)`` (time
-        axis at ``dim``). The system must be square, i.e. ``n_out == n_in``.
+        axis at ``axis``, as in :func:`pyFDN.edc`). The system must be
+        square, i.e. ``n_out == n_in``.
     nfft : int, default 2048
         DFT length. A response longer than ``nfft`` is truncated, a shorter
         one zero-padded, as in :func:`torch.fft.rfft`.
-    dim : int, default 0
+    axis : int, default 0
         Temporal dimension of the impulse response; the two remaining axes
         are read as ``(n_out, n_in)`` in that order.
 
@@ -54,7 +55,7 @@ def mimo_rir_eigenvalues_per_frequency(
             f"got shape {tuple(ir.shape)}."
         )
 
-    ir = ir.movedim(dim, 0)
+    ir = ir.movedim(axis, 0)
     n_out, n_in = ir.shape[1:]
     if n_out != n_in:
         raise ValueError(f"Expected a square MIMO system, got {n_out}x{n_in}.")

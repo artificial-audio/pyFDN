@@ -60,7 +60,7 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(2)
+    _rng = np.random.default_rng(2)
     fs = 48000
     ir_len = 2 * fs
     rt = 2.0  # seconds
@@ -68,7 +68,7 @@ def _(np, pyFDN):
 
     sizes = [4, 8, 16]  # FDN size: small, medium, large
     delay_scales = [300, 1000, 3000]  # delays: short, medium, long
-    base_delays = np.random.rand(16) + 0.5  # shared random delay pattern
+    base_delays = _rng.random(16) + 0.5  # shared random delay pattern
     all_delays = np.round(
         base_delays[None, :] * np.array(delay_scales)[:, None]
     ).astype(int)
@@ -87,6 +87,7 @@ def _(mo):
 
 @app.cell
 def _(all_delays, fs, gain_per_sample, ir_len, np, pyFDN, sizes):
+    _rng = np.random.default_rng(2)
     rirs = {}
     density = {}
     num_modes = {}
@@ -94,7 +95,7 @@ def _(all_delays, fs, gain_per_sample, ir_len, np, pyFDN, sizes):
         for _s in range(all_delays.shape[0]):
             _delays = all_delays[_s, :_n]
             _g = np.diag(gain_per_sample ** _delays.astype(float))
-            _A = pyFDN.fdn_matrix_gallery(_n, "orthogonal") @ _g
+            _A = pyFDN.fdn_matrix_gallery(_n, "orthogonal", rng=_rng) @ _g
             rirs[(_n, _s)] = pyFDN.dss_to_impz(
                 _delays,
                 _A,
@@ -103,7 +104,7 @@ def _(all_delays, fs, gain_per_sample, ir_len, np, pyFDN, sizes):
                 np.zeros((1, 1)),
                 ir_len,
             )[:, 0, 0]
-            _, density[(_n, _s)] = pyFDN.echo_density(rirs[(_n, _s)], 1024, fs, 0)
+            _, density[(_n, _s)] = pyFDN.echo_density(rirs[(_n, _s)], fs)
             num_modes[(_n, _s)] = int(_delays.sum())
 
     for (_n, _s), _modes in sorted(num_modes.items()):

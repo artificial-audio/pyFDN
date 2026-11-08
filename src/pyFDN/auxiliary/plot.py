@@ -188,13 +188,13 @@ def _new_figure(width_px: float, height_px: float) -> Figure:
     return Figure(figsize=(width_px / _DPI, height_px / _DPI), dpi=_DPI)
 
 
-def _heatmap(ax: Any, M: np.ndarray, zmin: float, zmax: float) -> Any:
+def _heatmap(ax: Any, M: np.ndarray, vmin: float, vmax: float) -> Any:
     """Draw ``M`` as an RdBu heatmap with its origin at the top-left."""
     return ax.imshow(
         M,
         cmap="RdBu",
-        vmin=zmin,
-        vmax=zmax,
+        vmin=vmin,
+        vmax=vmax,
         interpolation="nearest",
         aspect="auto",
     )
@@ -209,8 +209,8 @@ def plot_matrix(
     A: ArrayLike,
     *,
     title: str | None = None,
-    zmin: float | None = None,
-    zmax: float | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     block_boundaries: Sequence[int] | None = None,
 ) -> Figure:
     """Plot a single matrix as a heatmap (RdBu, square pixels).
@@ -221,7 +221,7 @@ def plot_matrix(
         2-D matrix to visualise.
     title : str, optional
         Figure title.
-    zmin, zmax : float, optional
+    vmin, vmax : float, optional
         Color limits. If both None, uses ``(-1, 1)``.
     block_boundaries : sequence of int, optional
         Indices at which to draw dashed dividing lines on both axes, e.g. to
@@ -233,13 +233,13 @@ def plot_matrix(
     matplotlib.figure.Figure
     """
     A = np.asarray(A, dtype=float)
-    zmin, zmax = _shared_color_limits(zmin, zmax)
+    vmin, vmax = _shared_color_limits(vmin, vmax)
 
     n_rows, n_cols = A.shape[:2]
     size = min(max(240.0, 28.0 * max(n_rows, n_cols)), 480.0)
     fig = _new_figure(size, size + (30 if title else 0))
     ax = fig.add_subplot(111)
-    _heatmap(ax, A, zmin, zmax)
+    _heatmap(ax, A, vmin, vmax)
     ax.set_aspect("equal")
     _hide_ticks(ax)
     for k in block_boundaries or ():
@@ -262,12 +262,11 @@ def plot_matrix_grid(
     *,
     titles: Sequence[str] | None = None,
     ncols: int = 2,
-    zmin: float | None = None,
-    zmax: float | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     show_ticks: bool = False,
     title: str | None = None,
-    height: int | None = None,
-    width: int | None = None,
+    figsize: tuple[float, float] | None = None,
 ) -> Figure:
     """Plot several matrices as a grid of heatmaps sharing one color scale.
 
@@ -284,14 +283,14 @@ def plot_matrix_grid(
         One subplot title per matrix (``"\\n"`` for line breaks).
     ncols : int, optional
         Number of columns in the grid. Default 2.
-    zmin, zmax : float, optional
+    vmin, vmax : float, optional
         Shared color limits. If both None, uses (-1, 1).
     show_ticks : bool, optional
         If True, label axes with integer row/column indices. Default False.
     title : str, optional
         Overall figure title.
-    height, width : int, optional
-        Figure size in pixels. Defaults scale with the grid shape.
+    figsize : (float, float), optional
+        Figure size in inches. Defaults scale with the grid shape.
 
     Returns
     -------
@@ -302,23 +301,21 @@ def plot_matrix_grid(
         raise ValueError("at least one matrix is required")
     if titles is not None and len(titles) != len(mats):
         raise ValueError("titles must have one entry per matrix")
-    zmin, zmax = _shared_color_limits(zmin, zmax)
+    vmin, vmax = _shared_color_limits(vmin, vmax)
 
     n = len(mats)
     ncols = max(1, min(ncols, n))
     nrows = -(-n // ncols)  # ceil division
 
-    if height is None:
-        height = 300 * nrows + (60 if title else 20)
-    if width is None:
-        width = 300 * ncols + 80
-    fig = _new_figure(width, height)
+    if figsize is None:
+        figsize = (3.0 * ncols + 0.8, 3.0 * nrows + (0.6 if title else 0.2))
+    fig = _new_figure(figsize[0] * _DPI, figsize[1] * _DPI)
     fig.set_layout_engine("constrained")
     axes = np.atleast_1d(fig.subplots(nrows, ncols, squeeze=False)).ravel()
 
     image = None
     for idx, (ax, mat) in enumerate(zip(axes, mats, strict=False)):
-        image = _heatmap(ax, mat, zmin, zmax)
+        image = _heatmap(ax, mat, vmin, vmax)
         ax.set_aspect("equal")
         if show_ticks:
             ax.set_xticks(range(mat.shape[1]))
@@ -365,30 +362,30 @@ def _system_matrix_blocks(
     return A, B, C, D
 
 
-def _shared_color_limits(zmin: float | None, zmax: float | None) -> tuple[float, float]:
+def _shared_color_limits(vmin: float | None, vmax: float | None) -> tuple[float, float]:
     """Resolve shared heatmap color limits, defaulting to a symmetric (-1, 1)."""
-    if zmin is None and zmax is None:
+    if vmin is None and vmax is None:
         return -1.0, 1.0
-    if zmin is None:
-        assert zmax is not None  # both-None case handled above
-        return (-abs(zmax) if zmax != 0 else -1.0), zmax
-    if zmax is None:
-        return zmin, (abs(zmin) if zmin != 0 else 1.0)
-    return zmin, zmax
+    if vmin is None:
+        assert vmax is not None  # both-None case handled above
+        return (-abs(vmax) if vmax != 0 else -1.0), vmax
+    if vmax is None:
+        return vmin, (abs(vmin) if vmin != 0 else 1.0)
+    return vmin, vmax
 
 
 def _draw_system_matrix(
     fig: Figure,
     cells: Sequence[Any],
     blocks: Sequence[np.ndarray],
-    zmin: float,
-    zmax: float,
+    vmin: float,
+    vmax: float,
 ) -> list[Any]:
     """Draw the A, B, C, D blocks into four gridspec cells; return the axes."""
     axes = []
     for cell, blk, name in zip(cells, blocks, "Abcd", strict=True):
         ax = fig.add_subplot(cell)
-        _heatmap(ax, blk, zmin, zmax)
+        _heatmap(ax, blk, vmin, vmax)
         _hide_ticks(ax)
         ax.set_title(name)
         axes.append(ax)
@@ -402,8 +399,8 @@ def plot_system_matrix(
     D: ArrayLike,
     *,
     title: str | None = None,
-    zmin: float | None = None,
-    zmax: float | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
 ) -> Figure:
     """Plot system matrix [A B; C D] as 2x2 heatmaps, shared RdBu color scale.
 
@@ -414,7 +411,7 @@ def plot_system_matrix(
     ----------
     A, B, C, D : array-like
         Feedback matrix, input gain, output gain, direct gain.
-    zmin, zmax : float, optional
+    vmin, vmax : float, optional
         Shared color limits. If both None, uses (-1, 1).
     title : str, optional
         Figure title.
@@ -424,7 +421,7 @@ def plot_system_matrix(
     matplotlib.figure.Figure
     """
     A, B, C, D = _system_matrix_blocks(A, B, C, D)
-    zmin, zmax = _shared_color_limits(zmin, zmax)
+    vmin, vmax = _shared_color_limits(vmin, vmax)
 
     # Layout: [A (m×n)  B (m×p);  C (q×n)  D (q×p)], sized so one cell has the
     # same physical size in all four subplots.
@@ -438,7 +435,7 @@ def plot_system_matrix(
     fig.set_layout_engine("constrained")
     gs = fig.add_gridspec(2, 2, width_ratios=[n, p], height_ratios=[m, q])
     axes = _draw_system_matrix(
-        fig, [gs[0, 0], gs[0, 1], gs[1, 0], gs[1, 1]], [A, B, C, D], zmin, zmax
+        fig, [gs[0, 0], gs[0, 1], gs[1, 0], gs[1, 1]], [A, B, C, D], vmin, vmax
     )
     fig.colorbar(axes[-1].images[0], ax=axes, shrink=0.8)
     if title:
@@ -563,8 +560,8 @@ def plot_fdn_parameter(
     post_output: ArrayLike | None = None,
     fs: float | None = None,
     nfft: int = 512,
-    zmin: float | None = None,
-    zmax: float | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     title: str | None = None,
 ) -> Figure:
     """Plot all FDN parameters in one figure.
@@ -605,7 +602,7 @@ def plot_fdn_parameter(
         logarithmic frequency axis in Hz; otherwise over rad/sample.
     nfft : int, optional
         Number of frequency points for the filter responses. Default 512.
-    zmin, zmax : float, optional
+    vmin, vmax : float, optional
         Shared color limits for the heatmaps. If both None, uses (-1, 1).
     title : str, optional
         Figure title.
@@ -617,7 +614,7 @@ def plot_fdn_parameter(
     from scipy.signal import sosfreqz
 
     A, B, C, D = _system_matrix_blocks(A, B, C, D)
-    zmin, zmax = _shared_color_limits(zmin, zmax)
+    vmin, vmax = _shared_color_limits(vmin, vmax)
     delays_arr = np.asarray(delays, dtype=float).ravel()
 
     m, n = A.shape
@@ -655,7 +652,7 @@ def plot_fdn_parameter(
 
     # The A, B, C, D heatmaps, as in plot_system_matrix.
     ax_A, *_ = _draw_system_matrix(
-        fig, [gs[1, 0], gs[1, 1], gs[2, 0], gs[2, 1]], [A, B, C, D], zmin, zmax
+        fig, [gs[1, 0], gs[1, 1], gs[2, 0], gs[2, 1]], [A, B, C, D], vmin, vmax
     )
 
     # Delays as bars aligned with the columns of A.
@@ -896,96 +893,74 @@ def plot_edc(
 
 
 def plot_impulse_response_matrix(
-    t: ArrayLike | None,
     ir: ArrayLike,
     *,
+    fs: float | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
     title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
-    fig: Figure | None = None,
     **plot_kwargs: Any,
-) -> tuple[Figure, np.ndarray, np.ndarray]:
-    """Plot matrix of impulse responses in a subplot grid (out x in).
+) -> Figure:
+    """Plot a matrix of impulse responses in a subplot grid (out x in).
 
     Parameters
     ----------
-    t : array-like, optional
-        x-values (e.g. time). If None, uses 0 .. size(ir,2)-1.
     ir : array-like
-        Shape (n_samples, n_out, n_in). Each subplot is ir[:, out, in].
+        Shape ``(n_samples, n_out, n_in)``, the layout of
+        :func:`pyFDN.dss_to_impz`; each subplot is ``ir[:, out, in]``. An FIR
+        matrix ``(n_out, n_in, taps)`` is ``fir.transpose(2, 0, 1)``.
+    fs : float, optional
+        Sample rate in Hz; the time axis is in seconds when given, else in
+        samples, as in :func:`plot_impulse_response`.
     xlabel, ylabel, title : str, optional
         Shared axis labels and title.
     xlim, ylim : tuple, optional
         Shared axis limits. If None, computed from data.
-    fig : Figure, optional
-        Figure to use.
     **plot_kwargs
-        Passed to ax.plot().
+        Passed to ``ax.plot()``.
 
     Returns
     -------
-    fig : Figure
-    plot_axes : ndarray of Axes
-        Shape (n_out, n_in).
-    plot_handles : ndarray of Line2D
-        Shape (n_out, n_in).
+    matplotlib.figure.Figure
+        Its axes are ``fig.axes``, row by row.
     """
-    from matplotlib import pyplot as plt
-
     ir = np.asarray(ir)
     if ir.ndim != 3:
-        raise ValueError("ir must be 3-D (n_samples,n_out, n_in)")
+        raise ValueError("ir must be 3-D (n_samples, n_out, n_in)")
     n_samples, n_out, n_in = ir.shape
-    if t is None:
-        t = np.arange(n_samples)
-    t = np.asarray(t).ravel()
+    t = np.arange(n_samples) / (fs if fs else 1.0)
 
-    if fig is None:
-        fig, plot_axes = plt.subplots(
-            n_out, n_in, sharex=True, sharey=True, squeeze=False
-        )
-    else:
-        if len(fig.axes) != n_out * n_in:
-            fig, plot_axes = plt.subplots(
-                n_out, n_in, sharex=True, sharey=True, squeeze=False, figure=fig
-            )
-        else:
-            plot_axes = np.array(fig.axes).reshape(n_out, n_in)
-
-    plot_handles = np.empty((n_out, n_in), dtype=object)
+    fig = _new_figure(200 * n_in + 100, 150 * n_out + 100)
+    plot_axes = fig.subplots(n_out, n_in, sharex=True, sharey=True, squeeze=False)
     for i_out in range(n_out):
         for i_in in range(n_in):
             ax = plot_axes[i_out, i_in]
-            (h,) = ax.plot(t, ir[:, i_out, i_in], **plot_kwargs)
-            plot_handles[i_out, i_in] = h
+            ax.plot(t, ir[:, i_out, i_in], **plot_kwargs)
             ax.grid(True)
-    # Hide inner tick labels
+            if xlim is not None:
+                ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
     for ax in plot_axes[:, 1:].ravel():
-        ax.set_yticklabels([])
+        ax.tick_params(labelleft=False)
     for ax in plot_axes[:-1, :].ravel():
-        ax.set_xticklabels([])
+        ax.tick_params(labelbottom=False)
     if xlabel:
         fig.supxlabel(xlabel)
     if ylabel:
         fig.supylabel(ylabel)
     if title:
         fig.suptitle(title)
-    if xlim is not None:
-        for ax in plot_axes.ravel():
-            ax.set_xlim(xlim)
-    if ylim is not None:
-        for ax in plot_axes.ravel():
-            ax.set_ylim(ylim)
     fig.tight_layout()
-    return fig, plot_axes, plot_handles
+    return fig
 
 
 def plot_spectrogram(
     ir: ArrayLike,
-    fs: float,
     *,
+    fs: float,
     nperseg: int = 1024,
     noverlap: int | None = None,
     window: str | tuple[Any, ...] = "blackman",
@@ -995,8 +970,8 @@ def plot_spectrogram(
     title: str | None = "Spectrogram",
     xlabel: str = "Time [s]",
     ylabel: str = "Frequency [Hz]",
-    height: int = 500,
-    colorscale: str = "Viridis",
+    figsize: tuple[float, float] = (8.0, 5.0),
+    cmap: str = "viridis",
 ) -> Figure:
     """Plot spectrogram of a 1-D signal as a Matplotlib image.
 
@@ -1026,10 +1001,10 @@ def plot_spectrogram(
         Figure title.
     xlabel, ylabel : str
         Axis labels.
-    height : int
-        Figure height in pixels.
-    colorscale : str
-        Colormap name (lowercased to a Matplotlib colormap). Default "Viridis".
+    figsize : (float, float)
+        Figure size in inches.
+    cmap : str
+        Matplotlib colormap. Default "viridis".
 
     Returns
     -------
@@ -1063,12 +1038,10 @@ def plot_spectrogram(
     if xmax is None:
         xmax = float(t[-1])
 
-    cmap = colorscale.lower()
     vmax = float(np.max(Sxx_plot)) if Sxx_plot.size else 0.0
     vmin = vmax - float(dynamic_range) if dynamic_range is not None else None
 
-    dpi = 100
-    fig = Figure(figsize=(8.0, height / dpi), dpi=dpi)
+    fig = Figure(figsize=figsize, dpi=_DPI)
     ax = fig.add_subplot(111)
     mesh = ax.pcolormesh(
         t, f_plot, Sxx_plot, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto"
@@ -1123,7 +1096,7 @@ def animate(
         import functools
 
         anim = pyFDN.animate(
-            functools.partial(pyFDN.plot_matrix, zmin=-1, zmax=1),
+            functools.partial(pyFDN.plot_matrix, vmin=-1, vmax=1),
             [C[:, :, k] for k in range(C.shape[2])],
             labels=t,
             label_prefix="t = ",

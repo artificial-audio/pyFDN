@@ -7,11 +7,10 @@ Usage and supported models
 Lindsey–Fox (LF) is an opt-in alternative for modal decomposition. The existing
 DSS ``eig`` and FLAMO ``eai`` defaults are unchanged::
 
-   residues, poles, direct, pairs, meta = pyFDN.dss_to_pr(
-       delays, A, B, C, D, mode="lindsey_fox")
+   pr, info = pyFDN.dss_to_pr(delays, A, B, C, D, mode="lindsey_fox")
 
-   residues, poles, direct, pairs, meta = pyFDN.flamo_to_pr(
-       model, mode="lindsey_fox", num_poles=known_order)
+   pr, info = pyFDN.flamo_to_pr(model, mode="lindsey_fox", num_poles=known_order)
+   ir = pyFDN.pr_to_impz(*pr, ir_len)
 
 The static DSS path requires finite real matrices, nonsingular ``A``, and
 positive integer delays. It remains NumPy/SciPy-only, including on failure.
@@ -59,7 +58,7 @@ errors. Other cases use direct response evaluation. FLAMO additionally reports
 
 LF requires a complete decomposition. Two-tap and IIR absorption can create
 unresolved groups near filter zeros, which LF may fail to resolve within its
-budget. Callers can choose ``mode="eai"`` explicitly as a separate solve.
+budget. Callers can run EAI, ``flamo_to_pr``'s default, as a separate solve.
 For EAI only, ``allow_approximate=True`` permits a nonempty incomplete result
 if both internal and external response checks pass. A warning and metadata
 ``complete=False``, ``approximate=True``, and ``omittedPoleCount`` report that

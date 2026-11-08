@@ -30,6 +30,7 @@ import numpy as np
 import scipy.linalg as sla
 from scipy.optimize import minimize
 
+from pyFDN.auxiliary.utils import as_generator
 from pyFDN.generate.orthogonal import random_orthogonal
 
 # ---------------------------- Utilities -------------------------------------
@@ -107,7 +108,9 @@ def diagonal_similarity_from_abs2_lyapunov(
     This is a sufficient-condition style preprocessing; it does NOT guarantee existence for
     arbitrary A. If (I - M) is ill-conditioned or yields nonpositive entries, this fails.
 
-    Returns:
+    Returns
+    -------
+    ndarray
         x : (N,) positive vector, X = diag(x)
     """
     A = np.asarray(A)
@@ -175,7 +178,9 @@ def map_back_from_similarity(
 # ------------------------ Completion methods ---------------------------------
 
 
-def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
+def complete_full_mimo_halmos(
+    A: np.ndarray, psd_clip: float = 0.0
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Full MIMO (k=N) Halmos/Julia dilation.
 
@@ -206,12 +211,16 @@ def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
 
 
 def complete_general_mimo_svd(
-    A: np.ndarray, k: int, tol_one: float = 1e-8, choose_smallest_if_needed: bool = True
-):
+    A: np.ndarray,
+    num_io: int,
+    *,
+    tol_one: float = 1e-8,
+    choose_smallest_if_needed: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     General MIMO completion via defect subspace (CS/SVD-based).
 
-    Given A (NxN) and k <= N, we aim for a balanced orthogonal/unitary block::
+    Given A (NxN) and k = num_io <= N, we aim for a balanced orthogonal/unitary block::
 
         V = [[A, B],
              [C, D]]
@@ -235,12 +244,13 @@ def complete_general_mimo_svd(
 
     Returns: B (Nxk), C (kxN), D (kxk)
     """
+    k = num_io
     A = np.asarray(A)
     N = A.shape[0]
     if A.shape != (N, N):
         raise ValueError("A must be square.")
     if not (1 <= k <= N):
-        raise ValueError("k must satisfy 1 <= k <= N")
+        raise ValueError("num_io must satisfy 1 <= num_io <= N")
 
     # SVD: A = U diag(s) Vh
     U, s, Vh = np.linalg.svd(A, full_matrices=True)
@@ -397,8 +407,10 @@ def optimize_diagonal_similarity_rank_defect_scipy(
     """
     Optimize u (log-diagonal scaling) so that G(u) is PSD with rank ~ k.
 
-    Returns:
-      u_opt, info dict including achieved eigenvalues and success flag.
+    Returns
+    -------
+    object
+        u_opt, info dict including achieved eigenvalues and success flag.
     """
     A = np.asarray(A)
     N = A.shape[0]
@@ -486,38 +498,48 @@ def optimize_diagonal_similarity_rank_defect_scipy(
 
 def complete_fdn(
     A: np.ndarray,
-    k: int | None = None,
+    num_io: int | None = None,
+    *,
     preprocessing: str = "optimize",
     q: float | np.ndarray = 1.0,
     tol_one: float = 1e-8,
     psd_clip: float = 0.0,
-    return_similarity: bool = True,
-):
+    rng: np.random.Generator | int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute a completion (B,C,D) for given A.
 
-    Args:
-      A: (N,N) feedback matrix
-      k: number of IO channels. If None -> full MIMO (k=N).
-      preprocessing:
-         "none"  -> X = I
-         "optimize" -> find diagonal similarity X=diag(x) that makes G(u) PSD with rank ~ k.
-      q: RHS for diagonal similarity solve (scalar or (N,) vector).
-      tol_one: tolerance for 'singular value equals 1' decisions in general MIMO.
-      psd_clip: eigenvalue clip (>=0) for PSD square roots in full MIMO completion.
-      return_similarity: if True, returns (B,C,D,x). else (B,C,D).
+    Parameters
+    ----------
+    A
+        (N,N) feedback matrix
+    num_io
+        number of IO channels k, as in complete_orthogonal. If None -> full MIMO (k=N).
+    preprocessing
+        "none"  -> X = I
+        "optimize" -> find diagonal similarity X=diag(x) that makes G(u) PSD with rank ~ k.
+    q
+        RHS for diagonal similarity solve (scalar or (N,) vector).
+    tol_one
+        tolerance for 'singular value equals 1' decisions in general MIMO.
+    psd_clip
+        eigenvalue clip (>=0) for PSD square roots in full MIMO completion.
+    rng
+        Generator or integer seed for the random start and mixing.
 
-    Returns:
-      B, C, D, x (if return_similarity), where x is diagonal of X used (x=ones if none).
+    Returns
+    -------
+    object
+        B, C, D, x, where x is the diagonal of the similarity X used (ones if none).
     """
+    rng = as_generator(rng)
     A = np.asarray(A)
     N = A.shape[0]
     if A.shape != (N, N):
         raise ValueError("A must be square.")
-    if k is None:
-        k = N
+    k = N if num_io is None else num_io
     if not (1 <= k <= N):
-        raise ValueError("k must satisfy 1 <= k <= N")
+        raise ValueError("num_io must satisfy 1 <= num_io <= N")
 
     # Preprocessing: compute x and A_tilde
     if preprocessing == "none" or k == N:
@@ -527,7 +549,7 @@ def complete_fdn(
         tail_norm_threshold = 1e-8  # can be parameterized as needed
         max_retries = 10
         for attempt in range(max_retries):
-            u = np.random.rand(N)
+            u = rng.random((N,))
             u, info = optimize_diagonal_similarity_rank_defect_scipy(
                 A,
                 k=k,
@@ -557,13 +579,13 @@ def complete_fdn(
     if k == N:
         Bt, Ct, Dt = complete_full_mimo_halmos(At, psd_clip=psd_clip)
     else:
-        Bt, Ct, Dt = complete_general_mimo_svd(At, k=k, tol_one=tol_one)
+        Bt, Ct, Dt = complete_general_mimo_svd(At, k, tol_one=tol_one)
 
     # Random orthogonal transformation to mix B, C, and D
-    UU = random_orthogonal(k)
+    UU = random_orthogonal(k, rng=rng)
     Bt = Bt @ UU
     Dt = Dt @ UU
-    VV = random_orthogonal(k)
+    VV = random_orthogonal(k, rng=rng)
     Ct = VV @ Ct
     Dt = VV @ Dt
 
@@ -573,9 +595,7 @@ def complete_fdn(
     else:
         B, C, D = map_back_from_similarity(Bt, Ct, Dt, x)
 
-    if return_similarity:
-        return B, C, D, x
-    return B, C, D
+    return B, C, D, x
 
 
 def check_completion(
@@ -585,8 +605,10 @@ def check_completion(
     Check balanced orthogonality/unitarity of V = [[A,B],[C,D]]:
       V^* V should be identity.
 
-    Returns:
-      dict with Frobenius norm error and max-abs error.
+    Returns
+    -------
+    dict[str, Any]
+        dict with Frobenius norm error and max-abs error.
     """
     V = block_matrix(A, B, C, D)
     n = V.shape[1]

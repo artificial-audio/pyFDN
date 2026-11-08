@@ -12,6 +12,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import pytest
 from scipy.optimize import linear_sum_assignment
 
 from pyFDN.generate.orthogonal import random_orthogonal
@@ -43,7 +44,7 @@ def test_dss_to_pr_eig_mode_reconstructs_ir():
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_pair, _ = dss_to_pr(delays, a, b, c, d, mode="eig")
+    (residues, poles, direct, is_pair), _ = dss_to_pr(delays, a, b, c, d, mode="eig")
 
     ir_len = 512
     ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
@@ -59,7 +60,7 @@ def test_dss_to_pr_roots_mode_reconstructs_ir():
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_conj, _ = dss_to_pr(
+    (residues, poles, direct, is_conj), _ = dss_to_pr(
         delays,
         a,
         b,
@@ -86,7 +87,9 @@ def test_dss_to_pr_roots_mode_meta_shape():
     c = np.eye(1, delays.size)
     d = np.zeros((1, 1))
 
-    residues, poles, direct, is_pair, meta = dss_to_pr(delays, a, b, c, d, mode="roots")
+    (residues, poles, direct, is_pair), meta = dss_to_pr(
+        delays, a, b, c, d, mode="roots"
+    )
 
     assert residues.ndim == 3
     assert poles.ndim == 1
@@ -100,31 +103,26 @@ def test_dss_to_pr_roots_mode_meta_shape():
 # ───────────────────────────────────────────────────────────────────────────
 
 
-def test_dss_to_pr_eai_matches_roots():
-    """EAI mode (float64 + SVD post-refinement) must agree with the roots
-    backend at near-machine precision in poles, residues and reconstructed IR."""
+def test_flamo_to_pr_eai_matches_dss_to_pr_roots():
+    """EAI on a float64 FLAMO model (with SVD post-refinement) must agree with
+    the roots backend at near-machine precision in poles, residues and IR."""
+    torch = pytest.importorskip("torch")
+    from pyFDN.translate.dss_to_flamo import dss_to_flamo
+    from pyFDN.translate.flamo_to_pr import flamo_to_pr
+
     delays = np.array([4, 5, 6], dtype=int)
     a = np.array([[0.25, -0.1, 0.05], [0.15, 0.3, -0.2], [0.1, 0.05, 0.2]])
     b = np.eye(3, 1)
     c = np.eye(1, 3)
     d = np.zeros((1, 1))
 
-    res_ref, pol_ref, direct_ref, pair_ref, _ = dss_to_pr(
+    (res_ref, pol_ref, direct_ref, pair_ref), _ = dss_to_pr(
         delays, a, b, c, d, mode="roots"
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        res_new, pol_new, direct_new, pair_new, _ = dss_to_pr(
-            delays,
-            a,
-            b,
-            c,
-            d,
-            mode="eai",
-            fs=1.0,
-            nfft=1024,
-            verbose=False,
-        )
+        model = dss_to_flamo(delays, a, b, c, d, 1.0, nfft=1024, dtype=torch.float64)
+        (res_new, pol_new, direct_new, pair_new), _ = flamo_to_pr(model)
 
     # Same pole-set cardinality (after conjugate-pair reduction).
     assert pol_new.size == pol_ref.size
@@ -148,17 +146,17 @@ def test_dss_to_pr_eai_matches_roots():
 
 
 def test_dss_to_pr_residue_lstsq_match():
-    np.random.seed(5)
+    rng = np.random.default_rng(5)
     n = 4
-    delays = np.random.randint(50, 101, size=n)
-    a = random_orthogonal(n)
+    delays = rng.integers(50, 101, size=n)
+    a = random_orthogonal(n, rng=rng)
     b = np.eye(n, 1)
     c = np.eye(1, n)
     d = np.zeros((1, 1))
 
     ir_len = 4 * int(np.sum(delays))
     ir_time = dss_to_impz(delays, a, b, c, d, ir_len)[:, 0, 0]
-    residues, poles, direct, is_conj, _ = dss_to_pr(
+    (residues, poles, direct, is_conj), _ = dss_to_pr(
         delays,
         a,
         b,
@@ -167,7 +165,7 @@ def test_dss_to_pr_residue_lstsq_match():
         mode="eig",
     )
     ir_modal = pr_to_impz(residues, poles, direct, is_conj, ir_len)[:, 0, 0]
-    residues_from_ir, _, _ = impz_to_res(ir_time, poles, is_conj)
+    residues_from_ir = impz_to_res(ir_time, poles, is_conj)
 
     np.testing.assert_allclose(ir_modal, ir_time, rtol=1e-6, atol=1e-7)
     np.testing.assert_allclose(

@@ -86,17 +86,19 @@ def _geq_control_problem(fs: float) -> tuple[np.ndarray, np.ndarray]:
         BANDWIDTH_R,
         _PROTOTYPE_GAIN_DB * np.ones(N_GRAPHIC_EQ_SECTIONS),
     )
-    system, _, _ = probe_sos(prototype, control_frequencies, _FFT_LEN, fs)
+    system, _, _ = probe_sos(
+        prototype, fs, control_frequencies=control_frequencies, nfft=_FFT_LEN
+    )
     return system / _PROTOTYPE_GAIN_DB, interpolation
 
 
-def geq_design_matrix(fs: float) -> np.ndarray:
+def graphic_eq_design_matrix(fs: float) -> np.ndarray:
     """Return the constant map from ten band targets to eleven command gains."""
     system, interpolation = _geq_control_problem(float(fs))
     return np.linalg.pinv(system) @ interpolation
 
 
-def gain_to_geq(
+def gain_to_graphic_eq(
     gain_db: Any,
     fs: float,
     *,
@@ -114,7 +116,7 @@ def gain_to_geq(
         got = 0 if gain_db.ndim == 0 else gain_db.shape[0]
         raise ValueError(f"graphic_eq takes {N_GRAPHIC_EQ_BANDS} gains, got {got}")
 
-    matrix = geq_design_matrix(fs) if design_matrix is None else design_matrix
+    matrix = graphic_eq_design_matrix(fs) if design_matrix is None else design_matrix
     if xp is not np and array_namespace(matrix) is np:
         matrix = xp.as_tensor(matrix, dtype=gain_db.dtype, device=gain_db.device)
     center_omega, shelving_omega = _band_omega(float(fs))
@@ -123,7 +125,7 @@ def gain_to_geq(
     return sos
 
 
-def gain_to_bounded_geq(
+def gain_to_bounded_graphic_eq(
     gain_db: Any,
     fs: float,
     *,
@@ -131,7 +133,7 @@ def gain_to_bounded_geq(
 ) -> np.ndarray:
     """Design a graphic EQ with bounded internal section gains.
 
-    This is the constrained, NumPy-only counterpart of :func:`gain_to_geq`.
+    This is the constrained, NumPy-only counterpart of :func:`gain_to_graphic_eq`.
     The flat-gain section remains unbounded; each of the ten frequency-shaped
     sections is limited to ``max_command_gain_db`` in either direction.
 
@@ -139,7 +141,7 @@ def gain_to_bounded_geq(
     :data:`COMMAND_FREQUENCIES` (31.25 Hz through 16 kHz).
     """
     if type(gain_db).__module__.split(".", 1)[0] == "torch":
-        raise TypeError("gain_to_bounded_geq is NumPy-only")
+        raise TypeError("gain_to_bounded_graphic_eq is NumPy-only")
     gain_db = np.asarray(gain_db, dtype=float)
     if gain_db.ndim not in (1, 2) or gain_db.shape[0] != N_GRAPHIC_EQ_BANDS:
         got = 0 if gain_db.ndim == 0 else gain_db.shape[0]
@@ -182,7 +184,7 @@ __all__ = [
     "N_GRAPHIC_EQ_BANDS",
     "N_GRAPHIC_EQ_SECTIONS",
     "SHELVING_CROSSOVER",
-    "gain_to_bounded_geq",
-    "gain_to_geq",
-    "geq_design_matrix",
+    "gain_to_bounded_graphic_eq",
+    "gain_to_graphic_eq",
+    "graphic_eq_design_matrix",
 ]

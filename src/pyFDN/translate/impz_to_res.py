@@ -6,19 +6,22 @@ import numpy as np
 
 
 def impz_to_res(
-    impulse_response: np.ndarray,
+    ir: np.ndarray,
     poles: np.ndarray,
     is_conjugate_pole_pair: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Estimate residues from impulse response and known poles via least squares.
+
+    Returns one residue per pole, conjugate pairs stored once as in
+    :class:`pyFDN.PoleResidue`.
 
     Notes
     -----
     This function follows fdnToolbox's ``impz2res.m`` and is currently
     implemented for SISO impulse responses.
     """
-    ir = np.asarray(impulse_response, dtype=np.float64)
+    ir = np.asarray(ir, dtype=np.float64)
     if ir.ndim != 1:
         raise ValueError("impz_to_res currently expects a 1-D SISO impulse response")
 
@@ -29,7 +32,7 @@ def impz_to_res(
     impulse_response_length = int(4 * poles.size)
     if ir.size < impulse_response_length:
         raise ValueError(
-            "impulse_response is shorter than 4 * len(poles), "
+            "ir is shorter than 4 * len(poles), "
             "which is required by impz2res least-squares formulation"
         )
 
@@ -49,5 +52,4 @@ def impz_to_res(
     b0 = b[: poles.size]
     b1 = b[poles.size :]
 
-    residues = (b0 + b1 * np.real(poles)) + 1j * (np.imag(poles) * b1)
-    return residues, b0, b1
+    return (b0 + b1 * np.real(poles)) + 1j * (np.imag(poles) * b1)

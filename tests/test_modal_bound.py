@@ -120,7 +120,7 @@ def test_static_refinement_visits_only_representatives(monkeypatch):
         return original(poles, *args)
 
     monkeypatch.setattr(module, "refine_dss_poles", refine)
-    result = pyFDN.dss_to_pr(
+    result, info = pyFDN.dss_to_pr(
         [3, 5],
         [[0.4, 0.1], [-0.1, 0.3]],
         np.eye(2),
@@ -128,6 +128,6 @@ def test_static_refinement_visits_only_representatives(monkeypatch):
         np.zeros((2, 2)),
         mode="lindsey_fox",
     )
-    assert result[4]["solver"] == "lindsey_fox"
-    assert counts == [result[1].size]
-    assert counts[0] < 8 and np.sum(1 + result[3]) == 8
+    assert info["solver"] == "lindsey_fox"
+    assert counts == [result.poles.size]
+    assert counts[0] < 8 and np.sum(1 + result.is_conjugate_pole_pair) == 8

@@ -100,7 +100,7 @@ def _(fs, gain_per_sample, nfft, np, pyFDN, total_delay):
     model = pyFDN.dss_to_flamo(
         *_dss._replace(A=A), fs, nfft=nfft, device="cpu", **_filters
     )
-    ir_vanilla = pyFDN.flamo_time_response(model).flatten()
+    ir_vanilla = pyFDN.flamo_to_impz(model).flatten()
     pyFDN.plot_flamo_graph(model)
     return ir_vanilla, model
 
@@ -124,7 +124,7 @@ def _(delays, delays_in, delays_out, model, pyFDN):
         delays_out,
     )
 
-    ir_delay_matrix = pyFDN.flamo_time_response(model_delay_matrix).flatten()
+    ir_delay_matrix = pyFDN.flamo_to_impz(model_delay_matrix).flatten()
 
     pyFDN.plot_flamo_graph(model_delay_matrix)
     return ir_delay_matrix, model_delay_matrix
@@ -144,7 +144,7 @@ def _(mo):
 def _(model_delay_matrix, pyFDN):
     model_swapped = pyFDN.swap_flamo_recursion_paths(model_delay_matrix)
 
-    ir_swapped = pyFDN.flamo_time_response(model_swapped).flatten()
+    ir_swapped = pyFDN.flamo_to_impz(model_swapped).flatten()
 
     pyFDN.plot_flamo_graph(model_swapped)
     return (ir_swapped,)
@@ -164,9 +164,9 @@ def _(mo):
 def _(fs, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, plt, pyFDN):
     t = np.arange(len(ir_vanilla)) / fs
 
-    _, echo_vanilla = pyFDN.echo_density(ir_vanilla, n=1024, fs=fs)
-    _, echo_delay_matrix = pyFDN.echo_density(ir_delay_matrix, n=1024, fs=fs)
-    _, echo_swapped = pyFDN.echo_density(ir_swapped, n=1024, fs=fs)
+    _, echo_vanilla = pyFDN.echo_density(ir_vanilla, fs)
+    _, echo_delay_matrix = pyFDN.echo_density(ir_delay_matrix, fs)
+    _, echo_swapped = pyFDN.echo_density(ir_swapped, fs)
 
     fig = pyFDN.plot_impulse_response(
         ir_vanilla,

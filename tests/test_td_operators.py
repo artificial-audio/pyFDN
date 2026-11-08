@@ -25,7 +25,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
     """parameters for the time_varying matrix"""
 
     tvm_kwargs = {
-        "N": N,
+        "channels": N,
         "fs": fs,
         "rate": 1.3,
         "depth": 0.2,
@@ -36,7 +36,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
 
 def _absorption_sos(delays: np.ndarray, fs: float) -> np.ndarray:
     """Per-delay first-order shelving absorption, shape (n_sections, 6, N)."""
-    return pyFDN.decay_to_first_order_shelf(1.5, 0.4, delays, fs)
+    return pyFDN.decay_to_first_order_shelf(1.5, delays, fs, rt_nyquist=0.4)
 
 
 def _noise(rng: np.random.Generator, length: int, channels: int) -> np.ndarray:
@@ -311,7 +311,7 @@ def test_tvmatrix() -> None:
     fs = 48_000.0
 
     # td engine
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), rng=3)
 
     # input signal
     n_samples = 400
@@ -350,7 +350,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     fs = 48_000.0
 
     # td engine
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), rng=3)
 
     # input signal
     n_samples = 400
@@ -426,12 +426,29 @@ def _shimmer_operators(N: int, fs: float) -> dict[str, td.TimeOperator]:
     """One instance of every stateful nonlinear operator, active on channels 0-1."""
     active = [0, 1]
     return {
-        "ControllableFullWaveRect": td.ControllableFullWaveRect(N, 0.5, active),
-        "SDFD": td.SDFD(N, 0.3, active),
-        "RingModulator": td.RingModulator(N, 200.0, np.sqrt(2), fs, active),
-        "PitchShift": td.PitchShift(N, 4096, 1024, 700.0, fs, active),
+        "ControllableFullWaveRectifier": td.ControllableFullWaveRectifier(
+            N, alpha=0.5, active_channels=active
+        ),
+        "SignalDependentFractionalDelay": td.SignalDependentFractionalDelay(
+            N, fraction=0.3, active_channels=active
+        ),
+        "RingModulator": td.RingModulator(
+            N, fs, rate=200.0, depth=np.sqrt(2), active_channels=active
+        ),
+        "PitchShift": td.PitchShift(
+            N,
+            max_delay=4096,
+            window=1024,
+            transpose_cents=700.0,
+            active_channels=active,
+        ),
         "GranularPitchShift": td.GranularPitchShift(
-            N, 8192, 2048, 700.0, active, seed=1
+            N,
+            max_delay=8192,
+            grain_length=2048,
+            transpose_cents=700.0,
+            active_channels=active,
+            rng=1,
         ),
     }
 
@@ -496,13 +513,13 @@ def test_dc_blocker_matches_difference_equation() -> None:
         out_sig_ref[n] = in_sig[n] - prev_x + R * prev_y
 
     # td engine
-    out_sig_td = td.DCBlocker(N, R=R).process_block(in_sig)
+    out_sig_td = td.DCBlocker(N, pole=R).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-10, rtol=0)
 
     # Test: a constant input decays away, i.e. DC really is rejected
-    settled_dc = td.DCBlocker(N, R=R).process_block(np.ones((2000, N)))[-1]
+    settled_dc = td.DCBlocker(N, pole=R).process_block(np.ones((2000, N)))[-1]
     assert np.abs(settled_dc).max() < 1e-6
 
 
@@ -541,7 +558,7 @@ def test_controllable_full_wave_rect_blocks_the_dc_it_injects() -> None:
     in_sig = _noise(rng=rng, length=n_samples, channels=N)
 
     # td engine
-    rect_td = td.ControllableFullWaveRect(N, alpha=1.0, active_channels=[0])
+    rect_td = td.ControllableFullWaveRectifier(N, alpha=1.0, active_channels=[0])
     out_sig_td = rect_td.process_block(in_sig)
 
     # Test: |x| has a large positive mean, the operator's output does not
@@ -562,7 +579,9 @@ def test_sdfd_is_a_unit_delay_at_zero_depth() -> None:
     out_sig_ref = np.vstack([np.zeros((1, N)), in_sig[:-1]])
 
     # td engine
-    out_sig_td = td.SDFD(N, d=0.0, active_channels=[0, 1]).process_block(in_sig)
+    out_sig_td = td.SignalDependentFractionalDelay(
+        N, fraction=0.0, active_channels=[0, 1]
+    ).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-12, rtol=0)
@@ -585,7 +604,9 @@ def test_ring_modulator_matches_sine_product() -> None:
     out_sig_ref[:, :1] *= mod_amp * np.sin(2 * np.pi * mod_freq * n / fs)
 
     # td engine
-    out_sig_td = td.RingModulator(N, mod_freq, mod_amp, fs, [0]).process_block(in_sig)
+    out_sig_td = td.RingModulator(
+        N, fs, rate=mod_freq, depth=mod_amp, active_channels=[0]
+    ).process_block(in_sig)
 
     # Test
     np.testing.assert_allclose(out_sig_td, out_sig_ref, atol=1e-12, rtol=0)
@@ -605,9 +626,13 @@ def test_pitch_shifters_transpose_a_sine(operator_name: str, cents: float) -> No
 
     # td engine
     if operator_name == "PitchShift":
-        shifter: td.TimeOperator = td.PitchShift(1, 8192, 2048, cents, fs, [0])
+        shifter: td.TimeOperator = td.PitchShift(
+            1, max_delay=8192, window=2048, transpose_cents=cents
+        )
     else:
-        shifter = td.GranularPitchShift(1, 8192, 2048, cents, [0], seed=0)
+        shifter = td.GranularPitchShift(
+            1, max_delay=8192, grain_length=2048, transpose_cents=cents, rng=0
+        )
     out_sig_td = shifter.process_block(in_sig)
 
     # Test: the dominant partial sits at f0 * 2 ** (cents / 1200), give or take
@@ -632,9 +657,10 @@ def test_granular_pitch_shift_seed_controls_the_grain_positions() -> None:
 
     # td engine
     def render(seed: int) -> np.ndarray:
-        return td.GranularPitchShift(
-            1, 8192, 2048, 700.0, [0], seed=seed
-        ).process_block(in_sig)
+        shifter = td.GranularPitchShift(
+            1, max_delay=8192, grain_length=2048, transpose_cents=700.0, rng=seed
+        )
+        return shifter.process_block(in_sig)
 
     # Test
     np.testing.assert_array_equal(render(0), render(0))
@@ -644,9 +670,13 @@ def test_granular_pitch_shift_seed_controls_the_grain_positions() -> None:
 def test_pitch_shifters_reject_buffers_that_cannot_hold_a_window() -> None:
     """Test the buffer-size guards of both pitch shifters"""
 
-    with pytest.raises(ValueError, match="max_delay_samps must be"):
-        td.PitchShift(1, 1024, 1024, 700.0, 48_000.0, [0])
-    with pytest.raises(ValueError, match="max_delay_samps must be"):
-        td.GranularPitchShift(1, 1024, 1024, 700.0, [0])
+    with pytest.raises(ValueError, match="max_delay must be"):
+        td.PitchShift(1, max_delay=1024, window=1024, transpose_cents=700.0)
+    with pytest.raises(ValueError, match="max_delay must be"):
+        td.GranularPitchShift(
+            1, max_delay=1024, grain_length=1024, transpose_cents=700.0
+        )
     with pytest.raises(ValueError, match="fade_ratio must be"):
-        td.GranularPitchShift(1, 8192, 1024, 700.0, [0], fade_ratio=0.8)
+        td.GranularPitchShift(
+            1, max_delay=8192, grain_length=1024, transpose_cents=700.0, fade_ratio=0.8
+        )

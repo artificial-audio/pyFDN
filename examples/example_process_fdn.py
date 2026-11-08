@@ -133,8 +133,8 @@ def _(N, np, pyFDN):
             f"{pyFDN.is_unilossless(_matrix)}"
         )
 
-    np.random.seed(0)  # "orthogonal" is drawn at random: seed it to stay reproducible
-    A = pyFDN.fdn_matrix_gallery(N, "orthogonal")
+    # "orthogonal" is drawn at random: seed it to stay reproducible
+    A = pyFDN.fdn_matrix_gallery(N, "orthogonal", rng=0)
 
     # Try this:
     #   A = pyFDN.fdn_matrix_gallery(N, "hadamard")     -> maximal mixing, +/-1 only
@@ -184,8 +184,8 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
             # when the density does not reach the threshold, which is exactly
             # what a permutation matrix does.
             warnings.simplefilter("ignore", UserWarning)
-            _mixing_time, _ = pyFDN.echo_density(_ir, n=1024, fs=fs, hop=256)
-        _mixed = f"{_mixing_time:.0f} ms" if _mixing_time else "never"
+            _mixing_time, _ = pyFDN.echo_density(_ir, fs, hop=256)
+        _mixed = f"{1000 * _mixing_time:.0f} ms" if _mixing_time else "never"
         print(f"{_label:12s} mixes after {_mixed}")
 
     # Try this: add "hadamard" or "circulant" to the list and rank them.
@@ -323,7 +323,7 @@ def _(mo):
     Real rooms absorb high frequencies faster than low ones, so a single number
     is not enough. Replace the scalar gain with a **filter per delay line** whose
     attenuation follows the target $T_{60}$ across frequency.
-    `decay_to_geq` designs those filters from a target curve at ten octave
+    `decay_to_graphic_eq` designs those filters from a target curve at ten octave
     centres (31.25 Hz – 16 kHz).
 
     The filters live *inside* the loop, so the feedback matrix goes back to being
@@ -337,7 +337,7 @@ def _(mo):
 def _(A, B, C, D, delays, fs, ir_len_seconds, np, pyFDN):
     target_rt = np.array([2.4, 2.4, 2.3, 2.1, 1.8, 1.4, 1.0, 0.7, 0.5, 0.5])
 
-    absorption = pyFDN.decay_to_geq(target_rt, delays, fs)  # (n_sections, 6, N)
+    absorption = pyFDN.decay_to_graphic_eq(target_rt, delays, fs)  # (n_sections, 6, N)
 
     graph = pyFDN.dss_to_td(delays, A, B, C, D, post_delay=absorption)
     ir = graph.impulse_response(int(ir_len_seconds * fs)).squeeze()
@@ -414,14 +414,14 @@ def _(mo):
 
 @app.cell
 def _(fs, ir, pyFDN):
-    pyFDN.plot_spectrogram(ir, fs, title="Impulse response — time-frequency energy")
+    pyFDN.plot_spectrogram(ir, title="Impulse response — time-frequency energy", fs=fs)
     return
 
 
 @app.cell
 def _(fs, ir, mo, pyFDN):
-    _mixing_time, _ = pyFDN.echo_density(ir, n=1024, fs=fs, hop=256)
-    print(f"mixing time: {_mixing_time:.0f} ms")
+    _mixing_time, _ = pyFDN.echo_density(ir, fs, hop=256)
+    print(f"mixing time: {1000 * _mixing_time:.0f} ms")
 
     mo.vstack(
         [
@@ -497,7 +497,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         D,
         post_delay=td.SOSBank(absorption),
         post_matrix=td.TimeVaryingMatrix(
-            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, seed=11
+            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, rng=11
         ),
     ).process_signal(x, squeeze=True)
 
@@ -505,7 +505,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
     #   post_matrix=td.AbsoluteValue(len(delays))
     #       -> a rectifier in the loop. The harmonics were never in the input;
     #          the FDN is generating them. No transfer function exists any more.
-    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_geq
+    #   post_output=td.SOSBank(...)   -> voice the wet signal with pyFDN.gain_to_graphic_eq
     mo.hstack(
         [
             pyFDN.labeled_audio("static matrix", pyFDN.peak_normalize(wet), fs=fs),
@@ -545,14 +545,14 @@ def _(fs, ir, mo, np, pyFDN, warnings):
     _your_rt, _ = pyFDN.estimate_rt_bands(ir, fs)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        _room_mix, _ = pyFDN.echo_density(room, n=1024, fs=fs, hop=256)
-        _your_mix, _ = pyFDN.echo_density(ir, n=1024, fs=fs, hop=256)
+        _room_mix, _ = pyFDN.echo_density(room, fs, hop=256)
+        _your_mix, _ = pyFDN.echo_density(ir, fs, hop=256)
 
     print(f"band [Hz]  {np.array2string(_bands, precision=0)}")
-    print(f"the room   {np.round(_room_rt, 2)}  mixes after {_room_mix:.0f} ms")
+    print(f"the room   {np.round(_room_rt, 2)}  mixes after {1000 * _room_mix:.0f} ms")
     print(
         f"your FDN   {np.round(_your_rt, 2)}  mixes after "
-        f"{f'{_your_mix:.0f} ms' if _your_mix else 'never'}"
+        f"{f'{1000 * _your_mix:.0f} ms' if _your_mix else 'never'}"
     )
 
     mo.vstack(

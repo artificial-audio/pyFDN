@@ -22,7 +22,7 @@ def _(mo):
 
     This example uses the **Scattering Delay Network (SDN)** to compute room acoustics coefficients (delays, feedback matrix, wall filters) from geometry and wall absorption, then builds a **FLAMO** model to render the impulse response.
 
-    **Pipeline:** SDN (room, source/receiver, wall filters) → `sdn.compute()` → `sdn.sdn_to_flamo(nfft)` → FLAMO model → `pyFDN.flamo_time_response()` → NumPy IR.
+    **Pipeline:** `pyFDN.SDN(room, source, receiver, wall_filters=...)` → `pyFDN.sdn_to_flamo(sdn)` → FLAMO model → `pyFDN.flamo_to_impz()` → NumPy IR.
 
     Original code of SDN: Enzo de Sena, Orchisama Das
     Python Translation: Sebastian J. Schlecht, Friday, 20. February 2026
@@ -33,11 +33,10 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    from scipy.linalg import block_diag
 
     import pyFDN
 
-    return block_diag, np, pyFDN
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -45,7 +44,7 @@ def _(mo):
     mo.md(r"""
     ## Room and wall filters
 
-    Define room size, source and receiver positions, and sample rate. Wall filters are first-order shelving EQs in second-order-section (SOS) format, with separate gains at DC and Nyquist.
+    Define room size, source and receiver positions, and sample rate. The wall filters are an SOS bank with one first-order shelving EQ per wall, with separate gains at DC and Nyquist.
     """)
     return
 
@@ -57,23 +56,20 @@ def _(np, pyFDN):
     receiver_pos = np.array([0.4, 0.1, 0.4]) * room_size
     fs = 44100
 
-    # Wall filters: one first-order shelving EQ per wall, shared by its 5 outputs.
-    wall_sos = pyFDN.gain_to_first_order_shelf(
-        gain_db=np.full(6, -1.0),
-        gain_db_nyquist=np.full(6, -6.0),
-        crossover=8000.0,
-        fs=fs,
+    # One first-order shelving EQ per wall (floor, ceiling, left, right, front,
+    # back); each wall filters the five delay lines it sends into.
+    wall_filters = pyFDN.gain_to_first_order_shelf(
+        np.full(6, -1.0), fs, crossover=8000.0, gain_db_nyquist=np.full(6, -6.0)
     )
-    wall_filters = [[wall_sos[:, :, wall] for _ in range(5)] for wall in range(6)]
     return fs, receiver_pos, room_size, source_pos, wall_filters
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## SDN compute
+    ## SDN
 
-    Build the SDN and run `compute()` to get delays, routing, scattering, and wall filter coefficients. No time-domain simulation is run here—only coefficient extraction.
+    Build the SDN: its delays (in samples), scattering matrix `A`, source and receiver gains `B` and `C`, direct path `D`, and wall filters come out of the geometry. No time-domain simulation is run here.
     """)
     return
 
@@ -81,13 +77,8 @@ def _(mo):
 @app.cell
 def _(fs, pyFDN, receiver_pos, room_size, source_pos, wall_filters):
     sdn = pyFDN.SDN(
-        room_size=room_size,
-        source_pos=source_pos,
-        receiver_pos=receiver_pos,
-        fs=fs,
-        wall_filters=wall_filters,
+        room_size, source_pos, receiver_pos, fs=fs, wall_filters=wall_filters
     )
-    _ = sdn.compute()  # mutates sdn in place; assign to suppress the result-dict output
     return (sdn,)
 
 
@@ -102,8 +93,8 @@ def _(mo):
 
 
 @app.cell
-def _(sdn):
-    sdn.visualize(show=False)
+def _(pyFDN, sdn):
+    pyFDN.plot_sdn(sdn)
     return
 
 
@@ -118,10 +109,9 @@ def _(mo):
 
 
 @app.cell
-def _(sdn):
-    nfft = 2**17
-    model, sdn_result = sdn.sdn_to_flamo(nfft=nfft, device="cpu")
-    return model, sdn_result
+def _(pyFDN, sdn):
+    model = pyFDN.sdn_to_flamo(sdn, nfft=2**17, device="cpu")
+    return (model,)
 
 
 @app.cell(hide_code=True)
@@ -144,14 +134,14 @@ def _(model, pyFDN):
 def _(mo):
     mo.md(r"""
     ## Plot impulse response
-    Obtain the impulse response as a NumPy array via `pyFDN.flamo_time_response()`.
+    Obtain the impulse response as a NumPy array via `pyFDN.flamo_to_impz()`.
     """)
     return
 
 
 @app.cell
 def _(fs, mo, model, pyFDN):
-    ir = pyFDN.flamo_time_response(model).squeeze()
+    ir = pyFDN.flamo_to_impz(model).squeeze()
     fig = pyFDN.plot_impulse_response(
         ir,
         fs=fs,
@@ -167,37 +157,21 @@ def _(mo):
     mo.md(r"""
     ## FDN parameter overview
 
-    The core feedback loop reconstructed as standard FDN parameters: feedback matrix `A = blockdiag(scattering) @ permutation`, net per-line input/output gains, the direct-path gain, and the wall filters as the per-line attenuation.
+    The 30-line core drawn as FDN parameters: the scattering matrix `A`, the source and receiver gains summed over the walls, the direct-path gain, and the wall filters as the per-line attenuation. The source, receiver and direct-path delays are not part of this picture.
     """)
     return
 
 
 @app.cell
-def _(block_diag, np, pyFDN, sdn_result):
-    A = (
-        block_diag(*sdn_result["scattering_matrices"])
-        @ sdn_result["permutation_matrix"]
-    )
-    delays_smp = np.rint(
-        np.asarray(sdn_result["delay_lengths_flat"]) * sdn_result["fs"]
-    ).astype(int)
-    B = sdn_result["input_matrix"] @ np.asarray(sdn_result["input_gains"]).reshape(
-        -1, 1
-    )
-    C = (
-        np.asarray(sdn_result["output_gains"]).reshape(1, -1)
-        @ sdn_result["output_matrix"]
-    )
-    D = np.array([[sdn_result["direct_path_gain"]]])
-
+def _(pyFDN, sdn):
     pyFDN.plot_fdn_parameter(
-        delays_smp,
-        A,
-        B,
-        C,
-        D,
-        post_delay=sdn_result["wall_filters_sos"],
-        fs=sdn_result["fs"],
+        sdn.delays,
+        sdn.A,
+        sdn.B.sum(axis=1, keepdims=True),
+        sdn.C.sum(axis=0, keepdims=True),
+        sdn.D,
+        post_delay=sdn.wall_filters,
+        fs=sdn.fs,
         title="SDN FDN parameters",
     )
     return

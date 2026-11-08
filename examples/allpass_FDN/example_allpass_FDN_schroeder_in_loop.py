@@ -39,7 +39,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(6)
     fs = 48000
     nfft = 2**16
     return fs, nfft, np, pyFDN
@@ -57,11 +56,12 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(6)
     N = 4
     sections_per_channel = 2
     ir_len_schroeder = 2**10
 
-    allpass_delays = np.random.randint(30, 200, size=(N, sections_per_channel))
+    allpass_delays = _rng.integers(30, 200, size=(N, sections_per_channel))
     allpass_gains = np.full(allpass_delays.shape, 0.7)
 
     A_list, B_list, C_list, D_list, delays_list = [], [], [], [], []
@@ -151,7 +151,7 @@ def _(fs, N, nfft, pyFDN):
     )
 
     model_fdn = pyFDN.dss_to_flamo(*fdn_dss, fs, nfft=nfft, device="cpu", **fdn_filters)
-    ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
+    ir_fdn = pyFDN.flamo_to_impz(model_fdn).squeeze()
     return fdn_dss, fdn_filters, ir_fdn
 
 
@@ -172,7 +172,7 @@ def _(mo):
     mo.md(r"""
     ## 3. FDN with Schroeder allpass behind the delays
 
-    Reuse the two models above: take the **vanilla FDN** (`fdn_dss` and its `fdn_filters`) and the **MIMO Schroeder allpass** (A_schroeder, B_schroeder, C_schroeder, D_schroeder, delays_schroeder). Build the Schroeder as a core with **dss_to_flamo(..., shell=False)** and pass it in the **post_delay** hook of **dss_to_flamo** after the absorption filter, so the loop becomes delay -> absorption -> Schroeder.
+    Reuse the two models above: take the **vanilla FDN** (`fdn_dss` and its `fdn_filters`) and the **MIMO Schroeder allpass** (A_schroeder, B_schroeder, C_schroeder, D_schroeder, delays_schroeder). Build the Schroeder as a core with **dss_to_flamo(...).get_core()** and pass it in the **post_delay** hook of **dss_to_flamo** after the absorption filter, so the loop becomes delay -> absorption -> Schroeder.
     """)
     return
 
@@ -199,9 +199,8 @@ def _(
         D_schroeder,
         fs,
         nfft=nfft,
-        shell=False,
         device="cpu",
-    )
+    ).get_core()
     # the Schroeder core goes after the absorption in the post_delay hook
     model_fdn_allpass = pyFDN.dss_to_flamo(
         *fdn_dss,
@@ -211,7 +210,7 @@ def _(
         post_output=fdn_filters["post_output"],
         device="cpu",
     )
-    ir_fdn_allpass = pyFDN.flamo_time_response(model_fdn_allpass).squeeze()
+    ir_fdn_allpass = pyFDN.flamo_to_impz(model_fdn_allpass).squeeze()
 
     pyFDN.plot_flamo_graph(model_fdn_allpass)
     return (ir_fdn_allpass,)

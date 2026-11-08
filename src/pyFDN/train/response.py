@@ -75,7 +75,7 @@ class Response:
 
 
 def impulse_excitation(
-    n_in: int, nfft: int, device: Any = None, dtype: Any = None
+    num_inputs: int, nfft: int, device: Any = None, dtype: Any = None
 ) -> torch.Tensor:
     """The excitation that makes a model's output the full IR matrix.
 
@@ -87,8 +87,8 @@ def impulse_excitation(
     import torch
 
     torch_dtype = torch.float32 if dtype is None else dtype
-    x = torch.zeros((n_in, nfft, n_in), device=device, dtype=torch_dtype)
-    for i in range(n_in):
+    x = torch.zeros((num_inputs, nfft, num_inputs), device=device, dtype=torch_dtype)
+    for i in range(num_inputs):
         x[i, 0, i] = 1.0
     return x
 
@@ -121,7 +121,8 @@ def model_response(model: Any, excitation: torch.Tensor | None = None) -> Respon
     :func:`impulse_excitation` builds one.
 
     Gradients flow through the returned response, so this is what the trainer
-    calls each step -- and, detached, what you can call to inspect a model.
+    calls each step. To inspect a model as a NumPy array, use
+    :func:`pyFDN.flamo_to_impz`.
     """
     require_time_output(model)
     n_in, n_out = int(model.input_channels), int(model.output_channels)

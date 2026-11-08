@@ -196,14 +196,8 @@ allow_untyped_defs = true
 disable_error_code = ["no-untyped-call", "no-untyped-def"]
 
 [[tool.mypy.overrides]]
-# SDN: complex geometry/simulation research code, annotation work in progress
-module = "pyFDN.generate.SDN"
-allow_untyped_defs = true
-disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined", "type-var"]
-
-[[tool.mypy.overrides]]
 # Allpass completion: complex optimisation code, annotation work in progress
-module = "pyFDN.generate.allpass_FDN.allpass_completion"
+module = "pyFDN.generate.allpass_fdn.allpass_completion"
 allow_untyped_defs = true
 disable_error_code = ["no-untyped-call", "no-untyped-def"]
 

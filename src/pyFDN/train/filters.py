@@ -82,7 +82,7 @@ class _DesignedSOS(dsp.parallelSOSFilter):  # type: ignore[misc]
     def __init__(
         self,
         value: np.ndarray,
-        n_channels: int,
+        channels: int,
         fs: float,
         *,
         design: EQDesign,
@@ -97,7 +97,7 @@ class _DesignedSOS(dsp.parallelSOSFilter):  # type: ignore[misc]
 
         _validate_filter_design(design)
         super().__init__(
-            size=(int(n_channels),),
+            size=(int(channels),),
             n_sections=_design_section_count(design),
             nfft=nfft,
             fs=int(fs),
@@ -225,7 +225,7 @@ class OutputEQ(_DesignedSOS):
     def __init__(
         self,
         gain_db: Any,
-        n_channels: int,
+        channels: int,
         fs: float,
         *,
         gain_db_nyquist: Any | None = None,
@@ -242,12 +242,12 @@ class OutputEQ(_DesignedSOS):
             gain_db,
             gain_db_nyquist,
             design,
-            int(n_channels),
+            int(channels),
             broadcast=True,
         )
         super().__init__(
             gains,
-            int(n_channels),
+            int(channels),
             fs,
             design=design,
             crossover=crossover,

@@ -107,7 +107,6 @@ def _(mo):
 
 @app.cell
 def _(est_rt, fs, np, pyFDN):
-    np.random.seed(5)
     num_delays = 16
     _dss, _ = pyFDN.fdn_dss_gallery(
         num_delays,
@@ -124,7 +123,7 @@ def _(est_rt, fs, np, pyFDN):
 
     target_rt = np.concatenate(([est_rt[0]], est_rt, [est_rt[-1]]))
     target_rt = target_rt * np.array([0.9, 1, 1, 1, 1, 1, 1, 1, 0.9, 0.5])
-    sos_absorption = pyFDN.decay_to_geq(target_rt, delays, fs)
+    sos_absorption = pyFDN.decay_to_graphic_eq(target_rt, delays, fs)
 
     print(f"Delays: {delays}")
     print(f"Target RT at GEQ bands (s): {target_rt.round(2)}")
@@ -171,10 +170,9 @@ def _(
         fs,
         nfft=nfft,
         post_delay=sos_absorption,
-        shell=True,
         device="cpu",
     )
-    ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
+    ir_unequalized = pyFDN.flamo_to_impz(_model).squeeze()[:rir_len]
     print(f"Unequalized FDN IR computed: {rir_len} samples")
     return ir_unequalized, nfft
 
@@ -214,7 +212,7 @@ def _(
     target_level_db = np.concatenate(([_diff_db[0]], _diff_db, [_diff_db[-1]]))
     target_level_db = target_level_db - np.array([5, 0, 0, 0, 0, 0, 0, 0, 0, 30])
 
-    equalization_sos = pyFDN.gain_to_bounded_geq(target_level_db, fs=fs)
+    equalization_sos = pyFDN.gain_to_bounded_graphic_eq(target_level_db, fs=fs)
 
     model_eq = pyFDN.dss_to_flamo(
         delays,
@@ -226,10 +224,9 @@ def _(
         nfft=nfft,
         post_delay=sos_absorption,
         post_output=equalization_sos[:, :, np.newaxis],
-        shell=True,
         device="cpu",
     )
-    ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
+    ir_fdn = pyFDN.flamo_to_impz(model_eq).squeeze()[:rir_len]
 
     print(f"GEQ target (dB): {target_level_db.round(1)}")
     return equalization_sos, ir_fdn, model_eq
@@ -288,13 +285,13 @@ def _(mo):
 
 @app.cell
 def _(fs, pyFDN, rir):
-    pyFDN.plot_spectrogram(rir, fs, title="Target RIR")
+    pyFDN.plot_spectrogram(rir, title="Target RIR", fs=fs)
     return
 
 
 @app.cell
 def _(fs, ir_fdn, pyFDN):
-    pyFDN.plot_spectrogram(ir_fdn, fs, title="FDN impulse response")
+    pyFDN.plot_spectrogram(ir_fdn, title="FDN impulse response", fs=fs)
     return
 
 

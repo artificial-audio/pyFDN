@@ -124,6 +124,121 @@ Unreleased
   ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
   are now fixed at 50 ms, 20 ms and 3 samples.
 
+* **Breaking: one convention for randomness.** Every random function takes
+  ``rng=``, a NumPy ``Generator`` or an integer seed, and none draws from
+  NumPy's global generator any more: the matrix and system galleries,
+  ``random_orthogonal`` (now keyword-only), ``tiny_rotation_matrix``,
+  ``anderson_matrix``, ``nearest_sign_agnostic_orthogonal``,
+  ``cascaded_paraunitary_matrix``, ``paraunitary_from_elementals``,
+  ``shift_matrix_distribute``, ``random_matrix_shift``,
+  ``random_admissible_homogeneous_allpass``, ``complete_fdn`` and
+  ``RecursionState.fill_noise``. ``TimeVaryingMatrix`` and
+  ``GranularPitchShift`` take ``rng=`` instead of ``seed=``.
+  ``np.random.seed`` no longer makes them reproducible; pass ``rng=``.
+* **Breaking: the ``is_*`` checks return a plain ``bool``.** ``is_allpass``,
+  ``is_uniallpass``, ``is_paraunitary`` and ``is_bounding_curve`` returned
+  tuples, so ``if pyFDN.is_paraunitary(m):`` was always true. The
+  characteristic polynomial ``is_allpass`` compared is
+  ``general_char_poly(delays, A)``. ``is_uniallpass`` no longer warns when the
+  answer is simply no.
+* **Breaking: ``SDN`` is cleaned up.** It computes everything when it is
+  built (``compute()`` and its 20-key dictionary are gone) and exposes
+  ``delays`` in samples, ``A``, ``B``, ``C``, ``D``, a ``wall_filters`` SOS
+  bank, and the ``input_delays``, ``output_delays`` and ``direct_delay`` of
+  the source, receiver and direct paths. ``wall_filters`` takes an SOS bank
+  with one filter per wall or per delay line. It renders with
+  ``pyFDN.sdn_to_flamo(sdn)`` (default ``nfft=2**16``, the model only) and
+  draws with ``pyFDN.plot_sdn(sdn)``, which replace the ``sdn_to_flamo`` and
+  ``visualize`` methods. The modules ``pyFDN.generate.SDN`` and
+  ``pyFDN.generate.allpass_FDN`` are now ``pyFDN.generate.sdn`` and
+  ``pyFDN.generate.allpass_fdn``.
+* **Breaking: no flags that change the return type.** ``dss_to_flamo``
+  always returns the ``Shell``; ``.get_core()`` gives the FDN without its FFT
+  layers, e.g. for another FDN's hook. ``complete_fdn`` always returns
+  ``(B, C, D, x)``, and its options after ``k`` are keyword-only.
+* **Breaking: no silent sample rates.** ``echo_density(ir, fs, *, window,
+  pre_delay, mixing_threshold, hop)`` and ``probe_sos(sos, fs, *,
+  control_frequencies, nfft)`` take ``fs`` as a required argument, and
+  ``delay_module`` takes delays in samples, like every other pyFDN function.
+
+* **Breaking: pole-residue results are a named tuple.** ``dss_to_pr`` and
+  ``flamo_to_pr`` return ``(pr, info)``: ``pr`` is a ``PoleResidue``
+  ``(residues, poles, direct, is_conjugate_pole_pair)`` that unpacks into
+  ``pr_to_impz(*pr, ir_len)``, and ``info`` is the solver report.
+  ``dss_to_pr`` keeps its static solvers (``"eig"``, ``"roots"``,
+  ``"lindsey_fox"``) and their two options; the Ehrlich-Aberth iteration is
+  ``flamo_to_pr(dss_to_flamo(*dss, fs))``, so ``dss_to_pr`` no longer copies
+  its nine solver and four model options. ``impz_to_res`` returns the residues
+  only.
+* **Breaking: the plots use Matplotlib's vocabulary.** ``vmin``/``vmax``
+  replace ``zmin``/``zmax``, ``plot_spectrogram`` takes ``cmap`` and
+  ``figsize`` instead of ``colorscale`` and a pixel ``height``, and
+  ``plot_matrix_grid`` takes ``figsize``. ``plot_impulse_response_matrix(ir,
+  *, fs=None, ...)`` takes the response first, like
+  ``plot_impulse_response``, and returns the figure alone.
+* **Breaking: the** ``td`` **operators share their parameter names.** Every
+  operator takes its channel count as ``channels`` (``TimeVaryingMatrix``
+  took ``N``); ``fs`` is the second argument wherever a rate in Hz needs it;
+  options are keyword-only, and ``active_channels`` defaults to all channels.
+  ``RingModulator(channels, fs, *, rate, depth)`` names its modulation like
+  the time-varying matrices; ``PitchShift`` and ``GranularPitchShift`` take
+  ``max_delay``, ``window`` and ``grain_length`` in samples (``PitchShift``
+  no longer takes an unused ``fs``); ``DCBlocker`` takes ``pole`` and no
+  ``fs``. ``SDFD`` is ``SignalDependentFractionalDelay`` (``fraction`` for
+  ``d``) and ``ControllableFullWaveRect`` is
+  ``ControllableFullWaveRectifier``.
+* **Breaking: the training losses frame in samples.** ``MatchEchoDensity``
+  takes ``window`` in samples (was ``win_duration`` in seconds),
+  ``MatchMelEnergyDecayRelief`` takes ``window`` and ``hop`` (were
+  ``win_lengths``/``hop_lengths``), and ``MatchSpectrogram`` /
+  ``MatchMelSpectrogram`` take ``overlap`` like the other spectrogram losses
+  instead of ``device``; they follow the response's device.
+* **Breaking:** ``echo_density`` reports the mixing time in seconds, like
+  every other time in pyFDN.
+* **Breaking: the allpass helpers follow the conventions.** ``complete_fdn``
+  and ``complete_general_mimo_svd`` call the number of inputs/outputs
+  ``num_io`` like ``complete_orthogonal`` (was ``k``);
+  ``homogeneous_allpass_fdn`` drops its printing ``verbose`` flag; the
+  completion results are documented as ``B, C, D``.
+* **Breaking:** ``octave_bands``, ``estimate_rt_bands`` and
+  ``estimate_initial_level_bands`` take ``lowest_octave`` and ``num_bands``
+  (were ``start`` and ``n``), keyword-only.
+* ``flamo_delay_feedback_matrix`` and ``swap_flamo_recursion_paths`` moved to
+  ``pyFDN.auxiliary.flamo`` and always return a modified copy (no
+  ``inplace``); ``pole_boundaries`` and ``is_bounding_curve`` moved to
+  ``pyFDN.auxiliary.poles``; ``pyFDN.auxiliary.allpass`` no longer re-exports
+  the allpass structures. The top-level names are unchanged.
+* **Breaking:** ``flamo_time_response`` is ``flamo_to_impz``, pairing with
+  ``dss_to_impz``, ``tf_to_impz`` and ``pr_to_impz``.
+
+* **Breaking:** ``trainable_fdn`` takes its starting matrices as ``A``,
+  ``B``, ``C``, ``D`` (were ``feedback``, ``input_gain``, ``output_gain``,
+  ``direct``), like ``trainable_from_dss``.
+* **Breaking: the EQ designers are named after their designs.**
+  ``decay_to_geq``, ``gain_to_geq``, ``gain_to_bounded_geq`` and
+  ``geq_design_matrix`` are ``decay_to_graphic_eq``, ``gain_to_graphic_eq``,
+  ``gain_to_bounded_graphic_eq`` and ``graphic_eq_design_matrix``. The
+  Nyquist targets are keyword-only, as in ``AttenuationFilter`` and
+  ``OutputEQ``: ``decay_to_first_order_shelf(rt, delays, fs, *, rt_nyquist,
+  crossover=None)``, ``decay_to_one_pole(rt, delays, fs, *, rt_nyquist)``,
+  ``gain_to_first_order_shelf(gain_db, fs, *, gain_db_nyquist,
+  crossover=None)``, ``gain_to_one_pole(gain_db, *, gain_db_nyquist)``.
+  ``OutputEQ`` takes ``channels`` (was ``n_channels``).
+* The biquad builders (``lowshelf_biquad``, ``highshelf_biquad``,
+  ``peaking_biquad``, ``first_order_shelf_biquad``, ``one_pole_biquad``) are
+  no longer exported; they stay in ``pyFDN.eq.biquads`` behind the designers.
+* Every public docstring uses the NumPy style.
+* ``impulse_excitation`` takes ``num_inputs``; the FLAMO module builders,
+  ``flamo_to_impz``, ``flamo_process`` and ``complete_fdn`` are fully typed.
+* **Breaking:** ``plot_flamo_graph`` returns a Figure like every other plot
+  and no longer takes ``ax``.
+* **Breaking:** ``fdn_dss_gallery`` accepts ``io_type="normalized"`` only
+  (the default; ``"normalised"`` is gone).
+* **Breaking:** ``mimo_rir_eigenvalues_per_frequency`` takes ``axis`` like
+  ``edc`` (was ``dim``), ``nearest_sign_agnostic_orthogonal`` takes ``tol``
+  (was ``tolerance``), and ``plot_spectrogram`` takes ``fs`` as a keyword like
+  the other plots.
+
 0.5.0 (2026-09-28)
 ------------------
 

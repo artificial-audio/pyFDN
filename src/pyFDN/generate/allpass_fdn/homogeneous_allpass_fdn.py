@@ -6,11 +6,10 @@ def homogeneous_allpass_fdn(
     G: ArrayLike,
     X: ArrayLike,
     *,
-    verbose: bool = False,
     tol: float = 1e-12,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Generate allpass FDN with homogeneous decay: V = [A,b;c,d] uniallpass, A = U @ G.
+    Generate allpass FDN with homogeneous decay: V = [A,B;C,D] uniallpass, A = U @ G.
 
     Assumptions (as in the Cauchy/CORDIC-style construction):
 
@@ -25,10 +24,12 @@ def homogeneous_allpass_fdn(
     Returns
     -------
     A : (N, N) ndarray
-    b : (N, 1) ndarray
-    c : (1, N) ndarray
-    d : (1, 1) ndarray
+    B : (N, 1) ndarray
+    C : (1, N) ndarray
+    D : (1, 1) ndarray
     U : (N, N) ndarray
+        The orthogonal factor of ``A``. Check the result with
+        :func:`pyFDN.is_uniallpass`.
     """
     G = np.asarray(G, dtype=float)
     X = np.asarray(X, dtype=float)
@@ -97,19 +98,5 @@ def homogeneous_allpass_fdn(
 
     # Coupling equation for X-uniallpass (scalar output):
     c = (-np.linalg.inv(X) @ np.linalg.inv(A) @ b * d).T
-
-    if verbose:
-        from pyFDN.auxiliary.allpass import is_allpass, is_uniallpass
-
-        print("||U U^T - I||_F =", np.linalg.norm(U @ U.T - np.eye(N)))
-        print(
-            "||X U - U R - b b^T U||_F =",
-            np.linalg.norm(X @ U - U @ (G @ G @ X) - b @ b.T @ U),
-        )
-        is_a1, XX = is_uniallpass(A, b, c, d)
-        print("isUniallpass:", is_a1, "XX=\n", XX)
-        delays = 2 ** np.arange(N)
-        is_a2, den, num = is_allpass(delays, A, b, c, d)
-        print("isAllpass (delays 2^0..2^(N-1)):", is_a2)
 
     return A, b, c, d, U

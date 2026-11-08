@@ -42,7 +42,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(5)
     fs = 48000
     impulse_response_length = fs // 100
 
@@ -64,7 +63,7 @@ def _():
         _dss.D,
         _dss.delays,
     )
-    return A, B, C, D, delays, impulse_response_length, pyFDN
+    return A, B, C, D, delays, impulse_response_length, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -112,8 +111,8 @@ def _(mo):
 
 @app.cell
 def _(ir_dss, ir_tf, mo, pyFDN):
-    fig1 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_tf)
-    fig2 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_dss)
+    fig1 = pyFDN.plot_impulse_response_matrix(ir_tf)
+    fig2 = pyFDN.plot_impulse_response_matrix(ir_dss)
 
     mo.vstack([fig1, fig2])
     return

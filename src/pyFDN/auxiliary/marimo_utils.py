@@ -47,17 +47,25 @@ def labeled_audio(
     player at ``fs``. marimo is imported lazily, so this only requires marimo
     when actually called.
 
-    Args:
-        label: HTML/text shown above the player.
-        signal: Audio samples. 1-D for mono; a 2-D array is treated as
-            multi-channel and oriented for ``mo.audio``, so either
-            ``(samples, channels)`` (the pyFDN render convention) or
-            ``(channels, samples)`` plays correctly.
-        fs: Sample rate in Hz.
-        label_size: CSS ``font-size`` for the label (default ``"1.1em"``).
-        gap: Vertical gap between the label and the player (default 0).
+    Parameters
+    ----------
+    label
+        HTML/text shown above the player.
+    signal
+        Audio samples. 1-D for mono; a 2-D array is treated as
+        multi-channel and oriented for ``mo.audio``, so either
+        ``(samples, channels)`` (the pyFDN render convention) or
+        ``(channels, samples)`` plays correctly.
+    fs
+        Sample rate in Hz.
+    label_size
+        CSS ``font-size`` for the label (default ``"1.1em"``).
+    gap
+        Vertical gap between the label and the player (default 0).
 
-    Returns:
+    Returns
+    -------
+    Any
         A marimo ``vstack`` element.
     """
     import marimo as mo

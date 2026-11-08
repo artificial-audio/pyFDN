@@ -6,7 +6,7 @@ import torch
 from pyFDN.auxiliary.flamo import (
     assemble_fdn_core,
     delay_module,
-    flamo_time_response,
+    flamo_to_impz,
     gain_module,
     wrap_fdn_shell,
 )
@@ -31,7 +31,7 @@ def test_flamo_time_response_is_one_response_per_input():
     response = torch.arange(24, dtype=torch.float64).reshape(1, 4, 3, 2)
     model = _TimeResponseModel(response)
 
-    result = flamo_time_response(model)
+    result = flamo_to_impz(model)
 
     assert isinstance(result, np.ndarray)
     assert result.dtype == np.float64
@@ -42,7 +42,7 @@ def test_flamo_time_response_is_one_response_per_input():
 def test_flamo_time_response_gives_a_single_input_its_own_axis():
     # with one input FLAMO drops the input axis: (batch, n, out)
     response = np.arange(12, dtype=np.float32).reshape(1, 4, 3)
-    result = flamo_time_response(_TimeResponseModel(response))
+    result = flamo_to_impz(_TimeResponseModel(response))
     assert result.shape == (4, 3, 1)
 
 
@@ -57,9 +57,9 @@ def test_flamo_time_response_gives_a_single_input_its_own_axis():
 
 
 def _small_fdn():
-    np.random.seed(0)
+    rng = np.random.default_rng(0)
     n = 4
-    a = random_orthogonal(n) * 0.9
+    a = random_orthogonal(n, rng=rng) * 0.9
     b = np.ones((n, 1))
     c = np.ones((1, n))
     d = np.zeros((1, 1))
@@ -73,7 +73,7 @@ def test_dss_to_flamo_render_matches_impz():
     _, a, b, c, d, m = _small_fdn()
     nfft = 2**13
     model = dss_to_flamo(m, a, b, c, d, fs=48000, nfft=nfft, device="cpu")
-    ir = np.asarray(flamo_time_response(model)).reshape(-1)
+    ir = np.asarray(flamo_to_impz(model)).reshape(-1)
     ref = dss_to_impz(m, a, b, c, d, 200).reshape(-1)
     np.testing.assert_allclose(ir[:120], ref[:120], atol=1e-4)
 
@@ -96,7 +96,7 @@ def test_assemble_fdn_core_direct_toggles_parallel():
     kw = {
         "input_gain": gain_module(b, nfft, device="cpu"),
         "feedback": gain_module(a, nfft, device="cpu"),
-        "delays": delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
+        "delays": delay_module(m, nfft, fs=48000, device="cpu"),
         "output_gain": gain_module(c, nfft, device="cpu"),
     }
     # No direct path -> plain Series core whose feedback matrix stays reachable
@@ -115,7 +115,7 @@ def test_wrap_fdn_shell_returns_the_time_response():
     core = assemble_fdn_core(
         input_gain=gain_module(b, nfft, device="cpu"),
         feedback=gain_module(a, nfft, device="cpu"),
-        delays=delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
+        delays=delay_module(m, nfft, fs=48000, device="cpu"),
         output_gain=gain_module(c, nfft, device="cpu"),
     )
     impulse = torch.zeros(1, nfft, 1)

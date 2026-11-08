@@ -43,7 +43,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(1)
     impulse_response_length = 1000
 
     delays = np.array([13, 19, 23])

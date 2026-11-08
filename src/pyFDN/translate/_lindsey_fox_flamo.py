@@ -21,6 +21,7 @@ from pyFDN.translate.flamo_to_pr import (
     _refine_pole_via_svd,
     _validate_flamo_result,
 )
+from pyFDN.translate.pr_to_impz import PoleResidue
 
 
 def _model_polynomial(decomposition: Any, degree: int) -> np.ndarray:
@@ -72,7 +73,7 @@ def lindsey_fox_flamo(
     *,
     max_seconds: float,
     response_tolerance: float,
-) -> ModalResult:
+) -> tuple[PoleResidue, dict[str, Any]]:
     loop = _FDNLoopFlamo(decomposition.recursion_module)
 
     coefficients = _model_polynomial(decomposition, order)
