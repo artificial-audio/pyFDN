@@ -29,7 +29,7 @@ def main():
         absorption = "model" in case and case["absorption"]
         try:
             if "model" in case:
-                result = pyFDN.flamo_to_pr(
+                result, meta = pyFDN.flamo_to_pr(
                     case["model"],
                     mode="lindsey_fox",
                     num_poles=case["degree"],
@@ -37,12 +37,11 @@ def main():
                 reference = case["td"].impulse_response(48000)
             else:
                 args = pyFDN.DSS(*(case[k] for k in ("delays", "A", "B", "C", "D")))
-                result = pyFDN.dss_to_pr(*args, mode="lindsey_fox")
+                result, meta = pyFDN.dss_to_pr(*args, mode="lindsey_fox")
                 reference = pyFDN.dss_to_impz(*args, 48000)
             elapsed = perf_counter() - start
-            ir = pyFDN.pr_to_impz(*result[:4], 48000, mode="lowMemory")
+            ir = pyFDN.pr_to_impz(*result, 48000, mode="lowMemory")
             error = float(np.linalg.norm(ir - reference) / np.linalg.norm(reference))
-            meta = result[4]
             assert error < 1e-8, error
             assert meta["complete"] and meta["solver"] == "lindsey_fox"
             print(

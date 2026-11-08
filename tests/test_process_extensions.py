@@ -174,7 +174,7 @@ def test_process_dss_absorption_matches_flamo() -> None:
         post_delay=sos,
         dtype=torch.float64,
     )
-    ir_flamo = pyFDN.flamo_time_response(model).squeeze()[:ir_len]
+    ir_flamo = pyFDN.flamo_to_impz(model).squeeze()[:ir_len]
     np.testing.assert_allclose(ir_td, ir_flamo, atol=1e-6)
 
 
@@ -210,10 +210,8 @@ def test_dss_to_flamo_output_filter_matches_sosfilt() -> None:
         )
 
     ir_len = 4096
-    ir_plain = pyFDN.flamo_time_response(build(None)).squeeze()[:ir_len]
-    ir_eq = pyFDN.flamo_time_response(build(eq_sos[:, :, np.newaxis])).squeeze()[
-        :ir_len
-    ]
+    ir_plain = pyFDN.flamo_to_impz(build(None)).squeeze()[:ir_len]
+    ir_eq = pyFDN.flamo_to_impz(build(eq_sos[:, :, np.newaxis])).squeeze()[:ir_len]
     np.testing.assert_allclose(ir_eq, sosfilt(eq_sos, ir_plain), atol=1e-8)
 
 
@@ -311,7 +309,7 @@ def test_a_lossless_fir_fdn_renders_through_flamo_with_alias_decay() -> None:
     reference = pyFDN.dss_to_td(*dss, post_matrix=td.MatrixFIR(fir)).impulse_response(
         nfft
     )
-    error = np.linalg.norm(pyFDN.flamo_time_response(model) - reference)
+    error = np.linalg.norm(pyFDN.flamo_to_impz(model) - reference)
     # the residual is the alias decay, by construction
     assert 20 * np.log10(error / np.linalg.norm(reference)) < -alias + 2
 
@@ -378,7 +376,7 @@ def test_all_three_hooks_render_alike_and_extract_back() -> None:
     model = pyFDN.dss_to_flamo(
         *dss, FS, nfft=2**14, device="cpu", post_matrix=post_matrix
     )
-    flamo_ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
+    flamo_ir = np.asarray(pyFDN.flamo_to_impz(model)).reshape(-1)
     np.testing.assert_allclose(numpy_ir, flamo_ir[:ir_len], atol=1e-4)
 
     # and it is not a no-op: halving the feedback path shortens the decay

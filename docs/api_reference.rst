@@ -147,8 +147,8 @@ rendered with ``.process_signal(signal)``. See :mod:`pyFDN.td`.
    pyFDN.td.Delay
    pyFDN.td.AbsoluteValue
    pyFDN.td.DCBlocker
-   pyFDN.td.ControllableFullWaveRect
-   pyFDN.td.SDFD
+   pyFDN.td.ControllableFullWaveRectifier
+   pyFDN.td.SignalDependentFractionalDelay
    pyFDN.td.RingModulator
    pyFDN.td.PitchShift
    pyFDN.td.GranularPitchShift
@@ -173,7 +173,7 @@ Delay Utilities
    pyFDN.matrix_delay_approximation
    pyFDN.matrix_group_delay
    pyFDN.ms_to_samples
-   pyFDN.flamo_time_response
+   pyFDN.flamo_to_impz
 
 Building a FLAMO Graph
 ----------------------
@@ -283,6 +283,7 @@ straight into each of them, with its filters alongside:
    pyFDN.impz_to_res
    pyFDN.tf_to_impz
    pyFDN.pr_to_impz
+   pyFDN.PoleResidue
 
 Experimental Lindsey–Fox modal decomposition
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

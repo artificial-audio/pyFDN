@@ -1,13 +1,6 @@
 """Auxiliary modules (utils, acoustics, allpass, flamo wrappers, etc.)."""
 
-from .allpass import (
-    is_allpass,
-    is_paraunitary,
-    is_uniallpass,
-    nested_allpass,
-    poletti_allpass,
-    series_allpass,
-)
+from .allpass import is_allpass, is_paraunitary, is_uniallpass
 from .audio import load_audio
 from .flamo import (
     assemble_fdn_core,
@@ -15,7 +8,7 @@ from .flamo import (
     delay_module,
     fir_matrix_module,
     flamo_process,
-    flamo_time_response,
+    flamo_to_impz,
     gain_module,
     matrix_module,
     sos_filter_module,
@@ -39,12 +32,9 @@ __all__ = [
     "assemble_fdn_core",
     "wrap_fdn_shell",
     "core_alias_decay_db",
-    "flamo_time_response",
+    "flamo_to_impz",
     "flamo_process",
     "load_audio",
-    "poletti_allpass",
-    "series_allpass",
-    "nested_allpass",
     "is_uniallpass",
     "is_allpass",
     "is_paraunitary",

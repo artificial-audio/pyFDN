@@ -12,7 +12,7 @@ from collections import OrderedDict
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.flamo import flamo_time_response
+from pyFDN.auxiliary.flamo import flamo_to_impz
 from pyFDN.eq import decay_to_one_pole
 
 
@@ -129,7 +129,7 @@ def one_pole_absorption_reference(loadmat):
         #     impulse[0, 0, 0] = 1.0
         #     ir_python = model(impulse).squeeze().cpu().numpy()
 
-        ir_python = flamo_time_response(model).flatten()
+        ir_python = flamo_to_impz(model).flatten()
 
     return {
         "sos_matlab": sos_matlab,

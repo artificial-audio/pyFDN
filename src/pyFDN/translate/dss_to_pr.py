@@ -2,8 +2,8 @@
 
 H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k/(z − p_k) + D
 
-The static algorithms are NumPy-only. EAI lazily imports torch + FLAMO, so
-callers using ``"eig"``, ``"roots"``, or ``"lindsey_fox"`` never pay that import cost.
+All three algorithms here are NumPy-only; the Ehrlich-Aberth iteration,
+which needs torch and FLAMO, is :func:`pyFDN.flamo_to_pr`.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from pyFDN.auxiliary.poles import (
     residue_at_pole,
 )
 from pyFDN.translate.dss_to_ss import dss_to_ss
+from pyFDN.translate.pr_to_impz import PoleResidue
 
 
 def _validated_lindsey_fox(
@@ -32,7 +33,7 @@ def _validated_lindsey_fox(
     bounds: np.ndarray,
     max_seconds: float,
     response_tolerance: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+) -> tuple[PoleResidue, dict[str, Any]]:
     from pyFDN.auxiliary.lindsey_fox import lindsey_fox_roots
     from pyFDN.auxiliary.modal import (
         RankOneResidues,
@@ -83,7 +84,7 @@ def _validated_lindsey_fox(
         delays=delays,
     )
     meta["responseValidation"] = check
-    return residues, poles, direct, pairs, meta
+    return PoleResidue(residues, poles, direct, pairs), meta
 
 
 def _dss_to_res(
@@ -126,28 +127,19 @@ def dss_to_pr(
     mode: str = "eig",
     lf_max_seconds: float = 3.0,
     response_tolerance: float = 1e-8,
-    allow_approximate: bool = False,
-    # ─── EAI-only knobs (ignored for mode in {"eig","roots"}) ─────────────
-    deflation_type: str = "full",
-    quality_threshold: float = 1e-10,
-    maximum_iterations: int = 50,
-    refinement_tol: float = 1e-12,
-    reject_unstable_poles: bool = False,
-    svd_refine: bool = True,
-    symmetrize: bool = True,
-    verbose: bool = False,
-    # ─── FLAMO model-construction (only used for mode="eai") ──────────────
-    fs: float = 1.0,
-    nfft: int = 2**16,
-    dtype: Any = None,
-    device: Any = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+) -> tuple[PoleResidue, dict[str, Any]]:
     """Modal decomposition of a delay state-space (DSS) system.
 
     ``H(z) = C·(diag(z^m_i) − A)^{-1}·B + D = Σ_k residue_k / (z − p_k) + D``
 
-    A :class:`~pyFDN.DSS` unpacks straight in: ``dss_to_pr(*dss)``, plus
-    ``fs=`` for ``mode="eai"``.
+    A :class:`~pyFDN.DSS` unpacks straight in, and the result straight into
+    :func:`pyFDN.pr_to_impz`::
+
+        pr, info = pyFDN.dss_to_pr(*dss)
+        ir = pyFDN.pr_to_impz(*pr, ir_len)
+
+    The Ehrlich-Aberth iteration works on a FLAMO model, so it is
+    :func:`pyFDN.flamo_to_pr`'s: ``flamo_to_pr(dss_to_flamo(*dss, fs))``.
 
     Parameters
     ----------
@@ -158,7 +150,7 @@ def dss_to_pr(
     B : array-like ``(N, n_in)``
     C : array-like ``(n_out, N)``
     D : array-like ``(n_out, n_in)``
-    mode : ``{"eig", "roots", "eai", "lindsey_fox"}``, default ``"eig"``
+    mode : ``{"eig", "roots", "lindsey_fox"}``, default ``"eig"``
         Pole-extraction algorithm.
 
         - ``"eig"``   — eigenvalues of the minimal state-space realization.
@@ -169,35 +161,29 @@ def dss_to_pr(
           checks the all-port response. Failed completion or validation raises;
           no other solver is called. Does not change the
           default or guarantee a speedup. See :mod:`pyFDN.auxiliary.lindsey_fox`.
-        - ``"eai"``   — Ehrlich-Aberth iteration in w = 1/z via FLAMO
-          (delegates to :func:`pyFDN.translate.flamo_to_pr.flamo_to_pr`).
     lf_max_seconds : float, default 3.0
         LF root-search budget checked between numerical operations. Coefficient
         construction, mandatory matrix refinement, and validation are outside
-        this budget. EAI-specific options are ignored by LF.
+        this budget.
     response_tolerance : float, default 1e-8
         LF must pass relative L2 and normalized peak checks
         against the original all-port transfer at deterministic off-grid points.
         Supported static loops can certify upper bounds on those same errors;
         otherwise the transfer is evaluated directly. Metadata ``errorBound``
         distinguishes bounds from measured errors. The sampled acceptance
-        criterion is not a uniform response error guarantee.
-
-    allow_approximate : bool, default False
-        For direct EAI only: allow an incomplete result if internal and external
-        response checks pass. Static LF always requires a complete result.
-        Empty results and unsupported multiple poles always raise.
+        criterion is not a uniform response error guarantee. LF always
+        requires a complete result.
 
     Returns
     -------
-    residues : ndarray ``(n_poles_reduced, n_out, n_in)``, complex
-    poles : ndarray ``(n_poles_reduced,)``, complex
-    direct : ndarray ``(n_out, n_in)``, complex
-    is_conjugate : ndarray of bool ``(n_poles_reduced,)``
-    meta : dict
+    pr : PoleResidue
+        ``residues`` ``(n_poles, n_out, n_in)``, ``poles`` ``(n_poles,)``,
+        ``direct`` ``(n_out, n_in)`` and ``is_conjugate_pole_pair``
+        ``(n_poles,)``, each conjugate pair stored once.
+    info : dict
         All modes report ``solver``, ``complete``, and expected/returned pole
         counts. ``responseValidation`` is None when no response check was run
-        (complete eig/roots/EAI results). LF always validates its response;
+        (complete eig/roots results). LF always validates its response;
         LF never switches to another solver.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
@@ -212,42 +198,6 @@ def dss_to_pr(
     n = delays_arr.size
     if a_mat.shape != (n, n):
         raise ValueError(f"A must have shape ({n},{n}), got {a_mat.shape}")
-
-    if mode == "eai":
-        # Lazy: torch + FLAMO are imported only when EAI is actually requested,
-        # keeping the eig/roots path numpy-only. Float64 by default for
-        # machine-precision EAI (FLAMO's own default is float32).
-        import torch
-
-        from pyFDN.translate.dss_to_flamo import dss_to_flamo
-        from pyFDN.translate.flamo_to_pr import flamo_to_pr
-
-        if dtype is None:
-            dtype = torch.float64
-        model = dss_to_flamo(
-            A=np.asarray(A, dtype=np.float64),
-            B=np.asarray(B, dtype=np.float64),
-            C=np.asarray(C, dtype=np.float64),
-            D=np.asarray(D, dtype=np.float64),
-            delays=delays_arr,
-            fs=float(fs),
-            nfft=int(nfft),
-            device=device,
-            dtype=dtype,
-        )
-        return flamo_to_pr(
-            model,
-            deflation_type=deflation_type,
-            reject_unstable_poles=reject_unstable_poles,
-            quality_threshold=quality_threshold,
-            maximum_iterations=maximum_iterations,
-            refinement_tol=refinement_tol,
-            svd_refine=svd_refine,
-            symmetrize=symmetrize,
-            verbose=verbose,
-            allow_approximate=allow_approximate,
-            response_tolerance=response_tolerance,
-        )
 
     if mode == "lindsey_fox":
         if not np.all(np.isfinite(a_mat)) or np.any(a_mat.imag != 0):
@@ -313,7 +263,10 @@ def dss_to_pr(
         poles = np.roots(p)
 
     else:
-        raise ValueError("mode must be 'eig', 'roots', 'eai', or 'lindsey_fox'")
+        raise ValueError(
+            f"mode must be 'eig', 'roots' or 'lindsey_fox', got {mode!r}; the "
+            "Ehrlich-Aberth iteration is flamo_to_pr(dss_to_flamo(*dss, fs))"
+        )
 
     poles, is_conjugate_pair, non_paired = reduce_conjugate_pairs(poles)
     residues, direct, undriven, eigenvectors = _dss_to_res(
@@ -326,4 +279,4 @@ def dss_to_pr(
         "undrivenResidues": undriven,
         "eigenvectors": eigenvectors,
     }
-    return residues, poles, direct, is_conjugate_pair, meta_data
+    return PoleResidue(residues, poles, direct, is_conjugate_pair), meta_data

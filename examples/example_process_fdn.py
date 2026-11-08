@@ -185,7 +185,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
             # what a permutation matrix does.
             warnings.simplefilter("ignore", UserWarning)
             _mixing_time, _ = pyFDN.echo_density(_ir, fs, hop=256)
-        _mixed = f"{_mixing_time:.0f} ms" if _mixing_time else "never"
+        _mixed = f"{1000 * _mixing_time:.0f} ms" if _mixing_time else "never"
         print(f"{_label:12s} mixes after {_mixed}")
 
     # Try this: add "hadamard" or "circulant" to the list and rank them.
@@ -421,7 +421,7 @@ def _(fs, ir, pyFDN):
 @app.cell
 def _(fs, ir, mo, pyFDN):
     _mixing_time, _ = pyFDN.echo_density(ir, fs, hop=256)
-    print(f"mixing time: {_mixing_time:.0f} ms")
+    print(f"mixing time: {1000 * _mixing_time:.0f} ms")
 
     mo.vstack(
         [
@@ -549,10 +549,10 @@ def _(fs, ir, mo, np, pyFDN, warnings):
         _your_mix, _ = pyFDN.echo_density(ir, fs, hop=256)
 
     print(f"band [Hz]  {np.array2string(_bands, precision=0)}")
-    print(f"the room   {np.round(_room_rt, 2)}  mixes after {_room_mix:.0f} ms")
+    print(f"the room   {np.round(_room_rt, 2)}  mixes after {1000 * _room_mix:.0f} ms")
     print(
         f"your FDN   {np.round(_your_rt, 2)}  mixes after "
-        f"{f'{_your_mix:.0f} ms' if _your_mix else 'never'}"
+        f"{f'{1000 * _your_mix:.0f} ms' if _your_mix else 'never'}"
     )
 
     mo.vstack(

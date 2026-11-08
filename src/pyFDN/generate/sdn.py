@@ -201,7 +201,7 @@ def sdn_to_flamo(
 ) -> Any:
     """Build a FLAMO ``Shell`` that renders ``sdn``; see :class:`SDN` for the flow.
 
-    Use :func:`pyFDN.flamo_time_response` for a NumPy impulse response.
+    Use :func:`pyFDN.flamo_to_impz` for a NumPy impulse response.
     """
     from flamo.processor import dsp, system
 

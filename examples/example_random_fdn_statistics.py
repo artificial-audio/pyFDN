@@ -96,7 +96,7 @@ def _(
         delays, feedback_matrix, input_gain, output_gain, direct, ir_len
     )[:, 0, 0]
 
-    residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr(
+    (residues, poles, direct_term, is_pair), meta = pyFDN.dss_to_pr(
         delays, feedback_matrix, input_gain, output_gain, direct
     )
     undriven_residues = meta["undrivenResidues"]

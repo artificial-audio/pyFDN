@@ -77,7 +77,7 @@ def _(np, pyFDN):
 
 @app.cell
 def _(A, b, c, d, delays, pyFDN):
-    residues, poles, direct, is_pair, meta = pyFDN.dss_to_pr(delays, A, b, c, d)
+    (residues, poles, direct, is_pair), meta = pyFDN.dss_to_pr(delays, A, b, c, d)
     num_modes = poles.size
     rv = meta["eigenvectors"]["right"]  # (N, num_modes)
     lv = meta["eigenvectors"]["left"]

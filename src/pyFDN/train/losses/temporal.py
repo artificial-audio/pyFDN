@@ -263,8 +263,8 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
         Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
         ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
         ``nfft``.
-    nfft, win_lengths, hop_lengths : sequence of int
-        One STFT resolution per entry; all three the same length.
+    nfft, window, hop : sequence of int
+        One STFT resolution per entry, in samples; all three the same length.
     n_mels : int
         Number of mel bands.
     p : float
@@ -276,23 +276,21 @@ class MatchMelEnergyDecayRelief(ResponseLoss):
         target: Any,
         *,
         nfft: tuple[int, ...] = (1024, 2048, 512),
-        win_lengths: tuple[int, ...] = (600, 1200, 240),
-        hop_lengths: tuple[int, ...] = (120, 240, 50),
+        window: tuple[int, ...] = (600, 1200, 240),
+        hop: tuple[int, ...] = (120, 240, 50),
         n_mels: int = 64,
         p: float = 1.0,
     ) -> None:
-        if not len(nfft) == len(win_lengths) == len(hop_lengths):
-            raise ValueError(
-                "nfft, win_lengths and hop_lengths must have the same length"
-            )
+        if not len(nfft) == len(window) == len(hop):
+            raise ValueError("nfft, window and hop must have the same length")
         self.resolutions = [
             Match(
                 target,
-                feature=MelEnergyDecayRelief(n_fft, win, hop, n_mels),
+                feature=MelEnergyDecayRelief(n_fft, win, hop_n, n_mels),
                 distance=RelativeError(p),
                 reduction=Mean(),
             )
-            for n_fft, win, hop in zip(nfft, win_lengths, hop_lengths, strict=True)
+            for n_fft, win, hop_n in zip(nfft, window, hop, strict=True)
         ]
 
     def __call__(self, response: Response) -> torch.Tensor:
@@ -314,8 +312,9 @@ class MatchEchoDensity(Match):
         Reference IR, shape ``(n_samples,)``, ``(n_samples, n_out)`` or
         ``(n_samples, n_out, n_in)``. Zero-padded or truncated to the model's
         ``nfft``.
-    win_duration : float
-        Analysis window in seconds.
+    window : int
+        Analysis window in samples (about 20 ms at 48 kHz), as in
+        :func:`pyFDN.echo_density`.
     hop : int, optional
         Samples between profile points; defaults to a quarter window. 1 is the
         textbook profile, at a memory cost of ``nfft * window`` per channel.
@@ -327,13 +326,13 @@ class MatchEchoDensity(Match):
         self,
         target: Any,
         *,
-        win_duration: float = 0.02,
+        window: int = 1024,
         hop: int | None = None,
         kappa: float | tuple[float, float] = (1e2, 1e5),
     ) -> None:
         super().__init__(
             target=target,
-            feature=EchoDensityProfile(win_duration=win_duration, hop=hop, kappa=kappa),
+            feature=EchoDensityProfile(window=window, hop=hop, kappa=kappa),
             distance=SquaredError(),
             reduction=Mean(),
         )

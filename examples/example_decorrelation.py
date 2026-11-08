@@ -131,16 +131,14 @@ def _(mo):
 
 @app.cell
 def _(P, adj_mat, mo, pyFDN):
-    _fig_char, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig_char = pyFDN.plot_impulse_response_matrix(
         P.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",
         title="Characteristic matrix",
         linewidth=0.6,
     )
-    _fig_adj, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig_adj = pyFDN.plot_impulse_response_matrix(
         adj_mat.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",
@@ -212,8 +210,7 @@ def _(adj_mat, mo, np, num_delays, pyFDN):
     input_gains = np.ones((num_delays, 1, 1))
     adj_vector = pyFDN.matrix_convolution(adj_mat, input_gains)
 
-    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
-        None,
+    _fig = pyFDN.plot_impulse_response_matrix(
         adj_vector.transpose(2, 0, 1),
         xlabel="Time (samples)",
         ylabel="Sample value",

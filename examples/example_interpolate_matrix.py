@@ -84,7 +84,7 @@ def _(mo):
 def _(C, T, mo, pyFDN):
     # animate one plot_matrix heatmap per time step; to_jshtml() adds a player.
     _anim = pyFDN.animate(
-        lambda M: pyFDN.plot_matrix(M, zmin=-1, zmax=1),
+        lambda M: pyFDN.plot_matrix(M, vmin=-1, vmax=1),
         [C[:, :, k] for k in range(C.shape[2])],
         labels=T,
         label_prefix="t = ",

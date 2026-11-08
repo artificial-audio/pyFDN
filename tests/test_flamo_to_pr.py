@@ -19,36 +19,27 @@ def _hungarian_match(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarr
     return linear_sum_assignment(cost)
 
 
-def test_flamo_to_pr_matches_dss_to_pr_eai():
-    """The model-driven entry and the numeric-matrix entry (mode="eai") run the
-    same algorithm — they must produce numerically equivalent poles/residues."""
+def test_flamo_to_pr_matches_dss_to_pr():
+    """EAI on the FLAMO model and the static roots backend on the matrices
+    must produce numerically equivalent poles/residues."""
     delays = np.array([2, 3], dtype=int)
     a = np.array([[0.25, -0.1], [0.15, 0.3]])
     b = np.eye(2, 1)
     c = np.eye(1, 2)
     d = np.zeros((1, 1))
 
-    # Build the model in float64 so flamo_to_pr matches dss_to_pr's
-    # (now-default) machine-precision behavior.
+    # Build the model in float64 for machine-precision EAI.
     model = dss_to_flamo(
         A=a, B=b, C=c, D=d, delays=delays, fs=1.0, nfft=1024, dtype=torch.float64
     )
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        res_model, pol_model, direct_model, pair_model, meta_model = flamo_to_pr(
+        (res_model, pol_model, direct_model, pair_model), meta_model = flamo_to_pr(
             model, verbose=False
         )
-        res_wrap, pol_wrap, direct_wrap, pair_wrap, _ = dss_to_pr(
-            delays,
-            a,
-            b,
-            c,
-            d,
-            mode="eai",
-            fs=1.0,
-            nfft=1024,
-            verbose=False,
+        (res_wrap, pol_wrap, direct_wrap, pair_wrap), _ = dss_to_pr(
+            delays, a, b, c, d, mode="roots"
         )
 
     assert pol_model.size == pol_wrap.size
@@ -100,7 +91,7 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        residues, poles, direct, is_pair, _ = flamo_to_pr(
+        (residues, poles, direct, is_pair), _ = flamo_to_pr(
             model,
             reject_unstable_poles=True,
             maximum_iterations=300,

@@ -25,7 +25,7 @@ __all__ = [
     "ms_to_samples",
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
-    "flamo_time_response",
+    "flamo_to_impz",
     "flamo_process",
     # building a FLAMO FDN graph from numpy values
     "assemble_fdn_core",
@@ -130,6 +130,7 @@ __all__ = [
     "impz_to_res",
     "tf_to_impz",
     "pr_to_impz",
+    "PoleResidue",
     # fdn processing
     "process_dss",
     # training
@@ -233,21 +234,21 @@ from .auxiliary.audio import audio_metadata, available_audio, load_audio
 
 # delay utilities
 from .auxiliary.delay import (
-    flamo_delay_feedback_matrix,
     matrix_delay_approximation,
     matrix_group_delay,
     ms_to_samples,
-    swap_flamo_recursion_paths,
 )
 from .auxiliary.flamo import (
     assemble_fdn_core,
     delay_module,
     fir_matrix_module,
+    flamo_delay_feedback_matrix,
     flamo_process,
-    flamo_time_response,
+    flamo_to_impz,
     gain_module,
     matrix_module,
     sos_filter_module,
+    swap_flamo_recursion_paths,
     wrap_fdn_shell,
 )
 from .auxiliary.flamo_graph import (
@@ -282,18 +283,17 @@ from .auxiliary.plot import (
     plot_spectrogram,
     plot_system_matrix,
 )
+from .auxiliary.poles import is_bounding_curve, pole_boundaries
 
 # general utilities
 from .auxiliary.utils import (
     fade_out,
     hertz_to_rad,
     hertz_to_unit,
-    is_bounding_curve,
     lin_to_db,
     max_corr,
     mulaw_encode,
     peak_normalize,
-    pole_boundaries,
     rad_to_hertz,
     sq_to_db,
 )
@@ -388,7 +388,7 @@ from .translate.dss_to_td import dss_to_td
 from .translate.dss_to_tf import dss_to_tf
 from .translate.flamo_to_dss import flamo_to_dss
 from .translate.impz_to_res import impz_to_res
-from .translate.pr_to_impz import pr_to_impz
+from .translate.pr_to_impz import PoleResidue, pr_to_impz
 from .translate.tf_to_impz import tf_to_impz
 
 # The training API and the FLAMO pole finder need torch and flamo. They are

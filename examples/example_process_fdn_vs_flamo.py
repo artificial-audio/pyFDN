@@ -145,7 +145,7 @@ def _(
         dtype=torch.float64,
         device="cpu",
     )
-    ir_flamo = pyFDN.flamo_time_response(model).squeeze().astype(np.float64)[:ir_len]
+    ir_flamo = pyFDN.flamo_to_impz(model).squeeze().astype(np.float64)[:ir_len]
 
     difference = ir_td - ir_flamo
     max_deviation = np.max(np.abs(difference))

@@ -8,10 +8,13 @@ inside the functions, so importing pyFDN does not load them.
 
 from __future__ import annotations
 
+import copy
 import warnings
+from collections import OrderedDict
 from typing import Any
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 
 def default_device(device: Any = None) -> Any:
@@ -34,7 +37,7 @@ def to_numpy(value: Any) -> np.ndarray:
     return np.asarray(value.numpy() if hasattr(value, "numpy") else value)
 
 
-def flamo_time_response(model) -> np.ndarray:
+def flamo_to_impz(model) -> np.ndarray:
     """Impulse response of a FLAMO model, shape ``(nfft, out, in)``.
 
     One Dirac per input channel, as :func:`pyFDN.dss_to_impz` and
@@ -42,6 +45,9 @@ def flamo_time_response(model) -> np.ndarray:
     renders compare directly. The array is detached from any autograd graph
     and moved to CPU memory. FLAMO renders circularly, so the response wraps
     around after ``nfft`` samples.
+
+    Training uses :func:`pyFDN.model_response` instead, the same response as
+    a torch tensor that keeps its gradients.
     """
     response = to_numpy(model.get_time_response(identity=True))[0]
     return response if response.ndim == 3 else response[:, :, np.newaxis]
@@ -707,3 +713,76 @@ def wrap_fdn_shell(
         ),
     )
     return shell.to(dev)
+
+
+def _assign_flamo_delay_samples(module: Any, samples: np.ndarray) -> None:
+    """Assign sample-valued delays while preserving a FLAMO module's tensor setup."""
+    import torch
+
+    values = torch.as_tensor(
+        samples, dtype=module.param.dtype, device=module.param.device
+    )
+    module.assign_value(module.sample2s(values))
+
+
+def flamo_delay_feedback_matrix(
+    model: Any,
+    delays: ArrayLike,
+    delays_in: ArrayLike,
+    delays_out: ArrayLike,
+) -> Any:
+    """Place a delay-matrix-delay chain in a FLAMO FDN feedback path.
+
+    The model is expected to have the topology produced by
+    :func:`pyFDN.dss_to_flamo`. Its feedforward delay is set to ``delays`` and
+    its feedback matrix is wrapped by delays of ``delays_in`` and
+    ``delays_out`` samples. Returns a modified copy; ``model`` is left as is.
+    """
+    delay_vectors = tuple(
+        np.asarray(values, dtype=np.int64).ravel()
+        for values in (delays, delays_in, delays_out)
+    )
+    if not delay_vectors[0].size:
+        raise ValueError("delay vectors must not be empty")
+    if any(values.size != delay_vectors[0].size for values in delay_vectors[1:]):
+        raise ValueError("delays, delays_in, and delays_out must have equal lengths")
+    if any(np.any(values < 0) for values in delay_vectors):
+        raise ValueError("delay values must be non-negative")
+
+    from flamo.processor import system
+
+    target = copy.deepcopy(model)
+    feedback_loop = target.get_core().branchA.feedback_loop
+    base_delay = feedback_loop.feedforward
+    feedback_matrix = feedback_loop.feedback
+
+    _assign_flamo_delay_samples(base_delay, delay_vectors[0])
+    extra_delay_in = copy.deepcopy(base_delay)
+    extra_delay_out = copy.deepcopy(base_delay)
+    _assign_flamo_delay_samples(extra_delay_in, delay_vectors[1])
+    _assign_flamo_delay_samples(extra_delay_out, delay_vectors[2])
+
+    feedback_loop.feedback = system.Series(
+        OrderedDict(
+            [
+                ("delay_in", extra_delay_in),
+                ("matrix", feedback_matrix),
+                ("delay_out", extra_delay_out),
+            ]
+        )
+    )
+    return target
+
+
+def swap_flamo_recursion_paths(model: Any) -> Any:
+    """Swap the feedforward and feedback paths of a FLAMO FDN recursion.
+
+    Returns a modified copy; ``model`` is left as is.
+    """
+    target = copy.deepcopy(model)
+    feedback_loop = target.get_core().branchA.feedback_loop
+    feedback_loop.feedforward, feedback_loop.feedback = (
+        feedback_loop.feedback,
+        feedback_loop.feedforward,
+    )
+    return target

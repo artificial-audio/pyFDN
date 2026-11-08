@@ -143,11 +143,11 @@ def _(A_original, B, classic, np, pyFDN, sign_agnostic):
         matrices,
         titles=titles,
         ncols=2,
-        zmin=-1,
-        zmax=1,
+        vmin=-1,
+        vmax=1,
         show_ticks=True,
         title="Sign-agnostic vs. classic nearest orthogonal",
-        height=1000,
+        figsize=(6.8, 10.0),
     )
     fig
     return

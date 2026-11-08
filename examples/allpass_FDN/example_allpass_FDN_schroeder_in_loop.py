@@ -151,7 +151,7 @@ def _(fs, N, nfft, pyFDN):
     )
 
     model_fdn = pyFDN.dss_to_flamo(*fdn_dss, fs, nfft=nfft, device="cpu", **fdn_filters)
-    ir_fdn = pyFDN.flamo_time_response(model_fdn).squeeze()
+    ir_fdn = pyFDN.flamo_to_impz(model_fdn).squeeze()
     return fdn_dss, fdn_filters, ir_fdn
 
 
@@ -210,7 +210,7 @@ def _(
         post_output=fdn_filters["post_output"],
         device="cpu",
     )
-    ir_fdn_allpass = pyFDN.flamo_time_response(model_fdn_allpass).squeeze()
+    ir_fdn_allpass = pyFDN.flamo_to_impz(model_fdn_allpass).squeeze()
 
     pyFDN.plot_flamo_graph(model_fdn_allpass)
     return (ir_fdn_allpass,)

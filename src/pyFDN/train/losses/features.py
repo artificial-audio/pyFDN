@@ -416,7 +416,7 @@ class MelEnergyDecayRelief(Feature):
 class EchoDensityProfile(Feature):
     r"""Differentiable normalized echo density profile (Abel & Huang).
 
-    In a Hann window of ``win_duration`` seconds around each analysis point,
+    In a Hann window of ``window`` samples around each analysis point,
     the fraction of samples whose magnitude exceeds the window's weighted RMS
     :math:`\sigma`, normalized by :math:`\operatorname{erfc}(1/\sqrt{2})`, the
     fraction expected of Gaussian noise -- so the profile reaches about 1 once
@@ -435,16 +435,16 @@ class EchoDensityProfile(Feature):
 
     def __init__(
         self,
-        win_duration: float = 0.02,
+        window: int = 1024,
         hop: int | None = None,
         kappa: float | tuple[float, float] = (1e2, 1e5),
     ) -> None:
-        self.win_duration = float(win_duration)
+        self.window = int(window)
         self.hop = hop
         self.kappa = kappa
 
     def __call__(self, h: torch.Tensor, fs: float) -> torch.Tensor:
-        win_len = int(self.win_duration * fs) | 1  # odd, centred
+        win_len = self.window | 1  # odd, centred
         # ponytail: one (frames, win_len) tensor; hop=1 at a long nfft is GBs
         hop = self.hop if self.hop is not None else max(1, win_len // 4)
         x = h.permute(1, 2, 0).reshape(-1, h.shape[0])

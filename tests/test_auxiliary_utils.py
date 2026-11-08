@@ -6,15 +6,14 @@ import pytest
 from pyFDN.auxiliary.acoustics import rt_to_slope, slope_to_rt
 from pyFDN.auxiliary.delay import ms_to_samples
 from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
+from pyFDN.auxiliary.poles import is_bounding_curve, pole_boundaries
 from pyFDN.auxiliary.utils import (
     ensure_3d,
     fade_out,
     hertz_to_unit,
-    is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
     max_corr,
-    pole_boundaries,
 )
 from pyFDN.eq import decay_to_first_order_shelf, decay_to_one_pole
 

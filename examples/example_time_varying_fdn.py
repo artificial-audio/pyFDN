@@ -242,8 +242,8 @@ def _(fs, matrix_types, mo, pyFDN, reverbed_synth):
                 nperseg=2048 * 8,
                 noverlap=2048 * 1,
                 title=f"{name} — spectrogram",
-                colorscale="Magma",
-                height=350,
+                cmap="magma",
+                figsize=(8.0, 3.5),
             )
             for name in matrix_types
         ]

@@ -180,7 +180,7 @@ def _(
         output_layer=dsp.iFFT(nfft).to("cpu"),
     )
 
-    ir_stereo = pyFDN.flamo_time_response(model).squeeze()
+    ir_stereo = pyFDN.flamo_to_impz(model).squeeze()
     if ir_stereo.ndim == 3:
         ir_stereo = ir_stereo[0]
     return ir_stereo, model

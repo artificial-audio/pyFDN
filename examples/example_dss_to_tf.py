@@ -111,8 +111,8 @@ def _(mo):
 
 @app.cell
 def _(ir_dss, ir_tf, mo, pyFDN):
-    fig1 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_tf)
-    fig2 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_dss)
+    fig1 = pyFDN.plot_impulse_response_matrix(ir_tf)
+    fig2 = pyFDN.plot_impulse_response_matrix(ir_dss)
 
     mo.vstack([fig1, fig2])
     return

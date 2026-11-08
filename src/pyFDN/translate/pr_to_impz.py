@@ -2,7 +2,25 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
+
+
+class PoleResidue(NamedTuple):
+    """Pole-residue (modal) form of a system: ``H(z) = sum_k R_k / (1 - p_k z^-1) + D``.
+
+    What :func:`pyFDN.dss_to_pr` and :func:`pyFDN.flamo_to_pr` return, next to
+    their solver report. Conjugate pairs are stored once, flagged in
+    ``is_conjugate_pole_pair``. The field order is the argument order of
+    :func:`pr_to_impz`, so a result unpacks straight in:
+    ``pr_to_impz(*pr, ir_len)``.
+    """
+
+    residues: np.ndarray
+    poles: np.ndarray
+    direct: np.ndarray
+    is_conjugate_pole_pair: np.ndarray
 
 
 def pr_to_impz(

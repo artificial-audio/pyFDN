@@ -85,8 +85,7 @@ def _(mo):
 
 @app.cell
 def _(feedback_matrix, mo, np, pyFDN):
-    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
-        np.arange(feedback_matrix.shape[2]),
+    _fig = pyFDN.plot_impulse_response_matrix(
         pyFDN.mulaw_encode(feedback_matrix.transpose(2, 0, 1)),
         xlabel="Time (samples)",
         ylabel="Amplitude (mu)",
@@ -167,7 +166,7 @@ def _(
         dtype=torch.float64,
         device="cpu",
     )
-    residues, poles, direct_term, is_pair, _meta = pyFDN.flamo_to_pr(
+    (residues, poles, direct_term, is_pair), _meta = pyFDN.flamo_to_pr(
         model,
         quality_threshold=1e-10,
         refinement_tol=1e-10,

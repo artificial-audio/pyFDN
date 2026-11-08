@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
-from numpy.linalg import svd
 from numpy.typing import ArrayLike
-from scipy.interpolate import interp1d
-from scipy.signal import freqz, group_delay
 
 
 def as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
@@ -213,91 +209,3 @@ def hertz_to_rad(hz: ArrayLike, fs: float) -> np.ndarray:
     Relationship: omega = 2*pi*f/fs. Inverse of :func:`rad_to_hertz`.
     """
     return np.asarray(hz, dtype=np.float64) * (2.0 * np.pi) / fs
-
-
-def is_bounding_curve(
-    x_points: ArrayLike,
-    y_points: ArrayLike,
-    x_curve: ArrayLike,
-    y_curve: ArrayLike,
-    bound_type: str,
-) -> bool:
-    """
-    Check if all value points are bounded by the curve.
-    Args:
-        x_points: x-coordinates of data points (1D array)
-        y_points: y-coordinates of data points (1D array)
-        x_curve: x-coordinates of curve points (1D array)
-        y_curve: y-coordinates of curve points (1D array)
-        bound_type: 'upper' or 'lower'
-    Returns:
-        Whether every data point lies on the bounded side of the curve.
-    """
-    # Spline interpolation with extrapolation
-    interp = interp1d(x_curve, y_curve, kind="cubic", fill_value="extrapolate")
-    y_curve_interp = interp(x_points)
-
-    if bound_type == "upper":
-        is_bounded = y_curve_interp >= y_points
-    elif bound_type == "lower":
-        is_bounded = y_curve_interp <= y_points
-    else:
-        raise ValueError("bound_type must be 'upper' or 'lower'")
-
-    return bool(np.all(is_bounded))
-
-
-def pole_boundaries(
-    delays: ArrayLike,
-    A: ArrayLike,
-    fs: float,
-    *,
-    post_delay: ArrayLike,
-    nfft: int = 2**12,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Upper and lower bounds of the pole magnitudes of an FDN loop.
-
-    Combines the singular values of the feedback matrix with the magnitude
-    and group delay of the per-line absorption filters.
-
-    Args:
-        delays: Delays in samples, shape ``(N,)``.
-        A: Feedback matrix ``(N, N)``, or the FIR matrix ``(N, N, L)`` in the
-            z^{-1} convention that sits on the feedback path.
-        fs: Sampling frequency in Hz.
-        post_delay: Per-line absorption, the ``post_delay`` filter hook as an
-            SOS bank of shape ``(sections, 6, N)``.
-        nfft: Number of frequency bins between 0 and Nyquist.
-
-    Returns:
-        min_curve: Lower bound of the pole magnitude, shape ``(nfft,)``.
-        max_curve: Upper bound of the pole magnitude, shape ``(nfft,)``.
-        f: Frequency points in Hz, shape ``(nfft,)``.
-    """
-    delays_arr = np.asarray(delays, dtype=float).ravel()
-    sos = np.asarray(post_delay, dtype=float)
-    if sos.ndim != 3 or sos.shape[1] != 6 or sos.shape[2] != delays_arr.size:
-        raise ValueError("post_delay must be an SOS bank of shape (sections, 6, N)")
-    # The FFT bins of a 2 * nfft transform: 0 up to (not including) Nyquist.
-    w = np.pi * np.arange(nfft) / nfft
-
-    spectrum = np.fft.fft(ensure_3d(A), n=nfft * 2, axis=2)[:, :, :nfft]
-    singular = np.array([svd(spectrum[:, :, k], compute_uv=False) for k in range(nfft)])
-    matrix_min = np.min(singular, axis=1) ** (1 / np.min(delays_arr))
-    matrix_max = np.max(singular, axis=1) ** (1 / np.max(delays_arr))
-
-    magnitude = np.ones((nfft, delays_arr.size))
-    group = np.zeros((nfft, delays_arr.size))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        for line in range(delays_arr.size):
-            for section in sos[:, :, line]:
-                _, h = freqz(section[:3], section[3:], w)
-                _, gd = group_delay((section[:3], section[3:]), w)
-                magnitude[:, line] *= np.abs(h)
-                group[:, line] += gd
-
-    per_line = magnitude ** (1.0 / (delays_arr + group))
-    min_curve = np.min(per_line, axis=1) * matrix_min
-    max_curve = np.max(per_line, axis=1) * matrix_max
-    return min_curve, max_curve, w / np.pi * fs / 2

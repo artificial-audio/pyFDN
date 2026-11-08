@@ -172,7 +172,7 @@ def _(
         post_delay=sos_absorption,
         device="cpu",
     )
-    ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
+    ir_unequalized = pyFDN.flamo_to_impz(_model).squeeze()[:rir_len]
     print(f"Unequalized FDN IR computed: {rir_len} samples")
     return ir_unequalized, nfft
 
@@ -226,7 +226,7 @@ def _(
         post_output=equalization_sos[:, :, np.newaxis],
         device="cpu",
     )
-    ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
+    ir_fdn = pyFDN.flamo_to_impz(model_eq).squeeze()[:rir_len]
 
     print(f"GEQ target (dB): {target_level_db.round(1)}")
     return equalization_sos, ir_fdn, model_eq

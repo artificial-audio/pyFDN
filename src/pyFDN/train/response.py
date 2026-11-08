@@ -121,7 +121,8 @@ def model_response(model: Any, excitation: torch.Tensor | None = None) -> Respon
     :func:`impulse_excitation` builds one.
 
     Gradients flow through the returned response, so this is what the trainer
-    calls each step -- and, detached, what you can call to inspect a model.
+    calls each step. To inspect a model as a NumPy array, use
+    :func:`pyFDN.flamo_to_impz`.
     """
     require_time_output(model)
     n_in, n_out = int(model.input_channels), int(model.output_channels)

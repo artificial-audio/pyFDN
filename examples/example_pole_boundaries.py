@@ -123,7 +123,7 @@ def _(
         dtype=torch.float64,
         device="cpu",
     )
-    _residues, poles, _direct_term, _is_pair, _meta = pyFDN.flamo_to_pr(
+    (_residues, poles, _direct_term, _is_pair), _meta = pyFDN.flamo_to_pr(
         model,
         # Unresolved absorption modes are accepted only after response validation.
         allow_approximate=True,

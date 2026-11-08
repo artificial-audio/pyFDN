@@ -4,10 +4,9 @@ import numpy as np
 import pytest
 import torch
 
-from pyFDN.auxiliary.delay import (
+from pyFDN.auxiliary.delay import matrix_delay_approximation, matrix_group_delay
+from pyFDN.auxiliary.flamo import (
     flamo_delay_feedback_matrix,
-    matrix_delay_approximation,
-    matrix_group_delay,
     swap_flamo_recursion_paths,
 )
 from pyFDN.translate.dss_to_flamo import dss_to_flamo

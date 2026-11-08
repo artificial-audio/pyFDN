@@ -176,7 +176,9 @@ def map_back_from_similarity(
 # ------------------------ Completion methods ---------------------------------
 
 
-def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
+def complete_full_mimo_halmos(
+    A: np.ndarray, psd_clip: float = 0.0
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Full MIMO (k=N) Halmos/Julia dilation.
 
@@ -207,12 +209,16 @@ def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
 
 
 def complete_general_mimo_svd(
-    A: np.ndarray, k: int, tol_one: float = 1e-8, choose_smallest_if_needed: bool = True
-):
+    A: np.ndarray,
+    num_io: int,
+    *,
+    tol_one: float = 1e-8,
+    choose_smallest_if_needed: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     General MIMO completion via defect subspace (CS/SVD-based).
 
-    Given A (NxN) and k <= N, we aim for a balanced orthogonal/unitary block::
+    Given A (NxN) and k = num_io <= N, we aim for a balanced orthogonal/unitary block::
 
         V = [[A, B],
              [C, D]]
@@ -236,12 +242,13 @@ def complete_general_mimo_svd(
 
     Returns: B (Nxk), C (kxN), D (kxk)
     """
+    k = num_io
     A = np.asarray(A)
     N = A.shape[0]
     if A.shape != (N, N):
         raise ValueError("A must be square.")
     if not (1 <= k <= N):
-        raise ValueError("k must satisfy 1 <= k <= N")
+        raise ValueError("num_io must satisfy 1 <= num_io <= N")
 
     # SVD: A = U diag(s) Vh
     U, s, Vh = np.linalg.svd(A, full_matrices=True)
@@ -487,7 +494,7 @@ def optimize_diagonal_similarity_rank_defect_scipy(
 
 def complete_fdn(
     A: np.ndarray,
-    k: int | None = None,
+    num_io: int | None = None,
     *,
     preprocessing: str = "optimize",
     q: float | np.ndarray = 1.0,
@@ -500,7 +507,7 @@ def complete_fdn(
 
     Args:
       A: (N,N) feedback matrix
-      k: number of IO channels. If None -> full MIMO (k=N).
+      num_io: number of IO channels k, as in complete_orthogonal. If None -> full MIMO (k=N).
       preprocessing:
          "none"  -> X = I
          "optimize" -> find diagonal similarity X=diag(x) that makes G(u) PSD with rank ~ k.
@@ -517,10 +524,9 @@ def complete_fdn(
     N = A.shape[0]
     if A.shape != (N, N):
         raise ValueError("A must be square.")
-    if k is None:
-        k = N
+    k = N if num_io is None else num_io
     if not (1 <= k <= N):
-        raise ValueError("k must satisfy 1 <= k <= N")
+        raise ValueError("num_io must satisfy 1 <= num_io <= N")
 
     # Preprocessing: compute x and A_tilde
     if preprocessing == "none" or k == N:
@@ -560,7 +566,7 @@ def complete_fdn(
     if k == N:
         Bt, Ct, Dt = complete_full_mimo_halmos(At, psd_clip=psd_clip)
     else:
-        Bt, Ct, Dt = complete_general_mimo_svd(At, k=k, tol_one=tol_one)
+        Bt, Ct, Dt = complete_general_mimo_svd(At, k, tol_one=tol_one)
 
     # Random orthogonal transformation to mix B, C, and D
     UU = random_orthogonal(k, rng=rng)

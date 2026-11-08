@@ -433,27 +433,18 @@ class _FlamoSpectrogramLoss(ResponseLoss):
         target: Any,
         *,
         nfft: tuple[int, ...] = (256, 512, 1024),
-        device: Any = None,
-        **kwargs: Any,
+        overlap: float = 0.75,
+        **flamo_options: Any,
     ) -> None:
         self.nfft = tuple(int(n) for n in nfft)
-        self.device = device
-        self.kwargs = kwargs
+        self.overlap = float(overlap)
+        self.flamo_options = flamo_options
         self._target = _CachedTarget(target)
         self._criterion: Any = None
         self._key: tuple[Any, ...] | None = None
 
     def _build_criterion(self, response: Response) -> Any:
         raise NotImplementedError
-
-    def _criterion_device(self, response: Response) -> Any:
-        """Where FLAMO should put its filterbanks.
-
-        FLAMO rebuilds them per call and moves them to the device it was given,
-        so an unset ``device`` has to follow the response rather than stay on
-        the CPU the loss was constructed on.
-        """
-        return response.h.device if self.device is None else self.device
 
     def __call__(self, response: Response) -> torch.Tensor:
         key = response_key(response)
@@ -470,9 +461,11 @@ class _FlamoSpectrogramLoss(ResponseLoss):
 class MatchSpectrogram(_FlamoSpectrogramLoss):
     """Multi-resolution STFT distance to a reference impulse response.
 
-    Wraps FLAMO's ``mss_loss``. ``nfft`` is the tuple of STFT window sizes; the
-    loss's own frequency resolution therefore comes from these, independent of
-    the model's ``nfft``.
+    Wraps FLAMO's ``mss_loss``. ``nfft`` is the tuple of STFT window sizes
+    and ``overlap`` the fractional frame overlap, as in
+    :class:`FlatSpectrogram`; the loss's own frequency resolution comes from
+    these, independent of the model's ``nfft``. Further keywords go to FLAMO's
+    ``mss_loss`` (e.g. ``energy_norm``).
     """
 
     def _build_criterion(self, response: Response) -> Any:
@@ -480,21 +473,28 @@ class MatchSpectrogram(_FlamoSpectrogramLoss):
 
         return mss_loss(
             nfft=list(self.nfft),
+            overlap=self.overlap,
             sample_rate=int(response.fs),
-            device=self._criterion_device(response),
-            **self.kwargs,
+            # FLAMO builds its filterbanks on this device: follow the response
+            device=response.h.device,
+            **self.flamo_options,
         )
 
 
 class MatchMelSpectrogram(_FlamoSpectrogramLoss):
-    """Mel-scaled multi-resolution STFT distance (FLAMO's ``mel_mss_loss``)."""
+    """Mel-scaled multi-resolution STFT distance (FLAMO's ``mel_mss_loss``).
+
+    Takes ``nfft``, ``overlap`` and FLAMO options as :class:`MatchSpectrogram`.
+    """
 
     def _build_criterion(self, response: Response) -> Any:
         from flamo.optimize.loss import mel_mss_loss
 
         return mel_mss_loss(
             nfft=list(self.nfft),
+            overlap=self.overlap,
             sample_rate=int(response.fs),
-            device=self._criterion_device(response),
-            **self.kwargs,
+            # FLAMO builds its filterbanks on this device: follow the response
+            device=response.h.device,
+            **self.flamo_options,
         )

@@ -82,7 +82,7 @@ def test_flamo_render_starts_with_the_direct_path():
     absorbing = np.zeros((1, 6, 6))
     absorbing[0, 0], absorbing[0, 3] = 0.7, 1.0  # lossless walls ring forever
     sdn = _room(fs=16_000.0, wall_filters=absorbing)
-    ir = pyFDN.flamo_time_response(pyFDN.sdn_to_flamo(sdn, nfft=2**12, device="cpu"))
+    ir = pyFDN.flamo_to_impz(pyFDN.sdn_to_flamo(sdn, nfft=2**12, device="cpu"))
     ir = ir.reshape(-1)
     # only the wrapped-around tail before the direct sound (circular convolution)
     np.testing.assert_allclose(ir[: sdn.direct_delay], 0.0, atol=1e-5)

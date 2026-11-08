@@ -207,7 +207,7 @@ def _(mo):
 
 @app.cell
 def _(model, pyFDN):
-    ir = pyFDN.flamo_time_response(model).squeeze()
+    ir = pyFDN.flamo_to_impz(model).squeeze()
     return (ir,)
 
 

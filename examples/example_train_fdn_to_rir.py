@@ -215,7 +215,7 @@ def _(device, fs, init_dss, np, pyFDN, rir, rir_len, torch):
 
     # Match energy on the validation window; output gain scales the entire IR
     # because the initial direct path is zero.
-    ir_init = pyFDN.flamo_time_response(model).squeeze().astype(float)[:rir_len]
+    ir_init = pyFDN.flamo_to_impz(model).squeeze().astype(float)[:rir_len]
     energy_gain = np.linalg.norm(rir[:render_nfft]) / np.linalg.norm(ir_init)
     with torch.no_grad():
         pyFDN.param(model, "output_gain").raw().mul_(energy_gain)
@@ -277,7 +277,7 @@ def _(device, fs, loss, model, pyFDN, render_nfft, rir_len, train_nfft):
         rng=0,
     )
     model.set_nfft(render_nfft)
-    ir_trained = pyFDN.flamo_time_response(model).squeeze()[:rir_len]
+    ir_trained = pyFDN.flamo_to_impz(model).squeeze()[:rir_len]
     print(
         f"{log.steps_run} steps: loss "
         f"{log.train_loss[0]:.4g} -> {log.train_loss[-1]:.4g}"

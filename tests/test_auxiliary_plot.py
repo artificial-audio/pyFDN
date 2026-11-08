@@ -205,7 +205,7 @@ def test_animate_builds_one_frame_per_input_over_plot_matrix():
     t = np.linspace(0.0, 1.0, 5)
 
     anim = animate(
-        functools.partial(plot_matrix, zmin=-1, zmax=1),
+        functools.partial(plot_matrix, vmin=-1, vmax=1),
         [C[:, :, k] for k in range(C.shape[2])],
         labels=t,
         label_prefix="t = ",

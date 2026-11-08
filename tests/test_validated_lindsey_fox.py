@@ -15,7 +15,7 @@ from pyFDN.auxiliary.modal import validate_modal_response
 def test_kronecker_close_pairs_complete():
     delays = np.array([53, 61, 71, 79, 89, 101, 113, 127])
     a = pyFDN.kronecker_matrix(np.full(3, np.pi / 4))
-    result = pyFDN.dss_to_pr(
+    result, info = pyFDN.dss_to_pr(
         delays,
         a,
         np.ones((8, 1)),
@@ -24,13 +24,13 @@ def test_kronecker_close_pairs_complete():
         mode="lindsey_fox",
         lf_max_seconds=10,
     )
-    assert result[4]["solver"] == "lindsey_fox"
-    assert result[4]["complete"] and result[4]["returnedPoles"] == 694
+    assert info["solver"] == "lindsey_fox"
+    assert info["complete"] and info["returnedPoles"] == 694
     reference = pyFDN.dss_to_impz(
         delays, a, np.ones((8, 1)), np.ones((1, 8)), [[0]], 4096
     )
     np.testing.assert_allclose(
-        pyFDN.pr_to_impz(*result[:4], 4096), reference, atol=1e-9, rtol=1e-9
+        pyFDN.pr_to_impz(*result, 4096), reference, atol=1e-9, rtol=1e-9
     )
 
 
@@ -69,9 +69,7 @@ def test_lf_never_calls_eai(monkeypatch, flamo, failure):
             pyFDN.flamo_to_pr, model, mode="lindsey_fox", maximum_iterations=0
         )
     else:
-        solve = partial(
-            pyFDN.dss_to_pr, *args, mode="lindsey_fox", maximum_iterations=0
-        )
+        solve = partial(pyFDN.dss_to_pr, *args, mode="lindsey_fox")
     if failure:
         message = (
             "grid budget" if failure == "budget" else "1/8 poles.*complete pole set"
@@ -79,7 +77,7 @@ def test_lf_never_calls_eai(monkeypatch, flamo, failure):
         with pytest.raises(RuntimeError, match=message):
             solve()
     else:
-        meta = solve()[4]
+        _, meta = solve()
         assert meta["solver"] == "lindsey_fox" and meta["complete"]
         assert "fallbackReason" not in meta
 
@@ -174,10 +172,10 @@ def test_flamo_lf_static_and_sos_complete():
         model = pyFDN.dss_to_flamo(
             *dss, 48000, dtype=torch.float64, device="cpu", post_delay=sos
         )
-        result = pyFDN.flamo_to_pr(model, mode="lindsey_fox")
-        assert result[4]["solver"] == "lindsey_fox" and result[4]["complete"]
+        result, info = pyFDN.flamo_to_pr(model, mode="lindsey_fox")
+        assert info["solver"] == "lindsey_fox" and info["complete"]
         np.testing.assert_allclose(
-            pyFDN.pr_to_impz(*result[:4], 512),
+            pyFDN.pr_to_impz(*result, 512),
             pyFDN.dss_to_td(*dss, post_delay=sos).impulse_response(512),
             atol=1e-9,
             rtol=1e-9,
@@ -203,14 +201,14 @@ def test_eai_absorption_approximation_uses_the_same_acceptance_policy():
     with pytest.raises(RuntimeError, match="allow_approximate=True"):
         pyFDN.flamo_to_pr(model)
     with pytest.warns(RuntimeWarning, match="validated approximate"):
-        result = pyFDN.flamo_to_pr(model, allow_approximate=True)
-    meta = result[4]
+        result, info = pyFDN.flamo_to_pr(model, allow_approximate=True)
+    meta = info
     assert meta["solver"] == meta["requestedSolver"] == "eai"
     assert meta["omittedPoleCount"] == 2 and not meta["complete"]
     assert meta["responseValidation"]["relativeL2"] < 1e-8
     assert meta["externalResponseValidation"]["relativeL2"] < 1e-8
     np.testing.assert_allclose(
-        pyFDN.pr_to_impz(*result[:4], 512),
+        pyFDN.pr_to_impz(*result, 512),
         reference,
         atol=1e-9,
     )

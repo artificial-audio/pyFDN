@@ -191,7 +191,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
         )
 
         # unequalized FDN: reference level for the output GEQ
-        _ir_flat = pyFDN.flamo_time_response(
+        _ir_flat = pyFDN.flamo_to_impz(
             pyFDN.dss_to_flamo(
                 _dss.delays,
                 _dss.A,
@@ -212,7 +212,7 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
         )
         _eq = pyFDN.gain_to_bounded_geq(geq_grid(_gain_db), fs=fs)
 
-        resynthesis += pyFDN.flamo_time_response(
+        resynthesis += pyFDN.flamo_to_impz(
             pyFDN.dss_to_flamo(
                 _dss.delays,
                 _dss.A,

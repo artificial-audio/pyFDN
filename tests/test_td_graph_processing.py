@@ -34,7 +34,7 @@ def _time_varying_parameters(N: int, fs: float) -> dict[str, Any]:
     """parameters for the time_varying matrix"""
 
     tvm_kwargs = {
-        "N": N,
+        "channels": N,
         "fs": fs,
         "rate": 1.3,
         "depth": 0.2,

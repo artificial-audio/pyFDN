@@ -127,7 +127,7 @@ def _(
         )
         irs[_name] = _graph.impulse_response(ir_len)[:, 0, 0]
         _t_mix, echo_densities[_name] = pyFDN.echo_density(irs[_name], fs)
-        print(f"{_name}: mixing time = {_t_mix:.0f} ms")
+        print(f"{_name}: mixing time = {1000 * _t_mix:.0f} ms")
     return echo_densities, irs
 
 

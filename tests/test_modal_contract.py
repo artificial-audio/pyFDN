@@ -8,16 +8,21 @@ from pyFDN.translate.dss_to_pr import dss_to_pr
 from pyFDN.translate.pr_to_impz import pr_to_impz
 
 
-def _eai(**options):
-    return dss_to_pr(
+def _eai(*dss, **options):
+    """The Ehrlich-Aberth route: a float64 FLAMO model into flamo_to_pr."""
+    torch = pytest.importorskip("torch")
+    from pyFDN.translate.dss_to_flamo import dss_to_flamo
+    from pyFDN.translate.flamo_to_pr import flamo_to_pr
+
+    delays, A, B, C, D = dss or (
         [3, 5],
         [[0.4, 0.1], [-0.1, 0.3]],
         np.eye(2),
         np.eye(2),
         np.zeros((2, 2)),
-        mode="eai",
-        **options,
     )
+    model = dss_to_flamo(delays, A, B, C, D, 1.0, dtype=torch.float64)
+    return flamo_to_pr(model, **options)
 
 
 @pytest.mark.parametrize("iterations", [0, -1, 1.5])
@@ -43,14 +48,8 @@ def test_inaccurate_partial_eai_result_cannot_be_opted_into():
 def test_complete_result_metadata_and_residue_convention(mode):
     delays = np.array([3, 5])
     a = np.array([[0.4, 0.1], [-0.1, 0.3]])
-    r, p, d, pairs, meta = dss_to_pr(
-        delays,
-        a,
-        np.eye(2),
-        np.eye(2),
-        np.zeros((2, 2)),
-        mode=mode,
-    )
+    dss = (delays, a, np.eye(2), np.eye(2), np.zeros((2, 2)))
+    (r, p, d, pairs), meta = _eai(*dss) if mode == "eai" else dss_to_pr(*dss, mode=mode)
     assert meta["complete"] and not meta["approximate"]
     assert meta["expectedPoles"] == meta["returnedPoles"] == 8
     assert meta["solver"] == mode
@@ -75,10 +74,10 @@ def test_zero_pole_is_a_unit_delay(mode):
 
 def test_roots_preserves_a_simple_zero_pole():
     args = ([1, 1], np.diag([0, 0.4]), np.eye(2), np.eye(2), np.zeros((2, 2)))
-    result = dss_to_pr(*args, mode="roots")
-    assert np.any(result[1] == 0)
+    result, _ = dss_to_pr(*args, mode="roots")
+    assert np.any(result.poles == 0)
     np.testing.assert_allclose(
-        pr_to_impz(*result[:4], 16), dss_to_impz(*args, 16), atol=1e-12
+        pr_to_impz(*result, 16), dss_to_impz(*args, 16), atol=1e-12
     )
 
 
@@ -91,9 +90,7 @@ def test_unsupported_repeated_zero_poles_raise(mode):
 def test_least_squares_residue_fit_supports_zero_pole():
     from pyFDN.translate.impz_to_res import impz_to_res
 
-    residues, _, _ = impz_to_res(
-        np.array([0, 1, 0, 0]), np.array([0j]), np.array([False])
-    )
+    residues = impz_to_res(np.array([0, 1, 0, 0]), np.array([0j]), np.array([False]))
     np.testing.assert_allclose(residues, [1])
 
 

@@ -80,7 +80,7 @@ def dss_to_flamo(
     Returns
     -------
     flamo.processor.system.Shell
-        Use :func:`pyFDN.flamo_time_response` for a NumPy impulse response,
+        Use :func:`pyFDN.flamo_to_impz` for a NumPy impulse response,
         and ``.get_core()`` for the FDN without its FFT layers, e.g. to nest
         it in another FDN's hook.
     """

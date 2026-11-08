@@ -20,8 +20,7 @@ def _(mo):
     mo.md(r"""
     # DSS→PR example
 
-    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with
-    the modal reconstruction from each mode.
+    Uses ``dss_to_pr`` with its pure-NumPy modes ``eig`` and ``roots``, and ``flamo_to_pr`` for the Ehrlich–Aberth iteration (``eai``, in ``w = 1/z``) on the same system as a FLAMO model. Compares the time-domain IR from ``dss_to_impz`` with the modal reconstruction from each; every result unpacks straight into ``pr_to_impz``.
     """)
     return
 
@@ -56,15 +55,18 @@ def _(A, b, c, d, delays, np, pyFDN):
     ir_len = 1024
     ir_time = pyFDN.dss_to_impz(delays, A, b, c, d, ir_len)[:, 0, 0]
 
+    import torch
+
+    _model = pyFDN.dss_to_flamo(delays, A, b, c, d, 1.0, dtype=torch.float64)
+    results = {
+        "eig": pyFDN.dss_to_pr(delays, A, b, c, d, mode="eig"),
+        "roots": pyFDN.dss_to_pr(delays, A, b, c, d, mode="roots"),
+        "eai": pyFDN.flamo_to_pr(_model),
+    }
     ir_modals = {}
-    modes = ["eig", "roots", "eai"]
-    for _mode in modes:
-        residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr(
-            delays, A, b, c, d, mode=_mode
-        )
-        ir_modals[_mode] = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[
-            :, 0, 0
-        ]
+    modes = list(results)
+    for _mode, (_pr, _info) in results.items():
+        ir_modals[_mode] = pyFDN.pr_to_impz(*_pr, ir_len)[:, 0, 0]
         err = np.max(np.abs(ir_time - ir_modals[_mode]))
         print(f"{_mode}: max |IR_time - IR_modal| = {err}")
     return ir_modals, ir_time, modes

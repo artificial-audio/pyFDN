@@ -163,8 +163,7 @@ def _(filter_types, mo, np, pyFDN):
     for _t in filter_types:
         _mat = pyFDN.filter_matrix_gallery(N_filter, _t, num_stages=2)
         _is_pu = pyFDN.is_paraunitary(_mat)
-        _fig, _, _ = pyFDN.plot_impulse_response_matrix(
-            np.arange(_mat.shape[2]),
+        _fig = pyFDN.plot_impulse_response_matrix(
             _mat.transpose(2, 0, 1),
             xlabel="Time (samples)",
             ylabel="Amplitude (lin)",

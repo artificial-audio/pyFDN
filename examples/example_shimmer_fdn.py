@@ -33,11 +33,11 @@ def _(mo):
 
     | operator | what it does | main knob |
     | --- | --- | --- |
-    | `ControllableFullWaveRect` | $y[n] = g_\text{cfwr}\big((1-\alpha)x[n] + \alpha\lvert x[n]\rvert\big)$ — a tunable rectifier | `alpha` |
-    | `SDFD` | splits the signal into positive/negative parts and delays them by a different, signal-dependent amount | `d` |
-    | `RingModulator` | $y[n] = g_\text{rm}\, x[n]\sin(2\pi f_\text{rm} n / f_s)$ — amplitude modulation by a sine | `mod_freq` |
+    | `ControllableFullWaveRectifier` | $y[n] = g_\text{cfwr}\big((1-\alpha)x[n] + \alpha\lvert x[n]\rvert\big)$ — a tunable rectifier | `alpha` |
+    | `SignalDependentFractionalDelay` | splits the signal into positive/negative parts and delays them by a different, signal-dependent amount | `fraction` |
+    | `RingModulator` | $y[n] = g_\text{rm}\, x[n]\sin(2\pi f_\text{rm} n / f_s)$ — amplitude modulation by a sine | `rate` |
     | `PitchShift` | dual-read-head pitch shifter reading a circular buffer at a different rate than it's written | `transpose_cents` |
-    | `GranularPitchShift` | the same idea, done with short overlapping grains instead of two continuous read heads | `transpose_cents`, `grain_dur_samps` |
+    | `GranularPitchShift` | the same idea, done with short overlapping grains instead of two continuous read heads | `transpose_cents`, `grain_length` |
 
     Each is a `post_delay` hook for `dss_to_td`.
 
@@ -187,7 +187,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         post_delay=td.Series(
             [
                 td.SOSBank(absorption),  # absorption inside the loop
-                td.ControllableFullWaveRect(
+                td.ControllableFullWaveRectifier(
                     len(delays), alpha=0.25, active_channels=[-1, -3]
                 ),
             ]
@@ -235,7 +235,9 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         post_delay=td.Series(
             [
                 td.SOSBank(absorption),  # absorption inside the loop
-                td.SDFD(len(delays), d=0.5, active_channels=[4, 5, 6, 7]),
+                td.SignalDependentFractionalDelay(
+                    len(delays), fraction=0.5, active_channels=[4, 5, 6, 7]
+                ),
             ]
         ),
     ).process_signal(x, squeeze=True)
@@ -254,13 +256,13 @@ def _(mo):
     mo.md(r"""
     ## Ring modulation
 
-    A ring modulator multiplies the signal by a sine wave at `mod_freq`, which
+    A ring modulator multiplies the signal by a sine wave at `rate`, which
     shifts its spectrum up and down by that frequency rather than adding
     harmonics on top of it. At the 10 Hz used below it reads as a tremolo, a slow
-    pulsing of the reverb tail. Push `mod_freq` into the audible range instead and the
+    pulsing of the reverb tail. Push `rate` into the audible range instead and the
     tremolo turns into a genuine timbral shift: the reverb takes on an
     inharmonic, bell- or metal-like character, because the sidebands it creates
-    are no longer harmonically related to the original spectrum. `mod_amp`
+    are no longer harmonically related to the original spectrum. `depth`
     compensates for the fact that a unit sine only has half the average power
     of the signal it multiplies.
     """)
@@ -280,9 +282,9 @@ def _(A, B, C, D, absorption, delays, fs, mo, np, pyFDN, td, wet, x):
                 td.SOSBank(absorption),  # absorption inside the loop
                 td.RingModulator(
                     len(delays),
-                    mod_freq=10,
-                    mod_amp=np.sqrt(2),
-                    fs=fs,
+                    fs,
+                    rate=10,
+                    depth=np.sqrt(2),
                     active_channels=[4, 5, 6, 7],
                 ),
             ]
@@ -334,7 +336,7 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
     )
     absorption_2 = pyFDN.decay_to_geq(target_rt, delays_2, fs)  # (n_sections, 6, N)
 
-    window_size = 2048
+    window = 2048
     wet_ps = pyFDN.dss_to_td(
         delays_2,
         A,
@@ -346,10 +348,9 @@ def _(A, B, C, D, N, fs, mo, pyFDN, target_rt, td, wet, x):
                 td.SOSBank(absorption_2),  # absorption inside the loop
                 td.PitchShift(
                     len(delays_2),
-                    max_delay_samps=window_size * 2,
-                    window_size=window_size,
+                    max_delay=window * 2,
+                    window=window,
                     transpose_cents=-700,
-                    fs=fs,
                     active_channels=[-1, -2],
                 ),
             ]
@@ -371,7 +372,7 @@ def _(mo):
     ## Granular pitch shift
 
     Same idea as `PitchShift`, but done with short, randomly placed grains instead of two
-    continuous read heads. Every `grain_dur_samps` samples, each of the two
+    continuous read heads. Every `grain_length` samples, each of the two
     active grains jumps to a new random position inside the buffer and starts
     reading from there, windowed by a raised-cosine envelope so the jump is
     inaudible as a click. The randomness trades the smooth, continuous pitch
@@ -384,7 +385,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
-    grain_dur_samps = 1024
+    grain_length = 1024
     wet_gps = pyFDN.dss_to_td(
         delays_2,
         A,
@@ -396,8 +397,8 @@ def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
                 td.SOSBank(absorption_2),  # absorption inside the loop
                 td.GranularPitchShift(
                     len(delays_2),
-                    max_delay_samps=grain_dur_samps * 4,
-                    grain_dur_samps=grain_dur_samps,
+                    max_delay=grain_length * 4,
+                    grain_length=grain_length,
                     transpose_cents=700,
                     active_channels=[
                         -1,

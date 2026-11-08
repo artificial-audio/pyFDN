@@ -141,7 +141,7 @@ def test_extract_roundtrip_with_direct_always_present():
 
 def test_build_rt_sets_absorption_and_renders():
     model = trainable_fdn(N=6, rt=2.0, nfft=2**12, device="cpu", rng=1)
-    ir = np.asarray(pyFDN.flamo_time_response(model)).reshape(-1)
+    ir = np.asarray(pyFDN.flamo_to_impz(model)).reshape(-1)
     assert np.all(np.isfinite(ir))
     _, filters = pyFDN.flamo_to_dss(model)
     assert filters["post_delay"] is not None and filters["post_delay"].shape[1] == 6
@@ -150,7 +150,7 @@ def test_build_rt_sets_absorption_and_renders():
 def test_extracted_dss_renders_through_dss_to_flamo():
     model = trainable_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=5)
     b, filters = pyFDN.flamo_to_dss(model)
-    ir = pyFDN.flamo_time_response(
+    ir = pyFDN.flamo_to_impz(
         pyFDN.dss_to_flamo(*b, FS, nfft=2**12, device="cpu", **filters)
     )
     assert np.all(np.isfinite(np.asarray(ir)))
@@ -391,7 +391,7 @@ def test_train_is_reproducible():
 def test_match_spectrogram_runs_and_renders():
     nfft = 2**11
     target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_to_impz(target)).reshape(-1)
     fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
 
     log = train_fdn(
@@ -403,7 +403,7 @@ def test_match_spectrogram_runs_and_renders():
     )
     assert np.isfinite(log.train_loss[-1])
     out_ir = np.asarray(
-        pyFDN.flamo_time_response(
+        pyFDN.flamo_to_impz(
             pyFDN.dss_to_flamo(
                 *pyFDN.flamo_to_dss(fresh)[0], FS, nfft=nfft, device="cpu"
             )
@@ -491,7 +491,7 @@ def test_a_first_order_shelf_decay_realizes_rt():
     assert sos.shape == (1, 6, 6)
 
     ir = np.asarray(
-        pyFDN.flamo_time_response(
+        pyFDN.flamo_to_impz(
             pyFDN.dss_to_flamo(*dss, FS, nfft=2**16, device="cpu", post_delay=sos)
         )
     ).reshape(-1)
@@ -630,14 +630,10 @@ def test_one_objective_can_hold_two_different_references():
     """Each loss owns its target, so an objective can fit more than one."""
     nfft = 2**11
     ref_a = np.asarray(
-        pyFDN.flamo_time_response(
-            trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
-        )
+        pyFDN.flamo_to_impz(trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7))
     ).reshape(-1)
     ref_b = np.asarray(
-        pyFDN.flamo_time_response(
-            trainable_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8)
-        )
+        pyFDN.flamo_to_impz(trainable_fdn(N=4, rt=0.08, nfft=nfft, device="cpu", rng=8))
     ).reshape(-1)
 
     model = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=11)
@@ -958,7 +954,7 @@ def test_match_phase_runs_and_improves():
     """MatchPhase should integrate into training loop."""
     nfft = 2**11
     target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=12)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_to_impz(target)).reshape(-1)
     fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=13)
 
     log = train_fdn(
@@ -979,7 +975,7 @@ def test_match_phase_spectrogram_runs():
     """MatchPhaseSpectrogram should compute loss across multiple STFT scales."""
     nfft = 2**11
     target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=14)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_to_impz(target)).reshape(-1)
     fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=15)
 
     log = train_fdn(
@@ -1041,7 +1037,7 @@ def test_match_mel_magnitude_runs():
     """MatchMelMagnitude should compute loss on mel-scaled bins."""
     nfft = 2**11
     target = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=18)
-    target_ir = np.asarray(pyFDN.flamo_time_response(target)).reshape(-1)
+    target_ir = np.asarray(pyFDN.flamo_to_impz(target)).reshape(-1)
     fresh = trainable_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=19)
 
     log = train_fdn(

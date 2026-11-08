@@ -129,8 +129,8 @@ def complete_orthogonal(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Solve the orthogonal completion problem for feedback matrix A.
 
-    Finds ``b``, ``c``, ``d`` such that ``V = [[A, b], [c, d]]`` is orthogonal,
-    where ``d`` is ``(num_io, num_io)``.  The ``num_io`` smallest singular values
+    Finds ``B``, ``C``, ``D`` such that ``V = [[A, B], [C, D]]`` is orthogonal,
+    where ``D`` is ``(num_io, num_io)``.  The ``num_io`` smallest singular values
     of ``A`` must be strictly less than 1.
 
     The construction uses the SVD of A: for the ``num_io`` smallest singular
@@ -138,16 +138,16 @@ def complete_orthogonal(
 
     .. code-block:: text
 
-        b = U_s * diag(sqrt(1 - σ²))
-        c = diag(sqrt(1 - σ²)) * V_s^T
-        d = -diag(σ)
+        B = U_s * diag(sqrt(1 - σ²))
+        C = diag(sqrt(1 - σ²)) * V_s^T
+        D = -diag(σ)
 
     Args:
         A: Feedback matrix of shape ``(N, N)``.
         num_io: Number of input/output channels.
 
     Returns:
-        ``(b, c, d, V)`` with shapes ``(N, num_io)``, ``(num_io, N)``,
+        ``(B, C, D, V)`` with shapes ``(N, num_io)``, ``(num_io, N)``,
         ``(num_io, num_io)``, and ``(N + num_io, N + num_io)`` respectively.
     """
     A = np.asarray(A, dtype=float)

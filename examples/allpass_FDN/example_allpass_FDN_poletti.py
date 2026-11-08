@@ -39,8 +39,8 @@ def _():
         is_allpass,
         is_paraunitary,
         is_uniallpass,
-        poletti_allpass,
     )
+    from pyFDN.generate.structures import poletti_allpass
 
     return (
         is_allpass,
@@ -164,8 +164,7 @@ def _(mo):
 
 @app.cell
 def _(fs, impulse_response, ir_len, mo, np, pyFDN):
-    _fig, _, _ = pyFDN.plot_impulse_response_matrix(
-        np.arange(ir_len),
+    _fig = pyFDN.plot_impulse_response_matrix(
         pyFDN.mulaw_encode(impulse_response),
         xlabel="Time [samples]",
         ylabel="Amplitude [mu-law]",

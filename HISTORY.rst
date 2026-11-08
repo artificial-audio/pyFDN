@@ -161,6 +161,56 @@ Unreleased
   control_frequencies, nfft)`` take ``fs`` as a required argument, and
   ``delay_module`` takes delays in samples, like every other pyFDN function.
 
+* **Breaking: pole-residue results are a named tuple.** ``dss_to_pr`` and
+  ``flamo_to_pr`` return ``(pr, info)``: ``pr`` is a ``PoleResidue``
+  ``(residues, poles, direct, is_conjugate_pole_pair)`` that unpacks into
+  ``pr_to_impz(*pr, ir_len)``, and ``info`` is the solver report.
+  ``dss_to_pr`` keeps its static solvers (``"eig"``, ``"roots"``,
+  ``"lindsey_fox"``) and their two options; the Ehrlich-Aberth iteration is
+  ``flamo_to_pr(dss_to_flamo(*dss, fs))``, so ``dss_to_pr`` no longer copies
+  its nine solver and four model options. ``impz_to_res`` returns the residues
+  only.
+* **Breaking: the plots use Matplotlib's vocabulary.** ``vmin``/``vmax``
+  replace ``zmin``/``zmax``, ``plot_spectrogram`` takes ``cmap`` and
+  ``figsize`` instead of ``colorscale`` and a pixel ``height``, and
+  ``plot_matrix_grid`` takes ``figsize``. ``plot_impulse_response_matrix(ir,
+  *, fs=None, ...)`` takes the response first, like
+  ``plot_impulse_response``, and returns the figure alone.
+* **Breaking: the** ``td`` **operators share their parameter names.** Every
+  operator takes its channel count as ``channels`` (``TimeVaryingMatrix``
+  took ``N``); ``fs`` is the second argument wherever a rate in Hz needs it;
+  options are keyword-only, and ``active_channels`` defaults to all channels.
+  ``RingModulator(channels, fs, *, rate, depth)`` names its modulation like
+  the time-varying matrices; ``PitchShift`` and ``GranularPitchShift`` take
+  ``max_delay``, ``window`` and ``grain_length`` in samples (``PitchShift``
+  no longer takes an unused ``fs``); ``DCBlocker`` takes ``pole`` and no
+  ``fs``. ``SDFD`` is ``SignalDependentFractionalDelay`` (``fraction`` for
+  ``d``) and ``ControllableFullWaveRect`` is
+  ``ControllableFullWaveRectifier``.
+* **Breaking: the training losses frame in samples.** ``MatchEchoDensity``
+  takes ``window`` in samples (was ``win_duration`` in seconds),
+  ``MatchMelEnergyDecayRelief`` takes ``window`` and ``hop`` (were
+  ``win_lengths``/``hop_lengths``), and ``MatchSpectrogram`` /
+  ``MatchMelSpectrogram`` take ``overlap`` like the other spectrogram losses
+  instead of ``device``; they follow the response's device.
+* **Breaking:** ``echo_density`` reports the mixing time in seconds, like
+  every other time in pyFDN.
+* **Breaking: the allpass helpers follow the conventions.** ``complete_fdn``
+  and ``complete_general_mimo_svd`` call the number of inputs/outputs
+  ``num_io`` like ``complete_orthogonal`` (was ``k``);
+  ``homogeneous_allpass_fdn`` drops its printing ``verbose`` flag; the
+  completion results are documented as ``B, C, D``.
+* **Breaking:** ``octave_bands``, ``estimate_rt_bands`` and
+  ``estimate_initial_level_bands`` take ``lowest_octave`` and ``num_bands``
+  (were ``start`` and ``n``), keyword-only.
+* ``flamo_delay_feedback_matrix`` and ``swap_flamo_recursion_paths`` moved to
+  ``pyFDN.auxiliary.flamo`` and always return a modified copy (no
+  ``inplace``); ``pole_boundaries`` and ``is_bounding_curve`` moved to
+  ``pyFDN.auxiliary.poles``; ``pyFDN.auxiliary.allpass`` no longer re-exports
+  the allpass structures. The top-level names are unchanged.
+* **Breaking:** ``flamo_time_response`` is ``flamo_to_impz``, pairing with
+  ``dss_to_impz``, ``tf_to_impz`` and ``pr_to_impz``.
+
 0.5.0 (2026-09-28)
 ------------------
 

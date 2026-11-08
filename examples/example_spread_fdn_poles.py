@@ -117,7 +117,7 @@ def _(
     poles = {}
     edcs = {}
     for _type in types:
-        _res, _pol, _direct_term, _is_pair, _ = pyFDN.dss_to_pr(
+        (_res, _pol, _direct_term, _is_pair), _ = pyFDN.dss_to_pr(
             delays, feedback_matrix[_type], input_gain, output_gain, direct
         )
         poles[_type] = _pol
