@@ -19,16 +19,18 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import block_diag
 
+from pyFDN.auxiliary.utils import as_generator
 
-def random_orthogonal(N: int, rng: np.random.Generator | None = None) -> np.ndarray:
+
+def random_orthogonal(
+    N: int, *, rng: np.random.Generator | int | None = None
+) -> np.ndarray:
     """Generate a random orthogonal matrix distributed according to the Haar measure.
 
-    Draws from ``rng`` when given, otherwise from NumPy's global random state
-    (so :func:`numpy.random.seed` makes the result reproducible).
+    ``rng`` is a NumPy ``Generator`` or an integer seed, as for every random
+    function in pyFDN; ``None`` draws fresh entropy.
     """
-
-    normal = np.random.standard_normal if rng is None else rng.standard_normal
-    q, r = np.linalg.qr(normal((N, N)))
+    q, r = np.linalg.qr(as_generator(rng).standard_normal((N, N)))
     d = np.sign(np.diag(r))
     d[d == 0] = 1
     return q * d
@@ -81,6 +83,8 @@ def nearest_sign_agnostic_orthogonal(
     A: np.ndarray,
     max_trials: int = 100_000,
     tolerance: float = float(np.finfo(float).eps) * 1e5,
+    *,
+    rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
     """Find the orthogonal matrix U minimising ``‖A − |U|‖_F``.
 
@@ -91,6 +95,7 @@ def nearest_sign_agnostic_orthogonal(
         A: Input square matrix, shape ``(N, N)``.  Signs are ignored.
         max_trials: Number of random sign-pattern restarts.
         tolerance: Stop early when the Frobenius error is below this value.
+        rng: Generator or integer seed for the random restarts.
 
     Returns:
         Orthogonal matrix of shape ``(N, N)``.
@@ -98,11 +103,12 @@ def nearest_sign_agnostic_orthogonal(
     A = np.asarray(A, dtype=float)
     A = _sinkhorn_knopp(A**2) ** 0.5
 
+    rng = as_generator(rng)
     best_matrix = nearest_orthogonal(A)
     best_error = np.inf
 
     for _ in range(max_trials):
-        new_orth = np.sign(np.random.randn(*A.shape))
+        new_orth = np.sign(rng.standard_normal(A.shape))
         new_orth *= new_orth[0, :]
         new_orth *= new_orth[:, 0:1]
 
@@ -182,6 +188,8 @@ def anderson_matrix(
     N: int,
     K: int | None = None,
     matrix_type: str = "hadamard",
+    *,
+    rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
     """Build an N×N block-circulant orthogonal matrix.
 
@@ -193,6 +201,7 @@ def anderson_matrix(
         K: Block size.  Defaults to the smallest prime factor of N.
         matrix_type: Type string passed to :func:`fdn_matrix_gallery` for each
                      block (default ``"hadamard"``).
+        rng: Generator or integer seed for random block types.
 
     Returns:
         Orthogonal matrix of shape ``(N, N)``.
@@ -206,7 +215,8 @@ def anderson_matrix(
     from .fdn_matrix_gallery import fdn_matrix_gallery
 
     num_blocks = N // K
-    blocks = [fdn_matrix_gallery(K, matrix_type) for _ in range(num_blocks)]
+    rng = as_generator(rng)
+    blocks = [fdn_matrix_gallery(K, matrix_type, rng=rng) for _ in range(num_blocks)]
     A = block_diag(*blocks)
     return np.roll(A, K, axis=0)
 
@@ -245,7 +255,13 @@ def rotation_matrix_from_angles(angles: ArrayLike, N: int | None = None) -> np.n
     return rotation
 
 
-def tiny_rotation_matrix(N: int, delta: float, spread: float = 0.1) -> np.ndarray:
+def tiny_rotation_matrix(
+    N: int,
+    delta: float,
+    spread: float = 0.1,
+    *,
+    rng: np.random.Generator | int | None = None,
+) -> np.ndarray:
     """Dense orthogonal matrix with small eigenvalue angles.
 
     The eigenvalue angles are delta * pi, randomly spread by the factor
@@ -255,19 +271,20 @@ def tiny_rotation_matrix(N: int, delta: float, spread: float = 0.1) -> np.ndarra
     is conjugated by a random orthogonal matrix, so the result is dense but
     keeps the prescribed eigenvalues. For odd N one eigenvalue is at 1.
 
-    Translation of tinyRotationMatrix.m from fdnToolbox. Draws from NumPy's
-    global random state.
+    Translation of tinyRotationMatrix.m from fdnToolbox.
 
     Args:
         N: Matrix size.
         delta: Mean normalized eigenvalue angle.
         spread: Spreading of the eigenvalue angles (default 0.1).
+        rng: Generator or integer seed.
 
     Returns:
         Orthogonal matrix of shape (N, N).
     """
     num_pairs = N // 2
-    frequency_spread = 2.0 * (np.random.rand(num_pairs) - 0.5) * spread + 1.0
+    rng = as_generator(rng)
+    frequency_spread = 2.0 * (rng.random(num_pairs) - 0.5) * spread + 1.0
     givens = rotation_matrix_from_angles(delta * np.pi * frequency_spread, N)
-    q = random_orthogonal(N)
+    q = random_orthogonal(N, rng=rng)
     return q @ givens @ q.T

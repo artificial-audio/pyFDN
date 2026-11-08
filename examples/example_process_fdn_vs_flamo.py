@@ -54,14 +54,14 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(5)
+    _rng = np.random.default_rng(5)
     fs = 48000
     num_delays = 4
     ir_len = fs  # 1 second
 
-    delays = np.sort(np.random.randint(500, 2001, num_delays))
+    delays = np.sort(_rng.integers(500, 2001, num_delays))
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "velvet", num_stages=3, sparsity=3
+        num_delays, "velvet", num_stages=3, sparsity=3, rng=_rng
     )
     input_gain = np.ones((num_delays, 1)) / num_delays
     output_gain = np.ones((1, num_delays))
@@ -142,7 +142,6 @@ def _(
         post_matrix=pyFDN.fir_matrix_module(
             feedback_matrix, nfft, dtype=torch.float64, device="cpu"
         ),
-        shell=True,
         dtype=torch.float64,
         device="cpu",
     )

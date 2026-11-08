@@ -77,6 +77,8 @@ Scattering Delay Network
    :nosignatures:
 
    pyFDN.SDN
+   pyFDN.sdn_to_flamo
+   pyFDN.plot_sdn
 
 Acoustics & Absorption
 -----------------------

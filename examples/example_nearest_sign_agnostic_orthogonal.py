@@ -56,11 +56,11 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(42)
+    _rng = np.random.default_rng(42)
     N = 8
 
     # Ground-truth orthogonal matrix
-    A_original = pyFDN.random_orthogonal(N)
+    A_original = pyFDN.random_orthogonal(N, rng=_rng)
     # Target: absolute values only (signs removed)
     B = np.abs(A_original)
     return A_original, B, N
@@ -78,8 +78,11 @@ def _(mo):
 
 @app.cell
 def _(B, N, np, pyFDN):
+    _rng = np.random.default_rng(42)
     classic = pyFDN.nearest_orthogonal(B)
-    sign_agnostic = pyFDN.nearest_sign_agnostic_orthogonal(B, max_trials=10_000)
+    sign_agnostic = pyFDN.nearest_sign_agnostic_orthogonal(
+        B, max_trials=10_000, rng=_rng
+    )
 
     error_classic = np.linalg.norm(np.abs(classic) - B, "fro") / N**2
     error_sign_agnostic = np.linalg.norm(np.abs(sign_agnostic) - B, "fro") / N**2

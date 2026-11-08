@@ -42,7 +42,6 @@ def _():
         poletti_allpass,
     )
 
-    np.random.seed(42)
     return (
         is_allpass,
         is_paraunitary,
@@ -65,11 +64,12 @@ def _(mo):
 
 @app.cell
 def _(np, poletti_allpass, pyFDN):
+    _rng = np.random.default_rng(42)
     N = 4
-    U = pyFDN.random_orthogonal(N)
+    U = pyFDN.random_orthogonal(N, rng=_rng)
     fs = 48000
     rt = 1
-    delays = np.random.randint(200, 1000, size=N)
+    delays = _rng.integers(200, 1000, size=N)
     g = pyFDN.rt_to_gain_per_sample(rt, fs)
 
     average_gain = g ** np.mean(delays)
@@ -105,7 +105,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, is_uniallpass):
-    _is_a, P = is_uniallpass(A, B, C, D)
+    _is_a = is_uniallpass(A, B, C, D)
     assert _is_a, "Expected uniallpass"
     print("Uniallpass: OK")
     return
@@ -124,7 +124,7 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, N, is_allpass, np):
     test_delays = 2 ** np.arange(N)
-    _is_a, den, num = is_allpass(test_delays, A, B, C, D)
+    _is_a = is_allpass(test_delays, A, B, C, D)
     assert _is_a, "Expected allpass"
     print("Allpass: OK")
     return
@@ -146,10 +146,9 @@ def _(A, B, C, D, fs, delays, is_paraunitary, pyFDN, rt):
     impulse_response = pyFDN.dss_to_impz(delays, A, B, C, D, ir_len)
     # Shape: (ir_len, n_out, n_in)
 
-    is_p, test_matrix, max_off = is_paraunitary(impulse_response.transpose(1, 2, 0))
+    is_p = is_paraunitary(impulse_response.transpose(1, 2, 0))
     assert is_p, "Expected paraunitary impulse response"
     print("Paraunitary: OK")
-    print("Max off-diagonal in correlation matrix:", max_off)
     return impulse_response, ir_len
 
 

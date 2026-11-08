@@ -50,19 +50,23 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(2)
+    _rng = np.random.default_rng(2)
     fs = 48000
     ir_len = int(fs / 10)
 
     num_delays = 4
     num_stages = 3
-    delays = np.random.randint(150, 501, num_delays)
+    delays = _rng.integers(150, 501, num_delays)
     input_gain = np.eye(num_delays, 1)
     output_gain = np.eye(1, num_delays)
     direct = np.zeros((1, 1))
 
     feedback_matrix = pyFDN.filter_matrix_gallery(
-        num_delays, "random_dense", num_stages=num_stages, stage_matrix_type="random"
+        num_delays,
+        "random_dense",
+        num_stages=num_stages,
+        stage_matrix_type="random",
+        rng=_rng,
     )
     print(f"Delays: {delays} (sum = {delays.sum()})")
     print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
@@ -104,10 +108,8 @@ def _(mo):
 
 @app.cell
 def _(feedback_matrix, pyFDN):
-    is_pu, _, max_off = pyFDN.is_paraunitary(feedback_matrix)
-    print(
-        f"Feedback matrix is paraunitary: {bool(is_pu)} (max off-diagonal {max_off:.2e})"
-    )
+    is_pu = pyFDN.is_paraunitary(feedback_matrix)
+    print(f"Feedback matrix is paraunitary: {is_pu}")
     assert is_pu
     return
 
@@ -162,7 +164,6 @@ def _(
         post_matrix=pyFDN.fir_matrix_module(
             feedback_matrix, nfft, dtype=torch.float64, device="cpu"
         ),
-        shell=False,
         dtype=torch.float64,
         device="cpu",
     )

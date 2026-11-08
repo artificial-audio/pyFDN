@@ -311,7 +311,7 @@ def test_tvmatrix() -> None:
     fs = 48_000.0
 
     # td engine
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), rng=3)
 
     # input signal
     n_samples = 400
@@ -350,7 +350,7 @@ def test_tvmatrix_is_orthogonal_and_resets() -> None:
     fs = 48_000.0
 
     # td engine
-    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), seed=3)
+    tvmatrix_td = td.TimeVaryingMatrix(**_time_varying_parameters(N=N, fs=fs), rng=3)
 
     # input signal
     n_samples = 400
@@ -431,7 +431,7 @@ def _shimmer_operators(N: int, fs: float) -> dict[str, td.TimeOperator]:
         "RingModulator": td.RingModulator(N, 200.0, np.sqrt(2), fs, active),
         "PitchShift": td.PitchShift(N, 4096, 1024, 700.0, fs, active),
         "GranularPitchShift": td.GranularPitchShift(
-            N, 8192, 2048, 700.0, active, seed=1
+            N, 8192, 2048, 700.0, active, rng=1
         ),
     }
 
@@ -607,7 +607,7 @@ def test_pitch_shifters_transpose_a_sine(operator_name: str, cents: float) -> No
     if operator_name == "PitchShift":
         shifter: td.TimeOperator = td.PitchShift(1, 8192, 2048, cents, fs, [0])
     else:
-        shifter = td.GranularPitchShift(1, 8192, 2048, cents, [0], seed=0)
+        shifter = td.GranularPitchShift(1, 8192, 2048, cents, [0], rng=0)
     out_sig_td = shifter.process_block(in_sig)
 
     # Test: the dominant partial sits at f0 * 2 ** (cents / 1200), give or take
@@ -632,9 +632,9 @@ def test_granular_pitch_shift_seed_controls_the_grain_positions() -> None:
 
     # td engine
     def render(seed: int) -> np.ndarray:
-        return td.GranularPitchShift(
-            1, 8192, 2048, 700.0, [0], seed=seed
-        ).process_block(in_sig)
+        return td.GranularPitchShift(1, 8192, 2048, 700.0, [0], rng=seed).process_block(
+            in_sig
+        )
 
     # Test
     np.testing.assert_array_equal(render(0), render(0))

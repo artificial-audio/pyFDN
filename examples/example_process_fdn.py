@@ -133,8 +133,8 @@ def _(N, np, pyFDN):
             f"{pyFDN.is_unilossless(_matrix)}"
         )
 
-    np.random.seed(0)  # "orthogonal" is drawn at random: seed it to stay reproducible
-    A = pyFDN.fdn_matrix_gallery(N, "orthogonal")
+    # "orthogonal" is drawn at random: seed it to stay reproducible
+    A = pyFDN.fdn_matrix_gallery(N, "orthogonal", rng=0)
 
     # Try this:
     #   A = pyFDN.fdn_matrix_gallery(N, "hadamard")     -> maximal mixing, +/-1 only
@@ -184,7 +184,7 @@ def _(A, N, delays, fs, np, pyFDN, warnings):
             # when the density does not reach the threshold, which is exactly
             # what a permutation matrix does.
             warnings.simplefilter("ignore", UserWarning)
-            _mixing_time, _ = pyFDN.echo_density(_ir, n=1024, fs=fs, hop=256)
+            _mixing_time, _ = pyFDN.echo_density(_ir, fs, hop=256)
         _mixed = f"{_mixing_time:.0f} ms" if _mixing_time else "never"
         print(f"{_label:12s} mixes after {_mixed}")
 
@@ -420,7 +420,7 @@ def _(fs, ir, pyFDN):
 
 @app.cell
 def _(fs, ir, mo, pyFDN):
-    _mixing_time, _ = pyFDN.echo_density(ir, n=1024, fs=fs, hop=256)
+    _mixing_time, _ = pyFDN.echo_density(ir, fs, hop=256)
     print(f"mixing time: {_mixing_time:.0f} ms")
 
     mo.vstack(
@@ -497,7 +497,7 @@ def _(A, B, C, D, absorption, delays, fs, mo, pyFDN, td, wet, x):
         D,
         post_delay=td.SOSBank(absorption),
         post_matrix=td.TimeVaryingMatrix(
-            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, seed=11
+            len(delays), fs, rate=10.0, depth=1.1, spread=0.7, rng=11
         ),
     ).process_signal(x, squeeze=True)
 
@@ -545,8 +545,8 @@ def _(fs, ir, mo, np, pyFDN, warnings):
     _your_rt, _ = pyFDN.estimate_rt_bands(ir, fs)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        _room_mix, _ = pyFDN.echo_density(room, n=1024, fs=fs, hop=256)
-        _your_mix, _ = pyFDN.echo_density(ir, n=1024, fs=fs, hop=256)
+        _room_mix, _ = pyFDN.echo_density(room, fs, hop=256)
+        _your_mix, _ = pyFDN.echo_density(ir, fs, hop=256)
 
     print(f"band [Hz]  {np.array2string(_bands, precision=0)}")
     print(f"the room   {np.round(_room_rt, 2)}  mixes after {_room_mix:.0f} ms")

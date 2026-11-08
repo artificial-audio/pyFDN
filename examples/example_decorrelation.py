@@ -57,16 +57,16 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(5)
+    _rng = np.random.default_rng(5)
 
     num_delays = 4
-    delays = np.random.randint(300, 1001, num_delays)
+    delays = _rng.integers(300, 1001, num_delays)
 
     num_stages = 3
     sparsity = 3
     # Hadamard stages make it a velvet feedback matrix
     feedback_matrix, _ = pyFDN.cascaded_paraunitary_matrix(
-        num_delays, num_stages, sparsity=sparsity
+        num_delays, num_stages, sparsity=sparsity, rng=_rng
     )
 
     print(f"Delays: {delays}")

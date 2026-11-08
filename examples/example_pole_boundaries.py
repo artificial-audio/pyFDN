@@ -56,15 +56,15 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(6)
+    _rng = np.random.default_rng(6)
     fs = 48000
     num_delays = 8
-    delays = np.random.randint(50, 301, num_delays)
+    delays = _rng.integers(50, 301, num_delays)
     input_gain = np.eye(num_delays, 1)
     output_gain = np.eye(1, num_delays)
-    direct = np.random.randn(1, 1)
+    direct = _rng.standard_normal((1, 1))
 
-    feedback_matrix = pyFDN.random_orthogonal(num_delays) / 1.5
+    feedback_matrix = pyFDN.random_orthogonal(num_delays, rng=_rng) / 1.5
 
     # two-tap FIR absorption per delay line, h(z) = 0.65 + 0.3 z^{-1}, as one
     # SOS section per line: [b0, b1, b2, a0, a1, a2]
@@ -119,7 +119,6 @@ def _(
         D=direct,
         delays=delays,
         fs=fs,
-        shell=False,
         post_delay=absorption,
         dtype=torch.float64,
         device="cpu",
@@ -189,10 +188,10 @@ def _(mo):
 
 @app.cell
 def _(f_bounds, max_curve, min_curve, np, pole_freq, poles, pyFDN):
-    upper_ok, _ = pyFDN.is_bounding_curve(
+    upper_ok = pyFDN.is_bounding_curve(
         pole_freq, np.abs(poles), f_bounds, max_curve, "upper"
     )
-    lower_ok, _ = pyFDN.is_bounding_curve(
+    lower_ok = pyFDN.is_bounding_curve(
         pole_freq, np.abs(poles), f_bounds, min_curve, "lower"
     )
     print(f"All poles below the maximum boundary: {bool(upper_ok)}")

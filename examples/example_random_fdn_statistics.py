@@ -61,7 +61,6 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(3)
     fs = 48000
     ir_len = fs // 2
 

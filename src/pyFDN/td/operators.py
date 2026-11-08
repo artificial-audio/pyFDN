@@ -16,6 +16,7 @@ delay lines.
 
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TypedDict
@@ -25,6 +26,7 @@ from numpy.typing import ArrayLike
 from scipy.fft import irfft, next_fast_len, rfft
 from scipy.signal import lfilter, sosfilt
 
+from pyFDN.auxiliary.utils import as_generator
 from pyFDN.generate.kronecker_matrix import kronecker_transform
 
 
@@ -549,7 +551,8 @@ class GranularPitchShift(TimeOperator):
         transpose_cents: float,
         active_channels: ArrayLike,
         fade_ratio: float = 0.25,
-        seed: int | None = None,
+        *,
+        rng: np.random.Generator | int | None = None,
     ) -> None:
         if max_delay_samps <= 2 * grain_dur_samps:
             raise ValueError("max_delay_samps must be greater than 2 * grain_dur_samps")
@@ -560,8 +563,10 @@ class GranularPitchShift(TimeOperator):
         self.max_delay = int(max_delay_samps)
         self.grain_dur = int(grain_dur_samps)
         self.fade_ratio = float(fade_ratio)
-        self.seed = seed  # kept so reset() can rewind the grain positions too
-        self.rng = np.random.default_rng(seed)
+        # A copy of the starting generator, so reset() rewinds the grain
+        # positions too and a seeded operator repeats exactly.
+        self._rng_start = copy.deepcopy(as_generator(rng))
+        self.rng = copy.deepcopy(self._rng_start)
         self._mask = np.zeros(self.in_channels, dtype=bool)
         self._mask[np.asarray(active_channels)] = True
         self.dc_blocker = DCBlocker(self.in_channels, R=0.995, correct_loss=True)
@@ -660,8 +665,7 @@ class GranularPitchShift(TimeOperator):
         self.write_ptr = 0
         self.samples_written = 0
         self.dc_blocker.reset()
-        # Rewind the draw as well, so a seeded operator repeats exactly.
-        self.rng = np.random.default_rng(self.seed)
+        self.rng = copy.deepcopy(self._rng_start)
         self.grains = [
             self._new_grain(phase_offset=0),
             self._new_grain(phase_offset=self.grain_dur // 2),
@@ -890,8 +894,8 @@ class TimeVaryingMatrix(TimeOperator):
     spread : float
         Relative random spread of ``rate`` and ``depth`` across the rotation
         planes: each plane draws from ``value * (1 +- spread)``.
-    seed : int or None
-        Seed for the random per-plane phases and spread.
+    rng : Generator, int or None
+        Random generator or integer seed for the per-plane phases and spread.
 
     Attributes
     ----------
@@ -911,7 +915,7 @@ class TimeVaryingMatrix(TimeOperator):
         rate: float,
         depth: float,
         spread: float = 0.0,
-        seed: int | None = None,
+        rng: np.random.Generator | int | None = None,
     ) -> None:
         N = int(N)
         if N <= 0 or N % 2:
@@ -921,7 +925,7 @@ class TimeVaryingMatrix(TimeOperator):
         self.fs = float(fs)
         self.num_pairs = N // 2
 
-        rng = np.random.default_rng(seed)
+        rng = as_generator(rng)
         self.phase = 2 * np.pi * rng.random(self.num_pairs)
         self.rate = rate * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
         self.depth = depth * (1 + spread * (2 * rng.random(self.num_pairs) - 1))
@@ -1227,14 +1231,14 @@ class RecursionState:
             self.buffer[i, (p + np.arange(m)) % m] = line_arr
 
     def fill_noise(
-        self, variance: float = 1.0, rng: np.random.Generator | None = None
+        self, variance: float = 1.0, *, rng: np.random.Generator | int | None = None
     ) -> None:
         """Fill with zero-mean Gaussian noise of finite, non-negative variance.
 
-        Pass a seeded ``rng`` for reproducible noise. Zero variance clears the
+        Pass ``rng`` (a Generator or an integer seed) for reproducible noise. Zero variance clears the
         lines without moving their read positions.
         """
         if not np.isfinite(variance) or variance < 0:
             raise ValueError("variance must be finite and non-negative")
-        rng = np.random.default_rng() if rng is None else rng
+        rng = as_generator(rng)
         self.set_lines([rng.normal(0.0, np.sqrt(variance), m) for m in self.delays])

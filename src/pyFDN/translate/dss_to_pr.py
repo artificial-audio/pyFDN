@@ -233,7 +233,6 @@ def dss_to_pr(
             fs=float(fs),
             nfft=int(nfft),
             device=device,
-            shell=False,
             dtype=dtype,
         )
         return flamo_to_pr(

@@ -77,8 +77,6 @@ def _(mo):
 
 @app.cell
 def _(mo, np, pyFDN, sound_selection):
-    np.random.seed(1)
-
     # init source signal
     mode = sound_selection.value
 
@@ -119,19 +117,20 @@ def _(mo):
 
 @app.cell
 def _(la, np, random_orthogonal):
+    _rng = np.random.default_rng(1)
     N = 8
     num_input = 1
     num_output = 2
 
-    input_gain = la.orth(np.random.randn(N, num_input))
+    input_gain = la.orth(_rng.standard_normal((N, num_input)))
 
-    random_matrix = np.random.randn(num_output, N)
+    random_matrix = _rng.standard_normal((num_output, N))
     output_gain = la.orth(random_matrix.T).T
 
     direct = np.zeros((num_output, num_input))
-    delays = np.random.randint(750, 2001, size=N)[None, :]
+    delays = _rng.integers(750, 2001, size=N)[None, :]
 
-    feedback_matrix = random_orthogonal(N)
+    feedback_matrix = random_orthogonal(N, rng=_rng)
     return N, delays, direct, feedback_matrix, input_gain, output_gain
 
 
@@ -175,11 +174,13 @@ def _(
     feedback_matrix,
     fs,
     input_gain,
+    np,
     output_gain,
     pyFDN,
     synth,
     td,
 ):
+    _rng = np.random.default_rng(1)
     matrix_types = ["no_variation", "slow_variation", "fast_variation"]
 
     reverbed_synth = {}
@@ -201,7 +202,12 @@ def _(
             spread = 0.7
 
         tv_matrix = td.TimeVaryingMatrix(
-            N, fs, rate=modulation_frequency, depth=modulation_amplitude, spread=spread
+            N,
+            fs,
+            rate=modulation_frequency,
+            depth=modulation_amplitude,
+            spread=spread,
+            rng=_rng,
         )
 
         reverbed_synth[matrix_type] = pyFDN.dss_to_td(

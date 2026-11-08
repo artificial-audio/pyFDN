@@ -25,7 +25,6 @@ def test_model_polynomial_clears_sos_denominators():
         fs=48000,
         post_delay=sos,
         dtype=torch.float64,
-        shell=False,
     )
     coefficients = _model_polynomial(pyFDN.flamo_decompose_for_pr(model), 10)
     for w in [0, 0.7 + 0.2j, 0.3 - 0.9j]:
@@ -63,7 +62,6 @@ def test_model_adapter_reconstructs_static_and_fir_models():
             48000,
             dtype=torch.float64,
             device="cpu",
-            shell=False,
             post_matrix=None
             if post_matrix is None
             else pyFDN.fir_matrix_module(

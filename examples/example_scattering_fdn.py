@@ -55,12 +55,12 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(1)
+    _rng = np.random.default_rng(1)
     fs = 48000
     ir_len = fs
 
     num_delays = 4
-    delays = np.random.randint(750, 2001, num_delays)
+    delays = _rng.integers(750, 2001, num_delays)
     input_gain = np.ones((num_delays, 1))
     output_gain = np.ones((1, num_delays))
     direct = np.zeros((1, 1))
@@ -69,12 +69,14 @@ def _(np, pyFDN):
     sparsity = 3
     feedback_matrices = {
         _name: pyFDN.filter_matrix_gallery(
-            num_delays, _name, num_stages=num_stages, sparsity=sparsity
+            num_delays, _name, num_stages=num_stages, sparsity=sparsity, rng=_rng
         )
         for _name in pyFDN.FILTER_MATRIX_TYPES
     }
     # a static matrix is a one-tap filter matrix
-    feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays)[:, :, None]
+    feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays, rng=_rng)[
+        :, :, None
+    ]
 
     print(f"Delays: {delays}")
     for _name, _mat in feedback_matrices.items():
@@ -124,7 +126,7 @@ def _(
             post_matrix=pyFDN.td.MatrixFIR(_mat),
         )
         irs[_name] = _graph.impulse_response(ir_len)[:, 0, 0]
-        _t_mix, echo_densities[_name] = pyFDN.echo_density(irs[_name], 1024, fs, 0)
+        _t_mix, echo_densities[_name] = pyFDN.echo_density(irs[_name], fs)
         print(f"{_name}: mixing time = {_t_mix:.0f} ms")
     return echo_densities, irs
 

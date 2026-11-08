@@ -224,7 +224,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(7)
     print("pyFDN version:", getattr(pyFDN, "__version__", "unknown"))
     return np, pyFDN, torch
 

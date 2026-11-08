@@ -148,10 +148,10 @@ def test_dss_to_pr_eai_matches_roots():
 
 
 def test_dss_to_pr_residue_lstsq_match():
-    np.random.seed(5)
+    rng = np.random.default_rng(5)
     n = 4
-    delays = np.random.randint(50, 101, size=n)
-    a = random_orthogonal(n)
+    delays = rng.integers(50, 101, size=n)
+    a = random_orthogonal(n, rng=rng)
     b = np.eye(n, 1)
     c = np.eye(1, n)
     d = np.zeros((1, 1))

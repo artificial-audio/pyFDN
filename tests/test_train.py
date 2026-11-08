@@ -1775,9 +1775,8 @@ def test_shell_accepts_parts_built_with_a_string_device_and_moved_with_to():
         np.zeros((1, 1)),
         48000,
         nfft=nfft,
-        shell=False,
         device="cpu",
-    )
+    ).get_core()
     model = system.Shell(
         core=core,
         input_layer=dsp.FFT(nfft).to("cpu"),
@@ -1831,9 +1830,8 @@ def test_wrap_fdn_shell_keeps_the_core_on_its_device(device):
         np.zeros((1, 1)),
         48000,
         nfft=2**10,
-        shell=False,
         device=device,
-    )
+    ).get_core()
     shell = wrap_fdn_shell(core, nfft=2**10)
     assert torch.device(shell.device).type == device
     assert model_response(shell).h.device.type == device

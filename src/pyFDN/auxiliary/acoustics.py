@@ -78,10 +78,11 @@ def edc(ir: Any, axis: int = 0) -> Any:
 
 def echo_density(
     ir: ArrayLike,
-    n: int = 1024,
-    fs: float = 48000.0,
+    fs: float,
+    *,
+    window: int = 1024,
     pre_delay: int = 0,
-    mixing_thresh: float = 1.0,
+    mixing_threshold: float = 1.0,
     hop: int = 500,
 ) -> tuple[float, np.ndarray]:
     """Echo density and mixing time (Abel & Huang 2006).
@@ -97,13 +98,13 @@ def echo_density(
     ----------
     ir : array-like
         Impulse response (1 channel only). Converted to 1D.
-    n : int, optional
-        Window length (must be even). Default 1024.
-    fs : float, optional
-        Sampling rate in Hz. Default 48000.
+    fs : float
+        Sampling rate in Hz.
+    window : int, optional
+        Window length in samples (must be even). Default 1024.
     pre_delay : int, optional
         Onset delay in samples for mixing time. Default 0.
-    mixing_thresh : float, optional
+    mixing_threshold : float, optional
         Normalized echo density threshold for mixing time (Abel & Huang use 1).
         Default 1.0.
     hop : int, optional
@@ -113,22 +114,22 @@ def echo_density(
     -------
     t_abel : float
         Mixing time in milliseconds (time at which echo density first
-        exceeds mixing_thresh, relative to pre_delay). 0 if not found.
+        exceeds mixing_threshold, relative to pre_delay). 0 if not found.
     echo_dens : np.ndarray
         Echo density vector (length = len(ir)), normalized; interpolated
         from sparse analysis.
     """
     ir_arr = np.asarray(ir, dtype=float).ravel()
     len_ir = len(ir_arr)
-    if n % 2 != 0:
-        raise ValueError("Window length n must be even.")
-    if len_ir < n:
+    if window % 2 != 0:
+        raise ValueError("The window length must be even.")
+    if len_ir < window:
         raise ValueError(
-            f"IR length {len_ir} is shorter than analysis window {n}. "
+            f"IR length {len_ir} is shorter than analysis window {window}. "
             "Provide at least an IR of some 100 ms."
         )
-    half_win = n // 2
-    w_tau = np.hanning(n)
+    half_win = window // 2
+    w_tau = np.hanning(window)
     w_tau = w_tau / np.sum(w_tau)
 
     sparse_ind = np.arange(0, len_ir, hop, dtype=int)
@@ -158,7 +159,7 @@ def echo_density(
         echo_dens_sparse,
     )
 
-    d = np.where(echo_dens > mixing_thresh)[0]
+    d = np.where(echo_dens > mixing_threshold)[0]
     if d.size > 0:
         first_idx = int(d[0])
         t_abel = (first_idx - pre_delay) / fs * 1000.0

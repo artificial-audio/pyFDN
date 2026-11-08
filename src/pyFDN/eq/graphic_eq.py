@@ -86,7 +86,9 @@ def _geq_control_problem(fs: float) -> tuple[np.ndarray, np.ndarray]:
         BANDWIDTH_R,
         _PROTOTYPE_GAIN_DB * np.ones(N_GRAPHIC_EQ_SECTIONS),
     )
-    system, _, _ = probe_sos(prototype, control_frequencies, _FFT_LEN, fs)
+    system, _, _ = probe_sos(
+        prototype, fs, control_frequencies=control_frequencies, nfft=_FFT_LEN
+    )
     return system / _PROTOTYPE_GAIN_DB, interpolation
 
 

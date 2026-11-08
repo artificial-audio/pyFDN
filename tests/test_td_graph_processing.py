@@ -595,8 +595,8 @@ def test_res_tvfdn_block_process():
 
     # Generate tv matrices
     # Identical modulation in both renders: the same seed.
-    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
-    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs, seed=7)
+    tvm_ref = td.TimeVaryingMatrix(**tvm_kwargs, rng=7)
+    tvm_td = td.TimeVaryingMatrix(**tvm_kwargs, rng=7)
 
     # td engine
     # Physical room

@@ -71,7 +71,7 @@ def test_geq_zero_gains_flat(geq_setup):
     center_omega, shelving_omega, R, fs = geq_setup
     sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(200, 8000, 20)
-    G, _, _ = probe_sos(sos, ctrl, 2**14, fs)
+    G, _, _ = probe_sos(sos, fs, control_frequencies=ctrl, nfft=2**14)
     # Each section at 0 dB should contribute ≈ 0 dB
     np.testing.assert_allclose(G.sum(axis=1), np.zeros(len(ctrl)), atol=0.5)
 
@@ -86,7 +86,7 @@ def test_probe_sos_shapes(geq_setup):
     center_omega, shelving_omega, R, fs = geq_setup
     sos = _geq_sections(center_omega, shelving_omega, R, np.zeros(11))
     ctrl = np.linspace(100, 10000, 30)
-    G, H, W = probe_sos(sos, ctrl, 512, fs)
+    G, H, W = probe_sos(sos, fs, control_frequencies=ctrl, nfft=512)
     assert G.shape == (30, 11)
     assert H.shape == (512, 11)
     assert W.shape == (512, 11)
@@ -101,7 +101,7 @@ def test_gain_to_geq_flat_target():
     """Flat 0 dB target should give ≈ 0 dB total response at all bands."""
     sos = gain_to_geq(np.zeros(10), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
-    G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
+    G, _, _ = probe_sos(sos, 48000.0, control_frequencies=ctrl, nfft=2**16)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.zeros(len(ctrl)), atol=0.5)
 
@@ -110,7 +110,7 @@ def test_gain_to_geq_uniform_target():
     """Uniform -3 dB target should give ≈ -3 dB at all bands."""
     sos = gain_to_geq(np.full(10, -3.0), 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000], dtype=float)
-    G, _, _ = probe_sos(sos, ctrl, 2**16, 48000.0)
+    G, _, _ = probe_sos(sos, 48000.0, control_frequencies=ctrl, nfft=2**16)
     total_db = G.sum(axis=1)
     np.testing.assert_allclose(total_db, np.full(len(ctrl), -3.0), atol=0.5)
 
@@ -147,8 +147,8 @@ def test_gain_to_bounded_geq_matches_closed_form_when_bounds_are_slack():
     bounded = gain_to_bounded_geq(target, 48000.0)
     closed = gain_to_geq(target, 48000.0)
     ctrl = np.array([63.0, 125, 250, 500, 1000, 2000, 4000, 8000])
-    bounded_db = probe_sos(bounded, ctrl, 2**16, 48000.0)[0]
-    closed_db = probe_sos(closed, ctrl, 2**16, 48000.0)[0]
+    bounded_db = probe_sos(bounded, 48000.0, control_frequencies=ctrl, nfft=2**16)[0]
+    closed_db = probe_sos(closed, 48000.0, control_frequencies=ctrl, nfft=2**16)[0]
     np.testing.assert_allclose(bounded_db.sum(axis=1), closed_db.sum(axis=1), atol=0.05)
 
 

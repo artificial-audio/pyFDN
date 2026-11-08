@@ -31,15 +31,7 @@ def test_flamo_to_pr_matches_dss_to_pr_eai():
     # Build the model in float64 so flamo_to_pr matches dss_to_pr's
     # (now-default) machine-precision behavior.
     model = dss_to_flamo(
-        A=a,
-        B=b,
-        C=c,
-        D=d,
-        delays=delays,
-        fs=1.0,
-        nfft=1024,
-        shell=False,
-        dtype=torch.float64,
+        A=a, B=b, C=c, D=d, delays=delays, fs=1.0, nfft=1024, dtype=torch.float64
     )
 
     with warnings.catch_warnings():
@@ -84,8 +76,8 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
     delays = np.array([13, 17, 19, 23], dtype=int)
     n = delays.size
 
-    np.random.seed(0)
-    a = 0.5 * random_orthogonal(n)
+    rng = np.random.default_rng(0)
+    a = 0.5 * random_orthogonal(n, rng=rng)
     b = np.eye(n, 1)
     c = np.eye(1, n)
     d = np.zeros((1, 1))
@@ -102,7 +94,6 @@ def test_flamo_to_pr_biquad_in_loop_reconstructs_ir():
         delays=delays,
         fs=fs,
         nfft=nfft,
-        shell=True,
         post_delay=sos_loop,
         dtype=torch.float64,
     )

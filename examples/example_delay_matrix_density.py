@@ -164,9 +164,9 @@ def _(mo):
 def _(fs, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, plt, pyFDN):
     t = np.arange(len(ir_vanilla)) / fs
 
-    _, echo_vanilla = pyFDN.echo_density(ir_vanilla, n=1024, fs=fs)
-    _, echo_delay_matrix = pyFDN.echo_density(ir_delay_matrix, n=1024, fs=fs)
-    _, echo_swapped = pyFDN.echo_density(ir_swapped, n=1024, fs=fs)
+    _, echo_vanilla = pyFDN.echo_density(ir_vanilla, fs)
+    _, echo_delay_matrix = pyFDN.echo_density(ir_delay_matrix, fs)
+    _, echo_swapped = pyFDN.echo_density(ir_swapped, fs)
 
     fig = pyFDN.plot_impulse_response(
         ir_vanilla,

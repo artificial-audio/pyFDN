@@ -37,8 +37,6 @@ def _():
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(11)
-
     delays = np.array([41, 53, 67, 79], dtype=int)
     _dss, _ = pyFDN.fdn_dss_gallery(
         delays=delays,

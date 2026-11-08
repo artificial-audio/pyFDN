@@ -159,7 +159,7 @@ def fdn_dss_gallery(
     if np.any(delays_array < 1):
         raise ValueError("all delays must be positive")
 
-    A = random_orthogonal(N, local_rng)
+    A = random_orthogonal(N, rng=local_rng)
     B, C, D = _build_io_matrices(
         N,
         num_inputs,

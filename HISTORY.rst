@@ -124,6 +124,43 @@ Unreleased
   ``PitchShift`` its ``min_delay_samps`` argument; nothing set them, and they
   are now fixed at 50 ms, 20 ms and 3 samples.
 
+* **Breaking: one convention for randomness.** Every random function takes
+  ``rng=``, a NumPy ``Generator`` or an integer seed, and none draws from
+  NumPy's global generator any more: the matrix and system galleries,
+  ``random_orthogonal`` (now keyword-only), ``tiny_rotation_matrix``,
+  ``anderson_matrix``, ``nearest_sign_agnostic_orthogonal``,
+  ``cascaded_paraunitary_matrix``, ``paraunitary_from_elementals``,
+  ``shift_matrix_distribute``, ``random_matrix_shift``,
+  ``random_admissible_homogeneous_allpass``, ``complete_fdn`` and
+  ``RecursionState.fill_noise``. ``TimeVaryingMatrix`` and
+  ``GranularPitchShift`` take ``rng=`` instead of ``seed=``.
+  ``np.random.seed`` no longer makes them reproducible; pass ``rng=``.
+* **Breaking: the ``is_*`` checks return a plain ``bool``.** ``is_allpass``,
+  ``is_uniallpass``, ``is_paraunitary`` and ``is_bounding_curve`` returned
+  tuples, so ``if pyFDN.is_paraunitary(m):`` was always true. The
+  characteristic polynomial ``is_allpass`` compared is
+  ``general_char_poly(delays, A)``. ``is_uniallpass`` no longer warns when the
+  answer is simply no.
+* **Breaking: ``SDN`` is cleaned up.** It computes everything when it is
+  built (``compute()`` and its 20-key dictionary are gone) and exposes
+  ``delays`` in samples, ``A``, ``B``, ``C``, ``D``, a ``wall_filters`` SOS
+  bank, and the ``input_delays``, ``output_delays`` and ``direct_delay`` of
+  the source, receiver and direct paths. ``wall_filters`` takes an SOS bank
+  with one filter per wall or per delay line. It renders with
+  ``pyFDN.sdn_to_flamo(sdn)`` (default ``nfft=2**16``, the model only) and
+  draws with ``pyFDN.plot_sdn(sdn)``, which replace the ``sdn_to_flamo`` and
+  ``visualize`` methods. The modules ``pyFDN.generate.SDN`` and
+  ``pyFDN.generate.allpass_FDN`` are now ``pyFDN.generate.sdn`` and
+  ``pyFDN.generate.allpass_fdn``.
+* **Breaking: no flags that change the return type.** ``dss_to_flamo``
+  always returns the ``Shell``; ``.get_core()`` gives the FDN without its FFT
+  layers, e.g. for another FDN's hook. ``complete_fdn`` always returns
+  ``(B, C, D, x)``, and its options after ``k`` are keyword-only.
+* **Breaking: no silent sample rates.** ``echo_density(ir, fs, *, window,
+  pre_delay, mixing_threshold, hop)`` and ``probe_sos(sos, fs, *,
+  control_frequencies, nfft)`` take ``fs`` as a required argument, and
+  ``delay_module`` takes delays in samples, like every other pyFDN function.
+
 0.5.0 (2026-09-28)
 ------------------
 

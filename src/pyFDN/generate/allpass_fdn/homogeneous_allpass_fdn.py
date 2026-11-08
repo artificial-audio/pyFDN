@@ -106,10 +106,10 @@ def homogeneous_allpass_fdn(
             "||X U - U R - b b^T U||_F =",
             np.linalg.norm(X @ U - U @ (G @ G @ X) - b @ b.T @ U),
         )
-        is_a1, XX = is_uniallpass(A, b, c, d)
-        print("isUniallpass:", is_a1, "XX=\n", XX)
+        is_a1 = is_uniallpass(A, b, c, d)
+        print("isUniallpass:", is_a1)
         delays = 2 ** np.arange(N)
-        is_a2, den, num = is_allpass(delays, A, b, c, d)
+        is_a2 = is_allpass(delays, A, b, c, d)
         print("isAllpass (delays 2^0..2^(N-1)):", is_a2)
 
     return A, b, c, d, U

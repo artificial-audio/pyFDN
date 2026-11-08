@@ -166,7 +166,7 @@ def gain_module(
 
 
 def delay_module(
-    lengths_seconds: np.ndarray,
+    delays: np.ndarray,
     nfft: int,
     *,
     fs: float,
@@ -177,18 +177,17 @@ def delay_module(
     requires_grad: bool = False,
 ):
     """
-    Build a FLAMO parallelDelay module from delay lengths in seconds.
-
-    Values are assigned directly (no sample conversion); buffer size is derived from fs.
+    Build a FLAMO parallelDelay module from delay lengths in samples.
 
     Parameters
     ----------
-    lengths_seconds : np.ndarray
-        1D array of delay lengths in seconds, one per channel.
+    delays : np.ndarray
+        1D array of delay lengths in samples, one per channel, as everywhere
+        in pyFDN.
     nfft : int
         FFT size for the FLAMO module.
     fs : float
-        Sampling rate in Hz (used for buffer size max_len = max(lengths_seconds) * fs).
+        Sampling rate in Hz; FLAMO stores delays in seconds.
     device : torch device or None
         Device for the module; default is cuda if available else cpu.
     dtype : torch.dtype or None
@@ -204,19 +203,19 @@ def delay_module(
     Returns
     -------
     flamo.processor.dsp.parallelDelay
-        FLAMO parallelDelay module with lengths assigned (in seconds).
+        FLAMO parallelDelay module with the delays assigned.
     """
     import torch
     from flamo.processor import dsp
 
-    lengths = np.asarray(lengths_seconds, dtype=np.float64).ravel()
-    n = len(lengths)
-    max_len = int(np.ceil(np.max(lengths) * fs)) if n else 1
+    samples = np.asarray(delays, dtype=np.float64).ravel()
+    n = len(samples)
+    max_len = int(np.ceil(np.max(samples))) if n else 1
     max_len = max(1, max_len)
     dev = default_device(device)
 
     torch_dtype = torch.float32 if dtype is None else dtype
-    delays = dsp.parallelDelay(
+    module = dsp.parallelDelay(
         size=(n,),
         max_len=max_len,
         nfft=nfft,
@@ -228,8 +227,8 @@ def delay_module(
         device=dev,
         dtype=torch_dtype,
     )
-    delays.assign_value(torch.as_tensor(lengths, dtype=torch_dtype, device=dev))
-    return delays
+    module.assign_value(torch.as_tensor(samples / fs, dtype=torch_dtype, device=dev))
+    return module
 
 
 def fir_matrix_module(

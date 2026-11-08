@@ -349,7 +349,7 @@ def _random_so_n(n: int, rng: np.random.Generator) -> np.ndarray:
     """
     from pyFDN.generate.orthogonal import random_orthogonal
 
-    q = random_orthogonal(n, rng)
+    q = random_orthogonal(n, rng=rng)
     if np.linalg.det(q) < 0:
         q[:, -1] *= -1.0
     return q

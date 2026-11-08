@@ -201,7 +201,6 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 fs,
                 nfft=nfft,
                 post_delay=_absorption,
-                shell=True,
                 device="cpu",
             )
         ).squeeze()[: len(rir)]
@@ -224,7 +223,6 @@ def _(decay_time, fs, nfft, np, pyFDN, rir, slope_level):
                 nfft=nfft,
                 post_delay=_absorption,
                 post_output=_eq[:, :, np.newaxis],
-                shell=True,
                 device="cpu",
             )
         ).squeeze()[: len(rir)]

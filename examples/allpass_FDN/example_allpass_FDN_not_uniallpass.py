@@ -52,10 +52,10 @@ def _(mo):
 
 @app.cell
 def _(np, orth):
-    np.random.seed(1)
+    _rng = np.random.default_rng(1)
     N = 3
 
-    V = orth(np.random.randn(N + 1, N + 1))
+    V = orth(_rng.standard_normal((N + 1, N + 1)))
 
     X = np.eye(N + 1)
     X[0, 0] = -0.1
@@ -89,9 +89,9 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([1, 1, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
+    _is_a = pyFDN.is_allpass(_m, A, b, c, d)
 
-    _roots_den = np.roots(_den)
+    _roots_den = np.roots(pyFDN.general_char_poly(_m, A))
     _stable = np.all(np.abs(_roots_den) < 1)
     assert _stable, "Expected stable (|roots| < 1)"
     assert _is_a, "Expected allpass for m = [1,1,1]"
@@ -112,9 +112,9 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([2, 1, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
+    _is_a = pyFDN.is_allpass(_m, A, b, c, d)
 
-    _roots_den = np.roots(_den)
+    _roots_den = np.roots(pyFDN.general_char_poly(_m, A))
     unstable = np.any(np.abs(_roots_den) > 1)
     assert unstable, "Expected unstable for m = [2,1,1]"
     assert not _is_a, "Expected not allpass for m = [2,1,1]"
@@ -135,9 +135,9 @@ def _(mo):
 @app.cell
 def _(A, b, c, d, np, pyFDN):
     _m = np.array([2, 2, 1])
-    _is_a, _den, _num = pyFDN.is_allpass(_m, A, b, c, d)
+    _is_a = pyFDN.is_allpass(_m, A, b, c, d)
 
-    _roots_den = np.roots(_den)
+    _roots_den = np.roots(pyFDN.general_char_poly(_m, A))
     _stable = np.all(np.abs(_roots_den) < 1)
     assert _stable, "Expected stable (|roots| < 1)"
     assert _is_a, "Expected allpass for m = [2,2,1]"
@@ -157,7 +157,7 @@ def _(mo):
 
 @app.cell
 def _(A, b, c, d, pyFDN):
-    is_uni, P = pyFDN.is_uniallpass(A, b, c, d)
+    is_uni = pyFDN.is_uniallpass(A, b, c, d)
     assert not is_uni, "Expected not uniallpass (allpass only for specific delays)"
     print("Not uniallpass: OK")
     return

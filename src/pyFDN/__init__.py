@@ -192,6 +192,8 @@ __all__ = [
     "td",
     # SDN (scattering delay network)
     "SDN",
+    "plot_sdn",
+    "sdn_to_flamo",
     # allpass FDN
     "complete_fdn",
     "complete_full_mimo_halmos",
@@ -315,13 +317,13 @@ from .eq import (
     peaking_biquad,
     probe_sos,
 )
-from .generate.allpass_FDN.allpass_completion import (
+from .generate.allpass_fdn.allpass_completion import (
     complete_fdn,
     complete_full_mimo_halmos,
     complete_general_mimo_svd,
 )
-from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
-from .generate.allpass_FDN.random_admissible_homogeneous_allpass import (
+from .generate.allpass_fdn.homogeneous_allpass_fdn import homogeneous_allpass_fdn
+from .generate.allpass_fdn.random_admissible_homogeneous_allpass import (
     random_admissible_homogeneous_allpass,
 )
 from .generate.fdn_dss_gallery import fdn_dss_gallery
@@ -357,7 +359,7 @@ from .generate.paraunitary import (
     paraunitary_from_elementals,
 )
 from .generate.sample_delay_lengths import sample_delay_lengths
-from .generate.SDN import SDN
+from .generate.sdn import SDN, plot_sdn, sdn_to_flamo
 from .generate.structures import (
     allpass_in_fdn,
     nested_allpass,

@@ -9,10 +9,14 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pyFDN.auxiliary.utils import as_generator
+
 
 def random_admissible_homogeneous_allpass(
     G: ArrayLike,
     range_: tuple[float, float] | ArrayLike,
+    *,
+    rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
     """
     Generate a random admissible diagonal matrix P for homogeneous uniallpass FDN.
@@ -27,6 +31,8 @@ def random_admissible_homogeneous_allpass(
     range_ : tuple (low, high) or array-like of length 2
         Random range with 0 < low < high < 1. Diagonal entries of P are built
         from random ratios in [low, high] scaled by diag(G)^2.
+    rng : Generator, int or None
+        Random generator or integer seed.
 
     Returns
     -------
@@ -51,7 +57,7 @@ def random_admissible_homogeneous_allpass(
         raise ValueError("range_ must satisfy 0 < low < high < 1")
 
     ratios = np.diag(G) ** 2
-    rand_ratios = (np.random.rand(N) * (high - low) + low) * ratios
+    rand_ratios = (as_generator(rng).random(N) * (high - low) + low) * ratios
     cum = np.cumprod(1.0 / rand_ratios[1:])
     diag_P = np.concatenate([[1.0], cum])
     return np.diag(diag_P)

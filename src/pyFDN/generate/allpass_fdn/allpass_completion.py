@@ -30,6 +30,7 @@ import numpy as np
 import scipy.linalg as sla
 from scipy.optimize import minimize
 
+from pyFDN.auxiliary.utils import as_generator
 from pyFDN.generate.orthogonal import random_orthogonal
 
 # ---------------------------- Utilities -------------------------------------
@@ -487,11 +488,12 @@ def optimize_diagonal_similarity_rank_defect_scipy(
 def complete_fdn(
     A: np.ndarray,
     k: int | None = None,
+    *,
     preprocessing: str = "optimize",
     q: float | np.ndarray = 1.0,
     tol_one: float = 1e-8,
     psd_clip: float = 0.0,
-    return_similarity: bool = True,
+    rng: np.random.Generator | int | None = None,
 ):
     """
     Compute a completion (B,C,D) for given A.
@@ -505,11 +507,12 @@ def complete_fdn(
       q: RHS for diagonal similarity solve (scalar or (N,) vector).
       tol_one: tolerance for 'singular value equals 1' decisions in general MIMO.
       psd_clip: eigenvalue clip (>=0) for PSD square roots in full MIMO completion.
-      return_similarity: if True, returns (B,C,D,x). else (B,C,D).
+      rng: Generator or integer seed for the random start and mixing.
 
     Returns:
-      B, C, D, x (if return_similarity), where x is diagonal of X used (x=ones if none).
+      B, C, D, x, where x is the diagonal of the similarity X used (ones if none).
     """
+    rng = as_generator(rng)
     A = np.asarray(A)
     N = A.shape[0]
     if A.shape != (N, N):
@@ -527,7 +530,7 @@ def complete_fdn(
         tail_norm_threshold = 1e-8  # can be parameterized as needed
         max_retries = 10
         for attempt in range(max_retries):
-            u = np.random.rand(N)
+            u = rng.random((N,))
             u, info = optimize_diagonal_similarity_rank_defect_scipy(
                 A,
                 k=k,
@@ -560,10 +563,10 @@ def complete_fdn(
         Bt, Ct, Dt = complete_general_mimo_svd(At, k=k, tol_one=tol_one)
 
     # Random orthogonal transformation to mix B, C, and D
-    UU = random_orthogonal(k)
+    UU = random_orthogonal(k, rng=rng)
     Bt = Bt @ UU
     Dt = Dt @ UU
-    VV = random_orthogonal(k)
+    VV = random_orthogonal(k, rng=rng)
     Ct = VV @ Ct
     Dt = VV @ Dt
 
@@ -573,9 +576,7 @@ def complete_fdn(
     else:
         B, C, D = map_back_from_similarity(Bt, Ct, Dt, x)
 
-    if return_similarity:
-        return B, C, D, x
-    return B, C, D
+    return B, C, D, x
 
 
 def check_completion(

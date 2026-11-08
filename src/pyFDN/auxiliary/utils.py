@@ -221,7 +221,7 @@ def is_bounding_curve(
     x_curve: ArrayLike,
     y_curve: ArrayLike,
     bound_type: str,
-) -> tuple[Any, np.ndarray]:
+) -> bool:
     """
     Check if all value points are bounded by the curve.
     Args:
@@ -231,8 +231,7 @@ def is_bounding_curve(
         y_curve: y-coordinates of curve points (1D array)
         bound_type: 'upper' or 'lower'
     Returns:
-        all_bounded: bool, whether all data points are bounded
-        is_bounded: boolean array, whether each data point is bounded
+        Whether every data point lies on the bounded side of the curve.
     """
     # Spline interpolation with extrapolation
     interp = interp1d(x_curve, y_curve, kind="cubic", fill_value="extrapolate")
@@ -245,8 +244,7 @@ def is_bounding_curve(
     else:
         raise ValueError("bound_type must be 'upper' or 'lower'")
 
-    all_bounded = np.all(is_bounded)
-    return all_bounded, is_bounded
+    return bool(np.all(is_bounded))
 
 
 def pole_boundaries(

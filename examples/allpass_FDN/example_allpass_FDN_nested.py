@@ -35,7 +35,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(42)
     fs = 48000
     return fs, np, pyFDN
 
@@ -52,9 +51,10 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(42)
     N = 6
     g = np.array([0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-    delays = np.random.randint(200, 1000, size=N)
+    delays = _rng.integers(200, 1000, size=N)
 
     A, B, C, D = pyFDN.nested_allpass(g)
     print("A shape:", A.shape)
@@ -92,7 +92,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, pyFDN):
-    is_uniallpass, _P = pyFDN.is_uniallpass(A, B, C, D)
+    is_uniallpass = pyFDN.is_uniallpass(A, B, C, D)
     assert is_uniallpass, "Expected uniallpass"
     print("Uniallpass: OK")
     return

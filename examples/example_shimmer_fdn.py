@@ -39,7 +39,7 @@ def _(mo):
     | `PitchShift` | dual-read-head pitch shifter reading a circular buffer at a different rate than it's written | `transpose_cents` |
     | `GranularPitchShift` | the same idea, done with short overlapping grains instead of two continuous read heads | `transpose_cents`, `grain_dur_samps` |
 
-    Each is a `post_delay` hook for `process_dss`.
+    Each is a `post_delay` hook for `dss_to_td`.
 
 
     Reference: "Shimmer Reverberation with Nonlinear Feedback Delay Networks",
@@ -56,7 +56,6 @@ def _():
     import pyFDN
     from pyFDN import td
 
-    np.random.seed(0)
     return np, pyFDN, td
 
 
@@ -74,6 +73,7 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
+    _rng = np.random.default_rng(0)
     fs = 48_000  # sampling rate in Hz
     N = 8  # number of delay lines
     ir_len_seconds = 3.0
@@ -87,9 +87,9 @@ def _(np, pyFDN):
         rng=2,
     )
 
-    A = pyFDN.fdn_matrix_gallery(N, "orthogonal")
-    B = np.random.randn(N, 1) / np.sqrt(N)  # (N, num_inputs)
-    C = np.random.randn(1, N) / np.sqrt(N)  # (num_outputs, N)
+    A = pyFDN.fdn_matrix_gallery(N, "orthogonal", rng=_rng)
+    B = _rng.standard_normal((N, 1)) / np.sqrt(N)  # (N, num_inputs)
+    C = _rng.standard_normal((1, N)) / np.sqrt(N)  # (num_outputs, N)
     D = np.zeros((1, 1))  # (num_outputs, num_inputs) — wet only
 
     target_rt = np.array([4.4, 4.4, 4.3, 4.1, 3.8, 3.4, 3.0, 1.7, 1.5, 0.5])
@@ -402,7 +402,7 @@ def _(A, B, C, D, absorption_2, delays_2, fs, mo, pyFDN, td, wet, x):
                     active_channels=[
                         -1,
                     ],
-                    seed=0,  # grain positions are random; fix them for the docs
+                    rng=0,  # grain positions are random; fix them for the docs
                 ),
             ]
         ),

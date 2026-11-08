@@ -59,7 +59,6 @@ def _(mo):
 
 @app.cell
 def _(np, pyFDN):
-    np.random.seed(1)
     delays = np.array([13, 19, 23])
     _dss, _ = pyFDN.fdn_dss_gallery(
         delays=delays,

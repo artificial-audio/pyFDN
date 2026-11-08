@@ -64,7 +64,6 @@ def test_lf_never_calls_eai(monkeypatch, flamo, failure):
             D=args[4],
             fs=48000,
             dtype=torch.float64,
-            shell=False,
         )
         solve = partial(
             pyFDN.flamo_to_pr, model, mode="lindsey_fox", maximum_iterations=0

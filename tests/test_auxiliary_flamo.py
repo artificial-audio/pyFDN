@@ -57,9 +57,9 @@ def test_flamo_time_response_gives_a_single_input_its_own_axis():
 
 
 def _small_fdn():
-    np.random.seed(0)
+    rng = np.random.default_rng(0)
     n = 4
-    a = random_orthogonal(n) * 0.9
+    a = random_orthogonal(n, rng=rng) * 0.9
     b = np.ones((n, 1))
     c = np.ones((1, n))
     d = np.zeros((1, 1))
@@ -96,7 +96,7 @@ def test_assemble_fdn_core_direct_toggles_parallel():
     kw = {
         "input_gain": gain_module(b, nfft, device="cpu"),
         "feedback": gain_module(a, nfft, device="cpu"),
-        "delays": delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
+        "delays": delay_module(m, nfft, fs=48000, device="cpu"),
         "output_gain": gain_module(c, nfft, device="cpu"),
     }
     # No direct path -> plain Series core whose feedback matrix stays reachable
@@ -115,7 +115,7 @@ def test_wrap_fdn_shell_returns_the_time_response():
     core = assemble_fdn_core(
         input_gain=gain_module(b, nfft, device="cpu"),
         feedback=gain_module(a, nfft, device="cpu"),
-        delays=delay_module(m / 48000.0, nfft, fs=48000, device="cpu"),
+        delays=delay_module(m, nfft, fs=48000, device="cpu"),
         output_gain=gain_module(c, nfft, device="cpu"),
     )
     impulse = torch.zeros(1, nfft, 1)

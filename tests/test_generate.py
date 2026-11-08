@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+import pyFDN
 from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.auxiliary.utils import is_almost_zero
 from pyFDN.generate.fdn_dss_gallery import fdn_dss_gallery
@@ -27,13 +28,8 @@ from pyFDN.generate.paraunitary import (
 from pyFDN.generate.sample_delay_lengths import sample_delay_lengths
 
 
-@pytest.fixture()
-def deterministic_rng():
-    np.random.seed(42)
-
-
 def test_random_orthogonal_produces_unitary_matrix():
-    mat = random_orthogonal(5)
+    mat = random_orthogonal(5, rng=0)
     identity = mat.T @ mat
     np.testing.assert_allclose(identity, np.eye(5), atol=1e-12)
 
@@ -58,16 +54,16 @@ def test_shift_matrix_supports_left_and_right():
     np.testing.assert_allclose(shifted_right[:, 0, : tensor.shape[2]], tensor[:, 0, :])
 
 
-def test_shift_matrix_distribute_respects_pulse_size(deterministic_rng):
+def test_shift_matrix_distribute_respects_pulse_size():
     tensor = np.ones((3, 3, 2))
-    shifts = shift_matrix_distribute(tensor, sparsity=0.5, pulse_size=4)
+    shifts = shift_matrix_distribute(tensor, sparsity=0.5, pulse_size=4, rng=42)
     np.testing.assert_equal(shifts.shape, (3,))
     np.testing.assert_equal(shifts % 4, 0)
 
 
-def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
+def test_random_matrix_shift_returns_consistent_lengths():
     tensor = np.ones((3, 3, 2))
-    shifted, shifted_rev, left, right = random_matrix_shift(5, tensor, tensor)
+    shifted, shifted_rev, left, right = random_matrix_shift(5, tensor, tensor, rng=42)
 
     np.testing.assert_equal(shifted.shape[0:2], tensor.shape[0:2])
     np.testing.assert_(shifted.shape[2] >= tensor.shape[2])
@@ -79,11 +75,13 @@ def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
     np.testing.assert_(np.all(right >= 0))
 
 
-def test_cascaded_paraunitary_matrix_is_reproducible_with_global_seed():
-    np.random.seed(0)
-    first, _ = cascaded_paraunitary_matrix(4, 2, sparsity=2)
-    np.random.seed(0)
-    second, _ = cascaded_paraunitary_matrix(4, 2, sparsity=2)
+def test_cascaded_paraunitary_matrix_is_reproducible_with_a_seed():
+    first, _ = cascaded_paraunitary_matrix(
+        4, 2, sparsity=2, matrix_type="random", rng=0
+    )
+    second, _ = cascaded_paraunitary_matrix(
+        4, 2, sparsity=2, matrix_type="random", rng=0
+    )
     np.testing.assert_array_equal(first, second)
 
 
@@ -102,21 +100,21 @@ def test_cascaded_paraunitary_matrix_is_inverse(monkeypatch):
 def test_filter_matrix_gallery_types_are_paraunitary():
     import pyFDN
 
-    np.random.seed(0)
+    rng = np.random.default_rng(0)
     n = 4
     types = pyFDN.FILTER_MATRIX_TYPES
     assert types == ("random_dense", "velvet", "from_elementals")
     for mtype in types:
-        mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2)
+        mat = pyFDN.filter_matrix_gallery(n, mtype, num_stages=2, rng=rng)
         assert mat.ndim == 3 and mat.shape[:2] == (n, n)
-        is_pu, _, _ = pyFDN.is_paraunitary(mat)
+        is_pu = pyFDN.is_paraunitary(mat)
         assert is_pu, mtype
 
     # stage_matrix_type is honored for the cascaded types
     mat_rnd = pyFDN.filter_matrix_gallery(
-        n, "velvet", num_stages=2, stage_matrix_type="random"
+        n, "velvet", num_stages=2, stage_matrix_type="random", rng=rng
     )
-    is_pu, _, _ = pyFDN.is_paraunitary(mat_rnd)
+    is_pu = pyFDN.is_paraunitary(mat_rnd)
     assert is_pu
 
     with pytest.raises(ValueError, match="Unknown matrix_type"):
@@ -172,9 +170,9 @@ def test_nearest_orthogonal_identity_preserved():
 
 
 def test_nearest_sign_agnostic_orthogonal_is_orthogonal():
-    np.random.seed(0)
-    A = np.abs(np.random.randn(4, 4))
-    U = nearest_sign_agnostic_orthogonal(A, max_trials=200)
+    rng = np.random.default_rng(0)
+    A = np.abs(rng.standard_normal((4, 4)))
+    U = nearest_sign_agnostic_orthogonal(A, max_trials=200, rng=rng)
     np.testing.assert_allclose(U @ U.T, np.eye(4), atol=1e-8)
 
 
@@ -500,17 +498,15 @@ def test_delay_lengths_invalid_range_raises():
 
 
 def test_tiny_rotation_matrix_is_orthogonal_with_prescribed_angles():
-    np.random.seed(42)
     delta, n = 0.12, 7
-    rotation = tiny_rotation_matrix(n, delta, spread=0.1)
+    rotation = tiny_rotation_matrix(n, delta, spread=0.1, rng=42)
     np.testing.assert_allclose(rotation @ rotation.T, np.eye(n), atol=1e-12)
     angles = np.sort(np.abs(np.angle(np.linalg.eigvals(rotation))))
     # One eigenvalue at 1 (odd n); the rest within the spread around delta*pi.
     assert angles[0] < 1e-10
     assert np.all(np.abs(angles[1:] / (delta * np.pi) - 1.0) <= 0.1 + 1e-9)
 
-    np.random.seed(42)
-    np.testing.assert_array_equal(rotation, tiny_rotation_matrix(n, delta))
+    np.testing.assert_array_equal(rotation, tiny_rotation_matrix(n, delta, rng=42))
 
 
 def test_rotation_matrix_from_angles_block_structure():
@@ -529,3 +525,22 @@ def test_galleries_list_their_types_as_tuples():
     assert "velvet" in pyFDN.FILTER_MATRIX_TYPES
     A, B, C, D = pyFDN.fdn_system_gallery(4, "nested_allpass")
     assert A.shape[0] == A.shape[1] == B.shape[0] == C.shape[1]
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [
+        lambda rng: pyFDN.random_orthogonal(4, rng=rng),
+        lambda rng: pyFDN.fdn_matrix_gallery(4, "circulant", rng=rng),
+        lambda rng: pyFDN.fdn_system_gallery(4, "schroeder_reverberator", rng=rng)[0],
+        lambda rng: pyFDN.filter_matrix_gallery(4, "velvet", rng=rng),
+        lambda rng: pyFDN.tiny_rotation_matrix(5, 0.1, rng=rng),
+    ],
+)
+def test_random_functions_take_a_seed_and_leave_the_global_rng_alone(draw):
+    key_before, pos_before = _global_rng_state()
+    np.testing.assert_array_equal(draw(7), draw(7))
+    np.testing.assert_array_equal(draw(np.random.default_rng(7)), draw(7))
+    key_after, pos_after = _global_rng_state()
+    np.testing.assert_array_equal(key_after, key_before)
+    assert pos_after == pos_before

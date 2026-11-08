@@ -162,7 +162,7 @@ def _(filter_types, mo, np, pyFDN):
     _figures = []
     for _t in filter_types:
         _mat = pyFDN.filter_matrix_gallery(N_filter, _t, num_stages=2)
-        _is_pu, _, _ = pyFDN.is_paraunitary(_mat)
+        _is_pu = pyFDN.is_paraunitary(_mat)
         _fig, _, _ = pyFDN.plot_impulse_response_matrix(
             np.arange(_mat.shape[2]),
             _mat.transpose(2, 0, 1),
@@ -271,7 +271,7 @@ def _(N, mo, pyFDN, system_types):
     for stype in system_types:
         try:
             s = pyFDN.fdn_system_gallery(N, stype)
-            is_ua, _ = pyFDN.is_uniallpass(*s)
+            is_ua = pyFDN.is_uniallpass(*s)
             sys_results[stype] = {"system": s, "uniallpass": is_ua}
         except NotImplementedError:
             sys_results[stype] = None

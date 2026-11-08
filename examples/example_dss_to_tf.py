@@ -42,7 +42,6 @@ def _():
 
     import pyFDN
 
-    np.random.seed(5)
     fs = 48000
     impulse_response_length = fs // 100
 
@@ -64,7 +63,7 @@ def _():
         _dss.D,
         _dss.delays,
     )
-    return A, B, C, D, delays, impulse_response_length, pyFDN
+    return A, B, C, D, delays, impulse_response_length, np, pyFDN
 
 
 @app.cell(hide_code=True)

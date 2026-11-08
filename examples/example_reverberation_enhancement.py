@@ -201,8 +201,7 @@ def _(mo):
 def _(fs, np, pyFDN, td):
     n_lines = 8
     fdn_delays = np.array([557, 619, 691, 757, 821, 887, 953, 1021])
-    np.random.seed(1)
-    A = pyFDN.random_orthogonal(n_lines)
+    A = pyFDN.random_orthogonal(n_lines, rng=1)
     gen = np.random.default_rng(1)
     B_fdn = gen.standard_normal((n_lines, 6)) / np.sqrt(n_lines)  # mics -> lines
     C_fdn = gen.standard_normal((6, n_lines)) / np.sqrt(
@@ -225,7 +224,7 @@ def _(fs, np, pyFDN, td):
         if time_varying:
             # a fixed seed keeps the modulation identical across rebuilds
             tvm = td.TimeVaryingMatrix(
-                n_lines, fs, rate=1.2, depth=0.7, spread=0.2, seed=3
+                n_lines, fs, rate=1.2, depth=0.7, spread=0.2, rng=3
             )
             feedback = td.Series([td.Gain(A), tvm])
         else:

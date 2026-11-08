@@ -10,9 +10,8 @@ from pyFDN.generate.structures import allpass_in_fdn
 
 def test_is_uniallpass_poletti():
     A, B, C, D = poletti_allpass(0.7, random_orthogonal(8))
-    is_ua, P = is_uniallpass(A, B, C, D)
-    assert is_ua
-    np.testing.assert_allclose(P, np.diag(np.diag(P)), atol=1e-9)
+    is_ua = is_uniallpass(A, B, C, D)
+    assert is_ua is True
 
 
 def test_is_uniallpass_rejects_lossless_feedback_matrix():
@@ -31,6 +30,5 @@ def test_is_uniallpass_rejects_lossless_feedback_matrix():
 
     assert np.max(np.abs(np.linalg.eigvals(A))) == pytest.approx(1.0)
     with pytest.warns(UserWarning, match="spectral radius"):
-        is_ua, P = is_uniallpass(A, B, C, D)
-    assert not is_ua
-    assert np.isnan(P).all()
+        is_ua = is_uniallpass(A, B, C, D)
+    assert is_ua is False
