@@ -139,9 +139,14 @@ def _velocity(
 
 
 def _scan(
-    loop: _Loop, t: float, radius: float, nfft: int, count: int, max_newton: int
-) -> list[complex]:
-    """Refine the ``count`` deepest dips of ``s_min(P)`` on ``|z| = radius``."""
+    loop: _Loop, t: float, radius: float, nfft: int, max_newton: int
+) -> np.ndarray:
+    """Every pole behind a dip of ``s_min(P)`` on ``|z| = radius``.
+
+    Newton runs from all dips at once, so the ranking is by the converged
+    ``|z|``: a dip's depth also scales with how well-conditioned its mode is,
+    which makes it a poor proxy when the dominant poles differ by little.
+    """
     w = 2 * np.pi * np.arange(nfft // 2 + 1) / nfft
     z = loop.cplx(radius * np.exp(1j * w))
     t_ = loop.real(t)
@@ -153,21 +158,35 @@ def _scan(
     padded = np.r_[s[1], s, s[-2]]  # mirror: dips at 0 and pi count too
     mid = padded[1:-1]
     dips = np.flatnonzero((mid < padded[:-2]) & (mid <= padded[2:]))
-    poles = []
-    for i in dips[np.argsort(s[dips])[:count]]:
-        pole, _, _, ok = _correct(loop, complex(z[i]), t, max_newton)
-        if ok:
-            poles.append(pole)
-    return poles
+    return _newton_batch(loop, z[dips], t, max_newton)
 
 
-def _distinct_upper(poles: list[complex], tol: float) -> list[complex]:
+def _newton_batch(
+    loop: _Loop, z: torch.Tensor, t: float, max_newton: int, tol: float = 1e-12
+) -> np.ndarray:
+    """SVD-Newton from many starting points at once; the converged ones."""
+    t_ = loop.real(t)
+    probe = torch.vmap(lambda zz: _derivative(lambda x: loop(x, t_), zz))
+    out = []
+    for chunk in torch.split(z, 2048):
+        for _ in range(max_newton):
+            P, P_z = probe(chunk)
+            U, s, Vh = torch.linalg.svd(P)
+            left, right = U[..., -1], Vh[..., -1, :].conj()
+            slope = torch.einsum("bi,bij,bj->b", left.conj(), P_z, right)
+            dz = -s[..., -1] / slope
+            chunk = chunk + dz
+        converged = (dz.abs() <= tol * chunk.abs().clamp(min=1)) & chunk.isfinite()
+        out.append(chunk[converged].cpu().numpy())
+    return np.concatenate(out) if out else np.zeros(0, dtype=np.complex128)
+
+
+def _distinct_upper(poles: np.ndarray, tol: float) -> np.ndarray:
     """One of each pole with Im >= 0, largest ``|z|`` first."""
-    out: list[complex] = []
-    for p in sorted(poles, key=abs, reverse=True):
-        if p.imag >= -tol and all(abs(p - q) > tol for q in out):
-            out.append(p)
-    return out
+    poles = poles[poles.imag >= -tol]
+    _, first = np.unique(np.round(poles / tol), return_index=True)
+    poles = poles[first]
+    return poles[np.argsort(-np.abs(poles))]
 
 
 def seed_poles(
@@ -184,8 +203,8 @@ def seed_poles(
     """Find the ``num_poles`` largest-magnitude poles of a FLAMO loop.
 
     Scans the smallest singular value of the characteristic matrix on a circle
-    ``|z| = radius`` just outside the poles, refines the deepest dips with
-    Newton, and ranks the converged poles by ``|z|``. Without a ``radius`` the
+    ``|z| = radius`` just outside the poles, runs Newton from every dip at once,
+    and ranks the converged poles by ``|z|``. Without a ``radius`` the
     scan starts a quarter pole spacing outside the unit circle and repeats once
     or twice just outside the largest pole found, so poles well inside the
     circle (a lossy loop) or outside it (an unstable one) are ranked correctly.
@@ -211,7 +230,7 @@ def seed_poles(
     nfft : int, optional
         Scan points on the full circle. Default: a power of two ``>= 8 * order``.
     max_newton : int
-        Newton iterations per candidate.
+        Newton iterations from each dip.
 
     Returns
     -------
@@ -226,18 +245,17 @@ def seed_poles(
     tol = 1e-6 * loop.spacing
     auto = radius is None
     scan_radius = 1 + loop.spacing / 4 if radius is None else radius
-    found: list[complex] = []
+    found = np.zeros(0, dtype=np.complex128)
     for _ in range(3):
-        found = _distinct_upper(
-            found + _scan(loop, t, scan_radius, nfft, 4 * num_poles, max_newton), tol
-        )
-        if not auto or not found:
+        new = _scan(loop, t, scan_radius, nfft, max_newton)
+        found = _distinct_upper(np.concatenate([found, new]), tol)
+        if not auto or not found.size:
             break
         target = abs(found[0]) + loop.spacing / 4
         if abs(target - scan_radius) <= loop.spacing / 4:
             break
         scan_radius = target
-    return np.array(found[:num_poles], dtype=np.complex128)
+    return found[:num_poles]
 
 
 def track_poles(
