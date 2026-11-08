@@ -2,6 +2,20 @@
 History
 =======
 
+Unreleased
+----------
+
+* New ``seed_poles`` and ``track_poles`` follow a few dominant poles of a FLAMO
+  loop while any of its parameters change: a loop gain, the feedback matrix,
+  filter coefficients (continuation after Bai and Schlecht, ICASSP 2026).
+  ``seed_poles`` finds the largest poles without a full modal decomposition;
+  ``track_poles`` steps along the path and rejects any step on which a track
+  fails to converge, jumps to a neighbouring mode or merges with another
+  track, and returns ``PoleTracks`` with the poles and their singular vectors.
+* New example: the modes of a reverberation enhancement system tracked over its
+  loop gain, with the maximum stable gain and the channels that carry the
+  critical mode.
+
 0.6.0 (2026-11-08)
 ------------------
 

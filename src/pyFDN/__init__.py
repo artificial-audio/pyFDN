@@ -126,6 +126,9 @@ __all__ = [
     "tf_to_impz",
     "pr_to_impz",
     "PoleResidue",
+    "seed_poles",
+    "track_poles",
+    "PoleTracks",
     # fdn processing
     "process_dss",
     # training
@@ -430,6 +433,7 @@ if TYPE_CHECKING:
         flamo_decompose_for_pr,
         flamo_to_pr,
     )
+    from .translate.track_poles import PoleTracks, seed_poles, track_poles
 
 _LAZY_MODULES = {
     "L1": ".train",
@@ -474,6 +478,9 @@ _LAZY_MODULES = {
     "FlamoDecompositionForPR": ".translate.flamo_to_pr",
     "flamo_decompose_for_pr": ".translate.flamo_to_pr",
     "flamo_to_pr": ".translate.flamo_to_pr",
+    "PoleTracks": ".translate.track_poles",
+    "seed_poles": ".translate.track_poles",
+    "track_poles": ".translate.track_poles",
 }
 
 
