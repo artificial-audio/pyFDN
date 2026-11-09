@@ -280,6 +280,22 @@ straight into each of them, with its filters alongside:
    pyFDN.pr_to_impz
    pyFDN.PoleResidue
 
+Tracking poles along a parameter path
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:func:`pyFDN.track_poles` follows a few poles of a FLAMO loop while any of its
+parameters change -- a loop gain, the feedback matrix, filter coefficients --
+by continuation (Bai and Schlecht, ICASSP 2026). :func:`pyFDN.seed_poles` finds
+the dominant poles to start from, without a full modal decomposition.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.seed_poles
+   pyFDN.track_poles
+   pyFDN.PoleTracks
+
 Experimental Lindsey–Fox modal decomposition
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
