@@ -19,6 +19,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import scipy
 from scipy.linalg import block_diag, expm
@@ -35,6 +36,9 @@ from pyFDN.auxiliary.physics_based_coupling import (
 FS = 48000
 ENSEMBLE_SEEDS = list(range(200, 216))
 COLORS = ["#1769aa", "#d36b16", "#25805d"]
+SA_LINE_STYLE = dict(ls="-", lw=3.6, alpha=.3, zorder=1)
+GFDN_LINE_STYLE = dict(ls="-", lw=1.1, marker="o", ms=3.8,
+                       markerfacecolor="white", markeredgewidth=.8, zorder=3)
 
 
 def room_model(volumes, apertures, lines=16, setting=2000, matrix_seed=12314):
@@ -148,6 +152,12 @@ def ensemble(model, source=0, lossy=False, varying=True):
                 metrics=energy_errors(mean,response["reference"]), individual=individual)
 
 
+def trajectory_handles(rooms):
+    return [Line2D([], [], color=COLORS[i], label=f"Room {i+1}") for i in range(rooms)] + [
+        Line2D([], [], color="black", label="GFDN", **GFDN_LINE_STYLE),
+        Line2D([], [], color="black", label="SA", **SA_LINE_STYLE)]
+
+
 def plot_trajectories(axes, response, lossy, title):
     # One-ms display spacing; all error metrics still use every audio sample.
     indices = np.unique(np.r_[np.arange(0,len(response["energy"]),48),len(response["energy"])-1])
@@ -158,11 +168,14 @@ def plot_trajectories(axes, response, lossy, title):
         if lossy:
             energy=10*np.log10(np.maximum(energy,1e-12))
             reference=10*np.log10(np.maximum(reference,1e-12))
-        axes.plot(time,energy,color=COLORS[room],label=f"GFDN R{room+1}")
-        axes.plot(time,reference,color=COLORS[room],ls="--",label=f"SA R{room+1}")
+        axes.plot(time,reference,color=COLORS[room],**SA_LINE_STYLE)
+        # Marker times are staggered between rooms; curve values stay unchanged.
+        axes.plot(time,energy,color=COLORS[room],markevery=(50+200*room,600),
+                  **GFDN_LINE_STYLE)
         if not lossy:
             axes.fill_between(time,response["energy"][indices,room]-response["se"][indices,room],
-                              response["energy"][indices,room]+response["se"][indices,room],color=COLORS[room],alpha=.15)
+                              response["energy"][indices,room]+response["se"][indices,room],
+                              color=COLORS[room],alpha=.15,zorder=.5)
     axes.set(title=title,xlabel="Time (s)",ylabel="Energy / injected energy (dB)" if lossy else "Fraction of injected energy")
     axes.set_ylim((-85,2) if lossy else (-.02,1.02))
     axes.grid(alpha=.15)
@@ -215,8 +228,9 @@ def main():
                                                       color=COLORS[int(lossy)],label="Lossy" if lossy else "Lossless",lw=.6,rasterized=True)
                         ir_axes[source,receiver].set(title=f"Source R{source+1} → receiver R{receiver+1}",xlabel="Time (ms)",ylabel="Amplitude")
                 print(key,result['metrics'],flush=True)
-    for figure,axes in [(ir_figure,ir_axes),(two_figure,two_axes),(three_figure,three_axes)]:
-        axes[0,-1].legend(ncol=2)
+    ir_axes[0,-1].legend(ncol=2)
+    for figure,rooms in [(two_figure,2),(three_figure,3)]:
+        figure.legend(handles=trajectory_handles(rooms),loc="outside upper center",ncol=rooms+2)
     ir_figure.savefig(args.output/'joint-two-room-irs.pdf',dpi=300)
     two_figure.savefig(args.output/'joint-two-room-energy.pdf')
     three_figure.savefig(args.output/'joint-three-room-energy.pdf')
