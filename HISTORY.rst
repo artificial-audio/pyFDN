@@ -2,8 +2,8 @@
 History
 =======
 
-Unreleased
-----------
+0.7.0 (2026-11-09)
+------------------
 
 * New ``seed_poles`` and ``track_poles`` follow a few dominant poles of a FLAMO
   loop while any of its parameters change: a loop gain, the feedback matrix,
