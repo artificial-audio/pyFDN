@@ -34,28 +34,30 @@ COMPARISON_STYLES = {
 }
 
 
-def comparison_handles():
-    handles = [Line2D([], [], color=COLORS[i], label=f"Room {i+1}") for i in range(2)]
+def comparison_handles(rooms=2):
+    handles = [Line2D([], [], color=COLORS[i], label=f"Room {i+1}") for i in range(rooms)]
     labels = {"varying": "Noise, TV", "fixed": "Noise, fixed",
               "impulse": "Impulse, TV", "reference": "SA"}
     return handles + [Line2D([], [], color="black", label=label,
                              **COMPARISON_STYLES[method]) for method, label in labels.items()]
 
 
-def plot_comparison(ax, cases, lossy, source, *, sample_rate=FS):
+def plot_comparison(ax, cases, lossy, source, *, sample_rate=FS, end_time=2):
     for method, style in COMPARISON_STYLES.items():
         response = cases["varying"] if method == "reference" else cases[method]
         values = response["reference"] if method == "reference" else response["energy"]
-        indices = np.arange(0, min(len(values), int(2*sample_rate)+1),
+        indices = np.arange(0, min(len(values), int(end_time*sample_rate)+1),
                             max(1, round(sample_rate/1000)))
         time = indices/sample_rate
-        for room in range(2):
+        rooms = values.shape[1]
+        for room in range(rooms):
             curve = values[indices, room]
             if lossy:
                 curve = 10*np.log10(np.maximum(curve, 1e-12))
-            # Stagger all six method/room marker sequences without shifting the data.
+            # Stagger every method/room marker sequence without shifting the data.
             markers = {} if method == "reference" else {
-                "markevery": (30+120*["varying", "fixed", "impulse"].index(method)+60*room, 360)}
+                "markevery": (30+60*rooms*["varying", "fixed", "impulse"].index(method)+60*room,
+                              180*rooms)}
             ax.plot(time, curve, color=COLORS[room], **style, **markers)
             if method == "varying" and not lossy:
                 se = response["se"][indices, room]
@@ -63,8 +65,8 @@ def plot_comparison(ax, cases, lossy, source, *, sample_rate=FS):
                                 zorder=.5)
     ax.set(title=f"Initially R{source+1}; {'lossy' if lossy else 'lossless'}",
            xlabel="Time (s)", ylabel="Stored energy (dB)" if lossy else "Stored energy",
-           xlim=(0, 2), ylim=(-85, 2) if lossy else (-.02, 1.02),
-           xticks=[0, .5, 1, 1.5, 2])
+           xlim=(0, end_time), ylim=(-85, 2) if lossy else (-.02, 1.02),
+           xticks=np.arange(0, end_time+.001, .5))
     ax.grid(alpha=.15)
 
 
