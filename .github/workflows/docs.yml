@@ -21,6 +21,12 @@ permissions:
   pages: write
   id-token: write
 
+# A newer run on the same branch cancels an older one still in progress, so an
+# older build never deploys over a newer one.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-docs:
     runs-on: ubuntu-latest
